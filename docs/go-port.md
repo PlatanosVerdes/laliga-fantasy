@@ -49,7 +49,7 @@ keeps working throughout.
 | 4b | The scoring half: xPts, price prior, score, ranks | **harness green**: 729 players × 48 fields, identical to 6 decimals |
 | 4c | Cash reconstruction, activity, offers, favourites, raids | **harness green**: 52 fields, 82 events, 13 managers' cash to the euro |
 | 5 | Scheduler and the refresh cycle, on channels | **36 decisions identical** to Python across 9 scenarios × 4 cadences; 7 engine tests green under `-race` |
-| 6 | Writes with the two-step guard and the id semantics | dry-run parity; no live write until the harness agrees |
+| 6 | Writes with the two-step guard and the id semantics | **11 calls byte-identical, 15 validations identical**, 12 guard tests green; no live write yet |
 | 7 | HTTP server, SSE, the existing templates | page renders, SSE swaps, drag-and-drop still works |
 | 8 | Policies and the automation | plan parity on recorded payloads, then armed |
 
@@ -108,6 +108,11 @@ about to expire, our own match under way, somebody else's, a finished one, a mat
 closing — each at four cadences including "the page is open" and "the periodic rebuild is
 overdue". Both sides take `now` as an argument, because a scheduler that can only be
 observed live cannot be compared.
+
+`tools/diff_writes.py` compares the writes without sending any: the eleven calls literally
+(method, path, body key by key) and the fifteen validation rows that decide whether an
+amount is refused. Python's own guard is run with the cash reader stubbed, because a harness
+must not depend on a session and must certainly not spend anything.
 
 The cycle itself is covered by `go test ./internal/engine -race`, with the network and the
 clock injected: a probe that finds nothing must not rebuild, one that finds a transfer must

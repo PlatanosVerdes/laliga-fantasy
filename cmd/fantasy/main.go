@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
 
 func main() {
@@ -56,6 +58,10 @@ func main() {
 		err = cmdModel(rest[1:])
 	case "wake":
 		err = cmdWake(rest[1:])
+	case "checks":
+		err = cmdChecks()
+	case "calls":
+		err = cmdCalls()
 	case "paths":
 		err = cmdPaths()
 	default:
@@ -78,6 +84,8 @@ uso: fantasy [-v|-q] <comando>
   model --json  volcar el modelo, para compararlo con el de Python
   wake <p.json> <now> [tick] [last_full] [watched]
                 que haria el planificador con ese payload, para comparar
+  calls         la peticion que construiria cada operacion, sin enviarla
+  checks        que aceptaria y que rechazaria la guardia, caso por caso
   paths         donde vive cada cosa
 `))
 }
@@ -246,6 +254,112 @@ func cmdWake(args []string) error {
 	decision := schedule.NextWake(payload, now, tick, lastFull, watched, time.Time{})
 	fmt.Printf("decision: +%.0fs %s %s\n", decision.At.Sub(now).Seconds(),
 		decision.Kind, decision.Why)
+	return nil
+}
+
+// cmdCalls prints the request each operation would build, with fixed arguments and
+// without sending anything. It exists to be compared against Python's: the ids here are
+// unobvious and hard-won, and a port that swaps two of them fails in the most expensive
+// way there is.
+// validationTable is shared with tools/diff_writes.py by construction: the same rows, in
+// the same order, so the two answers can be lined up.
+var validationTable = []struct {
+	Label string
+	Case  writes.ValidationCase
+}{
+	{"puja normal", writes.ValidationCase{"bid",
+		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 1_000_000},
+		writes.Player{Name: "X", MinBid: 900_000, IdealBid: 2_000_000}, 50_000_000}},
+	{"puja por debajo del minimo", writes.ValidationCase{"bid",
+		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 800_000},
+		writes.Player{Name: "X", MinBid: 900_000, IdealBid: 2_000_000}, 50_000_000}},
+	{"puja de cero", writes.ValidationCase{"bid",
+		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 0},
+		writes.Player{Name: "X"}, 50_000_000}},
+	{"puja mayor que el saldo", writes.ValidationCase{"bid",
+		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 2_000_000},
+		writes.Player{Name: "X", IdealBid: 9_000_000}, 1_000_000}},
+	{"puja sobre el techo rentable", writes.ValidationCase{"bid",
+		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 3_000_000},
+		writes.Player{Name: "X", IdealBid: 2_000_000}, 50_000_000}},
+	{"puja sin rentabilidad conocida", writes.ValidationCase{"bid",
+		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 1_000_000},
+		writes.Player{Name: "X"}, 50_000_000}},
+	{"puja que se come medio saldo", writes.ValidationCase{"bid",
+		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 600_000},
+		writes.Player{Name: "X", IdealBid: 900_000}, 1_000_000}},
+	{"puja con rivales", writes.ValidationCase{"bid",
+		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 1_000_000},
+		writes.Player{Name: "X", IdealBid: 2_000_000, Bids: 3}, 50_000_000}},
+	{"clausula pagada de menos", writes.ValidationCase{"pay_clause",
+		writes.Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT", Amount: 9_000_000},
+		writes.Player{Name: "X", Clause: 10_000_000}, 50_000_000}},
+	{"clausula exacta", writes.ValidationCase{"pay_clause",
+		writes.Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT", Amount: 10_000_000},
+		writes.Player{Name: "X", Clause: 10_000_000}, 50_000_000}},
+	{"clausula sin saldo", writes.ValidationCase{"pay_clause",
+		writes.Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT", Amount: 10_000_000},
+		writes.Player{Name: "X", Clause: 10_000_000}, 5_000_000}},
+	{"oferta directa negativa", writes.ValidationCase{"direct_offer",
+		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: -1},
+		writes.Player{Name: "X"}, 50_000_000}},
+	{"aceptar por debajo del valor", writes.ValidationCase{"accept_offer",
+		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", OfferID: "O", Amount: 8_000_000},
+		writes.Player{Name: "X", Value: 10_000_000}, 0}},
+	{"aceptar por encima del techo", writes.ValidationCase{"accept_offer",
+		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", OfferID: "O", Amount: 12_000_000},
+		writes.Player{Name: "X", Value: 10_000_000, IdealBid: 11_000_000}, 0}},
+	{"retirar del mercado", writes.ValidationCase{"withdraw",
+		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M"},
+		writes.Player{Name: "X"}, 50_000_000}},
+}
+
+func cmdChecks() error {
+	for _, row := range validationTable {
+		refused, _, warnings := writes.Validate(row.Case)
+		fmt.Printf("%-32s %-8s %d\n", row.Label, boolWord(refused), len(warnings))
+	}
+	return nil
+}
+
+func boolWord(value bool) string {
+	if value {
+		return "rechaza"
+	}
+	return "acepta"
+}
+
+func cmdCalls() error {
+	fixed := writes.Args{
+		LeagueID: "L", TeamID: "T", MarketID: "M", BidID: "B", OfferID: "O",
+		PlayerID: "P", PlayerTeamID: "PT", Amount: 1000,
+		Goalkeeper: "G", Defender: []string{"D"}, Midfield: []string{"M"},
+		Striker: []string{"S"}, Formation: []int{3, 4, 3},
+	}
+	names := make([]string, 0, len(writes.Operations))
+	for name := range writes.Operations {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		call, err := writes.Build(name, fixed)
+		if err != nil {
+			return err
+		}
+		body := ""
+		if call.Body != nil {
+			blob, err := json.Marshal(call.Body)
+			if err != nil {
+				return err
+			}
+			body = string(blob)
+		}
+		fmt.Printf("%-15s %-6s %s\n", name, call.Method, call.Path)
+		if body != "" {
+			fmt.Printf("%16s%s\n", "", body)
+		}
+	}
 	return nil
 }
 

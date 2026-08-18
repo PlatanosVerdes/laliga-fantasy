@@ -15,7 +15,7 @@ import json
 import secrets
 import threading
 import time
-from typing import Any
+from typing import Any, NamedTuple
 
 from . import laliga
 from .config import API_BASE, API_HEADERS, CMP
@@ -39,7 +39,20 @@ class WritesDisabled(WriteError):
     pass
 
 
-def _request(method: str, path: str, body: dict | None = None) -> Any:
+class Call(NamedTuple):
+    """A request that has been built but not sent.
+
+    Splitting building from sending is what makes a dry run worth anything: it shows the
+    exact method, path and body that would travel, which is also what the Go port has to
+    reproduce byte for byte.
+    """
+    method: str
+    path: str
+    body: dict | None = None
+
+
+def _send(call: Call) -> Any:
+    method, path, body = call
     headers = dict(API_HEADERS)
     headers["Authorization"] = f"Bearer {auth.bearer()}"
     data = None
@@ -54,71 +67,71 @@ def _request(method: str, path: str, body: dict | None = None) -> Any:
 
 # --- the operations ---------------------------------------------------------
 
-def _bid(league_id: str, market_id: str, amount: int) -> Any:
-    return _request("POST", f"{CMP}/league/{league_id}/market/{market_id}/bid",
-                    {"money": amount})
+def _bid(league_id: str, market_id: str, amount: int) -> Call:
+    return Call("POST", f"{CMP}/league/{league_id}/market/{market_id}/bid",
+                {"money": amount})
 
 
-def _modify_bid(league_id: str, market_id: str, bid_id: str, amount: int) -> Any:
-    return _request("PUT", f"{CMP}/league/{league_id}/market/{market_id}/bid/{bid_id}",
-                    {"money": amount})
+def _modify_bid(league_id: str, market_id: str, bid_id: str, amount: int) -> Call:
+    return Call("PUT", f"{CMP}/league/{league_id}/market/{market_id}/bid/{bid_id}",
+                {"money": amount})
 
 
-def _cancel_bid(league_id: str, market_id: str, bid_id: str) -> Any:
-    return _request("DELETE",
-                    f"{CMP}/league/{league_id}/market/{market_id}/bid/{bid_id}/cancel")
+def _cancel_bid(league_id: str, market_id: str, bid_id: str) -> Call:
+    return Call("DELETE",
+                f"{CMP}/league/{league_id}/market/{market_id}/bid/{bid_id}/cancel")
 
 
-def _raise_clause(league_id: str, player_team_id: str, amount: int) -> Any:
+def _raise_clause(league_id: str, player_team_id: str, amount: int) -> Call:
     # Same trap: the slot id, and the factor the app uses is 2.
-    return _request("PUT", f"{CMP}/league/{league_id}/buyout/player",
-                    {"playerId": player_team_id, "factor": 2, "valueToIncrease": amount})
+    return Call("PUT", f"{CMP}/league/{league_id}/buyout/player",
+                {"playerId": player_team_id, "factor": 2, "valueToIncrease": amount})
 
 
-def _accept_offer(league_id: str, market_id: str, offer_id: str, amount: int) -> Any:
+def _accept_offer(league_id: str, market_id: str, offer_id: str, amount: int) -> Call:
     # The API demands the amount in the body as a confirmation of what is being
     # accepted; without it, it answers 400.
-    return _request("POST",
-                    f"{CMP}/league/{league_id}/market/{market_id}/offer/{offer_id}/accept",
-                    {"offerMoney": amount})
+    return Call("POST",
+                f"{CMP}/league/{league_id}/market/{market_id}/offer/{offer_id}/accept",
+                {"offerMoney": amount})
 
 
-def _decline_offer(league_id: str, market_id: str, offer_id: str) -> Any:
-    return _request("POST",
-                    f"{CMP}/league/{league_id}/market/{market_id}/offer/{offer_id}/reject")
+def _decline_offer(league_id: str, market_id: str, offer_id: str) -> Call:
+    return Call("POST",
+                f"{CMP}/league/{league_id}/market/{market_id}/offer/{offer_id}/reject")
 
 
-def _sell_to_market(league_id: str, player_team_id: str, amount: int) -> Any:
+def _sell_to_market(league_id: str, player_team_id: str, amount: int) -> Call:
     # `playerId` here is the squad-slot id (playerTeamId), not the player's own id.
     # Sending the player id answers 500.
-    return _request("POST", f"{CMP}/league/{league_id}/market/sell",
-                    {"playerId": player_team_id, "salePrice": amount})
+    return Call("POST", f"{CMP}/league/{league_id}/market/sell",
+                {"playerId": player_team_id, "salePrice": amount})
 
 
-def _direct_offer(league_id: str, market_id: str, amount: int) -> Any:
+def _direct_offer(league_id: str, market_id: str, amount: int) -> Call:
     # A direct offer goes against the listing, so what travels as `playerId` is the
     # market id: you can only offer for somebody who is on the market.
-    return _request("POST", f"{CMP}/league/{league_id}/market/direct-offer",
-                    {"playerId": market_id, "money": amount})
+    return Call("POST", f"{CMP}/league/{league_id}/market/direct-offer",
+                {"playerId": market_id, "money": amount})
 
 
-def _pay_clause(league_id: str, player_team_id: str, amount: int) -> Any:
-    return _request("POST", f"{CMP}/league/{league_id}/buyout/{player_team_id}/pay",
-                    {"buyoutClauseToPay": amount})
+def _pay_clause(league_id: str, player_team_id: str, amount: int) -> Call:
+    return Call("POST", f"{CMP}/league/{league_id}/buyout/{player_team_id}/pay",
+                {"buyoutClauseToPay": amount})
 
 
 def _save_lineup(team_id: str, goalkeeper: str, defender: list, midfield: list,
-                 striker: list, formation: list) -> Any:
+                 striker: list, formation: list) -> Call:
     # Shape matters: goalkeeper is a single id, not a list, and the key is snake_case.
     # Anything else answers 500.
-    return _request("PUT", f"{CMP}/teams/{team_id}/lineup",
-                    {"goalkeeper": goalkeeper, "defender": defender,
-                     "midfield": midfield, "striker": striker,
-                     "tactical_formation": formation})
+    return Call("PUT", f"{CMP}/teams/{team_id}/lineup",
+                {"goalkeeper": goalkeeper, "defender": defender,
+                 "midfield": midfield, "striker": striker,
+                 "tactical_formation": formation})
 
 
-def _withdraw(league_id: str, market_id: str) -> Any:
-    return _request("DELETE", f"{CMP}/league/{league_id}/market/{market_id}/delete")
+def _withdraw(league_id: str, market_id: str) -> Call:
+    return Call("DELETE", f"{CMP}/league/{league_id}/market/{market_id}/delete")
 
 
 OPERATIONS = {
@@ -291,12 +304,15 @@ def confirm(token: str, *, allow_writes: bool = False, dry_run: bool = False) ->
                             "formation")}[operation]
     values = [args.get(name) for name in call]
 
+    call = runner(*values)
     if dry_run:
-        log.info("write dry-run", extra={"operation": operation, "args": values})
+        log.info("write dry-run", extra={"operation": operation, "method": call.method,
+                                        "path": call.path, "body": call.body})
         return {"ok": True, "dry_run": True, "operation": operation,
-                "summary": pending["summary"]}
+                "summary": pending["summary"],
+                "call": {"method": call.method, "path": call.path, "body": call.body}}
     try:
-        result = runner(*values)
+        result = _send(call)
     except http.HttpError as exc:
         log.error("write failed", extra={"operation": operation, "status": exc.status})
         raise WriteError(f"la API ha respondido {exc.status}: {exc.body[:200]}") from exc
