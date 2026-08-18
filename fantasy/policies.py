@@ -21,6 +21,16 @@ from .config import CONFIG_DIR, MIN_PER_POSITION, POLICY_FILE
 from .logs import log
 
 
+def _money(amount: float) -> str:
+    """Thousands with dots, and nothing else touched.
+
+    The reasons used to be built with f"...{amount:,}".replace(",", ".") per fragment, which
+    also turned the *prose* commas into full stops: "ya listado a 12.000.000. mejor oferta
+    9.799.596" read as two sentences and was one. Found by comparing against the Go port.
+    """
+    return f"{int(amount):,}".replace(",", ".")
+
+
 def load() -> dict[str, dict[str, Any]]:
     if not POLICY_FILE.exists():
         return {}
@@ -114,17 +124,16 @@ def raid_plan(players: list[dict[str, Any]], *, cash: float) -> list[dict[str, A
                                     + (f", se abre en {hours:.0f}h" if hours else ""))})
         elif ceiling and clause > ceiling:
             actions.append({**row, "action": "cancelada",
-                            "why": f"la clausula subio a {int(clause):,}".replace(",", ".")
-                                   + f", tu limite es {ceiling:,}".replace(",", ".")})
+                            "why": (f"la clausula subio a {_money(clause)}, "
+                                    f"tu limite es {_money(ceiling)}")})
         elif clause > cash:
             actions.append({**row, "action": "sin_saldo",
-                            "why": f"cuesta {int(clause):,}".replace(",", ".")
-                                   + f" y tienes {int(cash):,}".replace(",", ".")})
+                            "why": (f"cuesta {_money(clause)} "
+                                    f"y tienes {_money(cash)}")})
         else:
             actions.append({**row, "action": "pagar_clausula", "amount": int(clause),
-                            "why": f"abierta a {int(clause):,}".replace(",", ".")
-                                   + f", por debajo de tu limite de {ceiling:,}"
-                                     .replace(",", ".")})
+                            "why": (f"abierta a {_money(clause)}, "
+                                    f"por debajo de tu limite de {_money(ceiling)}")})
     return actions
 
 
@@ -209,10 +218,10 @@ def plan(players: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "player_id": str(player["id"]), "name": player["name"],
                 "action": "avisar", "amount": int(best["money"]),
                 "offer_id": str(best.get("id")), "market_id": listing.get("market_id"),
-                "why": f"ofrecen {int(best['money']):,}".replace(",", ".")
-                       + f" (por encima de {threshold:,})".replace(",", ".")
-                       + f", pero es tu ultimo {player.get('position') or 'jugador'}"
-                       + " y te quedarias sin alineacion legal"})
+                "why": (f"ofrecen {_money(best['money'])} "
+                        f"(por encima de {_money(threshold)}), pero es tu ultimo "
+                        f"{player.get('position') or 'jugador'}"
+                        " y te quedarias sin alineacion legal")})
             continue
 
         if threshold is not None and best and float(best.get("money") or 0) >= threshold:
@@ -220,19 +229,18 @@ def plan(players: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "player_id": str(player["id"]), "name": player["name"],
                 "action": "aceptar_oferta", "amount": int(best["money"]),
                 "offer_id": str(best.get("id")), "market_id": listing.get("market_id"),
-                "why": f"ofrecen {int(best['money']):,}".replace(",", ".")
-                       + f", {source} es {threshold:,}".replace(",", ".")})
+                "why": (f"ofrecen {_money(best['money'])}, "
+                        f"{source} es {_money(threshold)}")})
         elif not listing:
             price = max(floor, int(value))
             actions.append({
                 "player_id": str(player["id"]), "name": player["name"],
                 "action": "poner_en_venta", "amount": price,
-                "why": f"no esta en el mercado; lo listo a {price:,}".replace(",", ".")})
+                "why": f"no esta en el mercado; lo listo a {_money(price)}"})
         else:
             listed_at = int(listing.get("min_bid") or 0)
-            why = (f"ya listado a {listed_at:,}".replace(",", ".")
-                   + (f", mejor oferta {int(best['money']):,}".replace(",", ".")
-                      if best else ", sin ofertas"))
+            why = (f"ya listado a {_money(listed_at)}"
+                   + (f", mejor oferta {_money(best['money'])}" if best else ", sin ofertas"))
             # An offer that already covers the asking price, on a player nobody
             # authorised selling: worth saying out loud rather than leaving in a table
             # nobody reads. It is a notice, not an action — enforce skips it.
@@ -242,9 +250,9 @@ def plan(players: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "player_id": str(player["id"]), "name": player["name"],
                     "action": "avisar", "amount": int(best["money"]),
                     "offer_id": str(best.get("id")), "market_id": listing.get("market_id"),
-                    "why": f"ofrecen {int(best['money']):,}".replace(",", ".")
-                           + f", lo que pides ({listed_at:,})".replace(",", ".")
-                           + "; no vendo solo, decides tu"})
+                    "why": (f"ofrecen {_money(best['money'])}, "
+                            f"lo que pides ({_money(listed_at)}); "
+                            "no vendo solo, decides tu")})
                 continue
             if threshold is None:
                 why += "; no vendo solo"
@@ -290,11 +298,11 @@ def verify_clause(league_id: str, action: dict[str, Any]) -> tuple[bool, str]:
         now_clause = float(slot.get("buyoutClause") or 0)
         ceiling = int(action.get("max_pay") or 0)
         if ceiling and now_clause > ceiling:
-            return False, (f"la clausula esta en {int(now_clause):,}".replace(",", ".")
-                           + f", por encima de tu limite de {ceiling:,}".replace(",", "."))
+            return False, (f"la clausula esta en {_money(now_clause)}, "
+                           f"por encima de tu limite de {_money(ceiling)}")
         action["clause"] = now_clause
         action["amount"] = int(now_clause)
-        return True, f"clausula confirmada en {int(now_clause):,}".replace(",", ".")
+        return True, f"clausula confirmada en {_money(now_clause)}"
     return False, "ya no esta en esa plantilla"
 
 

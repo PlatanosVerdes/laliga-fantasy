@@ -26,6 +26,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/render"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/server"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
@@ -71,6 +72,8 @@ func main() {
 		err = cmdWake(rest[1:])
 	case "section":
 		err = cmdSection(rest[1:])
+	case "plan":
+		err = cmdPlan(rest[1:])
 	case "advise":
 		err = cmdAdvise(rest[1:])
 	case "match":
@@ -113,6 +116,7 @@ uso: fantasy [-v|-q] <comando>
   calls         la peticion que construiria cada operacion, sin enviarla
   checks        que aceptaria y que rechazaria la guardia, caso por caso
   cells         como se formatea cada celda, para compararlo con Python
+  plan <players.json> [saldo]   que harian las instrucciones permanentes
   advise <universe.json> <saldo> [deuda] [limite]   los cubos de consejo, en JSON
   match <players.json> <ffmarket.json> <teams.json>   emparejar las dos fuentes
   scrape <que> <fichero.html>   parsear una pagina de futbolfantasy y volcarla en JSON
@@ -519,6 +523,41 @@ func cmdSection(args []string) error {
 		return err
 	}
 	fmt.Print(html)
+	return nil
+}
+
+// cmdPlan is what the standing instructions would do, and what the scheduled raids would do,
+// from a recorded squad. Nothing is executed: this prints the plan.
+func cmdPlan(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("uso: plan <players.json> [saldo]")
+	}
+	body, err := os.ReadFile(args[0])
+	if err != nil {
+		return err
+	}
+	var players []map[string]any
+	if err := json.Unmarshal(body, &players); err != nil {
+		return err
+	}
+	cash := 0.0
+	if len(args) > 1 {
+		if cash, err = strconv.ParseFloat(args[1], 64); err != nil {
+			return err
+		}
+	}
+	armed, err := policies.Load()
+	if err != nil {
+		return err
+	}
+	blob, err := json.Marshal(map[string]any{
+		"plan":  policies.Plan(players, armed),
+		"raids": policies.RaidPlan(players, armed, cash),
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(blob))
 	return nil
 }
 
