@@ -33,11 +33,16 @@ SECTIONS = [
     ("seguimiento", "watchlist", False),
     ("ventas", "sells", False),
     ("riesgo", "exposure", False),
+    ("enventa", "asks", True),
+    ("clausulas", "raids", False),
+    ("ofertas", "offers", False),
 ]
 
 # The empty-state text is part of the output, so it belongs to the spec and not to a
 # default: "Sin exposicion relevante" is what the risk table says when there is none.
-EMPTY = {"riesgo": "Sin exposicion relevante"}
+EMPTY = {"riesgo": "Sin exposicion relevante",
+         "enventa": "Nadie ha puesto a nadie en venta",
+         "clausulas": "Ninguna cláusula a tu alcance"}
 
 
 def columns_for(name: str):
@@ -61,6 +66,31 @@ def columns_for(name: str):
         return report._player_columns()
     if name == "ventas":
         return report._player_columns(extra=[("Motivos", lambda r: r.get("reasons"), "list")])
+    if name == "enventa":
+        columns = report._player_columns(cost_label="Pide")
+        columns.insert(2, ("Vende", lambda r: r.get("seller"), "text"))
+        columns.insert(5, ("Sobre valor", lambda r: r.get("ask_ratio"), "ratio"))
+        columns.append(("", lambda r: r, "bid"))
+        return columns
+    if name == "clausulas":
+        columns = report._player_columns(cost_label="Cláusula")
+        columns.insert(1, ("Dueño", lambda r: r.get("owner"), "text"))
+        columns.insert(4, ("x valor", lambda r: r.get("clause_premium"), "num"))
+        columns.append(("Clausulazo", lambda r: r, "raid"))
+        return columns
+    if name == "ofertas":
+        return [
+            ("Jugador", lambda r: r, "player"),
+            ("Valor", lambda r: r["value"], "money"),
+            ("Pides", lambda r: r.get("ask"), "money"),
+            ("Te ofrecen", lambda r: r.get("offer_amount"), "money"),
+            ("Sobre su valor", lambda r: r.get("vs_value"), "ratio_sell"),
+            ("Ofertas", lambda r: r.get("offer_count"), "int"),
+            ("Caduca", lambda r: str(r.get("offer_expires") or "")[:16].replace("T", " "),
+             "text"),
+            ("xPts/j", lambda r: r["xpts"], "num"),
+            ("", lambda r: r, "offer"),
+        ]
     if name == "riesgo":
         return [
             ("Jugador", lambda r: r, "player"),
@@ -76,10 +106,17 @@ def columns_for(name: str):
 
 
 def synthetic(name: str, advice: dict) -> list[dict]:
-    """Rows for a section the current world has none of."""
+    """Rows for a section the current world happens to have none of.
+
+    A bucket can be legitimately empty — no clause exposure today is good news, and every
+    clause in the league being locked is normal early in the season — but the renderer still
+    has to be compared. What is under test is the HTML, so plausible rows do the job as long
+    as the line says they are made up.
+    """
     base = (advice.get("squad") or [])[:3]
     if not base:
         return []
+
     if name == "riesgo":
         return [{**row,
                  "clause": (row.get("value") or 0) * 1.8,
@@ -87,6 +124,21 @@ def synthetic(name: str, advice: dict) -> list[dict]:
                  "threats": index,
                  "top_threat": ["La rataneta", None, "TheMessias"][index % 3]}
                 for index, row in enumerate(base)]
+
+    if name == "clausulas":
+        # A rival's player with the clause open: not mine, owned, and one of them shielded,
+        # because "blindado" is a branch of the raid button.
+        return [{**row,
+                 "is_mine": False,
+                 "owner": ["La rataneta", "TheMessias", "Villaone"][index % 3],
+                 "entry_cost": (row.get("value") or 0) * 1.5,
+                 "clause": (row.get("value") or 0) * 1.5,
+                 "clause_premium": 1.5,
+                 "shielded": index == 1,
+                 "raid_scheduled": index == 2,
+                 "max_pay": 0}
+                for index, row in enumerate(base)]
+
     return []
 
 
@@ -143,7 +195,10 @@ def main() -> int:
         # `seguimiento` is the one table Python builds without a section marker, so its
         # rows still say "mio" — the players are unowned, and a row that is somehow yours
         # there is worth flagging.
-        section = "" if name == "seguimiento" else name
+        # Three tables Python builds without a section marker, so their rows still say
+        # "mio": seguimiento (unowned players), enventa and clausulas (rivals'). A row
+        # that is somehow yours in one of those is worth flagging.
+        section = "" if name in ("seguimiento", "enventa", "clausulas") else name
         python = report._table(columns_for(name), rows,
                               section=section, filterable=filterable,
                               **({"empty": EMPTY[name]} if name in EMPTY else {}))

@@ -312,6 +312,105 @@ func truthy(value any) bool {
 	return false
 }
 
+// BidButton is only rendered where a bid is actually possible; the server re-validates
+// anyway, because a page can be minutes old by the time somebody clicks.
+func BidButton(row map[string]any) string {
+	listing, _ := row["market"].(map[string]any)
+	marketID := text(listing["market_id"])
+	if marketID == "" {
+		return Missing
+	}
+	bid := ""
+	label := "Pujar"
+	if existing := text(listing["my_bid_id"]); existing != "" {
+		// Unquoted, as Python writes it: the value is an id and the attribute parses
+		// either way, and a byte comparison does not forgive improvements.
+		bid = " data-bid=" + existing
+		label = "Mi puja"
+	}
+	return fmt.Sprintf(`<button class="bid" type="button" data-market="%s" `+
+		`data-player="%s" data-name="%s" data-min="%d" data-ideal="%d" data-value="%d"%s>%s</button>`,
+		Esc(marketID), Esc(text(row["id"])), Esc(text(row["name"])),
+		int64(number(listing["min_bid"])), int64(number(row["ideal_bid"])),
+		int64(number(row["value"])), bid, label)
+}
+
+// RaidButton schedules a clause raid from the row that told you the clause is coming. The
+// whole point is arming it *before* the lock lifts, so the button lives in the table that
+// shows the countdown.
+func RaidButton(row map[string]any) string {
+	if truthy(row["is_mine"]) || text(row["owner"]) == "" {
+		return Missing
+	}
+	if truthy(row["shielded"]) {
+		return `<span class="pill-critical">blindado</span>`
+	}
+	clause := number(row["clause"])
+	suggested := int64(number(row["max_pay"]))
+	if suggested == 0 {
+		// A fifth over the clause if there is one, half over the value if there is not:
+		// enough headroom that a small raise does not cancel the raid.
+		if clause > 0 {
+			suggested = int64(clause * 1.2)
+		} else {
+			suggested = int64(number(row["value"]) * 1.5)
+		}
+	}
+	label := "Programar"
+	if truthy(row["raid_scheduled"]) {
+		label = "Reprogramar"
+	}
+	return fmt.Sprintf(`<button class="raid-btn" type="button" `+
+		`data-raid="%s" data-raid-name="%s" data-raid-max="%d" data-raid-clause="%d">%s</button>`,
+		Esc(text(row["id"])), Esc(text(row["name"])), suggested, int64(clause), label)
+}
+
+// OfferButtons are accept and reject, side by side, carrying everything the write needs so
+// the browser never has to guess an id.
+func OfferButtons(row map[string]any) string {
+	if text(row["offer_id"]) == "" {
+		return Missing
+	}
+	common := fmt.Sprintf(`data-op-market="%s" data-op-offer="%s" data-op-player="%s" `+
+		`data-op-name="%s" data-op-amount="%d"`,
+		Esc(text(row["market_id"])), Esc(text(row["offer_id"])), Esc(text(row["id"])),
+		Esc(text(row["name"])), int64(number(row["offer_amount"])))
+	return fmt.Sprintf(`<button class="op bid" data-op="accept_offer" %s type="button">Aceptar`+
+		`</button> <button class="op danger" data-op="decline_offer" %s `+
+		`type="button">Rechazar</button>`, common, common)
+}
+
+// Countdown is a live countdown: the server renders a first value and stamps the deadline,
+// so the browser keeps ticking it every second without asking again.
+func Countdown(row map[string]any) string {
+	if row == nil {
+		return Missing
+	}
+	hours := asFloat(row["hours_left"])
+	if hours == nil {
+		return Missing
+	}
+	deadline := text(row["unlock_at"])
+	if deadline == "" {
+		deadline = text(row["expires"])
+	}
+	stamp := ""
+	if deadline != "" {
+		stamp = ` data-deadline="` + Esc(deadline) + `"`
+	}
+	if *hours <= 0 {
+		return `<span class="pill-critical"` + stamp + `>ya</span>`
+	}
+	status, label := "neutral", fmt.Sprintf("%.0fd", *hours/24)
+	switch {
+	case *hours < 24:
+		status, label = "critical", fmt.Sprintf("%.0fh", *hours)
+	case *hours < 72:
+		status, label = "warning", fmt.Sprintf("%.1fd", *hours/24)
+	}
+	return fmt.Sprintf(`<span class="pill-%s"%s>%s</span>`, status, stamp, label)
+}
+
 // RatioBadge is a price against market value, named as well as coloured.
 //
 // The same multiple means opposite things depending on which side of it you are: paying
@@ -482,6 +581,44 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		columns := PlayerColumns("", Column{"Motivos", field("reasons"), "list"})
 		return TableIn(columns, rows, "Sin datos", "ventas", false), nil
 
+	case "enventa":
+		// What rivals are asking, next to what the player is worth: this is where the
+		// fantasy prices show up, so the ratio sits right after the price.
+		columns := insert(PlayerColumns("Pide"), 2,
+			Column{"Vende", field("seller"), "text"})
+		columns = insert(columns, 5, Column{"Sobre valor", field("ask_ratio"), "ratio"})
+		columns = append(columns, Column{"", whole, "bid"})
+		return TableIn(columns, rows, "Nadie ha puesto a nadie en venta", "", true), nil
+
+	case "clausulas":
+		columns := insert(PlayerColumns("Cláusula"), 1,
+			Column{"Dueño", field("owner"), "text"})
+		columns = insert(columns, 4, Column{"x valor", field("clause_premium"), "num"})
+		columns = append(columns, Column{"Clausulazo", whole, "raid"})
+		return TableIn(columns, rows, "Ninguna cláusula a tu alcance", "", false), nil
+
+	case "ofertas":
+		// Yours by definition, so no star: what matters is what they pay against what he
+		// is worth, and when the offer dies.
+		columns := []Column{
+			{"Jugador", whole, "player"},
+			{"Valor", field("value"), "money"},
+			{"Pides", field("ask"), "money"},
+			{"Te ofrecen", field("offer_amount"), "money"},
+			{"Sobre su valor", field("vs_value"), "ratio_sell"},
+			{"Ofertas", field("offer_count"), "int"},
+			{"Caduca", func(row map[string]any) any {
+				stamp := text(row["offer_expires"])
+				if len(stamp) > 16 {
+					stamp = stamp[:16]
+				}
+				return strings.ReplaceAll(stamp, "T", " ")
+			}, "text"},
+			{"xPts/j", field("xpts"), "num"},
+			{"", whole, "offer"},
+		}
+		return TableIn(columns, rows, "Sin datos", "ofertas", false), nil
+
 	case "riesgo":
 		// Not "who is good" but "who can be taken from you today", which is why the count
 		// of rivals who could pay is a column of its own.
@@ -572,7 +709,7 @@ func Cell(value any, kind string) (string, string) {
 }
 
 func CellIn(value any, kind string, section string) (string, string) {
-	number := asFloat(value)
+	amount := asFloat(value)
 	switch kind {
 	case "star":
 		row, _ := value.(map[string]any)
@@ -585,20 +722,38 @@ func CellIn(value any, kind string, section string) (string, string) {
 		row, _ := value.(map[string]any)
 		return PlayerCell(row, section), Esc(text(row["name"]))
 	case "starts":
-		return Starts(number)
+		return Starts(amount)
 	case "ideal":
 		// No ceiling is not zero: futbolfantasy has looked and sees no room at this price,
 		// which is a verdict and reads as one.
-		if number == nil || *number == 0 {
+		if amount == nil || *amount == 0 {
 			return `<span class="pill-warning">sin margen</span>`, "0"
 		}
-		return Esc(Money(number)), sortKey(number)
+		return Esc(Money(amount)), sortKey(amount)
 	case "pct_plain":
-		return Esc(Pct(number)), sortKey(number)
+		return Esc(Pct(amount)), sortKey(amount)
 	case "ratio":
-		return RatioBadge(number, false), sortKey(number)
+		return RatioBadge(amount, false), sortKey(amount)
 	case "ratio_sell":
-		return RatioBadge(number, true), sortKey(number)
+		return RatioBadge(amount, true), sortKey(amount)
+	case "bid":
+		row, _ := value.(map[string]any)
+		listing, _ := row["market"].(map[string]any)
+		return BidButton(row), fmt.Sprintf("%d", int64(number(listing["min_bid"])))
+	case "raid":
+		row, _ := value.(map[string]any)
+		return RaidButton(row), sortKey(asFloat(row["clause"]))
+	case "offer":
+		row, _ := value.(map[string]any)
+		return OfferButtons(row), sortKey(asFloat(row["offer_amount"]))
+	case "hours":
+		row, _ := value.(map[string]any)
+		hours := asFloat(row["hours_left"])
+		if hours == nil {
+			far := 1e9
+			hours = &far
+		}
+		return Countdown(row), sortKey(hours)
 	case "list":
 		items := asStrings(value)
 		if len(items) == 0 {
@@ -608,18 +763,18 @@ func CellIn(value any, kind string, section string) (string, string) {
 	}
 	switch kind {
 	case "money":
-		return Esc(Money(number)), sortKey(number)
+		return Esc(Money(amount)), sortKey(amount)
 	case "pct":
-		return DivergingBar(number, 12.0), sortKey(number)
+		return DivergingBar(amount, 12.0), sortKey(amount)
 	case "num":
-		return Esc(Num(number, 2)), sortKey(number)
+		return Esc(Num(amount, 2)), sortKey(amount)
 	case "mag":
-		return MagnitudeBar(number, 1.0, 2), sortKey(number)
+		return MagnitudeBar(amount, 1.0, 2), sortKey(amount)
 	case "int":
-		if number == nil {
-			return Missing, sortKey(number)
+		if amount == nil {
+			return Missing, sortKey(amount)
 		}
-		return fmt.Sprintf("%d", int64(*number)), sortKey(number)
+		return fmt.Sprintf("%d", int64(*amount)), sortKey(amount)
 	case "spark":
 		// Sorted by how much history there is, not by a value: the column is a shape.
 		series := asSeries(value)
