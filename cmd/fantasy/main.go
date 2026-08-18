@@ -48,8 +48,21 @@ func main() {
 			rest = append(rest, arg)
 		}
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr,
-		&slog.HandlerOptions{Level: level})))
+	// In a container the collector reads stdout, so emit JSON there instead of the terminal
+	// format, and at info rather than warn: a log that only speaks when something breaks
+	// cannot tell you what it was doing when it broke. Vector picks it up from the docker
+	// source with no extra config.
+	if asJSON := strings.ToLower(os.Getenv("FANTASY_LOG_JSON")); asJSON == "1" ||
+		asJSON == "true" || asJSON == "yes" {
+		if level > slog.LevelInfo {
+			level = slog.LevelInfo
+		}
+		slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout,
+			&slog.HandlerOptions{Level: level})))
+	} else {
+		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr,
+			&slog.HandlerOptions{Level: level})))
+	}
 
 	if len(rest) == 0 {
 		usage()
