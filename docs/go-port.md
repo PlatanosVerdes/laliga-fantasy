@@ -57,8 +57,11 @@ keeps working throughout.
 | 7d | The sections, one table at a time | **15 tables + 2 shapes byte-identical**, plus every empty state |
 | 7e | The page shell: head, widgets, tabs, footer | **5 pieces byte-identical**, ranks and meters included |
 | 7f | Assembling the whole document from Go | **the page is byte-identical**: 814.950 bytes |
-| 7g | The advice layer, so Go can serve its own page | `fantasy-go serve` renders it from its own model |
-| 8 | Policies and the automation | plan parity on recorded payloads, then armed |
+| 8 | The futbolfantasy scrapers | **141 cached pages parse identically**, field by field |
+| 9 | Cross-source name matching | same matches on the same feed |
+| 10 | The advice layer and the policy engine | same buckets, same plan |
+| 11 | The CLI, then Python is deleted | one language |
+
 
 ## The differential harness
 

@@ -62,6 +62,24 @@ func APIHeaders() map[string]string {
 const userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
 	"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 
+// futbolfantasy.com. No API, so these are pages and the parsers read HTML.
+const (
+	FFBase         = "https://www.futbolfantasy.com"
+	FFMarketURL    = FFBase + "/analytics/laliga-fantasy/mercado"
+	FFDetailURL    = FFBase + "/analytics/laliga-fantasy/mercado/detalle/{ff_id}?perfil=1"
+	FFPlayerURL    = FFBase + "/jugadores/{slug}"
+	FFInjuredURL   = FFBase + "/laliga/lesionados"
+	FFSuspendedURL = FFBase + "/laliga/sancionados"
+)
+
+func FFHeaders() map[string]string {
+	return map[string]string{
+		"User-Agent":      userAgent,
+		"Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+		"Accept-Language": "es-ES,es;q=0.9",
+	}
+}
+
 // Tags name cached responses. Other packages invalidate by tag, and a tag that matches
 // nothing fails silently — it drops no files and reports success — so the set is
 // declared once and checked against.
@@ -70,6 +88,8 @@ var Tags = map[string]bool{
 	"lineup": true, "market": true, "me": true, "money": true, "mv": true,
 	"offers": true, "player": true, "players": true, "squad": true,
 	"standing": true, "teams": true, "week": true,
+	// futbolfantasy's pages, cached the same way.
+	"ff_market": true, "ff_detail": true, "ff_player": true, "ff_absences": true,
 }
 
 func init() {

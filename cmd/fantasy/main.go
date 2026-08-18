@@ -22,6 +22,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/engine"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/render"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/server"
@@ -68,6 +69,8 @@ func main() {
 		err = cmdWake(rest[1:])
 	case "section":
 		err = cmdSection(rest[1:])
+	case "scrape":
+		err = cmdScrape(rest[1:])
 	case "page":
 		err = cmdPage(rest[1:])
 	case "shell":
@@ -104,6 +107,7 @@ uso: fantasy [-v|-q] <comando>
   calls         la peticion que construiria cada operacion, sin enviarla
   checks        que aceptaria y que rechazaria la guardia, caso por caso
   cells         como se formatea cada celda, para compararlo con Python
+  scrape <que> <fichero.html>   parsear una pagina de futbolfantasy y volcarla en JSON
   page <dump.json> <generado> [liga]   la pagina entera, desde un volcado
   shell <caso>  cabecera, widget, pie o pestanas, para compararlo
   section <n> <rows.json>   una seccion renderizada, para compararla
@@ -507,6 +511,48 @@ func cmdSection(args []string) error {
 		return err
 	}
 	fmt.Print(html)
+	return nil
+}
+
+// cmdScrape parses one saved futbolfantasy page and prints the result as JSON. The page
+// comes from a file rather than the network so both implementations can be handed the exact
+// same bytes: these parsers read somebody else's HTML, which is the most fragile code here
+// and the most worth comparing.
+func cmdScrape(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("uso: scrape <mercado|detalle|jugador|ausencias> <fichero.html> [tipo]")
+	}
+	body, err := os.ReadFile(args[1])
+	if err != nil {
+		return err
+	}
+	page := string(body)
+
+	var out any
+	switch args[0] {
+	case "mercado":
+		out = futbolfantasy.ParseMarket(page)
+	case "equipos":
+		out = futbolfantasy.ParseTeamMap(page)
+	case "detalle":
+		out = futbolfantasy.ParseDetail(page)
+	case "jugador":
+		out = futbolfantasy.ParsePlayerPage(page)
+	case "ausencias":
+		kind := "lesionado"
+		if len(args) > 2 {
+			kind = args[2]
+		}
+		out = futbolfantasy.ParseAbsences(page, kind)
+	default:
+		return fmt.Errorf("pagina desconocida: %s", args[0])
+	}
+
+	blob, err := json.Marshal(out)
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(blob))
 	return nil
 }
 
