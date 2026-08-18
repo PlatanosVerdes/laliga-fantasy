@@ -645,8 +645,14 @@ func RaidVerdict(row map[string]any) string {
 	}
 	note := ""
 	if ratio := asFloat(row["vs_market"]); ratio != nil && *ratio != 0 {
-		note = fmt.Sprintf(`<span class="pill-note">%s</span>`,
-			Esc(fmt.Sprintf("%.1fx tu plantilla", *ratio)))
+		// "5.0x tu plantilla" no dice de que: el titulo lo escribe entero, con las dos
+		// cifras que se estan comparando.
+		ppm := number(row["ppm_at_clause"])
+		explain := fmt.Sprintf("Pagando su clausula sacas %.2f pts/M; la mediana de tu "+
+			"plantilla es %.2f pts/M, asi que rinde %.1f veces mas por cada millon.",
+			ppm, ppm / *ratio, *ratio)
+		note = fmt.Sprintf(`<span class="pill-note" title="%s">%s</span>`,
+			Esc(explain), Esc(fmt.Sprintf("%.1fx pts/M de tu plantilla", *ratio)))
 	}
 	return fmt.Sprintf(`<span class="pill-%s">%s</span>`, status, Esc(verdict)) + note
 }
