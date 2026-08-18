@@ -1006,7 +1006,7 @@ if(drawer){
 
 // ---- pestañas: una vista a la vez ------------------------------------------
 const TABS=[
-  {id:'decidir', label:'Decidir', sections:['acciones','ofertas']},
+  {id:'decidir', label:'Decidir', sections:['plan','acciones','ofertas']},
   {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
   {id:'clausulas', label:'Cláusulas', sections:['programados','calendario','vencimientos','oportunidades','riesgo','clausulas']},
   {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},

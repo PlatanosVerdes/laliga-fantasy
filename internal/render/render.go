@@ -487,6 +487,83 @@ func Page(css, js, crestCSS, header, body, footer, modal, drawer string) string 
 		`<script>` + js + `</script>`
 }
 
+// SwapPlan draws the plan as what it is: pairs. Who leaves on the left, who arrives on the
+// right, and under each pair the two numbers that decide it — points won and euros moved.
+//
+// Deliberately not a table. A table invites comparing rows; this is meant to be read once,
+// top to bottom, and acted on.
+func SwapPlan(plan map[string]any) string {
+	moves := rows(plan["moves"])
+	if len(moves) == 0 {
+		return `<p class="empty">Ningun cambio del mercado de hoy mejora tu once sin ` +
+			`pagar de mas. No mover tambien es un plan.</p>`
+	}
+
+	var out strings.Builder
+	before, after := asFloat(plan["xpts_before"]), asFloat(plan["xpts_after"])
+	cashBefore, cashAfter := asFloat(plan["cash_before"]), asFloat(plan["cash_after"])
+	fmt.Fprintf(&out, `<div class="plan-head">`+
+		`<span class="plan-total"><b>%s</b> xPts <span class="plan-arrow">→</span> `+
+		`<b class="up">%s</b></span>`+
+		`<span class="plan-total">Caja <b>%s</b> <span class="plan-arrow">→</span> `+
+		`<b>%s</b></span>`+
+		`<span class="plan-count">%d cambio%s</span></div>`,
+		Num(before, 2), Num(after, 2), Money(cashBefore), Money(cashAfter),
+		len(moves), map[bool]string{true: "", false: "s"}[len(moves) == 1])
+
+	out.WriteString(`<div class="plan">`)
+	for _, move := range moves {
+		leaving, arriving := mapOf(move["out"]), mapOf(move["in"])
+		gain, net := asFloat(move["gain"]), asFloat(move["net"])
+		netClass, netText := "down", "+"+Money(net)
+		if net != nil && *net <= 0 {
+			positive := -*net
+			netClass, netText = "up", "-"+Money(&positive)
+		}
+		fmt.Fprintf(&out, `<div class="plan-move">`+
+			`<div class="plan-side out">%s<span class="plan-why">%s</span>`+
+			`<span class="plan-money">%s · %s</span></div>`+
+			`<div class="plan-mid"><span class="plan-arrow">→</span>`+
+			`<span class="plan-gain up">+%s xPts</span>`+
+			`<span class="plan-net %s">%s</span></div>`+
+			`<div class="plan-side in">%s<span class="plan-why">%s titular · %s xPts</span>`+
+			`<span class="plan-money">cuesta %s</span></div></div>`,
+			planCard(leaving), Esc(text(move["why"])),
+			Esc(Money(asFloat(move["sale"]))), Esc(text(move["sale_note"])),
+			Num(gain, 2), netClass, Esc(netText),
+			planCard(arriving), starts(asFloat(arriving["start_probability"])),
+			Num(asFloat(arriving["xpts"]), 2),
+			Esc(Money(asFloat(move["cost"]))))
+	}
+	out.WriteString(`</div>`)
+
+	for _, warning := range plan["warnings"].([]string) {
+		fmt.Fprintf(&out, `<p class="plan-warn">⚠ %s</p>`, Esc(warning))
+	}
+	return out.String()
+}
+
+// starts is the probability as plain text: inside the plan the pill would compete with the
+// numbers that matter.
+func starts(value *float64) string {
+	if value == nil {
+		return "sin dato de"
+	}
+	return fmt.Sprintf("%.0f%%", *value)
+}
+
+// planCard is one player inside the plan: crest, name and position, nothing else.
+func planCard(player map[string]any) string {
+	slug := positionSlug[int(number(player["position_id"]))]
+	if slug == "" {
+		slug = "ent"
+	}
+	return fmt.Sprintf(`<span class="plan-who">%s<button class="p-name" type="button" `+
+		`data-detail="%s">%s</button><span class="pos pos-%s">%s</span></span>`,
+		crestOf(text(player["team_id"])), Esc(text(player["id"])),
+		Esc(text(player["name"])), slug, Esc(text(player["position"])))
+}
+
 // Feed is the league's movements: who signed and sold, and for how much.
 //
 // Lineup changes are the bulk of the log and say nothing about the market, so they are

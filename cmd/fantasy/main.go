@@ -1043,6 +1043,9 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated 
 
 	document := render.Document{
 		Universe: generic, Advice: buckets, Generated: stamp, LeagueName: league,
+		// The plan reads the same buckets the tables do, so what it proposes and what they
+		// list can never disagree.
+		Swaps: advice.Swaps(generic, buckets, cash),
 		CSS: read("report.css"), JS: read("report.js"),
 		Modal: read("modal.html"), Drawer: read("drawer.html"),
 		Plan:     policies.Plan(players, armed),
@@ -1101,6 +1104,7 @@ func cmdPage(args []string) error {
 	// their rows are the policy engine's output, not the model's.
 	document := render.Document{
 		Universe: blob.Universe, Advice: blob.Advice,
+		Swaps: advice.Swaps(blob.Universe, blob.Advice, number(blob.Advice["budget"])),
 		Generated: args[1], LeagueName: league,
 		CSS: read("report.css"), JS: read("report.js"),
 		Modal: read("modal.html"), Drawer: read("drawer.html"),
