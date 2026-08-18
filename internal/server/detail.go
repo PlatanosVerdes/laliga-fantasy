@@ -91,6 +91,14 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 	policy := armed[id]
 	_, standing := armed[id]
 
+	// The house rule decides what can even be offered: a button the league forbids is worse
+	// than no button, because it looks like the tool disagrees with the pact.
+	locked := truthy(player["sale_locked"])
+	until := text(player["hold_until"])
+	if len(until) > 10 {
+		until = until[:10]
+	}
+
 	switch {
 	case truthy(player["is_mine"]):
 		floor, source := policies.GoodOfferFloor(player, policy)
@@ -112,6 +120,10 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 		if marketID := text(listing["market_id"]); marketID != "" {
 			actions = append(actions, map[string]any{"op": "withdraw",
 				"label": "Quitar del mercado", "kind": "confirm", "market_id": marketID})
+		} else if locked {
+			actions = append(actions, map[string]any{"op": "note", "kind": "note",
+				"label": "Lo fichaste hace poco: la norma de la liga no deja venderlo hasta " +
+					"el " + until})
 		} else {
 			actions = append(actions, map[string]any{"op": "sell_to_market",
 				"label": "Poner en venta", "kind": "amount",
@@ -166,7 +178,11 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 		}
 		// A direct offer goes against his listing: with no listing there is nothing to
 		// make an offer on.
-		if marketID := text(listing["market_id"]); marketID != "" {
+		if locked {
+			actions = append(actions, map[string]any{"op": "note", "kind": "note",
+				"label": owner + " lo ficho hace poco: la norma no le deja venderlo hasta el " +
+					until + ", asi que solo se llega a el por clausula"})
+		} else if marketID := text(listing["market_id"]); marketID != "" {
 			suggested := number(listing["min_bid"])
 			if suggested == 0 {
 				suggested = number(player["value"])

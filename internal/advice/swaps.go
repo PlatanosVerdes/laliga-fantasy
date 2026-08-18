@@ -85,6 +85,11 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 		if len(moves) >= 4 {
 			break
 		}
+		// La norma de la liga manda sobre el plan: proponer lo que no se puede hacer es peor
+		// que no proponer nada.
+		if truthy(out["sale_locked"]) {
+			continue
+		}
 		positionID := int(number(out["position_id"]))
 		// Selling a player you are already at the minimum for is only allowed when somebody
 		// replaces him in the same move, which is exactly what this is.
@@ -107,6 +112,10 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 		bestScore := 0.0
 		for _, in := range candidates {
 			if taken[text(in["id"])] || int(number(in["position_id"])) != positionID {
+				continue
+			}
+			// Un rival recien fichado tampoco puede salir: solo se llega a el por clausula.
+			if truthy(in["sale_locked"]) {
 				continue
 			}
 			gain := number(in["xpts"]) - number(out["xpts"])

@@ -34,6 +34,10 @@ type Document struct {
 	Policies map[string]map[string]any
 	// Swaps is the "this one out, this one in" plan, computed by the advice layer.
 	Swaps map[string]any
+	// The league's house rules: the hold period, its exceptions, and the social pacts.
+	HoldDays       int
+	HoldExceptions string
+	RuleNotes      []string
 }
 
 func rows(source any) []map[string]any {
@@ -83,6 +87,7 @@ func (d Document) HTML() string {
 		sections = append(sections, d.clauseSections()...)
 	}
 	sections = append(sections, d.scheduleSection(players))
+	sections = append(sections, d.rulesSection())
 	sections = append(sections, d.rankingSections(players)...)
 
 	kpis := d.widgets(week, players)
@@ -566,6 +571,21 @@ func weeksIn(fixtures []map[string]any) int {
 		seen[int(number(fixture["week"]))] = true
 	}
 	return len(seen)
+}
+
+// rulesSection is the league's own pact. Everything here is invisible to the API, so if it
+// is not written down it does not exist.
+func (d Document) rulesSection() string {
+	if d.HoldDays == 0 && len(d.RuleNotes) == 0 {
+		return ""
+	}
+	count := ""
+	if total := len(d.RuleNotes) + map[bool]int{true: 1, false: 0}[d.HoldDays > 0]; total > 0 {
+		count = fmt.Sprintf("%d normas", total)
+	}
+	return Section("Normas de la liga", HouseRules(d.HoldDays, d.HoldExceptions, d.RuleNotes),
+		"Lo que no sabe el juego. Solo la primera cambia lo que te propongo; las demas "+
+			"estan aqui para consultarlas.", count, "normas")
 }
 
 func (d Document) feedSection() string {

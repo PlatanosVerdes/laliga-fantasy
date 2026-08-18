@@ -42,6 +42,9 @@ type Options struct {
 	// Which league and team every write belongs to.
 	LeagueID string
 	MyTeamID string
+	// HoldExceptions is what the league agreed as an escape hatch to its own hold rule,
+	// quoted verbatim when an operation is refused because of it.
+	HoldExceptions string
 	// Settle makes the world catch up after a write, and is expected to block.
 	Settle func(cause string)
 	// Adopted runs once a session has just been stored: the world has to be built from

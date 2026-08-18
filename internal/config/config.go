@@ -45,6 +45,7 @@ var (
 	SettingsFile   string
 	FavouritesFile string
 	PolicyFile     string
+	RulesFile      string
 	ReportFile     string
 	LogFile        string
 )
@@ -98,6 +99,9 @@ func init() {
 	SettingsFile = filepath.Join(ConfigDir, "settings.json")
 	FavouritesFile = filepath.Join(ConfigDir, "favourites.json")
 	PolicyFile = filepath.Join(ConfigDir, "policies.json")
+	// The league's house rules, per league id: they belong with the session and the
+	// preferences, not with the cache, because nothing can regenerate them.
+	RulesFile = filepath.Join(ConfigDir, "rules.json")
 	ReportFile = filepath.Join(StateDir, "report.html")
 	LogFile = filepath.Join(StateDir, "fantasy.log")
 }

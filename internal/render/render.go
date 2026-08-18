@@ -268,6 +268,15 @@ func PlayerCell(row map[string]any, section string) string {
 	if truthy(row["is_mine"]) && !AllMine[section] {
 		flags = append(flags, `<span class="flag-mine">mio</span>`)
 	}
+	if truthy(row["sale_locked"]) {
+		until := text(row["hold_until"])
+		if len(until) > 10 {
+			until = until[:10]
+		}
+		flags = append(flags, fmt.Sprintf(
+			`<span class="flag-warning" title="Norma de la liga: recien fichado, `+
+				`no se puede vender hasta el %s">no vendible</span>`, Esc(until)))
+	}
 
 	// The three-letter team only earns its space when there is no crest: with one, it is the
 	// same fact printed twice.
@@ -562,6 +571,31 @@ func planCard(player map[string]any) string {
 		`data-detail="%s">%s</button><span class="pos pos-%s">%s</span></span>`,
 		crestOf(text(player["team_id"])), Esc(text(player["id"])),
 		Esc(text(player["name"])), slug, Esc(text(player["position"])))
+}
+
+// HouseRules prints the pact. Only the hold rule changes what the tool proposes; the rest
+// are here because a rule nobody can read is a rule nobody follows — and because the page is
+// where you look before deciding.
+func HouseRules(holdDays int, exceptions string, notes []string) string {
+	var out strings.Builder
+	out.WriteString(`<ul class="rules">`)
+	if holdDays > 0 {
+		line := fmt.Sprintf("Un jugador fichado o clausulado <strong>no se puede vender "+
+			"durante %d dias</strong>. Vale para toda la liga, asi que un rival tampoco "+
+			"puede venderte a quien acaba de fichar: a ese solo se llega por clausula.",
+			holdDays)
+		if exceptions != "" {
+			line += " Excepciones acordadas: " + Esc(exceptions) + "."
+		}
+		fmt.Fprintf(&out, `<li class="rule-live"><span class="rule-tag">se aplica</span>%s</li>`,
+			line)
+	}
+	for _, note := range notes {
+		fmt.Fprintf(&out, `<li><span class="rule-tag rule-social">acuerdo</span>%s</li>`,
+			Esc(note))
+	}
+	out.WriteString(`</ul>`)
+	return out.String()
 }
 
 // Feed is the league's movements: who signed and sold, and for how much.

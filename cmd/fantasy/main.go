@@ -29,6 +29,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/render"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/server"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
@@ -112,6 +113,8 @@ func main() {
 		err = cmdAlways(rest[1:])
 	case "raid":
 		err = cmdRaid(rest[1:])
+	case "rules":
+		err = cmdRules(rest[1:])
 	case "leagues":
 		err = cmdLeagues(rest[1:])
 	case "report":
@@ -152,6 +155,7 @@ uso: fantasy [-v|-q] <comando>
   always        instrucciones permanentes (siempre en mercado)
   raid          clausulazos programados
   leagues       tus ligas
+  rules         las normas de tu liga (plazo de venta y acuerdos)
   report        la pagina, a un fichero
   serve         el motor: pagina, API, SSE y refresco
   auth          browser, code y status: la sesion
@@ -335,6 +339,7 @@ func cmdServe(args []string) error {
 		Host: *host, Port: *port, AllowWrites: allowWrites,
 		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
 		Client: client, Guard: guard, LeagueID: league, MyTeamID: team,
+		HoldExceptions: rules.For(league).HoldExceptions,
 		Settle: func(cause string) {
 			// Force it: a write whose effect the fingerprint cannot see still has to make
 			// the page react, or the click looks like it did nothing.
@@ -1008,6 +1013,10 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated 
 		policyRows[id] = row
 	}
 
+	// The rules are per league, so they are read with the league the page belongs to.
+	leagueID, _, _ := savedLeague()
+	house := rules.For(leagueID)
+
 	stamp := generated
 	if stamp == "" {
 		stamp = time.Now().Format("02/01/2006 15:04")
@@ -1045,7 +1054,10 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated 
 		Universe: generic, Advice: buckets, Generated: stamp, LeagueName: league,
 		// The plan reads the same buckets the tables do, so what it proposes and what they
 		// list can never disagree.
-		Swaps: advice.Swaps(generic, buckets, cash),
+		Swaps:          advice.Swaps(generic, buckets, cash),
+		HoldDays:       house.HoldDays,
+		HoldExceptions: house.HoldExceptions,
+		RuleNotes:      house.Notes,
 		CSS: read("report.css"), JS: read("report.js"),
 		Modal: read("modal.html"), Drawer: read("drawer.html"),
 		Plan:     policies.Plan(players, armed),
