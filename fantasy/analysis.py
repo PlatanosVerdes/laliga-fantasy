@@ -1216,7 +1216,11 @@ def enrich_buckets(advice: dict[str, Any], *, limit: int = 15) -> None:
     the watchlist and the raid list too), so enriching them one by one meant tens of
     duplicated requests per refresh — enough for futbolfantasy to answer 429.
     """
-    buckets = ("bids_now", "asks", "watchlist", "raids", "upcoming_raids")
+    # `squad` is in here because the profitable ceiling of a player you *own* is what
+    # tells you whether an offer is a good sale. Without it, "is this offer good?" can
+    # only be answered from price, which is half the question.
+    buckets = ("bids_now", "asks", "watchlist", "raids", "upcoming_raids", "squad",
+               "my_listings", "offers", "sells")
     rows_by_player: dict[str, list[dict]] = {}
     for name in buckets:
         for row in (advice.get(name) or [])[:limit]:

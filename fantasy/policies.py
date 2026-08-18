@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .config import CONFIG_DIR, POLICY_FILE
+from .config import CONFIG_DIR, MIN_PER_POSITION, POLICY_FILE
 from .logs import log
 
 
@@ -128,6 +128,45 @@ def raid_plan(players: list[dict[str, Any]], *, cash: float) -> list[dict[str, A
     return actions
 
 
+# What counts as a good offer, when you would rather not pick a number.
+#
+# Three references, and the bar is the highest of them, because each one catches a
+# different way of being underpaid:
+#   * your asking price — you already decided what he is worth to you;
+#   * 1.02x his market value — the app's own "buen precio" band, and above the ceiling
+#     of the daily automatic offers, which top out around 1.05x but usually sit below par;
+#   * futbolfantasy's maximum profitable bid — if somebody pays more than the player can
+#     return at that price, selling is the winning side of the trade.
+# Whichever is highest is the one quoted in the reason, so the number is never a mystery.
+GOOD_OVER_VALUE = 1.02
+
+
+def good_offer_floor(player: dict[str, Any], policy: dict[str, Any]) -> tuple[int, str]:
+    """(bar, which reference set it)."""
+    value = float(player.get("value") or 0)
+    listing = player.get("market") or {}
+    candidates = [
+        (int(listing.get("min_bid") or 0), "lo que pides"),
+        (int(value * GOOD_OVER_VALUE) if value else 0, "un 2% sobre su valor"),
+        (int(player.get("ideal_bid") or 0), "la puja maxima rentable de futbolfantasy"),
+        (int(policy.get("min_price") or 0), "tu precio minimo"),
+    ]
+    bar, source = max(candidates, key=lambda item: item[0])
+    return bar, source
+
+
+def squad_room(players: list[dict[str, Any]], position_id: Any) -> int:
+    """How many of that position could be sold before the squad stops being legal.
+
+    A price can be excellent and the sale still be a mistake: eleven legal starters
+    need a goalkeeper, three defenders and three midfielders, and an automatic sale
+    that leaves you unable to field a team is not a good deal at any price.
+    """
+    mine = [p for p in players if p.get("is_mine")]
+    have = sum(1 for p in mine if p.get("position_id") == position_id)
+    return have - MIN_PER_POSITION.get(position_id, 0)
+
+
 def plan(players: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """What the standing instructions would do right now, without doing it.
 
@@ -153,14 +192,28 @@ def plan(players: list[dict[str, Any]]) -> list[dict[str, Any]]:
         asking = int(listing.get("min_bid") or floor or value)
 
         # Two ways to authorise a sale, and no third. An explicit `accept_above` is a
-        # number you chose. `auto_sell` means "if somebody pays what I am asking, sell":
-        # the threshold is the asking price, which is already yours and already on screen,
-        # so the switch hides no invented figure. Without either, nothing is ever sold.
+        # number you chose; `auto_sell` is the check, and it means "any offer that is
+        # good", with `good_offer_floor` deciding what good means. Without either,
+        # nothing is ever sold.
         threshold = policy.get("accept_above")
         threshold = int(threshold) if threshold else None
         source = "tu limite"
-        if threshold is None and policy.get("auto_sell") and asking:
-            threshold, source = asking, "tu precio de venta"
+        if threshold is None and policy.get("auto_sell"):
+            threshold, source = good_offer_floor(player, policy)
+
+        room = squad_room(players, player.get("position_id"))
+        if (threshold is not None and best and float(best.get("money") or 0) >= threshold
+                and room <= 0):
+            # Good price, bad idea: this is the last one at his position.
+            actions.append({
+                "player_id": str(player["id"]), "name": player["name"],
+                "action": "avisar", "amount": int(best["money"]),
+                "offer_id": str(best.get("id")), "market_id": listing.get("market_id"),
+                "why": f"ofrecen {int(best['money']):,}".replace(",", ".")
+                       + f" (por encima de {threshold:,})".replace(",", ".")
+                       + f", pero es tu ultimo {player.get('position') or 'jugador'}"
+                       + " y te quedarias sin alineacion legal"})
+            continue
 
         if threshold is not None and best and float(best.get("money") or 0) >= threshold:
             actions.append({

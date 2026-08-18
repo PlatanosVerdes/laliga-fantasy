@@ -477,6 +477,7 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
 
             if player.get("is_mine"):
                 policy_now = policies_now.get(str(player_id)) or {}
+                good_floor, good_source = policies.good_offer_floor(player, policy_now)
                 starred = str(player_id) in policies_now
                 actions.append({"op": "always", "label": ("Quitar de siempre-en-mercado"
                                                           if starred else "Siempre en mercado"),
@@ -485,7 +486,14 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                                 "accept_above": policy_now.get("accept_above"),
                                 "auto_sell": bool(policy_now.get("auto_sell")),
                                 "asking": int(listing.get("min_bid") or 0),
-                                "value": int(player.get("value") or 0)})
+                                "value": int(player.get("value") or 0),
+                                # The bar the check would use, and which reference set
+                                # it: a switch whose number is invisible is a switch
+                                # nobody can judge.
+                                "good_floor": good_floor, "good_source": good_source,
+                                "room": policies.squad_room(
+                                    state.payload.get("players") or [],
+                                    player.get("position_id"))})
                 if listing.get("market_id"):
                     actions.append({"op": "withdraw", "label": "Quitar del mercado",
                                     "kind": "confirm", "market_id": listing["market_id"]})

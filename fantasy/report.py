@@ -803,6 +803,7 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .always-check input{margin:1px 0 0;width:15px;height:15px;flex:0 0 auto;accent-color:var(--accent)}
 .always-check b{color:var(--ink)}
 .always-check i{color:var(--muted);font-style:normal;font-size:11px}
+.always-check i.always-warn{color:var(--warning)}
 .always-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .always-grid label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted)}
 .always-grid input{font:inherit;font-size:15px;font-variant-numeric:tabular-nums;
@@ -1679,7 +1680,7 @@ function note(panel,data){
     ? '<b>Vendo desde ese importe</b>, sin preguntar. El importe manda sobre el '
       +'interruptor de arriba.'
     : (data.auto_sell
-        ? '<b>Vendo si llegan a tu precio de venta.</b> Si prefieres otro numero, '
+        ? '<b>Vendo cuando la oferta sea buena.</b> Si prefieres decidir el numero tu, '
           +'ponlo en «aceptar desde».'
         : 'No vende solo: si llega una oferta buena <b>te aviso</b> y decides tu.');
 }
@@ -1736,14 +1737,17 @@ function alwaysPanel(a){
   // lo dice con palabras en vez de dejar un hueco que parece "sin limite".
   const min=a.min_price?group(a.min_price):'';
   const acc=a.accept_above?group(a.accept_above):'';
-  const ask=a.asking||a.min_price||a.value||0;
+  const floor=a.good_floor||0;
   return `<div class="always-panel">
     <h4>Siempre en mercado</h4>
     <label class="always-check"><input type="checkbox" class="always-auto"
       ${a.auto_sell?'checked':''}>
-      <span><b>Vender automaticamente</b> si alguien llega a lo que pides
-      ${ask?`(${exact(ask)})`:''}<br>
-      <i>para jugadores que te dan igual: si la oferta es minimamente buena, fuera</i></span>
+      <span><b>Vender si la oferta es buena</b>${floor?`: desde ${exact(floor)}`:''}<br>
+      <i>${floor?`el mayor de lo que pides, un 2% sobre su valor y el techo rentable de `
+        +`futbolfantasy — aqui manda ${a.good_source}`
+        :'para jugadores que te dan igual'}</i>
+      ${a.room<=0?'<br><i class="always-warn">ojo: es tu ultimo '
+        +'jugador de esa posicion, no lo vendere solo</i>':''}</span>
     </label>
     <div class="always-grid">
       <label>Precio de listado
