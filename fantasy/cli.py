@@ -396,8 +396,7 @@ def cmd_advise(args) -> int:
         shape_bits.append(f"{POSITION_NAMES[position_id][:3]} {data['owned']}/{data['ideal']} {flag}")
     print("  " + " · ".join(shape_bits))
 
-    for bucket in ("bids_now", "asks", "watchlist", "upcoming_raids"):
-        analysis.enrich_with_detail(advice[bucket], limit=args.limit)
+    analysis.enrich_buckets(advice, limit=args.limit)
 
     heading("PUJAR AHORA · mercado libre de hoy")
     print(table(*player_rows(advice["bids_now"], cost_key="entry_cost",
@@ -563,8 +562,7 @@ def cmd_player(args) -> int:
 def cmd_report(args) -> int:
     universe, advice, context = _load(args)
     if advice:
-        for bucket in ("bids_now", "asks", "watchlist", "raids", "upcoming_raids"):
-            analysis.enrich_with_detail(advice[bucket], limit=args.limit)
+        analysis.enrich_buckets(advice, limit=args.limit)
     path = Path(args.output) if args.output else None
     written = report.write(universe, advice, context=context, path=path,
                            activity=universe.get("activity"))
@@ -617,8 +615,7 @@ def cmd_serve(args) -> int:
     def builder():
         universe, advice, context = _load(args)
         if advice:
-            for bucket in ("bids_now", "asks", "watchlist", "raids", "upcoming_raids"):
-                analysis.enrich_with_detail(advice[bucket], limit=args.limit)
+            analysis.enrich_buckets(advice, limit=args.limit)
         return universe, advice, context
 
     return serve.run(builder, host=args.host, port=args.port, interval=args.interval)

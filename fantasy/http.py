@@ -14,6 +14,20 @@ from .config import CACHE_DIR, ensure_dirs
 from .logs import log
 
 
+class RateLimited(Exception):
+    """429. Carries Retry-After when the server bothered to send one."""
+
+    def __init__(self, status: int, url: str, body: str = "", retry_after: str | None = None):
+        super().__init__(f"HTTP {status} on {url} (rate limited)")
+        self.status = status
+        self.url = url
+        self.body = body
+        try:
+            self.retry_after = float(retry_after) if retry_after else None
+        except ValueError:
+            self.retry_after = None
+
+
 class HttpError(Exception):
     def __init__(self, status: int, url: str, body: str = ""):
         snippet = " ".join(body.split())[:200] if body.isprintable() or body == "" else ""
@@ -40,6 +54,11 @@ def _read_cache(url: str, tag: str, ttl: float):
 def _write_cache(url: str, tag: str, body: str) -> None:
     ensure_dirs()
     _cache_path(url, tag).write_text(body, encoding="utf-8")
+
+
+def cached(url: str, tag: str, ttl: float) -> str | None:
+    """Cache-only read, so callers can throttle just the real requests."""
+    return _read_cache(url, tag, ttl)
 
 
 def fetch(
@@ -90,6 +109,11 @@ def fetch(
                                              "attempt": attempt + 1})
             if exc.code in (401, 403, 404):
                 raise HttpError(exc.code, url, body) from exc
+            if exc.code == 429:
+                # Being rate limited is an answer, not a glitch: retrying makes it
+                # worse. Surface it so the caller can stop for this cycle.
+                raise RateLimited(exc.code, url, body,
+                                  retry_after=exc.headers.get("Retry-After")) from exc
             last_error = HttpError(exc.code, url, body)
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             log.warning("http failure", extra={"url": url, "tag": tag,

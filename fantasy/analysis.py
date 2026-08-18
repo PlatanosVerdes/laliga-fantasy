@@ -13,7 +13,7 @@ from typing import Any, Iterable
 
 from . import favourites
 from . import futbolfantasy as ff
-from . import laliga, matching
+from . import http, laliga, matching
 from .config import IDEAL_PER_POSITION, MIN_PER_POSITION, POSITIONS, WEEKS_IN_SEASON
 from .logs import log, timed
 
@@ -961,24 +961,47 @@ def deep_enrich(rows: list[dict[str, Any]], *, limit: int = 20) -> int:
     return fixed
 
 
-def enrich_with_detail(rows: list[dict[str, Any]], *, limit: int = 25) -> None:
-    """Fetch futbolfantasy's ideal bid / value extremes for a shortlist."""
-    for row in rows[:limit]:
-        ff_id = row.get("ff_id")
-        if not ff_id:
-            continue
+def enrich_buckets(advice: dict[str, Any], *, limit: int = 15) -> None:
+    """Enrich every shortlist in one pass, each player fetched at most once.
+
+    The buckets overlap heavily (a market player is in `bids_now` and possibly in
+    the watchlist and the raid list too), so enriching them one by one meant tens of
+    duplicated requests per refresh — enough for futbolfantasy to answer 429.
+    """
+    buckets = ("bids_now", "asks", "watchlist", "raids", "upcoming_raids")
+    rows_by_player: dict[str, list[dict]] = {}
+    for name in buckets:
+        for row in (advice.get(name) or [])[:limit]:
+            if row.get("ff_id"):
+                rows_by_player.setdefault(str(row["ff_id"]), []).append(row)
+
+    fetched = 0
+    for ff_id, rows in rows_by_player.items():
         try:
             detail = ff.player_detail(ff_id)
+        except http.RateLimited as exc:
+            log.warning("futbolfantasy rate limited: dejo de enriquecer este ciclo",
+                        extra={"fetched": fetched, "pending": len(rows_by_player) - fetched,
+                               "retry_after": exc.retry_after})
+            break
         except Exception:
             continue
-        row["ideal_bid"] = detail.get("ideal_bid")
-        row["max_value"] = detail.get("max_value")
-        row["min_value"] = detail.get("min_value")
-        row["max_date"] = detail.get("max_date")
-        row["injury_marks"] = detail.get("injury_marks")
-        entry = row.get("entry_cost") or row.get("value")
-        ideal = detail.get("ideal_bid") or 0
-        row["bid_headroom"] = (ideal - entry) if ideal else None
-        row["profitable"] = bool(ideal and entry and ideal >= entry)
-        history = detail.get("history") or detail.get("prev_season_history") or []
-        row["value_history"] = [point["value"] for point in history][-60:]
+        fetched += 1
+        for row in rows:
+            _apply_detail(row, detail)
+    log.info("detail enrichment", extra={"unique_players": len(rows_by_player),
+                                        "fetched": fetched})
+
+
+def _apply_detail(row: dict[str, Any], detail: dict[str, Any]) -> None:
+    row["ideal_bid"] = detail.get("ideal_bid")
+    row["max_value"] = detail.get("max_value")
+    row["min_value"] = detail.get("min_value")
+    row["max_date"] = detail.get("max_date")
+    row["injury_marks"] = detail.get("injury_marks")
+    entry = row.get("entry_cost") or row.get("value")
+    ideal = detail.get("ideal_bid") or 0
+    row["bid_headroom"] = (ideal - entry) if ideal else None
+    row["profitable"] = bool(ideal and entry and ideal >= entry)
+    history = detail.get("history") or detail.get("prev_season_history") or []
+    row["value_history"] = [point["value"] for point in history][-60:]

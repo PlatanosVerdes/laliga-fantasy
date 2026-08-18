@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import html as html_mod
 import re
+import threading
+import time
 from typing import Any
 
 from . import http
@@ -20,7 +22,23 @@ from .config import FF_DETAIL_URL, FF_HEADERS, FF_MARKET_URL, FF_PLAYER_URL
 HOUR = 3600
 
 
+# futbolfantasy is somebody's site, not an API we are entitled to hammer: keep a
+# floor between requests that actually leave this process (cache hits don't count).
+MIN_INTERVAL = 0.4
+_last_request = 0.0
+_throttle = threading.Lock()
+
+
 def _fetch(url: str, *, ttl: float, tag: str) -> str:
+    global _last_request
+    cached = http.cached(url, tag, ttl)
+    if cached is not None:
+        return cached
+    with _throttle:
+        wait = MIN_INTERVAL - (time.monotonic() - _last_request)
+        if wait > 0:
+            time.sleep(wait)
+        _last_request = time.monotonic()
     return http.fetch(url, headers=FF_HEADERS, ttl=ttl, tag=tag, timeout=60)
 
 
@@ -141,7 +159,7 @@ def parse_detail(html: str) -> dict[str, Any]:
     }
 
 
-def player_detail(ff_id: str, ttl: float = 12 * HOUR) -> dict[str, Any]:
+def player_detail(ff_id: str, ttl: float = 24 * HOUR) -> dict[str, Any]:
     url = FF_DETAIL_URL.format(ff_id=ff_id)
     return parse_detail(_fetch(url, ttl=ttl, tag="ff_detail"))
 
