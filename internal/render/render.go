@@ -775,6 +775,21 @@ func asStrings(value any) []string {
 	return out
 }
 
+// parseStamp reads the API's dates, which come in more than one shape.
+func parseStamp(value string) (time.Time, bool) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, false
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05",
+		"2006-01-02"} {
+		if when, err := time.Parse(layout, value); err == nil {
+			return when, true
+		}
+	}
+	return time.Time{}, false
+}
+
 // NumericKinds are right-aligned, and the page's sort code reads the same list.
 var NumericKinds = map[string]bool{
 	"money": true, "num": true, "int": true, "pct": true, "pct_plain": true,
@@ -992,6 +1007,26 @@ func clauseColumns() []Column {
 	}
 }
 
+// columnsFor is the column spec of a section, for the callers that need the columns rather
+// than the rendered table — the actions section prepends a legend to its own.
+func columnsFor(name string) []Column {
+	switch name {
+	case "acciones":
+		return []Column{
+			{"Que hacer", field("verdict"), "verdict"},
+			{"★", whole, "star"},
+			{"Jugador", whole, "player"},
+			{"Motivo", field("why"), "text"},
+			{"Coste", field("entry_cost"), "money"},
+			{"Valor", field("value"), "money"},
+			{"xPts/j", field("xpts"), "num"},
+			{"Pts/M", field("points_value"), "mag"},
+			{"Valor 7d", field("projected_pct"), "pct"},
+		}
+	}
+	return nil
+}
+
 // SectionTable renders one of the page's tables by name. Same columns, same order, same
 // section — the section matters because it decides whether a row says "mio".
 func SectionTable(name string, rows []map[string]any) (string, error) {
@@ -1001,10 +1036,18 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 
 	case "mercado":
 		// The buying table puts what futbolfantasy still considers profitable right next
-		// to what the player would cost.
+		// to what the player would cost, and ends with how many rivals are already bidding
+		// and the button to join them.
 		columns := insert(PlayerColumns("Puja minima"), 4,
 			Column{"Puja max. rentable", field("ideal_bid"), "ideal"})
-		return TableIn(columns, rows, "Sin datos", "mercado", true), nil
+		columns = append(columns,
+			Column{"Pujas", func(row map[string]any) any {
+				listing, _ := row["market"].(map[string]any)
+				return listing["bids"]
+			}, "int"},
+			Column{"", whole, "bid"})
+		return TableIn(columns, rows, "El mercado libre esta vacio ahora mismo", "mercado",
+			true), nil
 
 	case "misventas":
 		// Yours, so no star and no "mio": what matters is what you are asking against what
@@ -1092,18 +1135,7 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 	case "acciones":
 		// The one table that says what to do rather than what is true, so the verdict is
 		// the first column and the reason sits right next to the name.
-		columns := []Column{
-			{"Que hacer", field("verdict"), "verdict"},
-			{"★", whole, "star"},
-			{"Jugador", whole, "player"},
-			{"Motivo", field("why"), "text"},
-			{"Coste", field("entry_cost"), "money"},
-			{"Valor", field("value"), "money"},
-			{"xPts/j", field("xpts"), "num"},
-			{"Pts/M", field("points_value"), "mag"},
-			{"Valor 7d", field("projected_pct"), "pct"},
-		}
-		return TableIn(columns, rows, "Sin datos", "", false), nil
+		return TableIn(columnsFor("acciones"), rows, "Sin datos", "", false), nil
 
 	case "vencimientos":
 		// Yours, and the clock is the subject: when the lock falls, anyone with the cash

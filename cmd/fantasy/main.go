@@ -68,6 +68,8 @@ func main() {
 		err = cmdWake(rest[1:])
 	case "section":
 		err = cmdSection(rest[1:])
+	case "page":
+		err = cmdPage(rest[1:])
 	case "shell":
 		err = cmdShell(rest[1:])
 	case "cells":
@@ -102,6 +104,7 @@ uso: fantasy [-v|-q] <comando>
   calls         la peticion que construiria cada operacion, sin enviarla
   checks        que aceptaria y que rechazaria la guardia, caso por caso
   cells         como se formatea cada celda, para compararlo con Python
+  page <dump.json> <generado> [liga]   la pagina entera, desde un volcado
   shell <caso>  cabecera, widget, pie o pestanas, para compararlo
   section <n> <rows.json>   una seccion renderizada, para compararla
   paths         donde vive cada cosa
@@ -505,6 +508,93 @@ func cmdSection(args []string) error {
 	}
 	fmt.Print(html)
 	return nil
+}
+
+// cmdPage renders the whole document from a dump, so it can be compared with Python's
+// byte for byte. The timestamp and the league name are arguments because a page that reads
+// the clock cannot be compared with anything.
+func cmdPage(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("uso: page <dump.json> <generado> [liga]")
+	}
+	raw, err := os.ReadFile(args[0])
+	if err != nil {
+		return err
+	}
+	var blob struct {
+		Universe map[string]any `json:"universe"`
+		Advice   map[string]any `json:"advice"`
+	}
+	if err := json.Unmarshal(raw, &blob); err != nil {
+		return err
+	}
+	league := ""
+	if len(args) > 2 {
+		league = args[2]
+	}
+
+	assets := os.Getenv("FANTASY_ASSETS")
+	if assets == "" {
+		assets = "assets"
+	}
+	read := func(name string) string {
+		body, err := os.ReadFile(filepath.Join(assets, name))
+		if err != nil {
+			return ""
+		}
+		return string(body)
+	}
+	render.Pitch = read("pitch.html")
+	render.Filters = read("filters.html")
+
+	// The crests come from the same cache file Python fills, so the page carries the same
+	// badges rather than a second download.
+	var crests map[string]string
+	if body, err := os.ReadFile(filepath.Join(config.CacheDir, "crests.json")); err == nil {
+		_ = json.Unmarshal(body, &crests)
+		render.Crests = crests
+	}
+
+	// The two standing-instruction tables come precomputed in the dump when it has them:
+	// their rows are the policy engine's output, not the model's.
+	document := render.Document{
+		Universe: blob.Universe, Advice: blob.Advice,
+		Generated: args[1], LeagueName: league,
+		CSS: read("report.css"), JS: read("report.js"),
+		Modal: read("modal.html"), Drawer: read("drawer.html"),
+		Plan: rowsFrom(blob.Advice["_plan"]), Raids: rowsFrom(blob.Advice["_raids"]),
+		Policies: policiesFrom(blob.Advice["_policies"]),
+	}
+	fmt.Print(document.HTML())
+	return nil
+}
+
+func rowsFrom(value any) []map[string]any {
+	list, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(list))
+	for _, item := range list {
+		if row, ok := item.(map[string]any); ok {
+			out = append(out, row)
+		}
+	}
+	return out
+}
+
+func policiesFrom(value any) map[string]map[string]any {
+	asMap, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]map[string]any, len(asMap))
+	for key, item := range asMap {
+		if row, ok := item.(map[string]any); ok {
+			out[key] = row
+		}
+	}
+	return out
 }
 
 // cmdShell renders the pieces of the page that are not sections, from arguments rather

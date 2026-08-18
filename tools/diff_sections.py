@@ -58,6 +58,7 @@ EMPTY = {
     "riesgo": "Sin exposicion relevante",
     "enventa": "Nadie ha puesto a nadie en venta",
     "clausulas": "Ninguna cláusula a tu alcance",
+    "mercado": "El mercado libre esta vacio ahora mismo",
     "vencimientos": "Ninguna se desbloquea en los proximos 10 dias.",
     "proximas": "Ninguna cláusula interesante se abre en los proximos 10 dias.",
 }
@@ -96,6 +97,11 @@ def columns_for(name: str):
     if name == "mercado":
         columns = player_columns(cost_label="Puja minima")
         columns.insert(4, ("Puja max. rentable", lambda r: r.get("ideal_bid"), "ideal"))
+        # These two were missing from this harness until the whole-page comparison caught
+        # it: a per-section spec written by hand can be wrong about the section, and only
+        # the page knows what the page contains.
+        columns.append(("Pujas", lambda r: (r.get("market") or {}).get("bids"), "int"))
+        columns.append(("", lambda r: r, "bid"))
         return columns
 
     if name == "enventa":

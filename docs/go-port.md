@@ -56,7 +56,8 @@ keeps working throughout.
 | 7c | The HTML rendering: primitives first | **52 cells identical** |
 | 7d | The sections, one table at a time | **15 tables + 2 shapes byte-identical**, plus every empty state |
 | 7e | The page shell: head, widgets, tabs, footer | **5 pieces byte-identical**, ranks and meters included |
-| 7f | Assembling the whole document from Go | page renders from Go, SSE swaps, drag-and-drop still works |
+| 7f | Assembling the whole document from Go | **the page is byte-identical**: 814.950 bytes |
+| 7g | The advice layer, so Go can serve its own page | `fantasy-go serve` renders it from its own model |
 | 8 | Policies and the automation | plan parity on recorded payloads, then armed |
 
 ## The differential harness
@@ -120,6 +121,12 @@ about to expire, our own match under way, somebody else's, a finished one, a mat
 closing — each at four cadences including "the page is open" and "the periodic rebuild is
 overdue". Both sides take `now` as an argument, because a scheduler that can only be
 observed live cannot be compared.
+
+`tools/diff_page.py` is the strictest of them and the last: the whole document, 814,950 bytes,
+byte for byte, from the same dump. A single character out of place in any of forty notes shows
+up. It is also the one that corrects the others — the per-section harness had the market table
+missing two columns for a while, and a hand-written spec can be wrong about the section while
+the page cannot be wrong about the page.
 
 `tools/diff_render.py` pins the page's formatters before any section is ported. Every table
 is these primitives repeated a few thousand times, so a comma where the other side writes a
