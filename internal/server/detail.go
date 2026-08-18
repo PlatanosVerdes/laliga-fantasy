@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
@@ -40,6 +41,17 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 			"error": "sin datos para este id: puede ser un entrenador, que el juego lista " +
 				"pero el analisis no cubre"})
 		return
+	}
+
+	// The profitable ceiling lives on futbolfantasy's page, not in the model, so the drawer
+	// only knows it if the server puts it here: without it the dialog reads "sin margen" and
+	// warns about every amount, however small.
+	if _, present := player["ideal_bid"]; !present {
+		if ffID := text(player["ff_id"]); ffID != "" {
+			if detail, err := futbolfantasy.PlayerDetail(ffID, 24*time.Hour); err == nil {
+				player["ideal_bid"] = number(detail["ideal_bid"])
+			}
+		}
 	}
 
 	armed, _ := policies.Load()

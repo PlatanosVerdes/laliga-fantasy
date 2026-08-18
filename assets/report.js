@@ -204,12 +204,13 @@ if(modal){
         body:JSON.stringify({operation:pending.operation||'bid', amount,
                              market_id:pending.market_id, player_id:pending.player_id,
                              player_team_id:pending.player_team_id,
-                             offer_id:pending.offer_id})});
+                             offer_id:pending.offer_id, bid_id:pending.bid_id})});
       const data=await res.json();
       if(!res.ok) throw new Error(data.error||res.status);
       pending.token=data.token;
       const op=pending.operation||'bid';
-      const movesCash=['bid','direct_offer','pay_clause','accept_offer'].includes(op);
+      const movesCash=['bid','modify_bid','direct_offer','pay_clause',
+                       'accept_offer'].includes(op);
       modal.querySelector('.bid-summary').innerHTML =
         `<dl class="bid-dl">
            <dt>Jugador</dt><dd>${data.player_name||pending.name}</dd>
@@ -275,8 +276,8 @@ const DONE_LABEL={bid:'Puja enviada',sell_to_market:'Puesto en venta',
   accept_offer:'Oferta aceptada',decline_offer:'Oferta rechazada',
   withdraw:'Retirado del mercado',direct_offer:'Oferta enviada',
   pay_clause:'Clausula pagada',raise_clause:'Clausula subida',
-  cancel_bid:'Puja retirada'};
-const AMOUNT_LABEL={bid:'Pujas',sell_to_market:'Precio de venta',
+  cancel_bid:'Puja retirada',modify_bid:'Puja cambiada'};
+const AMOUNT_LABEL={bid:'Pujas',modify_bid:'Nueva puja',sell_to_market:'Precio de venta',
   accept_offer:'Cobras',direct_offer:'Ofreces',pay_clause:'Pagas',
   raise_clause:'Subes la clausula'};
 
@@ -848,7 +849,7 @@ async function runAction(a,player){
   if(a.kind==='amount'){
     pending={operation:a.op, market_id:a.market_id, player_id:a.player_id||player.id,
              player_team_id:a.player_team_id||player.player_team_id,
-             offer_id:a.offer_id, name:player.name, min_bid:a.min||0,
+             offer_id:a.offer_id, bid_id:a.bid_id, name:player.name, min_bid:a.min||0,
              ideal:player.ideal_bid||0, value:player.value};
     modal.hidden=false;
     modal.querySelector('.bid-action').textContent=a.label+' —';
