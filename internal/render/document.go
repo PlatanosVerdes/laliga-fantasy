@@ -32,6 +32,8 @@ type Document struct {
 	Raids []map[string]any
 	// Policies is the file's contents, for the two amount columns in the plan table.
 	Policies map[string]map[string]any
+	// Swaps is the "this one out, this one in" plan, computed by the advice layer.
+	Swaps map[string]any
 }
 
 func rows(source any) []map[string]any {
@@ -67,6 +69,7 @@ func (d Document) HTML() string {
 
 	var sections []string
 	if hasAdvice {
+		sections = append(sections, d.swapSection())
 		sections = append(sections, d.actionsSection())
 		sections = append(sections, d.planSection())
 		sections = append(sections, d.raidsSection())
@@ -239,6 +242,28 @@ func whenLabel(value string) string {
 }
 
 // --- the sections ----------------------------------------------------------------------
+
+// swapSection is the plan: pairs of "this one out, this one in" with the arithmetic. It goes
+// first because it is the answer to the question the rest of the page only supplies evidence
+// for, and because twenty-six decisions in a table is exactly the moment somebody gives up.
+func (d Document) swapSection() string {
+	plan := d.Swaps
+	if len(plan) == 0 {
+		return ""
+	}
+	count := ""
+	if moves := rows(plan["moves"]); len(moves) > 0 {
+		count = fmt.Sprintf("%d cambios", len(moves))
+	}
+	return Section("Plan ideal", SwapPlan(plan),
+		"Cambios de uno por uno, misma posicion, sin dejar el once ilegal y sin pagar por "+
+			"encima del techo de futbolfantasy. Los puntos que compras tienen que salir "+
+			"<strong>mas baratos por millon que lo que ya tienes</strong>, que es lo que "+
+			"descarta al fichaje caro que parece un salto. El precio de venta es la oferta "+
+			"que ya tienes encima de la mesa cuando la hay; si no, su valor de mercado, y "+
+			"la caja descuenta lo que tengas comprometido en pujas.",
+		count, "plan")
+}
 
 func (d Document) actionsSection() string {
 	rowsOut := d.actionRows()
