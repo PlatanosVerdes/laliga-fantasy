@@ -52,8 +52,9 @@ keeps working throughout.
 | 6 | Writes with the two-step guard and the id semantics | **11 calls byte-identical, 15 validations identical**, 12 guard tests green; no live write yet |
 | 7a | The page's CSS and JS become files | **page byte-identical** once the clock decimals are masked |
 | 7b | HTTP server, JSON API, SSE | **/api/state identical live**: 729 players x 52 fields, 82 events, 13 managers' cash |
-| 7c | The HTML rendering: primitives first | **40 cells identical**; sections next |
-| 7d | The sections and the page shell | page renders from Go, SSE swaps, drag-and-drop still works |
+| 7c | The HTML rendering: primitives first | **52 cells identical** |
+| 7d | The sections, one table at a time | **2 of ~14 byte-identical**: plantilla, mercado |
+| 7e | The page shell, the pitch and the drawer | page renders from Go, SSE swaps, drag-and-drop still works |
 | 8 | Policies and the automation | plan parity on recorded payloads, then armed |
 
 ## The differential harness
@@ -119,6 +120,11 @@ dot makes every section differ and a section-level diff worthless. The inputs ar
 a negative whose sign belongs in front of the separators, an absent value that is an em dash
 and not a zero, a flat series whose sparkline span would be a division by zero, and a series
 of four, which is not enough history to draw and must be omitted rather than faked.
+
+`tools/diff_sections.py` compares whole rendered tables byte for byte. The rows are handed
+to both implementations rather than read from a live model on each side: otherwise a
+difference could be two data reads disagreeing rather than two renderers, and the point of a
+byte comparison is that it has exactly one explanation.
 
 `tools/diff_api.py` compares the two servers *live*, on the same frozen cache: it starts
 from /healthz, lists which keys of /api/state each side publishes, and then reuses the model

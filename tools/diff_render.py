@@ -43,6 +43,20 @@ CASES: list[tuple[str, object]] = [
     ("spark", []), ("spark", [1.0, 2.0, 3.0]),
     ("spark", [9_000_000.0, 9_100_000.0, 8_900_000.0, 9_400_000.0, 9_867_495.0]),
     ("spark", [5.0, 5.0, 5.0, 5.0, 5.0, 5.0]),
+    ("starts", None), ("starts", 0), ("starts", 29.0), ("starts", 30.0), ("starts", 50.0),
+    ("starts", 75.0), ("starts", 100.0),
+    ("star", {"id": "1300", "name": "Camavinga", "starred": True}),
+    ("star", {"id": "184", "name": "David Soria"}),
+    ("player", {"id": "1300", "name": "Camavinga", "team": "Real Madrid",
+                "team_short": "RMA", "team_id": "1", "position": "MED", "position_id": 3.0,
+                "available": True}),
+    ("player", {"id": "7", "name": "Lesionado", "team": "Elche CF",
+                "team_short": "ELC", "team_id": "7", "position": "POR", "position_id": 1.0,
+                "available": False, "status": "injured"}),
+    ("player", {"id": "8", "name": "Dudoso", "team": "Getafe",
+                "team_short": "GET", "team_id": "17", "position": "DEL", "position_id": 4.0,
+                "available": True, "status": "doubtful", "prior_based": True,
+                "is_mine": True}),
 ]
 
 

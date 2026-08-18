@@ -66,6 +66,8 @@ func main() {
 		err = cmdModel(rest[1:])
 	case "wake":
 		err = cmdWake(rest[1:])
+	case "section":
+		err = cmdSection(rest[1:])
 	case "cells":
 		err = cmdCells()
 	case "checks":
@@ -98,6 +100,7 @@ uso: fantasy [-v|-q] <comando>
   calls         la peticion que construiria cada operacion, sin enviarla
   checks        que aceptaria y que rechazaria la guardia, caso por caso
   cells         como se formatea cada celda, para compararlo con Python
+  section <n> <rows.json>   una seccion renderizada, para compararla
   paths         donde vive cada cosa
 `))
 }
@@ -433,6 +436,52 @@ var cellCases = []struct {
 	{"spark", []any{}}, {"spark", []any{1.0, 2.0, 3.0}},
 	{"spark", []any{9_000_000.0, 9_100_000.0, 8_900_000.0, 9_400_000.0, 9_867_495.0}},
 	{"spark", []any{5.0, 5.0, 5.0, 5.0, 5.0, 5.0}},
+	{"starts", nil}, {"starts", 0}, {"starts", 29.0}, {"starts", 30.0}, {"starts", 50.0},
+	{"starts", 75.0}, {"starts", 100.0},
+	{"star", map[string]any{"id": "1300", "name": "Camavinga", "starred": true}},
+	{"star", map[string]any{"id": "184", "name": "David Soria"}},
+	{"player", map[string]any{"id": "1300", "name": "Camavinga", "team": "Real Madrid",
+		"team_short": "RMA", "team_id": "1", "position": "MED", "position_id": 3.0,
+		"available": true}},
+	{"player", map[string]any{"id": "7", "name": "Lesionado", "team": "Elche CF",
+		"team_short": "ELC", "team_id": "7", "position": "POR", "position_id": 1.0,
+		"available": false, "status": "injured"}},
+	{"player", map[string]any{"id": "8", "name": "Dudoso", "team": "Getafe",
+		"team_short": "GET", "team_id": "17", "position": "DEL", "position_id": 4.0,
+		"available": true, "status": "doubtful", "prior_based": true, "is_mine": true}},
+}
+
+// cmdSection renders one section from rows handed to it, so the HTML can be compared
+// against Python's for the very same input. Rendering from a live model instead would
+// compare two data reads as much as two renderers.
+func cmdSection(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("uso: section <plantilla|mercado> <rows.json>")
+	}
+	raw, err := os.ReadFile(args[1])
+	if err != nil {
+		return err
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return err
+	}
+
+	switch args[0] {
+	case "plantilla":
+		fmt.Print(render.TableIn(render.PlayerColumns(""), rows, "Sin datos", "plantilla", false))
+	case "mercado":
+		// The buying table adds the price it would cost and what futbolfantasy still
+		// considers profitable, right next to it.
+		columns := render.PlayerColumns("Puja minima")
+		ideal := render.Column{Header: "Puja max. rentable", Kind: "ideal",
+			Read: func(row map[string]any) any { return row["ideal_bid"] }}
+		columns = append(columns[:4], append([]render.Column{ideal}, columns[4:]...)...)
+		fmt.Print(render.TableIn(columns, rows, "Sin datos", "mercado", true))
+	default:
+		return fmt.Errorf("seccion desconocida: %s", args[0])
+	}
+	return nil
 }
 
 func cmdCells() error {
