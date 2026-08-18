@@ -38,9 +38,18 @@ def save(policies: dict[str, dict[str, Any]]) -> None:
 
 def set_policy(player_id: str, *, name: str | None = None, always_listed: bool | None = None,
                min_price: int | None = None, accept_above: int | None = None,
-               raid: bool | None = None, max_pay: int | None = None) -> dict[str, Any]:
+               raid: bool | None = None, max_pay: int | None = None,
+               unset: tuple[str, ...] = ()) -> dict[str, Any]:
+    """`unset` removes keys outright, which is how a threshold is taken back off.
+
+    Passing None only means "leave it alone", so clearing needs its own way in:
+    otherwise disarming an automatic sale would be impossible from a form where
+    emptying the field is exactly how a person says "no".
+    """
     policies = load()
     entry = {**policies.get(str(player_id), {}), "id": str(player_id)}
+    for key in unset:
+        entry.pop(key, None)
     if name:
         entry["name"] = name
     if always_listed is not None:

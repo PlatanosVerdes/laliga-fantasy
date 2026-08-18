@@ -365,10 +365,14 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
             actions: list[dict[str, Any]] = []
 
             if player.get("is_mine"):
+                policy_now = policies_now.get(str(player_id)) or {}
                 starred = str(player_id) in policies_now
                 actions.append({"op": "always", "label": ("Quitar de siempre-en-mercado"
                                                           if starred else "Siempre en mercado"),
-                                "kind": "toggle", "on": starred})
+                                "kind": "toggle", "on": starred,
+                                "min_price": policy_now.get("min_price"),
+                                "accept_above": policy_now.get("accept_above"),
+                                "value": int(player.get("value") or 0)})
                 if listing.get("market_id"):
                     actions.append({"op": "withdraw", "label": "Quitar del mercado",
                                     "kind": "confirm", "market_id": listing["market_id"]})
@@ -500,6 +504,30 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                 player_id = str(body.get("id") or "")
                 if not player_id:
                     self._json(400, {"error": "falta el id"})
+                    return
+                # Amounts present: set them. Otherwise it is the plain on/off toggle.
+                if "min_price" in body or "accept_above" in body:
+                    amounts, unset = {}, []
+                    for key in ("min_price", "accept_above"):
+                        if key not in body:
+                            continue
+                        raw = body.get(key)
+                        try:
+                            amount = int(float(raw)) if raw not in (None, "") else 0
+                        except (TypeError, ValueError):
+                            self._json(400, {"error": f"{key} no es un importe"})
+                            return
+                        if amount > 0:
+                            amounts[key] = amount
+                        else:
+                            unset.append(key)
+                    entry = policies.set_policy(player_id, name=body.get("name"),
+                                                always_listed=True, unset=tuple(unset),
+                                                **amounts)
+                    threading.Thread(target=state.rerender, daemon=True).start()
+                    self._json(200, {"id": player_id, "always_listed": True,
+                                     "min_price": entry.get("min_price"),
+                                     "accept_above": entry.get("accept_above")})
                     return
                 if policies.load().get(player_id):
                     policies.remove(player_id)

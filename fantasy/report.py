@@ -775,6 +775,23 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   border-color:color-mix(in srgb,var(--warning) 45%,transparent)}
 .drawer-actions button[disabled]{opacity:.45;cursor:not-allowed}
 .drawer-note{font-size:11px;color:var(--muted);margin:16px 0 0}
+.always-panel{border:1px solid var(--line);border-radius:9px;padding:12px 13px 13px;
+  background:var(--plane);display:flex;flex-direction:column;gap:10px}
+.always-panel h4{margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);font-weight:600}
+.always-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.always-grid label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted)}
+.always-grid input{font:inherit;font-size:15px;font-variant-numeric:tabular-nums;
+  padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--surface);
+  color:var(--ink);width:100%;box-sizing:border-box}
+.always-grid input::placeholder{color:var(--muted);font-size:12px}
+.always-foot{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.always-foot p{margin:0;font-size:11px;color:var(--muted);line-height:1.35}
+.always-foot p b{color:var(--warning)}
+.always-save{font:inherit;font-size:12px;font-weight:600;padding:7px 13px;border-radius:7px;
+  border:1px solid transparent;background:var(--accent);color:#fff;cursor:pointer;flex:0 0 auto}
+.always-save[disabled]{opacity:.5;cursor:not-allowed}
+.always-saved{color:var(--good);font-weight:600}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;
   justify-content:center;z-index:50;padding:20px}
 .modal[hidden]{display:none}
@@ -1627,6 +1644,69 @@ async function openDetail(playerId){
       +'las operaciones estan desactivadas.</p>'}`;
   body.querySelectorAll('button[data-action]').forEach(button=>
     button.addEventListener('click',()=>runAction(JSON.parse(button.dataset.action),p)));
+  wireAlways(body,p);
+}
+
+function wireAlways(scope,player){
+  const panel=scope.querySelector('.always-panel');
+  if(!panel) return;
+  const min=panel.querySelector('.always-min');
+  const accept=panel.querySelector('.always-accept');
+  const save=panel.querySelector('.always-save');
+  [min,accept].forEach(input=>input.addEventListener('input',()=>{
+    const n=digits(input.value);
+    input.value=isNaN(n)?'':group(n);
+    save.disabled=false; save.textContent='Guardar';
+  }));
+  save.addEventListener('click',async()=>{
+    save.disabled=true; save.textContent='Guardando…';
+    try{
+      const res=await fetch('/api/always',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({id:player.id,name:player.name,
+                             min_price:digits(min.value)||0,
+                             accept_above:digits(accept.value)||0})});
+      if(!res.ok) throw new Error(res.status);
+      const data=await res.json();
+      min.value=data.min_price?group(data.min_price):'';
+      accept.value=data.accept_above?group(data.accept_above):'';
+      // Repintar el aviso: pasar de "no vende solo" a "venta automatica" es
+      // justo lo que hay que ver confirmado.
+      const note=panel.querySelector('.always-foot p');
+      note.innerHTML=data.accept_above
+        ? '<b>Venta automatica activada</b>: acepto la mejor oferta a partir de ese '
+          +'importe, sin preguntar.'
+        : 'Sin importe en «aceptar desde» <b>no vende solo</b>, solo lo mantiene listado.';
+      save.textContent='Guardado'; save.classList.add('always-saved');
+      setTimeout(()=>{save.classList.remove('always-saved');
+                      save.textContent='Guardar'; save.disabled=false;},1600);
+    }catch(e){
+      save.textContent='No se ha guardado'; save.disabled=false;
+    }
+  });
+}
+
+function alwaysPanel(a){
+  // Vacio = no vender solo. Es la unica forma de decirlo, asi que el placeholder
+  // lo dice con palabras en vez de dejar un hueco que parece "sin limite".
+  const min=a.min_price?group(a.min_price):'';
+  const acc=a.accept_above?group(a.accept_above):'';
+  return `<div class="always-panel">
+    <h4>Siempre en mercado</h4>
+    <div class="always-grid">
+      <label>Precio de listado
+        <input class="always-min" type="text" inputmode="numeric" autocomplete="off"
+               value="${min}" placeholder="${a.value?group(a.value):'valor de mercado'}"></label>
+      <label>Aceptar desde
+        <input class="always-accept" type="text" inputmode="numeric" autocomplete="off"
+               value="${acc}" placeholder="no vendo solo"></label>
+    </div>
+    <div class="always-foot">
+      <p>${acc?'<b>Venta automatica activada</b>: acepto la mejor oferta a partir de ese '
+             +'importe, sin preguntar.'
+            :'Sin importe en «aceptar desde» <b>no vende solo</b>, solo lo mantiene listado.'}</p>
+      <button class="always-save">Guardar</button>
+    </div></div>`;
 }
 
 function actionButton(a){
@@ -1634,8 +1714,9 @@ function actionButton(a){
   const cls=a.op==='decline_offer'||a.op==='withdraw' ? 'danger-full'
           : (a.op==='always'||a.op==='raid') ? (a.on?'on':'') : 'primary';
   const off=a.blocked?' disabled':'';
-  return `<button class="${cls}" data-action='${JSON.stringify(a).replace(/'/g,"&#39;")}'${off}>`
+  const button=`<button class="${cls}" data-action='${JSON.stringify(a).replace(/'/g,"&#39;")}'${off}>`
     +`${a.label}${a.blocked?' — no te llega':''}</button>`;
+  return a.op==='always'&&a.on ? button+alwaysPanel(a) : button;
 }
 
 async function runAction(a,player){
@@ -1678,6 +1759,11 @@ async function runAction(a,player){
                                              :'Siempre en mercado';
       }
       a.on=!!data.always_listed;
+      const existing=document.querySelector('.always-panel');
+      if(a.on&&!existing&&button){
+        button.insertAdjacentHTML('afterend',alwaysPanel(a));
+        wireAlways(button.parentElement,player);
+      }else if(!a.on&&existing){ existing.remove(); }
     }catch(e){
       if(button){ button.classList.toggle('on',a.on);
         button.textContent=a.on?'Quitar de siempre-en-mercado':'Siempre en mercado'; }
