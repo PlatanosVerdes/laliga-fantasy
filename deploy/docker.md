@@ -10,7 +10,7 @@ last good copy from memory so a failed refresh never takes the page down.
 docker build -t laliga-fantasy .
 docker run -d --name laliga-fantasy \
   -p 8000:8000 \
-  -v "$PWD/data:/app/data" \
+  -v laliga-fantasy:/data \
   laliga-fantasy
 ```
 
@@ -34,8 +34,15 @@ services:
     volumes:
       # Session, cache, favourites, standing instructions and the report all live
       # here. The session is the only thing that cannot be regenerated.
-      - ./data:/app/data
+      - laliga-fantasy:/data
+
+volumes:
+  laliga-fantasy:
 ```
+
+The image sets `FANTASY_DATA_DIR=/data`, which collapses config, state and cache into that
+one directory so there is a single volume to mount. Outside a container the files follow the
+XDG spec instead — see [Where things live](../README.md#where-things-live).
 
 The image is `python:3.13-alpine` with the package copied in: there are no dependencies
 to install, so it builds in seconds and runs anywhere Python does, ARM included.
@@ -43,13 +50,30 @@ to install, so it builds in seconds and runs anywhere Python does, ARM included.
 ## The session
 
 The container cannot log in on its own — the flow needs a browser once (see the README).
-Do it on your machine and copy the result in:
+Do it on your machine, then hand the result over one of two ways.
+
+**Copy the file into the volume** (`~/.config/laliga-fantasy/tokens.json` is where the
+login leaves it):
 
 ```bash
 python3 fantasy.py auth browser
 python3 fantasy.py auth code '<the redirect URL>'
-cp data/tokens.json /wherever/the/volume/lives/
+docker cp ~/.config/laliga-fantasy/tokens.json laliga-fantasy:/data/tokens.json
 ```
+
+**Or pass it in the environment**, which is friendlier to a secrets manager:
+
+```yaml
+environment:
+  # The whole tokens.json...
+  FANTASY_TOKENS: ${FANTASY_TOKENS}
+  # ...or just the refresh token, exchanged on startup.
+  # FANTASY_REFRESH_TOKEN: ${FANTASY_REFRESH_TOKEN}
+```
+
+Either variable is read **only when no token file exists**, is written to the volume at
+`0600`, and rotation takes over from there — the refresh token changes on renewal, so the
+variable goes stale and the file is the truth. You can drop it after the first start.
 
 From then on the refresh token keeps the session alive, the same way the official app
 does. `/healthz` reports how much life it has left, so a blackbox probe against it turns

@@ -6,11 +6,12 @@ COPY fantasy.py README.md ./
 COPY fantasy/ ./fantasy/
 
 # The session, cache, settings and logs all live here — mount it to persist them.
-VOLUME /app/data
+# Kept outside /app so it never collides with the source tree.
+VOLUME /data
 
 ENV PYTHONUNBUFFERED=1 \
     FANTASY_LOG_JSON=1 \
-    FANTASY_DATA_DIR=/app/data
+    FANTASY_DATA_DIR=/data
 
 EXPOSE 8000
 

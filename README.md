@@ -47,7 +47,7 @@ python3 fantasy.py auth code '<url>'     # exchanges the code the browser redire
 ```
 
 **Step 1 — get the URL.** `auth browser` builds it and saves the PKCE verifier and `state`
-to `data/pending_auth.json` (valid 15 minutes). It looks like this, with the app's client id
+to `pending_auth.json` in the config directory (valid 15 minutes). It looks like this, with the app's client id
 and its native redirect:
 
 ```
@@ -104,7 +104,8 @@ Splitting the flow in two also means neither command needs a TTY, so it works ov
 `state` is verified and B2C errors are surfaced verbatim. From then on `auth refresh` — called
 automatically when the token is within 2 minutes of expiry, at most once every 10 minutes —
 keeps the session alive indefinitely, exactly as the app does; you should never have to log in
-again. `auth status` shows what is stored. Tokens live in `data/tokens.json`, mode `0600`.
+again. `auth status` shows what is stored. Tokens live in `tokens.json`, mode `0600`, in the config
+directory — see [Where things live](#where-things-live).
 
 ### Other routes
 
@@ -210,10 +211,38 @@ pay it right now, and the richest is X".
 * Team ids differ between the two sources (LaLiga 3 = Athletic, futbolfantasy 3 = Barcelona);
   everything is matched by normalized team name.
 
+## Where things live
+
+Files follow the [XDG base directory spec](https://specifications.freedesktop.org/basedir-spec/latest/),
+split by what they are — so a backup of the first directory is a backup of everything that
+cannot be regenerated:
+
+| Directory | Default | Holds |
+|---|---|---|
+| config | `~/.config/laliga-fantasy/` | `tokens.json` (`0600`), `settings.json`, `favourites.json`, `policies.json` |
+| state | `~/.local/state/laliga-fantasy/` | `report.html`, `fantasy.log` |
+| cache | `~/.cache/laliga-fantasy/` | scraped futbolfantasy pages, 24 h TTL — safe to delete |
+
+`XDG_CONFIG_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOME` are honoured. Two overrides:
+
+* **`FANTASY_DATA_DIR`** collapses all three into one directory. That is what a container
+  wants — a single volume to mount — and it is what the image sets.
+* If a `data/` directory next to the code already has a session in it, it keeps being used, and
+  the first run moves those files to the locations above and tells you so. Upgrading never
+  costs a login.
+
+**Seeding a container without an interactive login.** The refresh token *rotates*: the API
+can hand back a new one on every renewal, so it has to be written somewhere — which is why
+`gh`, `aws` and `kubectl` all keep rotating credentials in a file rather than an environment
+variable. To hand over the first one, set **`FANTASY_TOKENS`** (the whole `tokens.json` as
+JSON) or **`FANTASY_REFRESH_TOKEN`** (just the refresh token, exchanged on startup). Either
+one is read only when no token file exists, is written to the file at `0600`, and rotation
+takes over from there — so you can drop the variable after the first start.
+
 ## Logging
 
 Human-readable lines on stderr (warnings only, `-v` for everything) and JSON lines in
-`data/fantasy.log`, rotated at 5 MB × 3. Each record carries `service`, `level`, `host` and
+`fantasy.log` in the state directory, rotated at 5 MB × 3. Each record carries `service`, `level`, `host` and
 the event's own fields (`url`, `status`, `ms`, `matched`, ...).
 
 Set `FANTASY_LOG_JSON=1` to emit JSON on **stdout** instead of the terminal format — that is
@@ -245,7 +274,6 @@ fantasy/serve.py      HTTP server mode
 fantasy/logs.py       logging
 Dockerfile            dependency-free image for the homeserver
 deploy/docker.md      running it as a container, endpoints, write flags
-data/                 cache, tokens, settings, logs, report (gitignored)
 ```
 
 ## Endpoint notes

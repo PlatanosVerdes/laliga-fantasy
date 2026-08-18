@@ -2,14 +2,91 @@
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 
+APP_NAME = "laliga-fantasy"
 ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = Path(os.environ.get("FANTASY_DATA_DIR", ROOT / "data"))
-CACHE_DIR = DATA_DIR / "cache"
-TOKEN_FILE = DATA_DIR / "tokens.json"
-SETTINGS_FILE = DATA_DIR / "settings.json"
-REPORT_FILE = DATA_DIR / "report.html"
+
+
+def _xdg(variable: str, default: str) -> Path:
+    """XDG base directory, which is where a CLI's files are supposed to live."""
+    base = os.environ.get(variable)
+    return Path(base).expanduser() if base else Path.home() / default
+
+
+EXPLICIT_DIR = bool(os.environ.get("FANTASY_DATA_DIR"))
+
+
+def _resolve_dirs() -> tuple[Path, Path, Path]:
+    """(config, state, cache), honouring one override and the XDG spec.
+
+    FANTASY_DATA_DIR collapses all three into one directory, which is what a
+    container wants: a single volume to mount. Without it, files land where the
+    rest of the system keeps them, and a legacy ./data next to the code still wins
+    if it exists so an existing install keeps working.
+    """
+    override = os.environ.get("FANTASY_DATA_DIR")
+    if override:
+        one = Path(override).expanduser()
+        return one, one, one / "cache"
+
+    legacy = ROOT / "data"
+    if (legacy / "tokens.json").exists() or (legacy / "settings.json").exists():
+        return legacy, legacy, legacy / "cache"
+
+    return (_xdg("XDG_CONFIG_HOME", ".config") / APP_NAME,
+            _xdg("XDG_STATE_HOME", ".local/state") / APP_NAME,
+            _xdg("XDG_CACHE_HOME", ".cache") / APP_NAME)
+
+
+CONFIG_DIR, STATE_DIR, CACHE_DIR = _resolve_dirs()
+
+# Credentials and preferences: small, edited by us, worth backing up.
+TOKEN_FILE = CONFIG_DIR / "tokens.json"
+SETTINGS_FILE = CONFIG_DIR / "settings.json"
+FAVOURITES_FILE = CONFIG_DIR / "favourites.json"
+POLICY_FILE = CONFIG_DIR / "policies.json"
+# Output and logs: regenerable, can grow.
+REPORT_FILE = STATE_DIR / "report.html"
+LOG_FILE = STATE_DIR / "fantasy.log"
+
+# Kept as an alias because plenty of code and the Dockerfile still say "data dir".
+DATA_DIR = CONFIG_DIR
+
+MIGRATED = []
+
+
+def migrate_legacy() -> list[str]:
+    """Move files from ./data into the resolved directories, once.
+
+    Silent when there is nothing to move. It exists so upgrading does not cost the
+    user a fresh login.
+
+    Never runs under FANTASY_DATA_DIR. An explicit override means "use exactly this
+    directory", and a container mounts its own volume: vacuuming the host's ./data
+    into it would empty a live session somewhere else.
+    """
+    legacy = ROOT / "data"
+    if EXPLICIT_DIR or not legacy.is_dir() or legacy == CONFIG_DIR:
+        return []
+    moved = []
+    targets = {
+        "tokens.json": TOKEN_FILE, "settings.json": SETTINGS_FILE,
+        "favourites.json": FAVOURITES_FILE, "policies.json": POLICY_FILE,
+        "report.html": REPORT_FILE, "fantasy.log": LOG_FILE,
+    }
+    for name, target in targets.items():
+        source = legacy / name
+        if source.exists() and not target.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(source), str(target))
+            if name == "tokens.json":
+                os.chmod(target, 0o600)
+            moved.append(name)
+    MIGRATED.extend(moved)
+    return moved
+
 
 # --- LaLiga Fantasy API (season 26/27 host; the old api-fantasy host is frozen)
 API_BASE = "https://fantasy-api.llt-services.com/api"
@@ -83,4 +160,5 @@ WEEKS_IN_SEASON = 38
 
 
 def ensure_dirs() -> None:
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    for directory in (CONFIG_DIR, STATE_DIR, CACHE_DIR):
+        directory.mkdir(parents=True, exist_ok=True)

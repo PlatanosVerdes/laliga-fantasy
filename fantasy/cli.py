@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from . import analysis, auth, favourites, futbolfantasy as ff, http, laliga, logs, matching, policies, report
-from .config import DATA_DIR, POSITION_NAMES, SETTINGS_FILE, ensure_dirs
+from .config import (CONFIG_DIR, POSITION_NAMES, SETTINGS_FILE, ensure_dirs,
+                     migrate_legacy)
 
 BOLD = "\033[1m"
 DIM = "\033[2m"
@@ -119,7 +120,7 @@ def load_settings() -> dict[str, Any]:
 
 
 def save_settings(values: dict[str, Any]) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     SETTINGS_FILE.write_text(json.dumps({**load_settings(), **values}, indent=2))
 
 
@@ -243,7 +244,7 @@ def cmd_auth(args) -> int:
 
     tokens = auth.load_tokens()
     if not tokens:
-        print("Sin sesion. Ejecuta: python3 fantasy.py auth snippet")
+        print("Sin sesion. Ejecuta: python3 fantasy.py auth browser")
         return 1
     left = auth.seconds_left(tokens)
     state = paint("valida", GREEN) if left > 0 else paint("caducada", RED)
@@ -911,7 +912,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     ensure_dirs()
+    moved = migrate_legacy()
     logs.setup(verbose=args.verbose, quiet=args.quiet, color=_supports_color())
+    if moved:
+        logs.log.info("legacy files migrated", extra={"files": moved,
+                                                     "to": str(CONFIG_DIR)})
+        print(paint(f"Movidos a {CONFIG_DIR}: {', '.join(moved)}", DIM))
     logs.log.info("command start", extra={"command": args.command})
     try:
         code = args.func(args)

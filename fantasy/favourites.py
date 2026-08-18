@@ -4,9 +4,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .config import DATA_DIR
-
-FAVOURITES_FILE = DATA_DIR / "favourites.json"
+from .config import CONFIG_DIR, FAVOURITES_FILE
 
 
 def load() -> dict[str, dict[str, Any]]:
@@ -23,7 +21,7 @@ def load() -> dict[str, dict[str, Any]]:
 
 
 def save(entries: dict[str, dict[str, Any]]) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     FAVOURITES_FILE.write_text(json.dumps(entries, indent=2, ensure_ascii=False))
 
 

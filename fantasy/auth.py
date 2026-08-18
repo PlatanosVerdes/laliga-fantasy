@@ -24,7 +24,7 @@ from .config import (
     B2C_SIGNIN_POLICY,
     B2C_TOKEN_URL,
     B2C_WEB_CLIENT_ID,
-    DATA_DIR,
+    CONFIG_DIR,
     TOKEN_FILE,
 )
 
@@ -105,7 +105,19 @@ def _decode_jwt(token: str) -> dict[str, Any]:
 
 
 def load_tokens() -> dict[str, Any] | None:
+    """The stored session, seeding it from the environment on first run.
+
+    The session cannot live in an environment variable, because the refresh token
+    rotates: the API can hand back a new one on every renewal and it has to be
+    written somewhere. That is why gh, aws, docker and kubectl all keep rotating
+    credentials in a file. But a container still needs a way to be handed the
+    first one without an interactive login, so FANTASY_TOKENS (the whole JSON) or
+    FANTASY_REFRESH_TOKEN seeds the file once and rotation takes over from there.
+    """
     if not TOKEN_FILE.exists():
+        seeded = _seed_from_env()
+        if seeded:
+            return seeded
         return None
     try:
         return json.loads(TOKEN_FILE.read_text())
@@ -113,8 +125,34 @@ def load_tokens() -> dict[str, Any] | None:
         return None
 
 
+def _seed_from_env() -> dict[str, Any] | None:
+    blob = os.environ.get("FANTASY_TOKENS")
+    if blob:
+        try:
+            tokens = normalize(json.loads(blob))
+        except (json.JSONDecodeError, TypeError):
+            log.error("FANTASY_TOKENS no es un JSON valido")
+            return None
+        save_tokens(tokens)
+        log.info("session seeded from FANTASY_TOKENS")
+        return tokens
+
+    refresh_token = os.environ.get("FANTASY_REFRESH_TOKEN")
+    if not refresh_token:
+        return None
+    # Only a refresh token: exchange it right away for a usable access token.
+    try:
+        tokens = refresh({"refresh_token": refresh_token})
+    except RuntimeError as exc:
+        log.error("no se ha podido usar FANTASY_REFRESH_TOKEN",
+                  extra={"reason": str(exc)[:200]})
+        return None
+    log.info("session seeded from FANTASY_REFRESH_TOKEN")
+    return tokens
+
+
 def save_tokens(tokens: dict[str, Any]) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     TOKEN_FILE.write_text(json.dumps(tokens, indent=2))
     os.chmod(TOKEN_FILE, 0o600)
 
@@ -193,12 +231,12 @@ def _b64url(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
-PENDING_FILE = DATA_DIR / "pending_auth.json"
+PENDING_FILE = CONFIG_DIR / "pending_auth.json"
 PENDING_TTL = 15 * 60
 
 
 def save_pending(flow: dict[str, Any]) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     PENDING_FILE.write_text(json.dumps({**flow, "created": int(time.time())}, indent=2))
     os.chmod(PENDING_FILE, 0o600)
 

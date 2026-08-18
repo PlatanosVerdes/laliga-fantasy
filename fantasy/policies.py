@@ -15,10 +15,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .config import DATA_DIR
+from .config import CONFIG_DIR, POLICY_FILE
 from .logs import log
-
-POLICY_FILE = DATA_DIR / "policies.json"
 
 
 def load() -> dict[str, dict[str, Any]]:
@@ -32,7 +30,7 @@ def load() -> dict[str, dict[str, Any]]:
 
 
 def save(policies: dict[str, dict[str, Any]]) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     POLICY_FILE.write_text(json.dumps(policies, indent=2, ensure_ascii=False))
 
 

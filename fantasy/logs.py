@@ -19,10 +19,9 @@ import urllib.request
 from logging.handlers import RotatingFileHandler
 from typing import Any
 
-from .config import DATA_DIR
+from .config import LOG_FILE, STATE_DIR
 
 SERVICE = "laliga-fantasy"
-LOG_FILE = DATA_DIR / "fantasy.log"
 _RESERVED = set(logging.LogRecord("", 0, "", 0, "", (), None).__dict__) | {
     "message", "asctime", "taskName"}
 
@@ -115,7 +114,7 @@ def setup(*, verbose: bool = False, quiet: bool = False, color: bool = True) -> 
     log.addHandler(console)
 
     try:
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
         file_handler = RotatingFileHandler(LOG_FILE, maxBytes=5_000_000, backupCount=3,
                                            encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)
