@@ -278,6 +278,20 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 		"updated_at": payload["updatedAt"], "writes_enabled": s.opts.AllowWrites})
 }
 
+// nested walks a chain of keys, because the images live three levels down and any of them can
+// be missing.
+func nested(source map[string]any, keys ...string) any {
+	var current any = source
+	for _, key := range keys {
+		row, ok := current.(map[string]any)
+		if !ok {
+			return nil
+		}
+		current = row[key]
+	}
+	return current
+}
+
 func shirtOf(slot map[string]any, known map[string]map[string]any) map[string]any {
 	master := mapOf(slot["playerMaster"])
 	id := text(master["id"])
@@ -293,9 +307,18 @@ func shirtOf(slot map[string]any, known map[string]map[string]any) map[string]an
 		}
 		return extra[second]
 	}
+	// The API publishes a transparent cutout per player; it is the fastest way to recognise a
+	// shirt on the pitch, and the crest stays in the corner for the fixture.
+	face := text(nested(master, "images", "transparent", "256x256"))
+	if face == "" {
+		// The bench is rebuilt from our own rows, which carry the face the squad payload gave
+		// us: without this the reserves are the only shirts without a photo.
+		face = text(extra["image"])
+	}
 	return map[string]any{
 		"player_team_id": text(slot["playerTeamId"]),
 		"id":             id,
+		"image":          face,
 		"name":           fallback(text(master["nickname"]), text(master["name"])),
 		"position_id":    master["positionId"],
 		"team_id":        text(pick("teamId", "team_id")),

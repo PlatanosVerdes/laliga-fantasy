@@ -83,6 +83,16 @@ th{position:sticky;top:0;z-index:1;background:var(--surface);cursor:pointer;font
   font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
   user-select:none;border-bottom:1px solid var(--baseline)}
 th:hover{color:var(--ink)}
+/* La primera columna se queda quieta al desplazar la tabla: en las tablas anchas es donde
+   vive el boton (pujar, clausulazo) y un boton que se sale de la vista no existe. */
+.table-wrap.sticky-first th:first-child,
+.table-wrap.sticky-first td:first-child{position:sticky;left:0;z-index:2;
+  background:var(--surface);box-shadow:1px 0 0 var(--line)}
+.table-wrap.sticky-first th:first-child{z-index:3}
+.table-wrap.sticky-first tbody tr:hover td:first-child{
+  background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
+.table-wrap.sticky-first tbody tr.row-me td:first-child{
+  background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
 th.sorted-asc::after{content:" ↑";color:var(--accent)}
 th.sorted-desc::after{content:" ↓";color:var(--accent)}
 td.num{text-align:right;font-variant-numeric:tabular-nums}
@@ -214,6 +224,17 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .drawer-stats dd.tit-mid{color:var(--warning)}
 .drawer-stats dd.tit-lo{color:var(--serious)}
 .drawer-stats dd.tit-out{color:var(--critical)}
+/* El grafico contesta al cursor: valor y dia del punto que tiene debajo. */
+.chart-wrap{position:relative;margin-top:14px}
+.chart-wrap .drawer-chart{margin-top:0}
+.chart-tip{position:absolute;top:-6px;pointer-events:none;display:flex;flex-direction:column;
+  gap:1px;padding:6px 9px;border-radius:8px;background:var(--surface);
+  border:1px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.35);font-size:12px;
+  min-width:120px;z-index:2}
+.chart-tip b{font-size:13px}
+.chart-tip span{color:var(--muted);font-size:11px}
+.chart-tip .up{color:var(--pole-pos)}
+.chart-tip .down{color:var(--pole-neg)}
 .drawer-chart{margin:0 0 20px}
 .drawer-actions{display:flex;flex-direction:column;gap:8px}
 .drawer-actions button{font:inherit;font-size:13px;font-weight:600;padding:10px 13px;
@@ -358,6 +379,15 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   align-items:center;justify-content:center;color:color-mix(in srgb,#fff 55%,transparent);
   font-size:11px;text-transform:uppercase;letter-spacing:.06em}
 .slot .crest{width:20px;height:20px}
+/* La cara identifica antes que el nombre; el escudo baja a la esquina. */
+.slot-avatar{position:relative;display:inline-flex;align-items:center;justify-content:center}
+.slot-face{width:42px;height:42px;border-radius:50%;object-fit:cover;object-position:top center;
+  background:color-mix(in srgb,#000 30%,transparent);
+  box-shadow:0 0 0 1px color-mix(in srgb,#fff 22%,transparent)}
+.slot-avatar .crest{position:absolute;right:-3px;bottom:-3px;width:15px;height:15px;
+  border-radius:50%;background-color:color-mix(in srgb,#000 55%,transparent);padding:1px}
+.bench-item .slot-face{width:26px;height:26px}
+.bench-item .slot-avatar .crest{width:12px;height:12px;right:-2px;bottom:-2px}
 .slot-name{font-size:12px;font-weight:700;color:#fff;text-align:center;line-height:1.15;
   text-shadow:0 1px 2px rgba(0,0,0,.55)}
 .slot-meta{display:flex;gap:5px;align-items:center;justify-content:center;font-size:10px;
@@ -432,3 +462,25 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 footer{margin-top:64px;color:var(--ink-2);font-size:12px;border-top:1px solid var(--line);
   padding-top:18px;max-width:90ch}
 footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11px}
+
+/* Calendario de partidos: mes a mes, jornada a jornada. Los partidos de los tuyos van
+   marcados porque es la unica razon para leer un calendario aqui. */
+.months{display:flex;flex-direction:column;gap:22px}
+.month>h4{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--muted)}
+.jornada{border:1px solid var(--line);border-radius:10px;background:var(--surface);
+  padding:10px 12px;margin-bottom:10px}
+.j-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.j-num{font-weight:700;font-size:13px}
+.j-when{color:var(--muted);font-size:12px}
+.j-mine{margin-left:auto;font-size:11px;color:var(--accent)}
+.match{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:7px;
+  font-size:13px}
+.match+.match{margin-top:2px}
+.match-side{display:inline-flex;align-items:center;gap:6px;min-width:130px}
+.match-vs{color:var(--muted)}
+.match-when{margin-left:auto;color:var(--muted);font-size:12px;
+  font-variant-numeric:tabular-nums}
+.match-mine{background:color-mix(in srgb,var(--accent) 10%,transparent);
+  box-shadow:inset 2px 0 0 var(--accent)}
+.match-mine-tag{font-size:11px;color:var(--accent);white-space:nowrap}
