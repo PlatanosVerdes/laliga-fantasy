@@ -31,34 +31,80 @@ LaLiga authenticates through an Azure AD B2C tenant (`login.laliga.es`). Access 
 
 ### `auth browser` — the one that works app-only
 
-LaLiga Fantasy is effectively app-only: there is no web client to log into, so there is no
-browser session to lift tokens from. But the **mobile app's own OAuth client** accepts the
-authorization-code + PKCE flow from any browser, federated logins included:
+LaLiga Fantasy is effectively app-only: <https://fantasy.laliga.com/> is a landing page, not
+a web client, so there is no browser session to lift tokens from. If you do not have an
+account yet, create it in the mobile app first
+([iOS](https://apps.apple.com/app/id968915185) /
+[Android](https://play.google.com/store/apps/details?id=com.lfp.laligafantasy)).
+
+The way in is the **mobile app's own OAuth client**, which accepts the authorization-code +
+PKCE flow from any desktop browser, federated logins included. Two commands, because the
+browser step happens in between:
 
 ```bash
 python3 fantasy.py auth browser          # prints the URL, stores the PKCE verifier
-python3 fantasy.py auth code '<url>'     # exchanges the code it redirected to
+python3 fantasy.py auth code '<url>'     # exchanges the code the browser redirected to
 ```
 
-1. The first command builds the B2C `/authorize` URL with the app's client
-   (`af88bcff-1157-40a0-b579-030728aacf0b`) and its redirect
-   `authredirect://com.lfp.laligafantasy`, and saves the PKCE verifier plus `state` to
-   `data/pending_auth.json` (valid 15 minutes). The page offers Google / Apple / Facebook,
-   the same options the app does.
-2. You log in. Google may ask for extra scopes on LaLiga's behalf (YouTube, gender, birth
-   date, postal address) — leave every box unchecked, none of it is used here.
-3. The browser then tries to open that custom scheme and **hangs on a blank page**: Chrome
-   cannot handle the scheme and does not update the address bar. Open DevTools → Network
-   with "Preserve log" *before* finishing, and the redirect is the last row, marked
-   `(canceled)`; right-click → Copy link address gives you
-   `authredirect://com.lfp.laligafantasy/?state=…&code=…`.
-4. Pass that URL (or the bare code) to `auth code`. It is exchanged locally against the token
-   endpoint using the stored verifier, and you get an **access token plus a refresh token**.
+**Step 1 — get the URL.** `auth browser` builds it and saves the PKCE verifier and `state`
+to `data/pending_auth.json` (valid 15 minutes). It looks like this, with the app's client id
+and its native redirect:
 
-Splitting it in two also means neither command needs a TTY, so the flow works over ssh.
-`state` is checked and B2C errors are surfaced. From then on `auth refresh` (called
-automatically when the token is within 5 minutes of expiry) keeps the session alive.
-`auth status` shows what is stored. Tokens live in `data/tokens.json`, mode `0600`.
+```
+https://login.laliga.es/laligadspprob2c.onmicrosoft.com/oauth2/v2.0/authorize
+  ?p=B2C_1A_5ULAIP_PARAMETRIZED_SIGNIN
+  &client_id=af88bcff-1157-40a0-b579-030728aacf0b
+  &response_type=code
+  &redirect_uri=authredirect%3A%2F%2Fcom.lfp.laligafantasy
+  &scope=openid+offline_access
+  &code_challenge=<generated>&code_challenge_method=S256
+  &state=<generated>&nonce=<generated>
+```
+
+Use the URL the command prints, not this one: the challenge and state are generated per
+attempt and the exchange fails without the matching verifier.
+
+**Step 2 — open DevTools _before_ logging in.** This is the part that catches everyone out.
+In Chrome: `Cmd+Opt+I` / `Ctrl+Shift+I` → **Network** tab → tick **Preserve log**. Then paste
+the URL and log in.
+
+**Step 3 — log in.** The page offers Google / Apple / Facebook, the same options as the app.
+Google may then ask for extra scopes on LaLiga's behalf (YouTube, gender, birth date, postal
+address): **leave every box unchecked**, none of it is used here, and click Continue.
+
+**Step 4 — grab the code from the Network log.** The browser now tries to open
+`authredirect://com.lfp.laligafantasy` and **hangs on a blank page with the address bar
+unchanged** — Chrome cannot handle a custom scheme, and this is what success looks like. The
+redirect is in the Network log as the **last row, status `(canceled)`**, its name starting
+with `?state=…&code=…`:
+
+```
+authresp?state=StateProperties%3D…        302   document   3.9 kB
+?state=hYTieapYtmRTbp_dfsN5JQ&cod…  (canceled)  document   0.0 kB   ← this one
+```
+
+Right-click it → **Copy → Copy link address**. (Or click the row → **Headers** → copy
+**Request URL**.) You get the full redirect:
+
+```
+authredirect://com.lfp.laligafantasy/?state=hYTieap…&code=eyJraWQiOiJDandFaWN0…
+```
+
+**Step 5 — exchange it.** Quote it: the `&` would otherwise split in the shell.
+
+```bash
+python3 fantasy.py auth code 'authredirect://com.lfp.laligafantasy/?state=…&code=…'
+# Sesion guardada. tu@email · caduca en 1439 min · refresh: si
+```
+
+The `code` is a JWE and single-use, so if the exchange fails for any reason other than a
+`state` mismatch, start again from step 1.
+
+Splitting the flow in two also means neither command needs a TTY, so it works over ssh.
+`state` is verified and B2C errors are surfaced verbatim. From then on `auth refresh` — called
+automatically when the token is within 2 minutes of expiry, at most once every 10 minutes —
+keeps the session alive indefinitely, exactly as the app does; you should never have to log in
+again. `auth status` shows what is stored. Tokens live in `data/tokens.json`, mode `0600`.
 
 ### Other routes
 
@@ -78,7 +124,7 @@ automatically when the token is within 5 minutes of expiry) keeps the session al
 | `standings` / `leagues` | League table and your leagues |
 | `activity` | The league's transfer log (`--pages N`) |
 | `report` | Self-contained HTML dashboard with sortable tables (`--open`, `--json`) |
-| `serve` | Serve the report over HTTP and regenerate it on an interval — see [deploy/raspberry.md](deploy/raspberry.md) |
+| `serve` | Serve the report over HTTP with a JSON API and SSE push — see [deploy/docker.md](deploy/docker.md) |
 | `probe <what>` | Dump a raw endpoint payload — use it when the API shape changes |
 | `cache` | Cache size, `--clear` to wipe |
 
@@ -198,7 +244,7 @@ fantasy/report.py     HTML report
 fantasy/serve.py      HTTP server mode
 fantasy/logs.py       logging
 Dockerfile            dependency-free image for the homeserver
-deploy/raspberry.md   compose service, Caddy route, session bootstrap
+deploy/docker.md      running it as a container, endpoints, write flags
 data/                 cache, tokens, settings, logs, report (gitignored)
 ```
 
