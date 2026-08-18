@@ -17,7 +17,8 @@ import time
 from typing import Any
 
 from . import http
-from .config import FF_DETAIL_URL, FF_HEADERS, FF_MARKET_URL, FF_PLAYER_URL
+from .config import (FF_DETAIL_URL, FF_HEADERS, FF_INJURED_URL, FF_MARKET_URL,
+                     FF_PLAYER_URL, FF_SUSPENDED_URL)
 
 HOUR = 3600
 
@@ -228,6 +229,47 @@ def parse_player_page(html: str) -> dict[str, Any]:
         "total_points": sum(m["points"] for m in played),
         "avg_points": (sum(m["points"] for m in played) / len(played)) if played else None,
     }
+
+
+def parse_absences(html: str, kind: str) -> list[dict[str, Any]]:
+    """One entry per absent player, with the reason in words.
+
+    The LaLiga API only says `injured` / `doubtful` / `sanctioned`; the reason lives
+    here: `<span class="lesion">Rotura de ligamento cruzado</span>`, how long it has
+    been going on, and when he is expected back.
+    """
+    out: list[dict[str, Any]] = []
+    for chunk in re.split(r'<div class="elemento ', html)[1:]:
+        classes = chunk.split('"', 1)[0]
+        name = re.search(r'class="jugador"[^>]*>([^<]+)</a>', chunk)
+        if not name:
+            continue
+        slug = re.search(r'/jugadores/([a-z0-9-]+)"', chunk)
+        reason = re.search(r'<span class="(?:lesion|sancion)">\s*([^<]+?)\s*</span>', chunk)
+        since = re.search(r'fa-calendar"></i>\s*([^<]+?)\s*</span>', chunk)
+        until = re.search(r'<span class="gravedad-\d+">\s*([^<]+?)\s*</span>', chunk)
+        severity = re.search(r'gravedad-(\d+)', chunk)
+        out.append({
+            "name": html_mod.unescape(name.group(1)).strip(),
+            "slug": slug.group(1) if slug else None,
+            "kind": "duda" if "duda" in classes else kind,
+            "reason": html_mod.unescape(reason.group(1)) if reason else None,
+            "since": html_mod.unescape(since.group(1)) if since else None,
+            "until": html_mod.unescape(until.group(1)) if until else None,
+            "severity": int(severity.group(1)) if severity else None,
+        })
+    return out
+
+
+def absences(ttl: float = 3 * HOUR) -> list[dict[str, Any]]:
+    """Injured and suspended players, from the two pages that list them."""
+    rows: list[dict[str, Any]] = []
+    for url, kind in ((FF_INJURED_URL, "lesionado"), (FF_SUSPENDED_URL, "sancionado")):
+        try:
+            rows.extend(parse_absences(_fetch(url, ttl=ttl, tag="ff_absences"), kind))
+        except Exception:
+            continue
+    return rows
 
 
 def player_page(slug: str, ttl: float = 12 * HOUR) -> dict[str, Any]:

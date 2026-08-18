@@ -861,14 +861,37 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .wk-neg{background:#d03b3b}.wk-none{background:rgba(255,255,255,.18)}
 .slot-trend{font-size:10px;font-weight:700;font-variant-numeric:tabular-nums}
 .slot-trend.up{color:#8ee6a8}.slot-trend.down{color:#ffb1a8}
-.slot-out{box-shadow:inset 0 0 0 2px var(--critical)}
+.slot{position:relative}
+.badge-status{position:absolute;top:5px;right:5px;width:16px;height:20px;border-radius:3px;
+  display:flex;align-items:center;justify-content:center;z-index:2;font-weight:900;
+  font-size:13px;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.5)}
+/* Tarjeta roja: la insignia misma, con proporcion de tarjeta. */
+.st-sancionado{background:#d03b3b}
+/* Botiquin: cruz roja sobre blanco, dos barras solidas. */
+.st-lesionado{background:#fff}
+.st-lesionado .kit{position:relative;display:block;width:11px;height:11px}
+.st-lesionado .kit::before,.st-lesionado .kit::after{content:"";position:absolute;
+  background:#d03b3b;border-radius:1px}
+.st-lesionado .kit::before{left:4px;top:0;width:3px;height:11px}
+.st-lesionado .kit::after{top:4px;left:0;height:3px;width:11px}
+.st-duda{background:#fab219;color:#3a2c00}
+/* Tooltip propio: el nativo tarda casi un segundo en salir. */
+.tip{position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%) scale(.96);
+  text-transform:none;letter-spacing:normal;font-weight:400;
+  background:#101114;color:#fff;border:1px solid rgba(255,255,255,.14);border-radius:8px;
+  padding:7px 10px;font-size:11px;line-height:1.35;width:190px;text-align:left;
+  opacity:0;pointer-events:none;transition:opacity .09s ease,transform .09s ease;z-index:20;
+  box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.tip strong{display:block;font-size:11px;margin-bottom:2px}
+.tip em{color:#c3c2b7;font-style:normal;font-size:10px}
+.slot:hover .tip,.bench-item:hover .tip{opacity:1;transform:translateX(-50%) scale(1)}
 .bench{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
 .bench h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;
   color:var(--muted)}
 .bench-list{display:flex;flex-direction:column;gap:7px;min-height:120px}
 .bench.drop-target{border-color:var(--warning)}
 .bench-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;
-  background:var(--plane);font-size:12px;cursor:grab}
+  background:var(--plane);font-size:12px;cursor:grab;position:relative}
 .bench-item:hover{background:color-mix(in srgb,var(--accent) 9%,transparent)}
 .bench-item.dragging{opacity:.35}
 .bench-item .crest{width:16px;height:16px}
@@ -1196,6 +1219,41 @@ const LINE_LABEL={goalkeeper:'POR',defender:'DEF',midfield:'MED',striker:'DEL'};
 const LINE_POS={goalkeeper:1,defender:2,midfield:3,striker:4};
 let pitchState=null, pitchDirty=false, dragged=null;
 
+
+// Iconos de estado: tarjeta roja, botiquin, incognita. El motivo lo pone
+// futbolfantasy (la API solo da el codigo de estado) y sale al instante con un
+// tooltip propio, porque el title nativo tarda casi un segundo.
+// Glifos de texto, no SVG: a 12px un trazo fino no se ve, y una cruz de dos rects
+// o un caracter siempre salen.
+const ICON_CARD='';              // la propia insignia ES la tarjeta
+const ICON_KIT='<i class="kit"></i>';
+const ICON_DOUBT='?';
+
+function statusOf(player){
+  const st=player.status||'ok';
+  const a=player.absence||{};
+  if(st==='suspended'||st==='sanctioned'||a.kind==='sancionado')
+    return {cls:'st-sancionado', icon:ICON_CARD, label:'Sancionado'};
+  if(st==='injured'||a.kind==='lesionado')
+    return {cls:'st-lesionado', icon:ICON_KIT, label:'Lesionado'};
+  if(st==='doubtful'||a.kind==='duda')
+    return {cls:'st-duda', icon:ICON_DOUBT, label:'Duda'};
+  return null;
+}
+
+function statusBadge(player){
+  const s=statusOf(player);
+  if(!s) return '';
+  const a=player.absence||{};
+  const bits=[`<strong>${s.label}</strong>`];
+  if(a.reason) bits.push(a.reason);
+  if(a.since) bits.push(`<em>${a.since}</em>`);
+  if(a.until) bits.push(`<em>${a.until}</em>`);
+  if(!a.reason) bits.push('<em>sin detalle en futbolfantasy</em>');
+  return `<span class="badge-status ${s.cls}">${s.icon}`
+    +`<span class="tip">${bits.join('<br>')}</span></span>`;
+}
+
 function weekChip(w){
   const p=w.points;
   const cls = p==null?'wk-none': p<0?'wk-neg': p>=8?'wk-hi': p>=4?'wk-mid':'wk-lo';
@@ -1208,10 +1266,10 @@ function shirtHtml(player,line,index){
   const trend=player.projected_pct||0;
   const weeks=(player.weeks||[]).slice(-5).map(weekChip).join('')
     || '<span class="wk wk-none">sin jornadas</span>';
-  const out=player.status&&player.status!=='ok'&&player.status!=='doubtful';
-  return `<div class="slot${out?' slot-out':''}" draggable="true" data-line="${line}"
+  return `<div class="slot" draggable="true" data-line="${line}"
     data-index="${index}" data-player="${player.id}" data-pt="${player.player_team_id}"
     title="${player.name} · ${player.next_rival?('vs '+player.next_rival):''}">
+    ${statusBadge(player)}
     <span class="crest crest-${player.team_id}"></span>
     <span class="slot-name">${player.name}</span>
     <span class="slot-weeks">${weeks}</span>
@@ -1226,6 +1284,7 @@ function benchHtml(player){
   const trend=player.projected_pct||0;
   return `<div class="bench-item" draggable="true" data-player="${player.id}"
     data-pt="${player.player_team_id}" data-from="bench" title="${player.name}">
+    ${statusBadge(player)}
     <span class="crest crest-${player.team_id}"></span>
     <span class="pos pos-${(LINE_LABEL[Object.keys(LINE_POS).find(k=>LINE_POS[k]===player.position_id)]||'ENT').toLowerCase()}">${
       {1:'POR',2:'DEF',3:'MED',4:'DEL'}[player.position_id]||'ENT'}</span>
@@ -1405,8 +1464,12 @@ async function savePitch(){
     const data=await res.json();
     if(!res.ok) throw new Error(data.error||res.status);
     pitchDirty=false;
-    document.getElementById('pitch-status').textContent='guardada';
-    await loadPitch();
+    // Los ids no cambian al guardar, asi que basta con repintar lo que ya tenemos:
+    // recargar del API es una vuelta entera para el mismo resultado.
+    pitchState.formation=data.formation||pitchState.formation;
+    renderPitch();
+    document.getElementById('pitch-status').textContent=
+      'guardada ' + new Date().toLocaleTimeString('es-ES');
   }catch(err){ flashPitch('No se ha guardado: '+err.message); }
   finally{ button.textContent='Guardar alineación'; }
 }
@@ -1664,6 +1727,11 @@ function wireTabs(){
 // ---- push: recambiar solo lo que cambia -----------------------------------
 let currentVersion=null;
 
+// Secciones cuyo contenido lo pinta el navegador, no el servidor: el fragmento que
+// llega es una carcasa vacia, asi que recambiarla borraria lo que hay dentro (y los
+// cambios de alineacion sin guardar).
+const CLIENT_OWNED=new Set(['once']);
+
 async function swap(){
   const res=await fetch('/api/fragments');
   if(!res.ok) return;
@@ -1671,6 +1739,7 @@ async function swap(){
   if(data.version===currentVersion) return;
   currentVersion=data.version;
   Object.entries(data.sections).forEach(([id,inner])=>{
+    if(CLIENT_OWNED.has(id)) return;
     const node=document.getElementById(id);
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });

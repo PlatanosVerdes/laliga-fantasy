@@ -278,6 +278,7 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                     "next_rival": extra.get("next_rival"),
                     "next_home": extra.get("next_home"),
                     "starred": extra.get("starred"),
+                    "absence": extra.get("absence"),
                 }
 
             lines = {line: [shirt(slot) for slot in (formation.get(line) or [])]
@@ -488,7 +489,8 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                 else:
                     threading.Thread(target=state.refresh, kwargs={"force": True},
                                      daemon=True).start()
-                    self._json(200, {"ok": True, "saved": bool(result)})
+                    self._json(200, {"ok": True, "saved": bool(result),
+                                     "formation": body.get("formation")})
                 return
 
             if path == "/api/raid":

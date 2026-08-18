@@ -205,6 +205,30 @@ def build_universe(
         week = laliga.current_week()
         market_rows = ff.market(ttl=ff_ttl)
 
+    # Why a player is out, in words: the API only gives the status code. futbolfantasy
+    # writes full names ("Dani Vivian") where LaLiga writes nicknames ("Vivian"), so
+    # index by both the whole name and the surname.
+    absences: dict[str, dict[str, Any]] = {}
+    try:
+        for row in ff.absences():
+            key = matching.normalize(row["name"])
+            absences[key] = row
+            absences.setdefault(matching.surname(row["name"]), row)
+            if row.get("slug"):
+                absences.setdefault(row["slug"].replace("-", " "), row)
+    except Exception as exc:
+        log.debug("absences unavailable", extra={"error_type": type(exc).__name__})
+
+    def absence_for(player: dict) -> dict[str, Any] | None:
+        for candidate in (player.get("name"), matching.player_label(player)):
+            if not candidate:
+                continue
+            found = (absences.get(matching.normalize(candidate))
+                     or absences.get(matching.surname(candidate)))
+            if found:
+                return found
+        return None
+
     team_index = matching.build_team_index(teams)
     team_names = {str(t["id"]): t.get("name") for t in teams}
     team_short = {str(t["id"]): t.get("shortName") for t in teams}
@@ -345,6 +369,7 @@ def build_universe(
             "shielded": owner.get("shielded") if owner else False,
             "player_team_id": owner.get("player_team_id") if owner else None,
             "is_mine": bool(owner and my_team_id and owner.get("team_id") == str(my_team_id)),
+            "absence": absence_for(player),
             "starred": pid in starred,
             "market": market_by_player.get(pid),
             "offers": offers_by_player.get(pid) or [],

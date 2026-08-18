@@ -36,6 +36,8 @@ FF_BASE = "https://www.futbolfantasy.com"
 FF_MARKET_URL = f"{FF_BASE}/analytics/laliga-fantasy/mercado"
 FF_DETAIL_URL = f"{FF_BASE}/analytics/laliga-fantasy/mercado/detalle/{{ff_id}}?perfil=1"
 FF_PLAYER_URL = f"{FF_BASE}/jugadores/{{slug}}"
+FF_INJURED_URL = f"{FF_BASE}/laliga/lesionados"
+FF_SUSPENDED_URL = f"{FF_BASE}/laliga/sancionados"
 
 FF_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
