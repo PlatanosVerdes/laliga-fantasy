@@ -93,6 +93,16 @@ var Frozen = os.Getenv("FANTASY_FREEZE") == "1" ||
 	strings.EqualFold(os.Getenv("FANTASY_FREEZE"), "true") ||
 	strings.EqualFold(os.Getenv("FANTASY_FREEZE"), "yes")
 
+func init() {
+	if Frozen {
+		// Loud on purpose: frozen mode refuses the network and therefore does not renew
+		// the session. Set by accident in a real run it would serve stale data and let the
+		// token die quietly.
+		slog.Warn("FANTASY_FREEZE activo: no se toca la red, no se renueva la sesion, " +
+			"todo sale de la cache")
+	}
+}
+
 // FrozenMiss is asked for something the frozen cache does not hold.
 type FrozenMiss struct {
 	URL string

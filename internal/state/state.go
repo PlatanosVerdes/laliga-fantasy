@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 )
@@ -339,13 +340,14 @@ type Health struct {
 	Subscribers int     `json:"subscribers"`
 	LastError   *string `json:"last_error"`
 	LastEffect  *Effect `json:"last_effect"`
+	Frozen      bool    `json:"frozen"`
 }
 
 func (s *State) Health() Health {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	health := Health{Version: s.version, Runs: s.runs, Subscribers: len(s.subs),
-		LastEffect: s.lastEffect, Status: "degraded"}
+		LastEffect: s.lastEffect, Status: "degraded", Frozen: httpx.Frozen}
 	if !s.generatedAt.IsZero() && s.lastError == "" {
 		health.Status = "ok"
 	}

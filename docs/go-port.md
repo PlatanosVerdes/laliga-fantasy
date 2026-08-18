@@ -55,7 +55,8 @@ keeps working throughout.
 | 7b | HTTP server, JSON API, SSE | **/api/state identical live**: 729 players x 52 fields, 82 events, 13 managers' cash |
 | 7c | The HTML rendering: primitives first | **52 cells identical** |
 | 7d | The sections, one table at a time | **15 tables + 2 shapes byte-identical**, plus every empty state |
-| 7e | The page shell: head, widgets, tabs, footer | page renders from Go, SSE swaps, drag-and-drop still works |
+| 7e | The page shell: head, widgets, tabs, footer | **5 pieces byte-identical**, ranks and meters included |
+| 7f | Assembling the whole document from Go | page renders from Go, SSE swaps, drag-and-drop still works |
 | 8 | Policies and the automation | plan parity on recorded payloads, then armed |
 
 ## The differential harness

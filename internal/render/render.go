@@ -315,6 +315,138 @@ func truthy(value any) bool {
 	return false
 }
 
+// KPI is a widget. `meter` (0..1) draws where you sit in the league for that number,
+// because a figure like "79.76M" only means something next to the other twelve.
+type KPI struct {
+	Label  string
+	Value  string
+	Hint   string
+	Rank   string
+	Meter  *float64
+	Status string
+	Tab    string
+}
+
+func Widget(kpi KPI) string {
+	parts := []string{
+		`<span class="kpi-label">` + Esc(kpi.Label) + `</span>`,
+		`<span class="kpi-value">` + Esc(kpi.Value) + `</span>`,
+	}
+	if kpi.Rank != "" {
+		status := kpi.Status
+		if status == "" {
+			status = "neutral"
+		}
+		parts = append(parts, fmt.Sprintf(`<span class="kpi-rank pill-%s">%s</span>`,
+			status, Esc(kpi.Rank)))
+	}
+	if kpi.Meter != nil {
+		width := math.Max(2.0, math.Min(100.0, *kpi.Meter*100))
+		parts = append(parts, `<span class="kpi-meter" role="presentation">`+
+			fmt.Sprintf(`<span class="kpi-meter-fill" style="width:%.0f%%"></span></span>`, width))
+	}
+	if kpi.Hint != "" {
+		parts = append(parts, `<span class="kpi-hint">`+Esc(kpi.Hint)+`</span>`)
+	}
+	if kpi.Tab != "" {
+		// A widget that states a fact should take you to where the fact is explained.
+		return fmt.Sprintf(`<button class="kpi kpi-link" type="button" data-goto="%s">%s</button>`,
+			Esc(kpi.Tab), strings.Join(parts, ""))
+	}
+	return `<div class="kpi">` + strings.Join(parts, "") + `</div>`
+}
+
+// RankOf is where a number sits among the league's: (label, 0..1 position, status).
+func RankOf(value float64, others []float64) (string, float64, string) {
+	total := len(others)
+	if total == 0 {
+		return "", 0, ""
+	}
+	position := 1
+	for _, other := range others {
+		if other > value {
+			position++
+		}
+	}
+	share := 1 - float64(position-1)/math.Max(1, float64(total-1))
+	third := max(1, total/3)
+	status := "neutral"
+	if position <= third {
+		status = "good"
+	} else if position > total-third {
+		status = "critical"
+	}
+	return fmt.Sprintf("%dº de %d", position, total), share, status
+}
+
+// Tabs are the page's six groups. Rendered only when there is a session, because a chip
+// that jumps nowhere is worse than no chip.
+const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
+	`<button class="tab" role="tab" data-tab="decidir" aria-selected="false" type="button">Decidir</button>` +
+	`<button class="tab" role="tab" data-tab="mercado" aria-selected="false" type="button">Mercado</button>` +
+	`<button class="tab" role="tab" data-tab="clausulas" aria-selected="false" type="button">Cláusulas</button>` +
+	`<button class="tab" role="tab" data-tab="plantilla" aria-selected="false" type="button">Plantilla</button>` +
+	`<button class="tab" role="tab" data-tab="liga" aria-selected="false" type="button">Liga</button>` +
+	`<button class="tab" role="tab" data-tab="ranking" aria-selected="false" type="button">Ranking</button></div>`
+
+// Header is the title, when it was generated, the widgets and the tabs. The live dot starts
+// off: a static file is honest about not being live, and the script turns it on when the
+// push channel connects.
+func Header(generated, leagueName string, week int, kpis []string, withTabs bool) string {
+	league := ""
+	if leagueName != "" {
+		league = ` · liga <strong>` + Esc(leagueName) + `</strong>`
+	}
+	tabs := ""
+	if withTabs {
+		tabs = Tabs
+	}
+	return `<header><h1>LaLiga Fantasy · panel de decisiones</h1>` +
+		`<p>` + Esc(generated) + league +
+		fmt.Sprintf(` · jornada %d</p>`, week) +
+		`<span class="live"><span id="live-dot" class="live-off"></span>` +
+		`<span id="live-stamp">estatico</span></span>` +
+		`</header>` +
+		`<div class="kpis">` + strings.Join(kpis, "") + `</div>` + tabs
+}
+
+// Footer says what the numbers are and what they are not. xPts is an estimate of ours, and
+// the page has to say so where somebody about to spend money will read it.
+func Footer(currentWeight float64) string {
+	return "<footer>Datos: API oficial de LaLiga Fantasy y futbolfantasy.com. " +
+		"<code>xPts</code> es una estimacion propia: puntos por jornada de la temporada pasada " +
+		fmt.Sprintf("y de la actual (peso actual %.0f%%), ajustados por ", currentWeight*100) +
+		"probabilidad de ser titular, dificultad del proximo rival y confianza del dato. " +
+		"<code>est.</code> marca a quien no tiene historico y se estima por precio. " +
+		"El barrido de valor a 7 dias es una proyeccion amortiguada, no una promesa. " +
+		"Herramienta de consulta: no ejecuta ninguna operacion.</footer>"
+}
+
+// CrestCSS is one rule per team rather than a data URI repeated in every row: the same
+// badge appeared 241 times and the page weighed 1.8 MB.
+func CrestCSS() string {
+	ids := make([]string, 0, len(Crests))
+	for id := range Crests {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	var css strings.Builder
+	for _, id := range ids {
+		fmt.Fprintf(&css, `.crest-%s{background-image:url(%s)}`, id, Crests[id])
+	}
+	return css.String()
+}
+
+// Page assembles the whole document: head, body, the two dialogs and the script. The
+// wrapper order matters — the modal and the drawer live outside the wrap so they can cover
+// it.
+func Page(css, js, crestCSS, header, body, footer, modal, drawer string) string {
+	return `<title>Panel Fantasy</title><style>` + css + crestCSS + `</style>` +
+		`<div class="wrap">` + header + body + footer + `</div>` +
+		modal + drawer +
+		`<script>` + js + `</script>`
+}
+
 // Feed is the league's movements: who signed and sold, and for how much.
 //
 // Lineup changes are the bulk of the log and say nothing about the market, so they are

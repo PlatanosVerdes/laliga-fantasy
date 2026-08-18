@@ -254,6 +254,9 @@ class State:
             "runs": self.runs,
             "probes": self.probes,
             "requests": dict(http.STATS),
+            # A probe should be able to tell a server that cannot renew its session from
+            # one that simply has not needed to yet.
+            "frozen": http.FROZEN,
             "next_wake_in": (round(self.next_wake - time.time())
                              if self.next_wake else None),
             "next_wake_why": self.wake_reason or None,

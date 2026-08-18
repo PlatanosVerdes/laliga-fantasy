@@ -5,6 +5,7 @@ import gzip
 import hashlib
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -56,6 +57,13 @@ def _cache_path(url: str, tag: str) -> "Any":
 # ignored and the network is refused, so a missing entry fails loudly instead of being
 # fetched — which would make the two runs read different bytes and compare nothing.
 FROZEN = os.environ.get("FANTASY_FREEZE", "").lower() in ("1", "true", "yes")
+
+if FROZEN:
+    # Loud on purpose. Frozen mode is for the differential harness: it refuses the network
+    # and, because of that, does not renew the session either. Set by accident in a real
+    # run it would serve stale data and let the token die quietly, so it says so.
+    print("FANTASY_FREEZE activo: no se toca la red, no se renueva la sesion, "
+          "todo sale de la cache", file=sys.stderr)
 
 
 def _read_cache(url: str, tag: str, ttl: float):
