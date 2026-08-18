@@ -525,3 +525,13 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
   .plan-side.in{text-align:left;align-items:flex-start}
   .plan-mid{flex-direction:row;gap:10px}
 }
+
+/* Las normas de la liga: la que se aplica, marcada; las demas, para leerlas. */
+.rules{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
+.rules li{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.5;
+  padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
+.rule-tag{flex:0 0 auto;font-size:10px;text-transform:uppercase;letter-spacing:.06em;
+  padding:3px 7px;border-radius:5px;background:color-mix(in srgb,var(--pole-pos) 20%,transparent);
+  color:var(--pole-pos)}
+.rule-social{background:var(--mid);color:var(--muted)}
+.rule-live{box-shadow:inset 2px 0 0 var(--pole-pos)}

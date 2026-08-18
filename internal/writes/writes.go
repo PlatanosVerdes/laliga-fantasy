@@ -233,6 +233,13 @@ type Player struct {
 	// bare 400, so knowing about it is what turns that into a sentence.
 	MyBidID string
 	MyBid   int64
+	// The league's hold rule: bought too recently to be sold. No API enforces this, which is
+	// exactly why the tool has to.
+	SaleLocked bool
+	HoldUntil  string
+	// Exceptions the league agreed, in its own words, so the refusal says where to go next.
+	HoldExceptions string
+	Available      bool
 }
 
 // Summary is what a person is asked to confirm.
@@ -371,6 +378,30 @@ func (g *Guard) Confirm(token string, allowWrites, dryRun bool) (map[string]any,
 // are errors; everything a person should know but may still choose is a warning.
 func check(name string, args Args, who Player, cash *int64) ([]string, error) {
 	var warnings []string
+
+	// The house rule first: it is not the API that refuses, it is the league, and finding out
+	// afterwards means having sold somebody you had agreed not to sell.
+	if who.SaleLocked {
+		switch name {
+		case "sell_to_market", "accept_offer", "direct_offer":
+			until := who.HoldUntil
+			if len(until) > 10 {
+				until = until[:10]
+			}
+			if who.Available {
+				reason := fmt.Sprintf("la norma de la liga no deja venderlo hasta el %s", until)
+				if who.HoldExceptions != "" {
+					reason += " (excepciones acordadas: " + who.HoldExceptions + ")"
+				}
+				return nil, errors.New(reason)
+			}
+			// Unavailable is the case the rule itself contemplates, so it warns instead of
+			// refusing: the decision is the league's, not the tool's.
+			warnings = append(warnings, fmt.Sprintf(
+				"la norma no deja venderlo hasta el %s, pero esta lesionado o sancionado: "+
+					"acuerdalo antes", until))
+		}
+	}
 
 	switch name {
 	case "accept_offer":

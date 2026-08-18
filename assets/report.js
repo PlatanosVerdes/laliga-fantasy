@@ -1011,7 +1011,7 @@ const TABS=[
   {id:'clausulas', label:'Cláusulas', sections:['programados','calendario','vencimientos','oportunidades','riesgo','clausulas']},
   {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
   {id:'partidos', label:'Partidos', sections:['partidos']},
-  {id:'liga', label:'Liga', sections:['rivales','movimientos']},
+  {id:'liga', label:'Liga', sections:['rivales','movimientos','normas']},
   {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
 ];
 

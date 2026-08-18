@@ -21,6 +21,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
 )
 
 // Observed match states: 1 not started, 7 finished with a score. Nothing has ever been
@@ -90,6 +91,11 @@ type Player struct {
 	Absence          map[string]any         `json:"absence"`
 	ClauseHoursLeft  *float64               `json:"clause_hours_left"`
 	Image            string                 `json:"image"`
+	// When he was signed, read from the league's own log, and when the league's hold rule
+	// lets him be sold. Absent when he was never bought (or the log does not reach that far).
+	BoughtAt   *string `json:"bought_at"`
+	HoldUntil  *string `json:"hold_until"`
+	SaleLocked bool    `json:"sale_locked"`
 	Starred          bool                   `json:"starred"`
 	RaidScheduled    bool                   `json:"raid_scheduled"`
 	MarketEntry      *Listing               `json:"market"`
@@ -517,6 +523,10 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 
 	ApplyScores(universe.Players)
 
+	// The league's hold rule: bought less than N days ago means not sellable, and the only
+	// record of when a player changed hands is the league log.
+	ApplyHoldRule(universe, myTeamID, rules.For(leagueID))
+
 	// Clock-derived, so it comes after the rows exist and before anything reads it.
 	now := time.Now().UTC()
 	for index := range universe.Players {
@@ -882,6 +892,90 @@ func LoadSchedule(client *api.Client, week api.Week, teams []api.Team) []Fixture
 	sort.SliceStable(out, func(one, two int) bool { return out[one].Kickoff < out[two].Kickoff })
 	slog.Info("schedule loaded", "matches", len(out), "from", week.WeekNumber)
 	return out
+}
+
+// ApplyHoldRule marks every player the league's own pact forbids selling yet — yours and
+// everybody else's, because the rule binds the whole league. A rival who signed somebody
+// three days ago cannot sell him to you either: that player is reachable only by paying his
+// clause, and a plan that ignores this proposes trades nobody can accept.
+//
+// The API knows nothing about this: it is an agreement between people, and the only trace of
+// a signing is the transfer log, so the purchase date is read from there. A player bought
+// before the log's horizon has no date and is left alone rather than guessed at.
+func ApplyHoldRule(universe *Universe, myTeamID string, league rules.League) {
+	if league.HoldDays <= 0 {
+		return
+	}
+
+	userOfTeam := map[string]string{}
+	for teamID, team := range universe.LeagueTeams {
+		if team != nil && team.UserID != "" {
+			userOfTeam[teamID] = team.UserID
+		}
+	}
+
+	// Latest purchase wins: a player sold and bought back starts his hold again.
+	type purchase struct {
+		buyer string
+		when  time.Time
+	}
+	bought := map[string]purchase{}
+	for _, event := range universe.Activity {
+		if event.PlayerID == nil {
+			continue
+		}
+		// 31 compra, 1 traspaso: in both, user1 is the one who paid.
+		if event.TypeID != 31 && event.TypeID != 1 {
+			continue
+		}
+		when, err := parseTime(event.Date)
+		if err != nil {
+			continue
+		}
+		if previous, seen := bought[*event.PlayerID]; !seen || when.After(previous.when) {
+			bought[*event.PlayerID] = purchase{buyer: event.User1, when: when}
+		}
+	}
+
+	now := time.Now()
+	locked, mineLocked := 0, 0
+	for index := range universe.Players {
+		player := &universe.Players[index]
+		if player.OwnerTeamID == nil && !player.IsMine {
+			continue
+		}
+		last, ok := bought[player.ID]
+		if !ok {
+			continue
+		}
+		// The purchase only counts while the buyer still owns him: if he changed hands again
+		// outside the log's reach, the date says nothing about the current owner.
+		owner := myTeamID
+		if player.OwnerTeamID != nil {
+			owner = *player.OwnerTeamID
+		}
+		if userOfTeam[owner] != last.buyer {
+			continue
+		}
+
+		stamp := last.when.Format(time.RFC3339)
+		player.BoughtAt = &stamp
+		until := league.HeldUntil(last.when)
+		if until == nil {
+			continue
+		}
+		free := until.Format(time.RFC3339)
+		player.HoldUntil = &free
+		if until.After(now) {
+			player.SaleLocked = true
+			locked++
+			if player.IsMine {
+				mineLocked++
+			}
+		}
+	}
+	slog.Info("hold rule applied", "days", league.HoldDays, "locked", locked,
+		"mine", mineLocked)
 }
 
 // LoadFixtures is this week's matches. A match changes neither the transfer log nor the

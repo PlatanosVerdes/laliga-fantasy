@@ -274,7 +274,12 @@ func (s *Server) playerFor(id string) writes.Player {
 		if player.ID != id {
 			continue
 		}
-		who := writes.Player{Name: player.Name, Value: player.Value}
+		who := writes.Player{Name: player.Name, Value: player.Value,
+			SaleLocked: player.SaleLocked, Available: player.Available}
+		if player.HoldUntil != nil {
+			who.HoldUntil = *player.HoldUntil
+		}
+		who.HoldExceptions = s.opts.HoldExceptions
 		if player.Clause != nil {
 			who.Clause = int64(*player.Clause)
 		}

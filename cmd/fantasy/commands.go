@@ -17,6 +17,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
 )
 
 // world is the pair every reporting command needs: the universe and the advice over it. Built
@@ -664,6 +665,69 @@ func cmdRaid(args []string) error {
 }
 
 // --- leagues ----------------------------------------------------------------------------
+
+// cmdRules shows and edits the house rules of the current league. They live per league id
+// because the next league will have agreed something else.
+func cmdRules(args []string) error {
+	leagueID, _, err := savedLeague()
+	if err != nil {
+		return err
+	}
+	all, err := rules.Load()
+	if err != nil {
+		return err
+	}
+	league := all[leagueID]
+
+	if len(args) == 0 || args[0] == "list" {
+		cli.Heading("Normas de la liga " + leagueID)
+		if league.HoldDays > 0 {
+			fmt.Printf("  %s  no se puede vender un fichaje hasta pasados %d dias\n",
+				cli.Green("se aplica"), league.HoldDays)
+			if league.HoldExceptions != "" {
+				fmt.Println(cli.Dim("             excepciones: " + league.HoldExceptions))
+			}
+		} else {
+			fmt.Println(cli.Dim("  sin plazo de venta configurado"))
+		}
+		for _, note := range league.Notes {
+			fmt.Printf("  %s     %s\n", cli.Dim("acuerdo"), note)
+		}
+		fmt.Println(cli.Dim("\n  fantasy rules hold <dias> [excepciones]   ·   fantasy rules note <texto>"))
+		return nil
+	}
+
+	switch args[0] {
+	case "hold":
+		if len(args) < 2 {
+			return fmt.Errorf("uso: rules hold <dias> [excepciones]")
+		}
+		days, err := strconv.Atoi(args[1])
+		if err != nil || days < 0 {
+			return fmt.Errorf("'%s' no es un numero de dias", args[1])
+		}
+		league.HoldDays = days
+		if len(args) > 2 {
+			league.HoldExceptions = strings.Join(args[2:], " ")
+		}
+	case "note":
+		if len(args) < 2 {
+			return fmt.Errorf("uso: rules note <texto>")
+		}
+		league.Notes = append(league.Notes, strings.Join(args[1:], " "))
+	case "clear":
+		league = rules.League{}
+	default:
+		return fmt.Errorf("no se que es '%s': usa list, hold, note o clear", args[0])
+	}
+
+	all[leagueID] = league
+	if err := rules.Save(all); err != nil {
+		return err
+	}
+	fmt.Println(cli.Green("guardado"))
+	return cmdRules(nil)
+}
 
 func cmdLeagues(args []string) error {
 	client := api.New()
