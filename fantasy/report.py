@@ -34,44 +34,10 @@ def _asset(name: str) -> str:
 
 Column = tuple[str, Callable[[dict], Any], str]
 
-DRAWER = '''<div class="drawer" id="drawer" hidden role="dialog" aria-modal="true">
-  <div class="drawer-panel">
-    <button class="drawer-close" type="button" aria-label="Cerrar">&times;</button>
-    <div class="drawer-body"><p class="empty">Cargando…</p></div>
-  </div>
-</div>'''
+DRAWER = _asset("drawer.html")
 
 
-MODAL = '''<div class="modal" id="bid-modal" hidden role="dialog" aria-modal="true"
-     aria-label="Confirmar operacion">
-  <div class="modal-card">
-    <h3><span class="bid-action">Pujar por</span> <span class="bid-who"></span></h3>
-    <div id="bid-amount-step">
-      <div class="bid-field">
-        <label for="bid-amount">Importe de la puja</label>
-        <input class="bid-amount" id="bid-amount" type="text" inputmode="numeric" autocomplete="off" spellcheck="false">
-      </div>
-      <p class="bid-refs">
-        <span>Puja minima <b class="bid-min"></b></span>
-        <span>Techo rentable <b class="bid-ideal"></b></span>
-        <span>Valor <b class="bid-value"></b></span>
-        <span class="bid-rivals-wrap">Pujas vigentes <b class="bid-rivals"></b></span>
-      </p>
-      <p class="bid-warn" hidden></p>
-    </div>
-    <div id="bid-summary-step" hidden>
-      <div class="bid-summary"></div>
-    </div>
-    <p class="bid-error"></p>
-    <div class="modal-actions">
-      <button class="bid-drop" type="button" hidden>Retirar mi puja</button>
-      <button class="bid-cancel" type="button">Cancelar</button>
-      <button class="bid-next primary" type="button">Continuar</button>
-      <button class="bid-confirm" type="button" hidden>Aceptar</button>
-    </div>
-    <p class="modal-note">Se comprueba contra tu saldo antes de ejecutar.</p>
-  </div>
-</div>'''
+MODAL = _asset("modal.html")
 
 VERDICTS = {
     "buy":      {"label": "Fichar",         "icon": "▲", "status": "good"},
@@ -1194,25 +1160,7 @@ def _calendar_section(universe: dict[str, Any], advice: dict[str, Any]) -> str:
         anchor="calendario")
 
 
-PITCH = '''<section id="once">
-  <h2>Alineación<span class="badge-count" id="pitch-formation"></span></h2>
-  <p class="note">Arrastra un jugador del campo al banquillo o al revés para cambiarlo.
-    Cambia la formación con el selector y las plazas se ajustan solas. Debajo de cada
-    uno: puntos por jornada, tendencia de valor y xPts esperados.</p>
-  <div class="pitch-bar">
-    <label>Formación <select id="pitch-formation-select"></select></label>
-    <span id="pitch-status" class="kpi-label"></span>
-    <button id="pitch-reset" type="button">Descartar cambios</button>
-    <button id="pitch-save" class="primary" type="button" disabled>Guardar alineación</button>
-  </div>
-  <div class="pitch-wrap">
-    <div class="pitch" id="pitch"></div>
-    <aside class="bench" id="bench">
-      <h3>Banquillo</h3>
-      <div class="bench-list" id="bench-list"></div>
-    </aside>
-  </div>
-</section>'''
+PITCH = _asset("pitch.html")
 
 
 SECTION_RE = re.compile(r'<section id="([a-z]+)">(.*?)</section>', re.S)

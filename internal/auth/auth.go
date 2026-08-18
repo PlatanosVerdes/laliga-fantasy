@@ -217,6 +217,13 @@ func Bearer() (string, error) {
 	if tokens == nil {
 		return "", errors.New("sin sesion guardada. Ejecuta `auth browser` y luego `auth code '<url>'`")
 	}
+	// Under FANTASY_FREEZE nothing may reach the network, so renewing is both impossible
+	// and pointless: every answer comes from the cache. Without this, a snapshot stops
+	// being replayable the moment the session inside it expires.
+	if httpx.Frozen {
+		return tokens.AccessToken, nil
+	}
+
 	if left := tokens.SecondsLeft(); left < int64(RefreshMargin.Seconds()) && tokens.RefreshToken != "" {
 		since := time.Since(time.Unix(int64(tokens.RefreshedAt), 0))
 		if since >= RefreshCooldown {

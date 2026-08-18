@@ -28,8 +28,9 @@ The two things Python does better here stay:
   took the longest to get right. `fantasy.py bridge` dumps everything derived from them,
   already keyed by LaLiga player id, and Go runs it as a subprocess: what crosses the
   boundary is data, never parsing.
-* **The report's CSS and JS.** 1,400 lines of it, already written, already validated.
-  They move across as template files unchanged.
+* **The report's CSS and JS**, and the static HTML of the pitch, the drawer and the bid
+  modal. Already written, already validated; they live in `assets/` and both implementations
+  serve the same bytes rather than each keeping a copy.
 
 So the target is not a rewrite but a split: Go takes the engine (scheduler, API client,
 writes, HTTP server, policies), Python keeps the scraping, and they talk over a
@@ -53,8 +54,8 @@ keeps working throughout.
 | 7a | The page's CSS and JS become files | **page byte-identical** once the clock decimals are masked |
 | 7b | HTTP server, JSON API, SSE | **/api/state identical live**: 729 players x 52 fields, 82 events, 13 managers' cash |
 | 7c | The HTML rendering: primitives first | **52 cells identical** |
-| 7d | The sections, one table at a time | **13 tables byte-identical**, buttons and verdicts included, plus every empty state |
-| 7e | The page shell, the pitch and the drawer | page renders from Go, SSE swaps, drag-and-drop still works |
+| 7d | The sections, one table at a time | **15 tables + 2 shapes byte-identical**, plus every empty state |
+| 7e | The page shell: head, widgets, tabs, footer | page renders from Go, SSE swaps, drag-and-drop still works |
 | 8 | Policies and the automation | plan parity on recorded payloads, then armed |
 
 ## The differential harness
@@ -78,7 +79,9 @@ python3 tools/diff_model.py $snap/report.json /tmp/go.json
 
 `FANTASY_FREEZE=1` is the guarantee: TTLs are ignored and the network is **refused**, so
 a cache miss fails loudly instead of being fetched — which would make the two runs read
-different bytes and compare nothing.
+different bytes and compare nothing. It also stops the session being renewed, on both sides:
+a snapshot whose token expires would otherwise stop being replayable a couple of hours after
+it was taken, which is exactly what happened the first time one was reused.
 
 Rules that keep it honest:
 

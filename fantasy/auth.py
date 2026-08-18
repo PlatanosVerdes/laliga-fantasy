@@ -353,6 +353,12 @@ def bearer(*, auto_refresh: bool = True) -> str:
             "sin sesion guardada. Ejecuta `python3 fantasy.py auth browser` y luego "
             "`python3 fantasy.py auth code '<url>'`"
         )
+    # Under FANTASY_FREEZE nothing may reach the network, so renewing is both impossible
+    # and pointless: every answer comes from the cache. Without this, a snapshot stops
+    # being replayable the moment the session inside it expires — which is hours, not days.
+    if http.FROZEN:
+        return tokens["access_token"]
+
     left = seconds_left(tokens)
     if auto_refresh and left < REFRESH_MARGIN and tokens.get("refresh_token"):
         since = time.time() - float(tokens.get("refreshed_at") or 0)

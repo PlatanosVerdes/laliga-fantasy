@@ -1,0 +1,19 @@
+<section id="once">
+  <h2>Alineación<span class="badge-count" id="pitch-formation"></span></h2>
+  <p class="note">Arrastra un jugador del campo al banquillo o al revés para cambiarlo.
+    Cambia la formación con el selector y las plazas se ajustan solas. Debajo de cada
+    uno: puntos por jornada, tendencia de valor y xPts esperados.</p>
+  <div class="pitch-bar">
+    <label>Formación <select id="pitch-formation-select"></select></label>
+    <span id="pitch-status" class="kpi-label"></span>
+    <button id="pitch-reset" type="button">Descartar cambios</button>
+    <button id="pitch-save" class="primary" type="button" disabled>Guardar alineación</button>
+  </div>
+  <div class="pitch-wrap">
+    <div class="pitch" id="pitch"></div>
+    <aside class="bench" id="bench">
+      <h3>Banquillo</h3>
+      <div class="bench-list" id="bench-list"></div>
+    </aside>
+  </div>
+</section>

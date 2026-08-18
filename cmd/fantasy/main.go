@@ -477,6 +477,25 @@ func cmdSection(args []string) error {
 		return err
 	}
 
+	// Two sections are not tables at all: the calendar is a shape and the feed is a list
+	// of sentences, so they render from the same rows by their own route.
+	switch args[0] {
+	case "calendario":
+		spending := 0.0
+		if len(args) > 2 {
+			parsed, err := strconv.ParseFloat(args[2], 64)
+			if err != nil {
+				return err
+			}
+			spending = parsed
+		}
+		fmt.Print(render.Calendar(rows, spending))
+		return nil
+	case "movimientos":
+		fmt.Print(render.Feed(rows))
+		return nil
+	}
+
 	html, err := render.SectionTable(args[0], rows)
 	if err != nil {
 		return err

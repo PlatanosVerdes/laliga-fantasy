@@ -8,10 +8,13 @@
 package render
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Em dash for absent values, as the page has always used.
@@ -312,6 +315,120 @@ func truthy(value any) bool {
 	return false
 }
 
+// Feed is the league's movements: who signed and sold, and for how much.
+//
+// Lineup changes are the bulk of the log and say nothing about the market, so they are
+// dropped before anything is counted.
+func Feed(events []map[string]any) string {
+	var moves []map[string]any
+	for _, event := range events {
+		if !strings.Contains(text(event["kind"]), "alinea") {
+			moves = append(moves, event)
+		}
+	}
+	if len(moves) == 0 {
+		return `<p class="empty">Hay actividad en la liga, pero solo cambios de alineacion: ` +
+			`ninguna compra ni venta todavia.</p>`
+	}
+
+	withAmount := make([]map[string]any, 0, len(moves))
+	for _, event := range moves {
+		if amount := asFloat(event["amount"]); amount != nil && *amount != 0 {
+			withAmount = append(withAmount, event)
+		}
+	}
+	sort.SliceStable(withAmount, func(i, j int) bool {
+		return number(withAmount[i]["amount"]) > number(withAmount[j]["amount"])
+	})
+	if len(withAmount) > 12 {
+		withAmount = withAmount[:12]
+	}
+
+	var blocks strings.Builder
+	// Two lists only earn their space once the log is long enough for them to differ.
+	if len(moves) > 8 && len(withAmount) > 0 {
+		blocks.WriteString(`<h3 class="kpi-label">Operaciones mas grandes</h3><div class="feed">`)
+		for _, event := range withAmount {
+			blocks.WriteString(FeedRow(event))
+		}
+		blocks.WriteString(`</div><h3 class="kpi-label" style="margin-top:20px">Lo ultimo</h3>`)
+	}
+	blocks.WriteString(`<div class="feed">`)
+	for index, event := range moves {
+		if index >= 20 {
+			break
+		}
+		blocks.WriteString(FeedRow(event))
+	}
+	blocks.WriteString(`</div>`)
+	return blocks.String()
+}
+
+// FeedRow is one movement. The amount alone does not say whether it was a steal or a panic
+// buy, so the player's value on that same day travels with it.
+func FeedRow(event map[string]any) string {
+	player, buyer, seller := text(event["player"]), text(event["buyer"]), text(event["seller"])
+	var body string
+	switch {
+	case player != "" && buyer != "" && seller != "":
+		body = fmt.Sprintf(`<strong>%s</strong>: %s &rarr; %s`, Esc(player), Esc(seller), Esc(buyer))
+	case player != "" && buyer != "":
+		body = fmt.Sprintf(`<strong>%s</strong> &rarr; %s`, Esc(player), Esc(buyer))
+	case player != "" && seller != "":
+		body = fmt.Sprintf(`<strong>%s</strong>, vendido por %s`, Esc(player), Esc(seller))
+	case player != "":
+		body = fmt.Sprintf(`<strong>%s</strong>`, Esc(player))
+	default:
+		// Nobody named: dump what came, so an event shape we do not know yet is visible
+		// rather than an empty row.
+		fallback := buyer
+		if fallback == "" {
+			fallback = seller
+		}
+		if fallback == "" {
+			blob, _ := json.Marshal(event["raw"])
+			fallback = string(blob)
+			if len(fallback) > 110 {
+				fallback = fallback[:110]
+			}
+		}
+		body = Esc(fallback)
+	}
+
+	amount := Missing
+	if value := asFloat(event["amount"]); value != nil && *value != 0 {
+		amount = Money(value)
+	}
+
+	extra := ""
+	if then := asFloat(event["value_then"]); then != nil && *then != 0 {
+		premium := 1.0
+		if value := asFloat(event["premium"]); value != nil {
+			premium = *value
+		}
+		status := "neutral"
+		switch {
+		case premium >= 1.25:
+			status = "critical"
+		case premium >= 1.08:
+			status = "warning"
+		case premium <= 0.98:
+			status = "good"
+		}
+		extra = fmt.Sprintf(`<span class="feed-then">valia <b>%s</b></span>`+
+			`<span class="pill-%s">%.2fx</span>`, Esc(Money(then)), status, premium)
+	}
+
+	date := strings.ReplaceAll(text(event["date"]), "T", " ")
+	if len(date) > 16 {
+		date = date[:16]
+	}
+	return fmt.Sprintf(`<div class="feed-row"><span class="feed-date">%s</span>`+
+		`<span class="feed-kind">%s</span><span class="feed-body">%s</span>`+
+		`<span class="feed-amount">%s</span>%s</div>`,
+		Esc(date), Esc(text(event["kind"])), body, Esc(amount), extra)
+}
+
 // Verdicts are the five recommendations, each with its glyph and status. The glyph is not
 // decoration: it is what carries the meaning where the colour cannot be seen.
 var Verdicts = map[string]struct{ Label, Icon, Status string }{
@@ -610,6 +727,120 @@ func field(name string) func(map[string]any) any {
 
 func whole(row map[string]any) any { return row }
 
+// raidPlanStatus colours the state of a scheduled raid. "cancelada" is a warning rather
+// than an error: standing down because the clause rose is the instruction working.
+var raidPlanStatus = map[string]string{
+	"pagar_clausula": "good", "esperando": "neutral", "cancelada": "warning",
+	"bloqueada": "critical", "sin_saldo": "warning", "ninguna": "neutral",
+}
+
+var months = []string{"", "ene", "feb", "mar", "abr", "may", "jun",
+	"jul", "ago", "sep", "oct", "nov", "dic"}
+var weekdays = []string{"lun", "mar", "mie", "jue", "vie", "sab", "dom"}
+
+// Calendar lays the clause unlocks out by day.
+//
+// A table sorts; a calendar answers a different question — *when does the league open up* —
+// and at the start of a season the answer is dramatic: everything on the same day. That is
+// worth seeing as a shape rather than reading as 28 rows.
+func Calendar(entries []map[string]any, spending float64) string {
+	if len(entries) == 0 {
+		return `<p class="empty">Sin cláusulas con fecha conocida.</p>`
+	}
+
+	byDay := map[string][]map[string]any{}
+	for _, row := range entries {
+		stamp := text(row["unlock_at"])
+		if len(stamp) >= 10 {
+			day := stamp[:10]
+			byDay[day] = append(byDay[day], row)
+		}
+	}
+	days := make([]string, 0, len(byDay))
+	for day := range byDay {
+		days = append(days, day)
+	}
+	sort.Strings(days)
+	if len(days) > 8 {
+		days = days[:8]
+	}
+
+	var cards strings.Builder
+	for _, day := range days {
+		rows := byDay[day]
+		sort.SliceStable(rows, func(i, j int) bool {
+			return number(rows[i]["score"]) > number(rows[j]["score"])
+		})
+		mine, targets := 0, 0
+		for _, row := range rows {
+			if truthy(row["is_mine"]) {
+				mine++
+			} else if number(row["clause"]) <= spending {
+				targets++
+			}
+		}
+
+		label := day
+		if when, err := time.Parse("2006-01-02", day); err == nil {
+			// Monday is 0 in Python's weekday(), 1 in Go's.
+			label = fmt.Sprintf("%s %d %s", weekdays[(int(when.Weekday())+6)%7],
+				when.Day(), months[int(when.Month())])
+		}
+
+		var chips strings.Builder
+		for index, row := range rows {
+			if index >= 14 {
+				break
+			}
+			chips.WriteString(calendarChip(row))
+		}
+		more := ""
+		if len(rows) > 14 {
+			more = fmt.Sprintf(`<span class="cal-more">+%d mas</span>`, len(rows)-14)
+		}
+		fmt.Fprintf(&cards, `<div class="cal-day"><div class="cal-head"><strong>%s</strong>`+
+			`<span class="cal-count">%d</span></div>`+
+			`<div class="cal-meta">%d tuyos · %d a tu alcance</div>`+
+			`<div class="cal-chips">%s%s</div></div>`,
+			Esc(label), len(rows), mine, targets, chips.String(), more)
+	}
+	return `<div class="cal">` + cards.String() + `</div>`
+}
+
+// calendarChip is one player on one day: yours are marked because that is the day you are
+// exposed, and a rival's doubles as the button that arms the raid.
+func calendarChip(row map[string]any) string {
+	class := ""
+	if truthy(row["is_mine"]) {
+		class += " cal-mine"
+	}
+	if truthy(row["raid_scheduled"]) {
+		class += " cal-armed"
+	}
+	raid := ""
+	title := "Tuyo: ese dia queda expuesto"
+	if !truthy(row["is_mine"]) {
+		clause := number(row["clause"])
+		max := int64(number(row["max_pay"]))
+		if max == 0 {
+			max = int64(clause * 1.2)
+		}
+		raid = fmt.Sprintf(` data-raid="%s" data-raid-name="%s" data-raid-max="%d"`+
+			` data-raid-clause="%d"`, Esc(text(row["id"])), Esc(text(row["name"])),
+			max, int64(clause))
+		title = "Programar clausulazo"
+	}
+	armed := ""
+	if truthy(row["raid_scheduled"]) {
+		armed = "<span class=cal-armed-mark>armado</span>"
+	}
+	clause := asFloat(row["clause"])
+	return fmt.Sprintf(`<button class="cal-chip%s" type="button"%s data-detail-alt="%s" `+
+		`title="%s"><span class="crest crest-%s"></span>%s%s<b>%s</b></button>`,
+		class, raid, Esc(text(row["id"])), title, Esc(text(row["team_id"])),
+		Esc(text(row["name"])), armed, Esc(Money(clause)))
+}
+
 // clauseColumns are shared by both clause tables: mine and the rivals'.
 func clauseColumns() []Column {
 	return []Column{
@@ -662,6 +893,48 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 	case "ventas":
 		columns := PlayerColumns("", Column{"Motivos", field("reasons"), "list"})
 		return TableIn(columns, rows, "Sin datos", "ventas", false), nil
+
+	case "siempre":
+		// The plan, not the state: what the standing instructions would do on the next
+		// cycle, with the two numbers that decide it beside each row.
+		columns := []Column{
+			{"Jugador", field("name"), "text"},
+			{"Accion", func(row map[string]any) any {
+				return strings.ReplaceAll(text(row["action"]), "_", " ")
+			}, "text"},
+			{"Importe", field("amount"), "money"},
+			{"Precio minimo", field("policy_min_price"), "money"},
+			// Not an empty cell when there is no threshold: a blank would read as "no
+			// limit", which is the opposite of what it means.
+			{"Acepto desde", func(row map[string]any) any {
+				if above := asFloat(row["policy_accept_above"]); above != nil && *above != 0 {
+					return Money(above)
+				}
+				return "no vendo solo"
+			}, "text"},
+			{"Motivo", field("why"), "text"},
+			{"Resultado", func(row map[string]any) any {
+				if result := text(row["result"]); result != "" {
+					return result
+				}
+				return "pendiente"
+			}, "text"},
+		}
+		return TableIn(columns, rows, "Sin datos", "siempre", false), nil
+
+	case "programados":
+		columns := []Column{
+			{"Jugador", field("name"), "text"},
+			{"Dueño", field("owner"), "text"},
+			{"Cláusula", field("clause"), "money"},
+			{"Mi limite", field("max_pay"), "money"},
+			{"Estado", func(row map[string]any) any {
+				action := text(row["action"])
+				return []any{action, raidPlanStatus[action]}
+			}, "status"},
+			{"Motivo", field("why"), "text"},
+		}
+		return TableIn(columns, rows, "Sin datos", "", false), nil
 
 	case "rivales":
 		// Who can buy today, which is a different table from who is winning: cash beats
@@ -910,6 +1183,22 @@ func CellIn(value any, kind string, section string) (string, string) {
 		row, _ := value.(map[string]any)
 		order := map[string]string{"justo": "0", "normal": "1", "holgado": "2"}
 		return PowerBadge(row), order[text(row["power"])]
+	case "status":
+		// A pair: the label and the status that colours it. The label is always written,
+		// so the pill is a second reading and never the only one.
+		pair, _ := value.([]any)
+		label, status := "", ""
+		if len(pair) > 0 {
+			label = text(pair[0])
+		}
+		if len(pair) > 1 {
+			status = text(pair[1])
+		}
+		if status == "" {
+			status = "neutral"
+		}
+		return fmt.Sprintf(`<span class="pill-%s">%s</span>`, status,
+			Esc(strings.ReplaceAll(label, "_", " "))), label
 	case "list":
 		items := asStrings(value)
 		if len(items) == 0 {
