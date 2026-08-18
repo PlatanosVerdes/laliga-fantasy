@@ -375,7 +375,7 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                 else:
                     actions.append({"op": "sell_to_market", "label": "Poner en venta",
                                     "kind": "amount", "suggested": int(player["value"] or 0),
-                                    "player_id": player_id})
+                                    "player_team_id": player.get("player_team_id")})
                 for offer in offers:
                     actions.append({"op": "accept_offer",
                                     "label": f"Aceptar {int(offer['money']):,}".replace(",", "."),
@@ -387,7 +387,8 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                                     "offer_id": str(offer["id"]),
                                     "market_id": listing.get("market_id")})
                 actions.append({"op": "raise_clause", "label": "Subir clausula",
-                                "kind": "amount", "player_id": player_id,
+                                "kind": "amount",
+                                "player_team_id": player.get("player_team_id"),
                                 "suggested": int((player["value"] or 0) * 0.5)})
             elif listing.get("kind") == "libre":
                 actions.append({"op": "bid", "label": "Pujar", "kind": "amount",
@@ -413,10 +414,17 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                                          or (clause * 1.2 if clause else player["value"] * 1.5)),
                         "note": ("Se paga en cuanto se libere la clausula, y solo si sigue "
                                  "por debajo de este importe.")})
-                actions.append({"op": "direct_offer",
-                                "label": f"Ofrecer a {player['owner']}", "kind": "amount",
-                                "player_id": player_id,
-                                "suggested": int(player["value"] or 0)})
+                # Una oferta directa va contra su anuncio: sin anuncio no hay a que ofertar.
+                if listing.get("market_id"):
+                    actions.append({"op": "direct_offer",
+                                    "label": f"Ofrecer a {player['owner']}", "kind": "amount",
+                                    "market_id": listing["market_id"],
+                                    "suggested": int(listing.get("min_bid")
+                                                     or player["value"] or 0)})
+                else:
+                    actions.append({"op": "note", "kind": "note",
+                                    "label": f"{player['owner']} no lo tiene en venta: solo "
+                                             "se le puede pagar la clausula"})
                 if listing.get("market_id"):
                     actions.append({"op": "bid", "label": "Pujar por su venta",
                                     "kind": "amount", "market_id": listing["market_id"],
@@ -425,7 +433,8 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                 if clause and not player.get("clause_locked"):
                     actions.append({"op": "pay_clause",
                                     "label": f"Pagar clausula ({int(clause):,})".replace(",", "."),
-                                    "kind": "amount", "player_id": player_id,
+                                    "kind": "amount",
+                                    "player_team_id": player.get("player_team_id"),
                                     "suggested": int(clause), "min": int(clause),
                                     "blocked": clause > budget})
 
@@ -572,6 +581,9 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                     amount=amount,
                     market_id=str(body.get("market_id") or "") or None,
                     bid_id=str(body.get("bid_id") or "") or None,
+                    offer_id=str(body.get("offer_id") or "") or None,
+                    player_id=str(body.get("player_id") or "") or None,
+                    player_team_id=str(body.get("player_team_id") or "") or None,
                     player=self._player_for(body.get("player_id") or ""),
                     allow_writes=allow_writes)
             except writes.WritesDisabled as exc:

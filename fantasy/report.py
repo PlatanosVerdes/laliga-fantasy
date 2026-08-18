@@ -1060,7 +1060,7 @@ function closeModal(){ modal.hidden=true; pending=null; }
 // Un unico sitio decide que paso se ve: antes los botones compartian clase con los
 // bloques y querySelector solo alcanzaba al primero, asi que el contenido avanzaba
 // y los botones se quedaban en el paso uno.
-function showStep(step,{confirmLabel='Aceptar y ejecutar'}={}){
+function showStep(step,{confirmLabel='Aceptar'}={}){
   modal.querySelector('#bid-amount-step').hidden = step!==1;
   modal.querySelector('#bid-summary-step').hidden = step!==2;
   modal.querySelector('.bid-next').hidden = step!==1;
@@ -1145,6 +1145,7 @@ if(modal){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({operation:pending.operation||'bid', amount,
                              market_id:pending.market_id, player_id:pending.player_id,
+                             player_team_id:pending.player_team_id,
                              offer_id:pending.offer_id})});
       const data=await res.json();
       if(!res.ok) throw new Error(data.error||res.status);
@@ -1181,7 +1182,7 @@ if(modal){
       modal.querySelector('.bid-summary').innerHTML =
         `<p>Vas a <strong>retirar tu puja</strong> por ${pending.name}.</p>`;
       modal.querySelector('.bid-drop').hidden=true;
-      showStep(2,{confirmLabel:'Aceptar y retirar'});
+      showStep(2);
     }catch(err){ modal.querySelector('.bid-error').textContent=err.message; }
   });
 
@@ -1203,7 +1204,7 @@ if(modal){
     }catch(err){
       modal.querySelector('.bid-error').textContent=err.message;
     }finally{
-      button.disabled=false; button.textContent='Aceptar y ejecutar';
+      button.disabled=false; button.textContent='Aceptar';
     }
   });
 }
@@ -1211,11 +1212,7 @@ if(modal){
 // ---- operaciones genericas (aceptar/rechazar oferta, retirar) --------------
 // Cada operacion se llama por su nombre en el boton final y en el resumen: "Pujas" y
 // "Saldo si ganas" no significan nada cuando lo que haces es vender.
-const CONFIRM_LABEL={bid:'Aceptar y pujar',sell_to_market:'Aceptar y poner en venta',
-  accept_offer:'Aceptar la oferta',decline_offer:'Rechazar la oferta',
-  withdraw:'Aceptar y retirar',direct_offer:'Aceptar y ofertar',
-  pay_clause:'Aceptar y pagar la clausula',raise_clause:'Aceptar y subir',
-  cancel_bid:'Aceptar y retirar la puja'};
+const CONFIRM_LABEL={};   // el boton dice simplemente Aceptar
 const DONE_LABEL={bid:'Puja enviada',sell_to_market:'Puesto en venta',
   accept_offer:'Oferta aceptada',decline_offer:'Oferta rechazada',
   withdraw:'Retirado del mercado',direct_offer:'Oferta enviada',
@@ -1690,6 +1687,7 @@ async function runAction(a,player){
   closeDrawer();
   if(a.kind==='amount'){
     pending={operation:a.op, market_id:a.market_id, player_id:a.player_id||player.id,
+             player_team_id:a.player_team_id||player.player_team_id,
              offer_id:a.offer_id, name:player.name, min_bid:a.min||0,
              ideal:player.ideal_bid||0, value:player.value};
     modal.hidden=false;

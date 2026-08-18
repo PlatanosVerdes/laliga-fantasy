@@ -69,9 +69,10 @@ def _cancel_bid(league_id: str, market_id: str, bid_id: str) -> Any:
                     f"{CMP}/league/{league_id}/market/{market_id}/bid/{bid_id}/cancel")
 
 
-def _raise_clause(league_id: str, player_id: str, amount: int) -> Any:
+def _raise_clause(league_id: str, player_team_id: str, amount: int) -> Any:
+    # Same trap: the slot id, and the factor the app uses is 2.
     return _request("PUT", f"{CMP}/league/{league_id}/buyout/player",
-                    {"playerId": player_id, "factor": 1, "valueToIncrease": amount})
+                    {"playerId": player_team_id, "factor": 2, "valueToIncrease": amount})
 
 
 def _accept_offer(league_id: str, market_id: str, offer_id: str, amount: int) -> Any:
@@ -87,18 +88,22 @@ def _decline_offer(league_id: str, market_id: str, offer_id: str) -> Any:
                     f"{CMP}/league/{league_id}/market/{market_id}/offer/{offer_id}/reject")
 
 
-def _sell_to_market(league_id: str, player_id: str, amount: int) -> Any:
+def _sell_to_market(league_id: str, player_team_id: str, amount: int) -> Any:
+    # `playerId` here is the squad-slot id (playerTeamId), not the player's own id.
+    # Sending the player id answers 500.
     return _request("POST", f"{CMP}/league/{league_id}/market/sell",
-                    {"playerId": player_id, "salePrice": amount})
+                    {"playerId": player_team_id, "salePrice": amount})
 
 
-def _direct_offer(league_id: str, player_id: str, amount: int) -> Any:
+def _direct_offer(league_id: str, market_id: str, amount: int) -> Any:
+    # A direct offer goes against the listing, so what travels as `playerId` is the
+    # market id: you can only offer for somebody who is on the market.
     return _request("POST", f"{CMP}/league/{league_id}/market/direct-offer",
-                    {"playerId": player_id, "money": amount})
+                    {"playerId": market_id, "money": amount})
 
 
-def _pay_clause(league_id: str, player_id: str, amount: int) -> Any:
-    return _request("POST", f"{CMP}/league/{league_id}/buyout/{player_id}/pay",
+def _pay_clause(league_id: str, player_team_id: str, amount: int) -> Any:
+    return _request("POST", f"{CMP}/league/{league_id}/buyout/{player_team_id}/pay",
                     {"buyoutClauseToPay": amount})
 
 
@@ -142,6 +147,7 @@ def _purge() -> None:
 def prepare(operation: str, *, league_id: str, my_team_id: str, amount: int | None = None,
             market_id: str | None = None, bid_id: str | None = None,
             offer_id: str | None = None, player_id: str | None = None,
+            player_team_id: str | None = None,
             player: dict[str, Any] | None = None, allow_writes: bool = False) -> dict[str, Any]:
     """Validate an operation and return a summary plus a single-use token."""
     if not allow_writes:
@@ -219,7 +225,8 @@ def prepare(operation: str, *, league_id: str, my_team_id: str, amount: int | No
         _pending[token] = {"created": time.time(), "operation": operation,
                            "args": {"league_id": league_id, "market_id": market_id,
                                     "bid_id": bid_id, "offer_id": offer_id,
-                                    "player_id": player_id, "amount": amount},
+                                    "player_id": player_id,
+                                    "player_team_id": player_team_id, "amount": amount},
                            "summary": summary}
     log.info("write prepared", extra={"operation": operation, "amount": amount,
                                      "player": player.get("name")})
@@ -242,12 +249,12 @@ def confirm(token: str, *, allow_writes: bool = False, dry_run: bool = False) ->
     call = {"bid": ("league_id", "market_id", "amount"),
             "modify_bid": ("league_id", "market_id", "bid_id", "amount"),
             "cancel_bid": ("league_id", "market_id", "bid_id"),
-            "raise_clause": ("league_id", "player_id", "amount"),
+            "raise_clause": ("league_id", "player_team_id", "amount"),
             "accept_offer": ("league_id", "market_id", "offer_id", "amount"),
             "decline_offer": ("league_id", "market_id", "offer_id"),
-            "sell_to_market": ("league_id", "player_id", "amount"),
-            "direct_offer": ("league_id", "player_id", "amount"),
-            "pay_clause": ("league_id", "player_id", "amount"),
+            "sell_to_market": ("league_id", "player_team_id", "amount"),
+            "direct_offer": ("league_id", "market_id", "amount"),
+            "pay_clause": ("league_id", "player_team_id", "amount"),
             "withdraw": ("league_id", "market_id"),
             "save_lineup": ("team_id", "goalkeeper", "defender", "midfield", "striker",
                             "formation")}[operation]
