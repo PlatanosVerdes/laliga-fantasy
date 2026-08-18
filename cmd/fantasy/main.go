@@ -23,6 +23,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/engine"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/render"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/server"
@@ -69,6 +70,8 @@ func main() {
 		err = cmdWake(rest[1:])
 	case "section":
 		err = cmdSection(rest[1:])
+	case "match":
+		err = cmdMatch(rest[1:])
 	case "scrape":
 		err = cmdScrape(rest[1:])
 	case "page":
@@ -107,6 +110,7 @@ uso: fantasy [-v|-q] <comando>
   calls         la peticion que construiria cada operacion, sin enviarla
   checks        que aceptaria y que rechazaria la guardia, caso por caso
   cells         como se formatea cada celda, para compararlo con Python
+  match <players.json> <ffmarket.json> <teams.json>   emparejar las dos fuentes
   scrape <que> <fichero.html>   parsear una pagina de futbolfantasy y volcarla en JSON
   page <dump.json> <generado> [liga]   la pagina entera, desde un volcado
   shell <caso>  cabecera, widget, pie o pestanas, para compararlo
@@ -511,6 +515,56 @@ func cmdSection(args []string) error {
 		return err
 	}
 	fmt.Print(html)
+	return nil
+}
+
+// cmdMatch resolves players across the two sources from files, so the result can be
+// compared: the matcher is a pure function of three lists.
+func cmdMatch(args []string) error {
+	if len(args) < 3 {
+		return fmt.Errorf("uso: match <players.json> <ffmarket.json> <teams.json>")
+	}
+	load := func(path string) ([]map[string]any, error) {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		var out []map[string]any
+		return out, json.Unmarshal(body, &out)
+	}
+	players, err := load(args[0])
+	if err != nil {
+		return err
+	}
+	market, err := load(args[1])
+	if err != nil {
+		return err
+	}
+	teams, err := load(args[2])
+	if err != nil {
+		return err
+	}
+
+	matched, unmatched := matching.MatchMarket(players, market,
+		matching.BuildTeamIndex(teams))
+
+	// Only the ids: comparing the whole rows would compare the scraper again, which has its
+	// own harness.
+	pairs := make(map[string]string, len(matched))
+	for id, row := range matched {
+		pairs[id] = fmt.Sprint(row["ff_id"])
+	}
+	loose := make([]string, 0, len(unmatched))
+	for _, row := range unmatched {
+		loose = append(loose, fmt.Sprint(row["ff_id"]))
+	}
+	sort.Strings(loose)
+
+	blob, err := json.Marshal(map[string]any{"matched": pairs, "unmatched": loose})
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(blob))
 	return nil
 }
 
