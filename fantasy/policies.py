@@ -94,7 +94,8 @@ def raid_plan(players: list[dict[str, Any]], *, cash: float) -> list[dict[str, A
         clause = float(player.get("clause") or 0)
         ceiling = int(policy.get("max_pay") or 0)
         row = {"player_id": str(player["id"]), "name": player["name"],
-               "clause": clause, "max_pay": ceiling, "owner": player.get("owner")}
+               "clause": clause, "max_pay": ceiling, "owner": player.get("owner"),
+               "owner_team_id": player.get("owner_team_id")}
 
         if player.get("is_mine"):
             actions.append({**row, "action": "ninguna", "why": "ya es tuyo"})
@@ -174,6 +175,51 @@ def plan(players: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return actions
 
 
+def verify_clause(league_id: str, action: dict[str, Any]) -> tuple[bool, str]:
+    """Re-read the clause from the owner's squad, right before paying it.
+
+    The plan is built from data that can be half an hour old, and this is the one
+    operation where that gap is expensive: the owner can raise the clause or shield
+    the player at any moment, and paying is irreversible. One request, at the only
+    instant it matters.
+    """
+    from . import laliga
+
+    team_id = action.get("owner_team_id")
+    if not team_id:
+        return False, "no se sabe de quien es ahora mismo"
+    try:
+        squad = laliga.team_squad(league_id, str(team_id), ttl=0)
+    except Exception as exc:
+        return False, f"no se ha podido comprobar la clausula ({type(exc).__name__})"
+
+    for slot in laliga.squad_players(squad):
+        if str(((slot.get("playerMaster") or {}).get("id")) or "") != action["player_id"]:
+            continue
+        if slot.get("isShielded"):
+            return False, "esta blindado"
+        unlock = slot.get("buyoutClauseLockedEndTime")
+        if unlock:
+            from datetime import datetime, timezone
+            try:
+                when = datetime.fromisoformat(str(unlock).replace("Z", "+00:00"))
+                if when.tzinfo is None:
+                    when = when.replace(tzinfo=timezone.utc)
+                if when > datetime.now(timezone.utc):
+                    return False, "la clausula sigue bloqueada"
+            except ValueError:
+                pass
+        now_clause = float(slot.get("buyoutClause") or 0)
+        ceiling = int(action.get("max_pay") or 0)
+        if ceiling and now_clause > ceiling:
+            return False, (f"la clausula esta en {int(now_clause):,}".replace(",", ".")
+                           + f", por encima de tu limite de {ceiling:,}".replace(",", "."))
+        action["clause"] = now_clause
+        action["amount"] = int(now_clause)
+        return True, f"clausula confirmada en {int(now_clause):,}".replace(",", ".")
+    return False, "ya no esta en esa plantilla"
+
+
 def enforce(players: list[dict[str, Any]], *, league_id: str, my_team_id: str,
             allow_writes: bool, cash: float = 0) -> list[dict[str, Any]]:
     """Carry out both plans. A no-op in read-only mode."""
@@ -192,6 +238,14 @@ def enforce(players: list[dict[str, Any]], *, league_id: str, my_team_id: str,
                      "pagar_clausula": "pay_clause"}.get(action["action"])
         if not operation:
             continue
+        if operation == "pay_clause":
+            ok, why = verify_clause(league_id, action)
+            log.info("clause verified", extra={"player": action["name"], "ok": ok,
+                                              "reason": why})
+            if not ok:
+                action["action"] = "cancelada"
+                action["why"] = why
+                continue
         try:
             summary = writes.prepare(
                 operation, league_id=league_id, my_team_id=my_team_id,

@@ -1,10 +1,11 @@
 """Live server: JSON API, server-rendered fragments and a push channel.
 
-The page is not regenerated on a schedule the browser knows nothing about. The
-server refreshes on a short interval, and only the two things that actually move
-minute to minute cost a request (market and activity: everything else is still
-inside its cache TTL). When the data changes, the version number moves and every
-connected browser is told over SSE, so it can swap just the sections that changed.
+The page is not regenerated on a schedule the browser knows nothing about, and the
+server does not poll blindly either: it sleeps until the next instant that matters
+and, when it wakes, first asks the two cheap questions that tell it whether a
+rebuild is warranted at all (see `schedule.py`). When the data changes, the version
+number moves and every connected browser is told over SSE, so it can swap just the
+sections that changed.
 
 Serving is decoupled from refreshing: a failed refresh keeps the last good page up
 and surfaces in `/healthz` instead of taking the page down with it.
@@ -20,7 +21,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable
 
-from . import auth, favourites, laliga, policies, report, writes
+from . import auth, favourites, http, laliga, policies, report, schedule, writes
 from .logs import log
 
 HEARTBEAT = 20
@@ -43,6 +44,15 @@ class State:
         self.fingerprint = ""
         self.universe: dict | None = None
         self.advice: dict | None = None
+        self.probe_parts: dict[str, str] = {}
+        self.probes = 0
+        self.deadline_floor = 0.0
+        # Set to cut a sleep short. Opening the page has to tighten the cadence now,
+        # not at the end of a wait that was planned while nobody was looking.
+        self.nudge = threading.Event()
+        self.last_full: float | None = None
+        self.next_wake: float | None = None
+        self.wake_reason = ""
         self.subscribers: set[queue.Queue] = set()
 
     # --- refresh ------------------------------------------------------------
@@ -111,6 +121,7 @@ class State:
             self.payload = payload
             self.context = context
             self.generated_at = time.time()
+            self.last_full = self.generated_at
             self.last_error = None
             self.runs += 1
             if changed:
@@ -123,6 +134,26 @@ class State:
         else:
             log.debug("state unchanged", extra={"runs": self.runs})
         return True
+
+    def probe(self, league_id: str) -> tuple[bool, list[str]]:
+        """Two requests that answer whether a rebuild is worth it, and which half moved.
+
+        Both are stored in the cache, so when the answer is yes the rebuild reuses
+        these very responses instead of asking again. A change in the activity half
+        also drops the squad and cash caches: somebody changing hands makes every
+        squad wrong however recently it was read, which is the one case a long TTL
+        gets badly wrong.
+        """
+        events = laliga.activity(league_id, ttl=0, store=True)
+        listings = laliga.market(league_id, ttl=0, store=True)
+        parts = schedule.probe_parts(events, listings)
+        moved = [half for half, digest in parts.items()
+                 if digest != self.probe_parts.get(half)]
+        self.probe_parts = parts
+        self.probes += 1
+        if "events" in moved:
+            http.invalidate("squad", "money", "standings")
+        return bool(moved), moved
 
     def rerender(self) -> bool:
         """Repaint from the universe already in memory, with no network at all.
@@ -157,7 +188,10 @@ class State:
     def subscribe(self) -> queue.Queue:
         channel: queue.Queue = queue.Queue(maxsize=8)
         with self.lock:
+            first = not self.subscribers
             self.subscribers.add(channel)
+        if first:
+            self.nudge.set()
         return channel
 
     def unsubscribe(self, channel: queue.Queue) -> None:
@@ -185,6 +219,11 @@ class State:
                              if self.generated_at else None),
             "age_seconds": round(age) if age is not None else None,
             "runs": self.runs,
+            "probes": self.probes,
+            "requests": dict(http.STATS),
+            "next_wake_in": (round(self.next_wake - time.time())
+                             if self.next_wake else None),
+            "next_wake_why": self.wake_reason or None,
             "subscribers": len(self.subscribers),
             "last_error": self.last_error,
             "session": {
@@ -650,20 +689,74 @@ def run(builder: Callable[[], tuple[dict, dict | None, dict]], *,
     state.policy_context = {"league_id": league_id, "my_team_id": my_team_id,
                             "allow_writes": allow_writes and auto}
     state.refresh(force=True)
+    # Seed the probe from what the first rebuild already read, so the loop does not
+    # begin by asking the API to confirm data it is holding.
+    if state.universe:
+        state.probe_parts = schedule.probe_parts(
+            state.universe.get("activity") or [], state.universe.get("market") or [])
 
     def loop() -> None:
+        """Sleep until the next thing that matters, then do the least that suffices.
+
+        Three kinds of wake-up. A deadline (an auction closing, a scheduled clause
+        opening) rebuilds unconditionally, because that is the instant we may have to
+        act. The periodic rebuild catches the drift nothing announces: values, points,
+        futbolfantasy. Everything else is a probe, and a probe that finds the league
+        exactly as it left it costs two requests and stops there.
+        """
         while True:
-            time.sleep(interval)
-            state.refresh()
+            when, why, kind = schedule.next_wake(
+                state.payload, now=time.time(), tick=interval,
+                last_full=state.last_full, watched=bool(state.subscribers),
+                after=state.deadline_floor, policies=policies.load())
+            state.next_wake, state.wake_reason = when, why
+            delay = max(schedule.MIN_SLEEP, when - time.time())
+            log.debug("sleeping", extra={"seconds": round(delay, 1), "why": why,
+                                        "kind": kind})
+            state.nudge.clear()
+            if state.nudge.wait(delay):
+                # Somebody opened the page: replan instead of finishing a sleep that
+                # was calculated for an empty room.
+                log.debug("sleep cut short", extra={"had_left": round(when - time.time(), 1)})
+                continue
+
+            if kind == schedule.DEADLINE:
+                # Remember it as spent, so an expiry the API keeps reporting as
+                # imminent cannot be woken for twice.
+                state.deadline_floor = when + schedule.LEAD + 1
+                log.info("waking on a deadline", extra={"why": why})
+                state.refresh()
+                continue
+            if not league_id:
+                log.debug("no league to probe, rebuilding", extra={"why": why})
+                state.refresh()
+                continue
+            try:
+                moved, halves = state.probe(league_id)
+            except Exception as exc:
+                # A failed probe must not silence the loop: fall back to rebuilding,
+                # which has its own error handling and keeps the last good page up.
+                log.warning("probe failed", extra={"error_type": type(exc).__name__,
+                                                  "reason": str(exc)[:200]})
+                state.refresh()
+                continue
+            if moved or kind == schedule.REBUILD:
+                log.info("rebuilding", extra={"why": ("se movio: " + ", ".join(halves))
+                                                     if moved else why})
+                state.refresh()
+            else:
+                log.debug("nothing moved", extra={"probes": state.probes})
 
     threading.Thread(target=loop, daemon=True).start()
     server = ThreadingHTTPServer((host, port), _handler(
         state, allow_writes=allow_writes, league_id=league_id, my_team_id=my_team_id))
     server.daemon_threads = True
     log.info("serving", extra={"host": host, "port": port, "interval": interval,
-                              "writes": allow_writes})
+                              "ceiling": schedule.CEILING, "writes": allow_writes})
     print(f"Sirviendo en http://{host}:{port}")
-    print(f"  refresco cada {interval}s · push por SSE · "
+    print(f"  sondeo cada {interval}s (x{schedule.IDLE_FACTOR} en calma), "
+          f"reconstruccion completa cada {int(schedule.CEILING / 60)} min o "
+          f"al vencer algo · push por SSE · "
           f"{'operaciones activas' if allow_writes else 'solo lectura'}"
           f"{' · automatico' if (allow_writes and auto) else ''}")
     try:

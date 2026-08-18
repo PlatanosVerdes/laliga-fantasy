@@ -56,9 +56,33 @@ def _write_cache(url: str, tag: str, body: str) -> None:
     _cache_path(url, tag).write_text(body, encoding="utf-8")
 
 
+# Requests actually put on the wire, so the refresh policy can be measured instead
+# of argued about. Reported by /healthz.
+STATS = {"requests": 0, "cache_hits": 0, "errors": 0}
+
+
 def cached(url: str, tag: str, ttl: float) -> str | None:
     """Cache-only read, so callers can throttle just the real requests."""
     return _read_cache(url, tag, ttl)
+
+
+def invalidate(*tags: str) -> int:
+    """Drop cached responses by tag, so the next read goes to the wire.
+
+    Used when something we just learned makes a long TTL wrong: a transfer means
+    every squad is stale, however recently it was read.
+    """
+    dropped = 0
+    for tag in tags:
+        for path in CACHE_DIR.glob(f"{tag}_*.cache"):
+            try:
+                path.unlink()
+                dropped += 1
+            except OSError:
+                pass
+    if dropped:
+        log.debug("cache invalidated", extra={"tags": list(tags), "files": dropped})
+    return dropped
 
 
 def fetch(
@@ -68,12 +92,20 @@ def fetch(
     method: str = "GET",
     data: bytes | None = None,
     ttl: float = 0,
+    store: bool = False,
     tag: str = "raw",
     timeout: float = 30,
     retries: int = 3,
 ) -> str:
+    """`store` writes the response to cache without reading from it.
+
+    That is what a probe wants: always ask, but leave the answer where the rest of
+    the cycle will find it, so checking whether anything moved does not cost the
+    same request twice.
+    """
     cached = _read_cache(url, tag, ttl)
     if cached is not None:
+        STATS["cache_hits"] += 1
         log.debug("http cache hit", extra={"url": url, "tag": tag, "bytes": len(cached)})
         return cached
 
@@ -84,6 +116,7 @@ def fetch(
             req.add_header(key, value)
         req.add_header("Accept-Encoding", "gzip")
         started = time.perf_counter()
+        STATS["requests"] += 1
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 raw = resp.read()
@@ -94,10 +127,11 @@ def fetch(
             log.debug("http ok", extra={"url": url, "tag": tag, "status": status,
                                         "bytes": len(body),
                                         "ms": round((time.perf_counter() - started) * 1000)})
-            if ttl > 0:
+            if ttl > 0 or store:
                 _write_cache(url, tag, body)
             return body
         except urllib.error.HTTPError as exc:
+            STATS["errors"] += 1
             raw = exc.read()
             if exc.headers.get("Content-Encoding") == "gzip":
                 try:
@@ -116,6 +150,7 @@ def fetch(
                                   retry_after=exc.headers.get("Retry-After")) from exc
             last_error = HttpError(exc.code, url, body)
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            STATS["errors"] += 1
             log.warning("http failure", extra={"url": url, "tag": tag,
                                                "error_type": type(exc).__name__,
                                                "attempt": attempt + 1})

@@ -239,6 +239,43 @@ JSON) or **`FANTASY_REFRESH_TOKEN`** (just the refresh token, exchanged on start
 one is read only when no token file exists, is written to the file at `0600`, and rotation
 takes over from there — so you can drop the variable after the first start.
 
+## Refreshing
+
+A fixed interval is the wrong shape for this game. Nothing happens for hours, and then
+several things happen at an exact second: a clause unlocks, an auction closes, an offer
+expires. Polling often enough to catch the second wastes the hours; polling calmly enough
+for the hours arrives late to the second. So the loop asks two questions instead of one.
+
+**Has anything moved?** The activity log and the market listing — two requests — are
+digested into a fingerprint. Bid and offer counts are in it, because a rival bidding
+changes what the page should say even though nothing has been transferred. Unchanged
+fingerprint and no deadline near: the loop stops there. Both responses are stored in the
+cache, so when the answer *is* yes, the rebuild reuses those very responses.
+
+**When does something next matter?** Every deadline already present in the data: each
+listing's expiry, each received offer's expiry, and the unlock time of any clause with a
+raid scheduled on it. The loop sleeps until the soonest, minus two seconds, instead of
+counting to 120 with its eyes shut — which is how a scheduled raid stops arriving up to
+two minutes late.
+
+Three kinds of wake-up, and `/healthz` names the next one (`next_wake_in`,
+`next_wake_why`):
+
+| Wake-up | When | What it does |
+|---|---|---|
+| probe | every `--interval`; ×4 only when no deadline is within 10 min **and** nobody has the page open | 2 requests, then usually nothing |
+| deadline | 2 s before an expiry or a scheduled unlock | rebuilds unconditionally: this is the instant we may have to act |
+| rebuild | 15 min since the last full one | catches the drift nothing announces — values, points, futbolfantasy |
+
+`/healthz` also reports the request counter (`requests`, `cache_hits`, `errors`), so the
+cost of a refresh policy is a measurement rather than a claim.
+
+**Paying a clause re-reads it first.** The plan can be built from data half an hour old,
+and this is the one operation where that gap is expensive: the owner can raise the clause
+or shield the player at any moment, and paying is irreversible. So before the write, one
+request re-reads that squad slot, and the raid stands down if the player is shielded, the
+clause is still locked, or it has risen above your `max_pay`.
+
 ## Logging
 
 Human-readable lines on stderr (warnings only, `-v` for everything) and JSON lines in
@@ -271,6 +308,7 @@ fantasy/matching.py   team and player identity resolution across sources
 fantasy/analysis.py   xPts, score, rival cash, recommendations
 fantasy/report.py     HTML report
 fantasy/serve.py      HTTP server mode
+fantasy/schedule.py   when to wake up, and whether anything moved
 fantasy/logs.py       logging
 Dockerfile            dependency-free image for the homeserver
 deploy/docker.md      running it as a container, endpoints, write flags

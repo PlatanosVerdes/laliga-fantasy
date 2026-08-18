@@ -22,10 +22,11 @@ def _headers(authenticated: bool) -> dict[str, str]:
     return headers
 
 
-def _get(path: str, *, authenticated: bool = False, ttl: float = 0, tag: str = "api") -> Any:
+def _get(path: str, *, authenticated: bool = False, ttl: float = 0, tag: str = "api",
+         store: bool = False) -> Any:
     sep = "&" if "?" in path else "?"
     url = f"{API_BASE}{path}{sep}x-lang=es"
-    return http.get_json(url, headers=_headers(authenticated), ttl=ttl, tag=tag)
+    return http.get_json(url, headers=_headers(authenticated), ttl=ttl, tag=tag, store=store)
 
 
 def _unwrap(payload: Any) -> list[dict]:
@@ -96,9 +97,10 @@ def _normalize_standing(entry: dict) -> dict:
     }
 
 
-def activity(league_id: str, index: int = 0, ttl: float = MINUTE) -> list[dict]:
+def activity(league_id: str, index: int = 0, ttl: float = MINUTE,
+             store: bool = False) -> list[dict]:
     return _unwrap(_get(f"{CMP}/leagues/{league_id}/activity/{index}", authenticated=True,
-                        ttl=ttl, tag="activity"))
+                        ttl=ttl, tag="activity", store=store))
 
 
 def team_squad(league_id: str, team_id: str, ttl: float = 30 * MINUTE) -> dict:
@@ -110,9 +112,9 @@ def team_money(team_id: str, ttl: float = MINUTE) -> dict:
     return _get(f"{CMP}/teams/{team_id}/money", authenticated=True, ttl=ttl, tag="money")
 
 
-def market(league_id: str, ttl: float = MINUTE) -> list[dict]:
+def market(league_id: str, ttl: float = MINUTE, store: bool = False) -> list[dict]:
     return _unwrap(_get(f"{CMP}/league/{league_id}/market", authenticated=True,
-                        ttl=ttl, tag="market"))
+                        ttl=ttl, tag="market", store=store))
 
 
 LINEUP_LINES = ("goalkeeper", "defender", "midfield", "striker")

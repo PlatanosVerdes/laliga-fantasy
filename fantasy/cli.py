@@ -893,7 +893,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--host", default="0.0.0.0")
     serve_parser.add_argument("--port", type=int, default=8000)
     serve_parser.add_argument("--interval", type=int, default=120,
-                              help="segundos entre refrescos (default 120)")
+                              help="segundos entre sondeos; x4 si la liga esta en calma (default 120)")
     serve_parser.add_argument("--read-only", action="store_true",
                               help="desactivar cualquier operacion que mueva dinero")
     serve_parser.add_argument("--no-auto", action="store_true",
