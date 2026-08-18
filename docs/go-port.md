@@ -1,0 +1,93 @@
+# Porting to Go
+
+## Why
+
+Not for speed. The Python version answers a page in milliseconds and idles at ~50
+requests an hour; nothing here is CPU-bound. The reasons are the ones that made the
+refresh loop awkward to write:
+
+* **Triggers want to be concurrent.** A scheduled clause raid, an auction closing and a
+  live match are three independent timers. In Python they share one loop and one sleep,
+  so the code has to compute a single next-wake and reason about which of the three it
+  belongs to. Three goroutines on three timers is the shape of the problem.
+* **A write should be able to interrupt.** Today a nudge event cuts the sleep short. With
+  channels the loop is a `select` and interruption stops being a special case.
+* **Deploying is a binary.** The Pi runs it as one static file with no interpreter, and
+  cross-compiling for ARM is one command.
+* **Types would have caught real bugs.** Two of the ones found this week were a
+  misspelled cache tag and a shadowed variable holding the wrong week's calendar. A
+  struct field and a compiler catch both.
+
+## What is *not* being ported
+
+The two things Python does better here stay:
+
+* **The futbolfantasy scrapers.** They are regex-and-heuristics over HTML that changes
+  without notice, and they are the most fragile code in the project. Rewriting them buys
+  nothing and risks the parsing that took the longest to get right.
+* **The report's CSS and JS.** 1,400 lines of it, already written, already validated.
+  They move across as template files unchanged.
+
+So the target is not a rewrite but a split: Go takes the engine (scheduler, API client,
+writes, HTTP server, policies), Python keeps the scraping, and they talk over a
+subprocess boundary with JSON.
+
+## Order of work
+
+Each step ends with something runnable and something proven, and the Python version
+keeps working throughout.
+
+| # | Step | Done when |
+|---|---|---|
+| 1 | Module skeleton, XDG config, cache with tags + stats | `fantasy-go cache` prints the same figures as `fantasy.py cache` |
+| 2 | Auth: bearer, expiry, refresh with rotation, env seeding | `fantasy-go auth status` matches `fantasy.py auth status` field for field |
+| 3 | API client and types for the fifteen endpoints in use | `fantasy-go probe` returns the same digest as the Python probe |
+| 4 | The model: universe, scores, cash reconstruction, price prior | **differential harness green** on the same cached inputs |
+| 5 | Scheduler as goroutines + channels; deadlines, live matches | same wake decisions as Python for a recorded set of payloads |
+| 6 | Writes with the two-step guard and the id semantics | dry-run parity; no live write until the harness agrees |
+| 7 | HTTP server, SSE, the existing templates | page renders, SSE swaps, drag-and-drop still works |
+| 8 | Policies and the automation | plan parity on recorded payloads, then armed |
+
+## The differential harness
+
+This is what makes the port verifiable rather than hopeful, and it is why step 4 comes
+before anything that spends money.
+
+Both implementations read the **same frozen cache directory** — the scrapes and API
+responses already on disk — and write their model to JSON. A comparator walks both trees
+and reports every field that differs, with a tolerance for floats:
+
+```
+fantasy.py  model --json > /tmp/py.json      # existing --json output
+fantasy-go  model --json > /tmp/go.json
+python3 tools/diff_model.py /tmp/py.json /tmp/go.json --tolerance 1e-6
+```
+
+Rules that keep it honest:
+
+* **Frozen inputs.** `FANTASY_DATA_DIR` points at a copy of the cache and the TTLs are
+  set to infinity, so neither side reaches the network and both see identical bytes.
+* **Every field, not a summary.** Comparing totals hides compensating errors. The
+  comparator walks player by player and reports the first mismatch per field with both
+  values.
+* **Floats need a tolerance, ordering does not.** Scores may differ in the last bits;
+  rankings must not differ at all.
+* **A green run is a claim about those inputs only.** Several snapshots are kept — one
+  mid-market, one during a live match, one with offers pending, one with a locked clause
+  about to open — because the interesting bugs live in the states that are rare.
+
+## Risks, and what each one costs
+
+* **Cash reconstruction is the subtlest code in the project** — it anchors the whole
+  league on one figure and folds rewards into a base. A port that is quietly wrong there
+  produces plausible numbers, which is the worst failure mode. It gets its own comparison
+  on every manager, not just ours.
+* **The id semantics are hard-won and unobvious**: the squad-slot id where the player id
+  looks right, the market id for a direct offer, factor 2 for a clause raise. They are
+  written down in `writes.py` comments and must be carried across as-is, with the
+  comments.
+* **The two-step write guard must not get looser.** Same TTL, same single-use token,
+  same refusal to act without an explicit amount.
+* **Automation stays off until the harness agrees.** No standing instruction runs from Go
+  until plan parity holds on the recorded payloads, and the first live run is with
+  `--read-only`.

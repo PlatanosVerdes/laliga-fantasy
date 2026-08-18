@@ -780,6 +780,28 @@ def cmd_probe(args) -> int:
     return 0
 
 
+def cmd_detect(args) -> int:
+    """The two cheap requests the refresh loop lives on, and their digest.
+
+    Exists so the Go port can be compared against this one: same league state, same
+    two hashes, or the port is wrong.
+    """
+    from . import http, schedule
+
+    league_id, _, _ = resolve_league(args)
+    if not league_id:
+        print(paint("no hay liga: usa --league", RED))
+        return 1
+    events = laliga.activity(league_id, ttl=0, store=True)
+    listings = laliga.market(league_id, ttl=0, store=True)
+    parts = schedule.probe_parts(events, listings)
+    print(f"liga {league_id} · {len(events)} eventos · {len(listings)} anuncios")
+    print(f"  events {parts['events']}")
+    print(f"  market {parts['market']}")
+    print(f"  peticiones: {http.STATS}")
+    return 0
+
+
 def cmd_cache(args) -> int:
     ensure_dirs()
     from .config import CACHE_DIR
@@ -904,6 +926,10 @@ def build_parser() -> argparse.ArgumentParser:
     probe_parser.add_argument("what")
     probe_parser.add_argument("--chars", type=int, default=4000)
     probe_parser.set_defaults(func=cmd_probe)
+
+    detect_parser = sub.add_parser("detect", parents=[common],
+                                   help="lo que ve el detector de cambios ahora mismo")
+    detect_parser.set_defaults(func=cmd_detect)
 
     cache_parser = sub.add_parser("cache", help="estado de la cache local")
     cache_parser.add_argument("--clear", action="store_true")
