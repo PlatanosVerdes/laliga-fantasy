@@ -263,27 +263,40 @@ class State:
         }
 
 
-def settle(state: State, operation: str) -> dict[str, Any]:
-    """Rebuild after a write and report what it moved.
+# Figures that only move when something actually happened. Squad value drifts on its
+# own every time the market revalues a player, so it is worth reporting after an
+# operation but would cry wolf on an ordinary refresh.
+DISCRETE = ("cash", "squad", "listed", "offers")
 
-    A write is not a local edit. Selling a player changes the cash, the squad, the
-    market and every recommendation derived from them, so the whole world is rebuilt
-    rather than patched — the caches the operation falsified were already dropped by
-    `writes.confirm`. Runs off the request thread: the click should not wait for a
-    dozen requests, and the result arrives over SSE when it is ready.
+
+def settle(state: State, cause: str, *, force: bool = True,
+           keys: tuple[str, ...] | None = None) -> dict[str, Any]:
+    """Rebuild, then report what moved between before and after.
+
+    Used for two different things, which turn out to be the same thing. A write of
+    ours is not a local edit — the cash, the squad, the market and every
+    recommendation derived from them change, and `writes.confirm` has already dropped
+    the caches it falsified. And a sale we did not make is exactly as consequential:
+    when a rival buys the player we had listed, nothing of ours was clicked, so
+    bracketing every rebuild is what makes that moment visible too.
+
+    Runs off the request thread: a click should not wait for a dozen requests, and the
+    answer arrives over SSE when it is ready.
     """
     before = state.snapshot()
-    state.refresh(force=True)
+    state.refresh(force=force)
     after = state.snapshot()
     diff = state.difference(before, after)
-    effect = {"operation": operation, "at": datetime.now(timezone.utc).isoformat(),
+    if keys:
+        diff = {key: value for key, value in diff.items() if key in keys}
+    effect = {"operation": cause, "at": datetime.now(timezone.utc).isoformat(),
               "changed": diff}
-    state.last_effect = effect
-    log.info("write settled", extra={"operation": operation,
-                                    "cash_before": before["cash"],
-                                    "cash_after": after["cash"],
-                                    "changed": list(diff)})
     if diff:
+        state.last_effect = effect
+        log.info("world moved", extra={"cause": cause,
+                                      "cash_before": before["cash"],
+                                      "cash_after": after["cash"],
+                                      "changed": list(diff)})
         state.publish({"type": "effect", "version": state.version, **effect})
     return effect
 
@@ -780,14 +793,14 @@ def run(builder: Callable[[], tuple[dict, dict | None, dict]], *,
                 # imminent cannot be woken for twice.
                 state.deadline_floor = when + schedule.LEAD + 1
                 log.info("waking on a deadline", extra={"why": why})
-                state.refresh()
+                settle(state, "vencimiento", force=False, keys=DISCRETE)
                 if state.needs_followup:
                     state.needs_followup = False
                     settle(state, "policy")
                 continue
             if not league_id:
                 log.debug("no league to probe, rebuilding", extra={"why": why})
-                state.refresh()
+                settle(state, "refresco", force=False, keys=DISCRETE)
                 continue
             try:
                 moved, halves = state.probe(league_id)
@@ -796,12 +809,15 @@ def run(builder: Callable[[], tuple[dict, dict | None, dict]], *,
                 # which has its own error handling and keeps the last good page up.
                 log.warning("probe failed", extra={"error_type": type(exc).__name__,
                                                   "reason": str(exc)[:200]})
-                state.refresh()
+                settle(state, "refresco", force=False, keys=DISCRETE)
                 continue
             if moved or kind == schedule.REBUILD:
                 log.info("rebuilding", extra={"why": ("se movio: " + ", ".join(halves))
                                                      if moved else why})
-                state.refresh()
+                # A transfer in the log is somebody else acting on our squad — a sale
+                # we did not make lands here, not in a write path.
+                cause = "traspaso" if "events" in halves else "mercado"
+                settle(state, cause, force=False, keys=DISCRETE)
             else:
                 log.debug("nothing moved", extra={"probes": state.probes})
 

@@ -141,8 +141,13 @@ OPERATIONS = {
 # recommendation computed from them, so the TTLs that make idle polling cheap are
 # exactly wrong for the seconds after an operation.
 EFFECTS = {
-    "sell_to_market": ("market", "squad", "money", "activity"),
-    "withdraw": ("market", "squad", "activity"),
+    # Listing a player does not sell him: he is still yours, the cash has not moved
+    # and no transfer has happened. Only the market and the squad slot's own state
+    # change, so those are the only stale answers.
+    "sell_to_market": ("market", "squad"),
+    "withdraw": ("market", "squad"),
+    # A pending bid can sit against `teamInvestment` in /money, so that is refreshed
+    # too — one request, and it covers the case where the amount is held.
     "bid": ("market", "money"),
     "modify_bid": ("market", "money"),
     "cancel_bid": ("market", "money"),

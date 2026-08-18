@@ -1970,7 +1970,9 @@ const OPERATION_LABELS={sell_to_market:'Puesto en venta',accept_offer:'Oferta ac
   decline_offer:'Oferta rechazada',withdraw:'Retirado del mercado',bid:'Puja enviada',
   modify_bid:'Puja modificada',cancel_bid:'Puja cancelada',direct_offer:'Oferta directa',
   pay_clause:'Clausulazo pagado',raise_clause:'Clausula subida',
-  save_lineup:'Alineacion guardada',policy:'Instruccion ejecutada'};
+  save_lineup:'Alineacion guardada',policy:'Instruccion ejecutada',
+  traspaso:'Se ha movido la liga',mercado:'Cambios en el mercado',
+  vencimiento:'Ha vencido algo',refresco:'Actualizado'};
 
 function showEffect(message){
   // Lo que una operacion mueve de verdad: el antes y el despues, no un "hecho".

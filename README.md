@@ -270,16 +270,26 @@ Three kinds of wake-up, and `/healthz` names the next one (`next_wake_in`,
 `/healthz` also reports the request counter (`requests`, `cache_hits`, `errors`), so the
 cost of a refresh policy is a measurement rather than a claim.
 
-**A write rebuilds the world, and says what it moved.** Selling a player is not a
-local edit: the cash changes, the squad changes, the market changes, and so does every
-recommendation derived from them. So each operation declares which cached answers it
-falsifies (`writes.EFFECTS`), those are dropped the moment it succeeds, and a full
-rebuild follows off the request thread — the click does not wait for a dozen requests.
-When the rebuild lands, the before/after of cash, squad size, squad value, listings and
-received offers is pushed over SSE and shown on the page, and kept in `/healthz` as
-`last_effect`. Instructions that fire on their own get the same treatment: the page
-built during the cycle that sold a player describes the world from before the sale, so
-it is rebuilt again.
+**Anything that moves the world says what it moved.** A completed sale changes the
+cash, the squad, the market and every recommendation derived from them, so the world is
+rebuilt rather than patched, and the rebuild is bracketed by a snapshot: the
+before/after of cash, squad, squad value, listings and received offers is pushed over
+SSE, shown on the page, and kept in `/healthz` as `last_effect`. An empty diff
+publishes nothing, so a no-op never claims to have changed something.
+
+Note what is *not* a sale. Listing a player leaves him yours, moves no cash and
+transfers nobody — so `sell_to_market` invalidates the market and the squad slot's own
+state, and the panel reports one line, `En el mercado 0 → 1`. The figures move when the
+sale completes, and that moment is often nobody's click: a rival buys the player you had
+listed, and it arrives through the activity probe. That is why every rebuild is
+bracketed and not just the ones we caused — `traspaso` when the log moved, `mercado`
+when only listings did. Squad value is left out of those, because the market revalues
+players on its own and a panel for that would cry wolf; after an operation of ours it is
+reported, because there it means something.
+
+Instructions that fire unattended get the same treatment: the page built during the
+cycle that accepted an offer describes the world from before its own action, so it is
+rebuilt again.
 
 **Paying a clause re-reads it first.** The plan can be built from data half an hour old,
 and this is the one operation where that gap is expensive: the owner can raise the clause
