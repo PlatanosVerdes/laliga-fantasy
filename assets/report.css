@@ -240,6 +240,9 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   gap:1px;padding:6px 9px;border-radius:8px;background:var(--surface);
   border:1px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.35);font-size:12px;
   min-width:120px;z-index:2}
+/* display:flex pisa el atributo hidden, asi que la pastilla vacia se pintaba hasta que el
+   cursor la rellenaba. El [hidden] tiene que ganar. */
+.chart-tip[hidden]{display:none}
 .chart-tip b{font-size:13px}
 .chart-tip span{color:var(--muted);font-size:11px}
 .chart-tip .up{color:var(--pole-pos)}
