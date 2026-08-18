@@ -640,16 +640,43 @@ def recommend(universe: dict[str, Any], *, budget: int, max_debt: int = 0,
                        "worth_taking": amount >= value or (ask and amount >= ask)})
     offers.sort(key=lambda o: -o["vs_value"])
 
+    # The reference for "is this clause worth paying" is your own squad: does the
+    # money buy more points per million than what you already own? Benchmarking
+    # against today's market instead brands everything a bargain, because a bad
+    # market day drags the median down and says nothing about the player.
+    squad_ppm = [p["xpts"] / (p["value"] / 1e6) for p in mine
+                 if p["value"] and p["xpts"] > 0]
+    benchmark = statistics.median(squad_ppm) if squad_ppm else 0.0
+
     clauses = universe.get("clauses") or {}
     # A rival's clause is only an opportunity if it opens soon AND you can pay it.
-    upcoming_raids = [{**p, "entry_cost": p.get("clause"),
-                       "affordable": (p.get("clause") or 0) <= spending_power}
-                      for p in clauses.get("rivals_soon", [])
-                      if p.get("clause") and p["score"] > 0.4]
+    upcoming_raids = []
+    for player in clauses.get("rivals_soon", []):
+        clause = player.get("clause") or 0
+        if not clause or player["score"] <= 0.4:
+            continue
+        affordable = clause <= spending_power
+        ppm = (player["xpts"] / (clause / 1e6)) if clause else 0.0
+        upcoming_raids.append({**player, "entry_cost": clause, "affordable": affordable,
+                               "clause_premium": clause / player["value"] if player["value"]
+                                                 else None,
+                               "ppm_at_clause": ppm,
+                               "vs_market": (ppm / benchmark) if benchmark else None,
+                               "verdict": _raid_verdict(ppm, benchmark, affordable,
+                                                        player["xpts"])})
+
+    # Rank the ones that cleared the gate: a tag is only useful if it separates them.
+    passed = sorted((r for r in upcoming_raids if r["verdict"] == ""),
+                    key=lambda r: -r["ppm_at_clause"])
+    for index, row in enumerate(passed):
+        share = index / max(1, len(passed) - 1)
+        row["verdict"] = "chollo" if share <= 0.25 else "renta" if share <= 0.6 else "justo"
     # Every clause in a league tends to unlock at the same instant, so the time is
     # usually a tie: break it by who is worth taking, not by squad order.
-    upcoming_raids.sort(key=lambda p: (not p["affordable"], round(p["hours_left"]),
-                                       -p["score"]))
+    RAID_ORDER = {"chollo": 0, "renta": 1, "justo": 2, "caro": 3,
+                  "sin datos": 4, "sin referencia": 4, "no te llega": 5}
+    upcoming_raids.sort(key=lambda p: (RAID_ORDER.get(p["verdict"], 9),
+                                       round(p["hours_left"]), -p["ppm_at_clause"]))
 
     return {
         "budget": budget,
@@ -670,10 +697,33 @@ def recommend(universe: dict[str, Any], *, budget: int, max_debt: int = 0,
         "free_agent_count": len(free_agents),
         "clauses_locked": len(locked),
         "clauses_unlock_from": unlock_dates[0] if unlock_dates else None,
+        "squad_ppm_benchmark": benchmark,
         "my_clauses_soon": clauses.get("mine_soon", [])[:limit],
         "upcoming_raids": upcoming_raids[:limit],
         "starred": [p for p in players if p.get("starred")],
     }
+
+
+def _raid_verdict(ppm_at_clause: float, benchmark: float, affordable: bool,
+                  xpts: float) -> str:
+    """Is paying this clause worth it, measured against your own squad.
+
+    Not against futbolfantasy's ceiling: the game sets clauses at roughly 1.5x market
+    value, so that comparison brands every raid "expensive" and tells you nothing.
+    The question that discriminates is whether these euros buy more points per million
+    than the players you already have.
+    """
+    if not affordable:
+        return "no te llega"
+    if xpts <= 0:
+        return "sin datos"
+    if not benchmark:
+        return "sin referencia"
+    # Absolute gate first: paying more per point than what you already own is bad no
+    # matter how it ranks against the other candidates.
+    if ppm_at_clause < benchmark:
+        return "caro"
+    return ""     # ranked afterwards, once the whole candidate set is known
 
 
 def _rival_cash(universe: dict[str, Any], my_real_budget: int) -> list[dict[str, Any]]:

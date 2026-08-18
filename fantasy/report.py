@@ -280,6 +280,19 @@ def _ratio_badge(ratio: Any, *, selling: bool = False) -> str:
 
 
 POWER_STATUS = {"holgado": "good", "normal": "neutral", "justo": "critical"}
+RAID_STATUS = {"chollo": "good", "renta": "good", "justo": "warning", "caro": "critical",
+               "no te llega": "critical", "sin datos": "neutral", "sin referencia": "neutral"}
+
+
+def _verdict_badge(row: Any) -> str:
+    """Whether paying this clause beats what you already own."""
+    if not isinstance(row, dict) or not row.get("verdict"):
+        return "—"
+    verdict = row["verdict"]
+    ratio = row.get("vs_market")
+    note = f"{ratio:.1f}x tu plantilla" if ratio else ""
+    return (f'<span class="pill-{RAID_STATUS.get(verdict, "neutral")}">{_esc(verdict)}</span>'
+            + (f'<span class="pill-note">{_esc(note)}</span>' if note else ""))
 
 
 def _power_badge(row: Any) -> str:
@@ -345,6 +358,8 @@ def _cell(value: Any, kind: str) -> tuple[str, str]:
         return _ratio_badge(value), str(float(value or 0))
     if kind == "ratio_sell":
         return _ratio_badge(value, selling=True), str(float(value or 0))
+    if kind == "verdict_raid":
+        return _verdict_badge(value), str(-(value.get("ppm_at_clause") or 0))
     if kind == "status":
         label, status = value
         return (f'<span class="pill-{status or "neutral"}">'
@@ -1861,15 +1876,24 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
         rival_clauses = advice.get("upcoming_raids") or []
         rival_clause_columns = list(clause_columns)
         rival_clause_columns.insert(3, ("Dueño", lambda r: r.get("owner"), "text"))
+        rival_clause_columns.insert(0, ("¿Renta?", lambda r: r, "verdict_raid"))
+        rival_clause_columns.append(("x valor", lambda r: r.get("clause_premium"), "num"))
+        rival_clause_columns.append(("Pts/M pagando", lambda r: r.get("ppm_at_clause"), "mag"))
         rival_clause_columns.append(
-            ("Te llega", lambda r: "si" if r.get("affordable") else "no", "text"))
+            ("Techo futbolfantasy", lambda r: r.get("ideal_bid"), "ideal"))
         rival_clause_columns.append(("Clausulazo", lambda r: r, "raid"))
         sections.append(_section(
             "Cláusulas de rivales que se abren",
             _table(rival_clause_columns, rival_clauses,
                    empty="Ninguna cláusula interesante se abre en los proximos 10 dias."),
-            note="El otro lado del mismo reloj: en cuanto se abren, se pueden pagar. "
-                 "Ordenadas por lo que puedes permitirte y por cercania.",
+            note=("El otro lado del mismo reloj: en cuanto se abren, se pueden pagar. "
+                  "<strong>¿Renta?</strong> compara los puntos por millon que sacas "
+                  f"<em>pagando la cláusula</em> con la mediana de tu plantilla "
+                  f"({advice.get('squad_ppm_benchmark', 0):.3f} pts/M): si es peor que lo que "
+                  "ya tienes, sale <em>caro</em>. No lo comparo con el techo de "
+                  "futbolfantasy porque el juego fija las cláusulas sobre 1.5x el valor, "
+                  "asi que por ese criterio ninguna saldria rentable nunca — la columna "
+                  "esta ahi para que veas el dato."),
             badge=f"{len(rival_clauses)}", anchor="oportunidades"))
 
         if advice.get("rivals"):
