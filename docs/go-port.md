@@ -48,7 +48,7 @@ keeps working throughout.
 | 4a | The model's structure: identity, ownership, market, fixtures | **harness green**: 729 players × 22 fields, 53 listings, 10 fixtures |
 | 4b | The scoring half: xPts, price prior, score, ranks | **harness green**: 729 players × 48 fields, identical to 6 decimals |
 | 4c | Cash reconstruction, activity, offers, favourites, raids | **harness green**: 52 fields, 82 events, 13 managers' cash to the euro |
-| 5 | Scheduler as goroutines + channels; deadlines, live matches | same wake decisions as Python for a recorded set of payloads |
+| 5 | Scheduler and the refresh cycle, on channels | **36 decisions identical** to Python across 9 scenarios × 4 cadences; 7 engine tests green under `-race` |
 | 6 | Writes with the two-step guard and the id semantics | dry-run parity; no live write until the harness agrees |
 | 7 | HTTP server, SSE, the existing templates | page renders, SSE swaps, drag-and-drop still works |
 | 8 | Policies and the automation | plan parity on recorded payloads, then armed |
@@ -93,6 +93,27 @@ Rules that keep it honest:
 * **A green run is a claim about those inputs only.** Several snapshots are kept — one
   mid-market, one during a live match, one with offers pending, one with a locked clause
   about to open — because the interesting bugs live in the states that are rare.
+
+## The two harnesses
+
+`tools/diff_model.py` compares the model, `tools/diff_wake.py` compares the decisions:
+
+```bash
+go build -o fantasy-go ./cmd/fantasy
+python3 tools/diff_wake.py ./fantasy-go
+```
+
+The scenarios are the states that matter and are rare — an auction about to close, an offer
+about to expire, our own match under way, somebody else's, a finished one, a matchday
+closing — each at four cadences including "the page is open" and "the periodic rebuild is
+overdue". Both sides take `now` as an argument, because a scheduler that can only be
+observed live cannot be compared.
+
+The cycle itself is covered by `go test ./internal/engine -race`, with the network and the
+clock injected: a probe that finds nothing must not rebuild, one that finds a transfer must
+say `traspaso` rather than `mercado`, a deadline must rebuild without wasting the two probe
+requests, the *same* deadline must not fire twice, a nudge must cut the wait short, and a
+probe that errors must still rebuild — silence is the failure mode to avoid.
 
 ## Risks, and what each one costs
 

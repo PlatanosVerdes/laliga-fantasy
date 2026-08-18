@@ -4,22 +4,22 @@
 package main
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/auth"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 )
 
 func main() {
@@ -54,6 +54,8 @@ func main() {
 		err = cmdProbe(rest[1:])
 	case "model":
 		err = cmdModel(rest[1:])
+	case "wake":
+		err = cmdWake(rest[1:])
 	case "paths":
 		err = cmdPaths()
 	default:
@@ -74,6 +76,8 @@ uso: fantasy [-v|-q] <comando>
   cache         tamano de la cache
   probe         las dos peticiones del detector de cambios, y su huella
   model --json  volcar el modelo, para compararlo con el de Python
+  wake <p.json> <now> [tick] [last_full] [watched]
+                que haria el planificador con ese payload, para comparar
   paths         donde vive cada cosa
 `))
 }
@@ -177,6 +181,74 @@ func savedLeague() (string, string, error) {
 	return settings.LeagueID, settings.TeamID, nil
 }
 
+// cmdWake prints what the scheduler would decide for a recorded payload at a given
+// instant. Both sides take `now` as an argument precisely so the decision is reproducible:
+// a scheduler that can only be observed live cannot be compared.
+func cmdWake(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("uso: wake <payload.json> <now RFC3339> [tick_s] [last_full] [watched]")
+	}
+	raw, err := os.ReadFile(args[0])
+	if err != nil {
+		return err
+	}
+	var wrapper struct {
+		Universe schedule.Payload `json:"universe"`
+	}
+	if err := json.Unmarshal(raw, &wrapper); err != nil {
+		return err
+	}
+	payload := wrapper.Universe
+	if len(payload.Players) == 0 {
+		// Also accept a bare payload, which is what the server's /api/state returns.
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			return err
+		}
+	}
+	// Policies live in a file, not in the dump.
+	state := loadState()
+	payload.Policies = map[string]schedule.Policy{}
+	for id := range state.Raids {
+		payload.Policies[id] = schedule.Policy{Raid: true}
+	}
+
+	now, err := time.Parse(time.RFC3339, args[1])
+	if err != nil {
+		return err
+	}
+	tick := 120 * time.Second
+	if len(args) > 2 {
+		seconds, err := strconv.Atoi(args[2])
+		if err != nil {
+			return err
+		}
+		tick = time.Duration(seconds) * time.Second
+	}
+	var lastFull time.Time
+	if len(args) > 3 && args[3] != "-" {
+		if lastFull, err = time.Parse(time.RFC3339, args[3]); err != nil {
+			return err
+		}
+	}
+	watched := len(args) > 4 && args[4] == "true"
+
+	deadlines := schedule.Deadlines(payload, now, time.Time{})
+	fmt.Printf("vencimientos: %d\n", len(deadlines))
+	for index, deadline := range deadlines {
+		if index >= 10 {
+			break
+		}
+		fmt.Printf("  %+7.0fs  %s\n", deadline.At.Sub(now).Seconds(), deadline.Why)
+	}
+	fmt.Printf("en juego: %d (mios %d)\n",
+		len(schedule.LiveMatches(payload, now, false)),
+		len(schedule.LiveMatches(payload, now, true)))
+	decision := schedule.NextWake(payload, now, tick, lastFull, watched, time.Time{})
+	fmt.Printf("decision: +%.0fs %s %s\n", decision.At.Sub(now).Seconds(),
+		decision.Kind, decision.Why)
+	return nil
+}
+
 func cmdPaths() error {
 	fmt.Printf("  config %s\n  state  %s\n  cache  %s\n",
 		config.ConfigDir, config.StateDir, config.CacheDir)
@@ -265,74 +337,18 @@ func cmdProbe(args []string) error {
 		return err
 	}
 
-	parts := ProbeParts(events, listings)
+	rawListings := make([]map[string]any, 0, len(listings))
+	for _, listing := range listings {
+		blob, _ := json.Marshal(listing)
+		var row map[string]any
+		_ = json.Unmarshal(blob, &row)
+		rawListings = append(rawListings, row)
+	}
+	parts := schedule.ProbeParts(events, rawListings)
 	fmt.Printf("liga %s · %d eventos · %d anuncios\n", leagueID, len(events), len(listings))
 	fmt.Printf("  events %s\n  market %s\n", parts["events"], parts["market"])
 	fmt.Printf("  peticiones: %+v\n", httpx.Stats())
 	return nil
 }
 
-// ProbeParts is the digest, split in two because the halves mean different things: a new
-// activity event means somebody changed hands and every squad is stale; a market-only
-// change is a listing or a rival bid and nothing moved owner.
-//
-// It must produce the same hex as fantasy/schedule.py for the same state, so the JSON
-// shapes it hashes are chosen to match Python's json.dumps of the same lists.
-func ProbeParts(events []map[string]any, listings []api.Listing) map[string]string {
-	ids := make([]string, 0, 8)
-	for index, event := range events {
-		if index >= 8 {
-			break
-		}
-		ids = append(ids, fmt.Sprint(event["id"]))
-	}
-
-	rows := make([]string, 0, len(listings))
-	for _, listing := range listings {
-		rows = append(rows, fmt.Sprintf("%s:%s:%s:%s",
-			listing.ID, amount(listing.SalePrice.String()),
-			nilable(listing.NumberOfBids), nilable(listing.NumberOfOffers)))
-	}
-	sort.Strings(rows)
-
-	return map[string]string{
-		"events": sha1Hex(pythonJSON(ids)),
-		"market": sha1Hex(pythonJSON(rows)),
-	}
-}
-
-// amount renders a number the way Python's str(int(float(value))) does, so the digests
-// agree whichever side parsed the response.
-func amount(value string) string {
-	if value == "" {
-		return ""
-	}
-	var parsed float64
-	if _, err := fmt.Sscanf(value, "%f", &parsed); err != nil {
-		return ""
-	}
-	return fmt.Sprintf("%d", int64(parsed))
-}
-
-func nilable(value *int) string {
-	if value == nil {
-		return "None"
-	}
-	return fmt.Sprint(*value)
-}
-
-// pythonJSON mimics json.dumps of a list of strings: separators are ", " and ": ".
-func pythonJSON(values []string) string {
-	quoted := make([]string, 0, len(values))
-	for _, value := range values {
-		blob, _ := json.Marshal(value)
-		quoted = append(quoted, string(blob))
-	}
-	return "[" + strings.Join(quoted, ", ") + "]"
-}
-
-func sha1Hex(text string) string {
-	sum := sha1.Sum([]byte(text))
-	return hex.EncodeToString(sum[:])
-}
 
