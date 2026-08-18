@@ -1,0 +1,36 @@
+name: Auto-tag (CalVer)
+
+# On every push to main, create a date-based tag vYYYY.MM.DD.
+# If several pushes land on the same day, a -N suffix is appended (v2026.07.01-1, -2, ...).
+# rpi-services pins its build to these tags for reproducible deploys.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create CalVer tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch --tags --quiet
+          base="v$(date +%Y.%m.%d)"
+          tag="$base"
+          n=1
+          while git rev-parse -q --verify "refs/tags/$tag" >/dev/null; do
+            tag="$base-$n"
+            n=$((n + 1))
+          done
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
+          echo "Created tag $tag"
