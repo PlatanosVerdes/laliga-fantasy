@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/auth"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
@@ -70,6 +71,8 @@ func main() {
 		err = cmdWake(rest[1:])
 	case "section":
 		err = cmdSection(rest[1:])
+	case "advise":
+		err = cmdAdvise(rest[1:])
 	case "match":
 		err = cmdMatch(rest[1:])
 	case "scrape":
@@ -110,6 +113,7 @@ uso: fantasy [-v|-q] <comando>
   calls         la peticion que construiria cada operacion, sin enviarla
   checks        que aceptaria y que rechazaria la guardia, caso por caso
   cells         como se formatea cada celda, para compararlo con Python
+  advise <universe.json> <saldo> [deuda] [limite]   los cubos de consejo, en JSON
   match <players.json> <ffmarket.json> <teams.json>   emparejar las dos fuentes
   scrape <que> <fichero.html>   parsear una pagina de futbolfantasy y volcarla en JSON
   page <dump.json> <generado> [liga]   la pagina entera, desde un volcado
@@ -515,6 +519,46 @@ func cmdSection(args []string) error {
 		return err
 	}
 	fmt.Print(html)
+	return nil
+}
+
+// cmdAdvise runs the advice layer over a recorded universe, so the buckets can be compared
+// bucket by bucket. Budget and debt are arguments: they come from the API in a live run and
+// from the comparison in this one.
+func cmdAdvise(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("uso: advise <universe.json> <saldo> [deuda] [limite]")
+	}
+	body, err := os.ReadFile(args[0])
+	if err != nil {
+		return err
+	}
+	var universe map[string]any
+	if err := json.Unmarshal(body, &universe); err != nil {
+		return err
+	}
+	budget, err := strconv.ParseFloat(args[1], 64)
+	if err != nil {
+		return err
+	}
+	debt := 0.0
+	if len(args) > 2 {
+		if debt, err = strconv.ParseFloat(args[2], 64); err != nil {
+			return err
+		}
+	}
+	limit := 15
+	if len(args) > 3 {
+		if limit, err = strconv.Atoi(args[3]); err != nil {
+			return err
+		}
+	}
+
+	blob, err := json.Marshal(advice.Recommend(universe, budget, debt, limit))
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(blob))
 	return nil
 }
 
