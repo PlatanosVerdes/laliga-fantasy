@@ -1289,8 +1289,9 @@ function wireRaids(root=document){
     if(card.dataset.wired) return;
     card.dataset.wired='1';
     card.addEventListener('click',()=>{
-      showTab(card.dataset.goto);
-      document.querySelector('.tabs').scrollIntoView({behavior:'smooth',block:'start'});
+      const target=resolveTarget(card.dataset.goto);
+      if(target) showTab(target.tab,{section:target.section});
+      else showTab(card.dataset.goto);
     });
   });
 }
@@ -1319,7 +1320,17 @@ const TABS=[
   {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
 ];
 
-function showTab(id){
+// Un hash puede ser una pestaña (#mercado) o una seccion (#oportunidades): lo
+// segundo es lo que hay en los enlaces, asi que hay que resolverlo a su pestaña.
+function resolveTarget(hash){
+  const id=(hash||'').replace(/^#/,'');
+  if(!id) return null;
+  if(TABS.some(t=>t.id===id)) return {tab:id, section:null};
+  const owner=TABS.find(t=>t.sections.includes(id));
+  return owner ? {tab:owner.id, section:id} : null;
+}
+
+function showTab(id,{section=null,updateHash=true}={}){
   const tab=TABS.find(t=>t.id===id)||TABS[0];
   document.querySelectorAll('section[id]').forEach(s=>{
     s.hidden=!tab.sections.includes(s.id);
@@ -1331,6 +1342,15 @@ function showTab(id){
   });
   try{ localStorage.setItem('fantasy-tab',tab.id); }catch(e){}
   applyFilters();
+  if(updateHash){
+    // replaceState, no assignment: no queremos una entrada de historial por clic ni
+    // disparar hashchange sobre nosotros mismos.
+    history.replaceState(null,'','#'+(section||tab.id));
+  }
+  if(section){
+    const node=document.getElementById(section);
+    if(node) node.scrollIntoView({behavior:'smooth',block:'start'});
+  }
 }
 
 function wireTabs(){
@@ -1339,9 +1359,15 @@ function wireTabs(){
   bar.dataset.wired='1';
   bar.querySelectorAll('.tab').forEach(b=>
     b.addEventListener('click',()=>showTab(b.dataset.tab)));
+  window.addEventListener('hashchange',()=>{
+    const target=resolveTarget(location.hash);
+    if(target) showTab(target.tab,{section:target.section,updateHash:false});
+  });
   let saved=null;
   try{ saved=localStorage.getItem('fantasy-tab'); }catch(e){}
-  showTab(location.hash.slice(1)||saved||'decidir');
+  const target=resolveTarget(location.hash);
+  if(target) showTab(target.tab,{section:target.section,updateHash:false});
+  else showTab(saved||'decidir');
 }
 
 // ---- push: recambiar solo lo que cambia -----------------------------------
@@ -1358,7 +1384,8 @@ async function swap(){
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });
   wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids(); tick();
-  showTab(document.querySelector('.tab.on')?.dataset.tab||'decidir');
+  showTab(document.querySelector('.tab.on')?.dataset.tab||'decidir',
+          {updateHash:false});
   const stamp=document.getElementById('live-stamp');
   if(stamp) stamp.textContent='actualizado '+new Date().toLocaleTimeString('es-ES');
 }
