@@ -117,6 +117,10 @@ type Listing struct {
 	// so the id has to come from whatever the market entry itself exposes once a bid
 	// exists. Looked up generically rather than guessed.
 	MyBidID *string `json:"my_bid_id"`
+	// What we bid, so the page can say "tienes 37M puestos" instead of just knowing that
+	// something is there.
+	MyBid       *float64 `json:"my_bid"`
+	MyBidStatus *string  `json:"my_bid_status"`
 }
 
 type Fixture struct {
@@ -682,6 +686,31 @@ func findBidID(entry map[string]any) *string {
 	return nil
 }
 
+// findBidAmount and findBidStatus read the same `bid` object findBidID found: the market list
+// carries our own bid inline, which is the only place it is exposed at all.
+func findBidAmount(entry map[string]any) *float64 {
+	bid, ok := entry["bid"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	if amount, present := bid["money"]; present && amount != nil {
+		value := number(amount)
+		return &value
+	}
+	return nil
+}
+
+func findBidStatus(entry map[string]any) *string {
+	bid, ok := entry["bid"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	if status := text(bid["status"]); status != "" {
+		return &status
+	}
+	return nil
+}
+
 // loadOffers asks only for our own listings: one request each, and there is no route that
 // lists them all.
 func loadOffers(client *api.Client, leagueID string, listings []Listing,
@@ -778,6 +807,8 @@ func loadMarket(client *api.Client, leagueID, myTeamID string) ([]Listing, error
 			IsMine:      myTeamID != "" && sellerTeamID == myTeamID,
 			DirectOffer: boolOrNil(entry["directOffer"]),
 			MyBidID:     findBidID(entry),
+			MyBid:       findBidAmount(entry),
+			MyBidStatus: findBidStatus(entry),
 		}
 		if expires := text(entry["expirationDate"]); expires != "" {
 			listing.Expires = &expires

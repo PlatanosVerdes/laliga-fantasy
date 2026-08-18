@@ -126,10 +126,7 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 		if suggested == 0 {
 			suggested = number(listing["min_bid"])
 		}
-		actions = append(actions, map[string]any{"op": "bid", "label": "Pujar",
-			"kind": "amount", "market_id": listing["market_id"],
-			"suggested": int64(suggested), "min": int64(number(listing["min_bid"])),
-			"bids": listing["bids"], "expires": listing["expires"]})
+		actions = append(actions, bidActions(listing, suggested)...)
 
 	case text(player["owner"]) != "":
 		owner := text(player["owner"])
@@ -164,10 +161,8 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 			}
 			actions = append(actions,
 				map[string]any{"op": "direct_offer", "label": "Ofrecer a " + owner,
-					"kind": "amount", "market_id": marketID, "suggested": int64(suggested)},
-				map[string]any{"op": "bid", "label": "Pujar por su venta", "kind": "amount",
-					"market_id": marketID, "suggested": int64(number(listing["min_bid"])),
-					"min": int64(number(listing["min_bid"]))})
+					"kind": "amount", "market_id": marketID, "suggested": int64(suggested)})
+			actions = append(actions, bidActions(listing, number(listing["min_bid"]))...)
 		} else {
 			actions = append(actions, map[string]any{"op": "note", "kind": "note",
 				"label": owner + " no lo tiene en venta: solo se le puede pagar la clausula"})
@@ -181,6 +176,33 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 		}
 	}
 	return actions
+}
+
+// bidActions is what you can do about a listing you do not own. The API refuses a second bid
+// on the same listing with a bare 400, so once one exists the only honest options are to
+// change it or to take it back — offering "Pujar" again would be offering a button that
+// cannot work.
+func bidActions(listing map[string]any, suggested float64) []map[string]any {
+	marketID := text(listing["market_id"])
+	minBid := int64(number(listing["min_bid"]))
+	if bidID := text(listing["my_bid_id"]); bidID != "" {
+		mine := int64(number(listing["my_bid"]))
+		if suggested <= float64(mine) {
+			suggested = float64(mine)
+		}
+		return []map[string]any{
+			{"op": "modify_bid", "label": fmt.Sprintf("Cambiar tu puja (%s)", thousands(mine)),
+				"kind": "amount", "market_id": marketID, "bid_id": bidID,
+				"suggested": int64(suggested), "min": minBid,
+				"bids": listing["bids"], "expires": listing["expires"],
+				"note": "Ya tienes una puja puesta: se sustituye por el nuevo importe."},
+			{"op": "cancel_bid", "label": "Cancelar tu puja", "kind": "confirm",
+				"danger": true, "market_id": marketID, "bid_id": bidID},
+		}
+	}
+	return []map[string]any{{"op": "bid", "label": "Pujar", "kind": "amount",
+		"market_id": marketID, "suggested": int64(suggested), "min": minBid,
+		"bids": listing["bids"], "expires": listing["expires"]}}
 }
 
 // lineup is the pitch: who starts where, who sits, and each one's recent form. Merged with

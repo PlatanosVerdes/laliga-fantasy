@@ -229,6 +229,10 @@ type Player struct {
 	Clause   int64
 	Bids     int
 	Expires  string
+	// Our own bid on this listing, when there is one. The API answers a second bid with a
+	// bare 400, so knowing about it is what turns that into a sentence.
+	MyBidID string
+	MyBid   int64
 }
 
 // Summary is what a person is asked to confirm.
@@ -394,6 +398,18 @@ func check(name string, args Args, who Player, cash *int64) ([]string, error) {
 		if args.Amount <= 0 {
 			return nil, errors.New("la puja tiene que ser un importe positivo")
 		}
+		if name == "bid" && who.MyBidID != "" {
+			return nil, fmt.Errorf("ya tienes una puja de %s en este jugador: cambiala en vez "+
+				"de poner otra", money(who.MyBid))
+		}
+		if name == "modify_bid" {
+			if args.BidID == "" {
+				return nil, errors.New("no se cual es tu puja: recarga la pagina")
+			}
+			if who.MyBid > 0 && args.Amount == who.MyBid {
+				return nil, fmt.Errorf("tu puja ya es de %s", money(who.MyBid))
+			}
+		}
 		if who.MinBid > 0 && args.Amount < who.MinBid {
 			return nil, fmt.Errorf("la puja minima es %s", money(who.MinBid))
 		}
@@ -412,9 +428,14 @@ func check(name string, args Args, who Player, cash *int64) ([]string, error) {
 		if cash != nil && float64(args.Amount) > 0.5*float64(*cash) {
 			warnings = append(warnings, "te deja con menos de la mitad del saldo")
 		}
-		// Only the count is published, never the amounts, so this is all there is to say.
+		// Only the count is published, never the amounts, so this is all there is to say —
+		// except which of them is ours, which we do know.
 		if who.Bids > 0 {
-			warnings = append(warnings, fmt.Sprintf("ya hay %d puja(s) por el", who.Bids))
+			note := fmt.Sprintf("ya hay %d puja(s) por el", who.Bids)
+			if who.MyBidID != "" {
+				note += fmt.Sprintf(", una tuya de %s", money(who.MyBid))
+			}
+			warnings = append(warnings, note)
 		}
 	}
 	return warnings, nil

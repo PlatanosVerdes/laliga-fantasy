@@ -14,7 +14,10 @@ import (
 	"strconv"
 	"strings"
 
+	"time"
+
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/favourites"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
@@ -282,6 +285,20 @@ func (s *Server) playerFor(id string) writes.Player {
 			}
 			if listing.Expires != nil {
 				who.Expires = *listing.Expires
+			}
+			if listing.MyBidID != nil {
+				who.MyBidID = *listing.MyBidID
+			}
+			if listing.MyBid != nil {
+				who.MyBid = int64(*listing.MyBid)
+			}
+		}
+		// The profitable ceiling is futbolfantasy's, and it lives on their player page rather
+		// than in the model, so it is read here. Cached for a day: without it every bid was
+		// warned as unprofitable, which is worse than saying nothing.
+		if player.FFID != nil && *player.FFID != "" {
+			if detail, err := futbolfantasy.PlayerDetail(*player.FFID, 24*time.Hour); err == nil {
+				who.IdealBid = int64(number(detail["ideal_bid"]))
 			}
 		}
 		return who
