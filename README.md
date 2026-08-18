@@ -270,6 +270,17 @@ Three kinds of wake-up, and `/healthz` names the next one (`next_wake_in`,
 `/healthz` also reports the request counter (`requests`, `cache_hits`, `errors`), so the
 cost of a refresh policy is a measurement rather than a claim.
 
+**A write rebuilds the world, and says what it moved.** Selling a player is not a
+local edit: the cash changes, the squad changes, the market changes, and so does every
+recommendation derived from them. So each operation declares which cached answers it
+falsifies (`writes.EFFECTS`), those are dropped the moment it succeeds, and a full
+rebuild follows off the request thread — the click does not wait for a dozen requests.
+When the rebuild lands, the before/after of cash, squad size, squad value, listings and
+received offers is pushed over SSE and shown on the page, and kept in `/healthz` as
+`last_effect`. Instructions that fire on their own get the same treatment: the page
+built during the cycle that sold a player describes the world from before the sale, so
+it is rebuilt again.
+
 **Paying a clause re-reads it first.** The plan can be built from data half an hour old,
 and this is the one operation where that gap is expensive: the owner can raise the clause
 or shield the player at any moment, and paying is irreversible. So before the write, one

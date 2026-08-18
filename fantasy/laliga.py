@@ -15,6 +15,13 @@ MINUTE = 60
 HOUR = 3600
 
 
+# Cache tags used below. Named here because other modules invalidate by tag, and a
+# tag that matches nothing fails silently: it drops no files and reports success.
+TAGS = frozenset({"activity", "calendar", "formations", "leagues", "lineup", "market",
+                  "me", "money", "mv", "offers", "player", "players", "squad",
+                  "standing", "teams", "week"})
+
+
 def _headers(authenticated: bool) -> dict[str, str]:
     headers = dict(API_HEADERS)
     if authenticated:

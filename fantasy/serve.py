@@ -47,6 +47,8 @@ class State:
         self.probe_parts: dict[str, str] = {}
         self.probes = 0
         self.deadline_floor = 0.0
+        self.last_effect: dict[str, Any] | None = None
+        self.needs_followup = False
         # Set to cut a sleep short. Opening the page has to tighten the cadence now,
         # not at the end of a wait that was planned while nobody was looking.
         self.nudge = threading.Event()
@@ -86,6 +88,10 @@ class State:
                         my_team_id=settings["my_team_id"],
                         allow_writes=settings["allow_writes"],
                         cash=(advice or {}).get("budget") or 0)
+                    # An instruction that fired changed the world too, so the page
+                    # about to be built is already out of date.
+                    self.needs_followup = any(
+                        action.get("result") == "hecho" for action in self.policy_actions)
                 except Exception as exc:
                     log.error("policies failed", extra={"reason": str(exc)[:200]})
 
@@ -152,7 +158,7 @@ class State:
         self.probe_parts = parts
         self.probes += 1
         if "events" in moved:
-            http.invalidate("squad", "money", "standings")
+            http.invalidate("squad", "money", "standing")
         return bool(moved), moved
 
     def rerender(self) -> bool:
@@ -182,6 +188,28 @@ class State:
         self.publish({"type": "state", "version": self.version})
         log.debug("rerendered", extra={"version": self.version})
         return True
+
+    def snapshot(self) -> dict[str, Any]:
+        """The handful of figures an operation moves, for a before/after comparison.
+
+        Read from the payload already in memory, so taking one costs nothing.
+        """
+        players = self.payload.get("players") or []
+        mine = [p for p in players if p.get("is_mine")]
+        return {
+            "cash": (self.payload.get("budget") or 0),
+            "squad": len(mine),
+            "squad_value": round(sum(float(p.get("value") or 0) for p in mine)),
+            "listed": sum(1 for m in (self.payload.get("market") or []) if m.get("is_mine")),
+            "offers": sum(len(p.get("offers") or []) for p in mine),
+        }
+
+    @staticmethod
+    def difference(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+        """Only what actually moved, so an empty result means the write changed nothing."""
+        return {key: {"before": before.get(key), "after": after.get(key),
+                      "delta": (after.get(key) or 0) - (before.get(key) or 0)}
+                for key in before if before.get(key) != after.get(key)}
 
     # --- push ---------------------------------------------------------------
 
@@ -226,12 +254,38 @@ class State:
             "next_wake_why": self.wake_reason or None,
             "subscribers": len(self.subscribers),
             "last_error": self.last_error,
+            "last_effect": self.last_effect,
             "session": {
                 "present": bool(tokens),
                 "seconds_left": auth.seconds_left(tokens) if tokens else None,
                 "has_refresh_token": bool(tokens and tokens.get("refresh_token")),
             },
         }
+
+
+def settle(state: State, operation: str) -> dict[str, Any]:
+    """Rebuild after a write and report what it moved.
+
+    A write is not a local edit. Selling a player changes the cash, the squad, the
+    market and every recommendation derived from them, so the whole world is rebuilt
+    rather than patched — the caches the operation falsified were already dropped by
+    `writes.confirm`. Runs off the request thread: the click should not wait for a
+    dozen requests, and the result arrives over SSE when it is ready.
+    """
+    before = state.snapshot()
+    state.refresh(force=True)
+    after = state.snapshot()
+    diff = state.difference(before, after)
+    effect = {"operation": operation, "at": datetime.now(timezone.utc).isoformat(),
+              "changed": diff}
+    state.last_effect = effect
+    log.info("write settled", extra={"operation": operation,
+                                    "cash_before": before["cash"],
+                                    "cash_after": after["cash"],
+                                    "changed": list(diff)})
+    if diff:
+        state.publish({"type": "effect", "version": state.version, **effect})
+    return effect
 
 
 def _handler(state: State, *, allow_writes: bool, league_id: str | None,
@@ -598,7 +652,7 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                 except writes.WriteError as exc:
                     self._json(400, {"error": str(exc)})
                 else:
-                    threading.Thread(target=state.refresh, kwargs={"force": True},
+                    threading.Thread(target=settle, args=(state, "save_lineup"),
                                      daemon=True).start()
                     self._json(200, {"ok": True, "saved": bool(result),
                                      "formation": body.get("formation")})
@@ -672,7 +726,8 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
             except writes.WriteError as exc:
                 self._json(400, {"error": str(exc)})
             else:
-                threading.Thread(target=state.refresh, kwargs={"force": True},
+                threading.Thread(target=settle,
+                                 args=(state, result.get("operation") or "write"),
                                  daemon=True).start()
                 self._json(200, result)
 
@@ -726,6 +781,9 @@ def run(builder: Callable[[], tuple[dict, dict | None, dict]], *,
                 state.deadline_floor = when + schedule.LEAD + 1
                 log.info("waking on a deadline", extra={"why": why})
                 state.refresh()
+                if state.needs_followup:
+                    state.needs_followup = False
+                    settle(state, "policy")
                 continue
             if not league_id:
                 log.debug("no league to probe, rebuilding", extra={"why": why})
@@ -746,6 +804,12 @@ def run(builder: Callable[[], tuple[dict, dict | None, dict]], *,
                 state.refresh()
             else:
                 log.debug("nothing moved", extra={"probes": state.probes})
+
+            if state.needs_followup:
+                # An instruction fired during that rebuild, so the page it produced
+                # describes the world from before its own action.
+                state.needs_followup = False
+                settle(state, "policy")
 
     threading.Thread(target=loop, daemon=True).start()
     server = ThreadingHTTPServer((host, port), _handler(

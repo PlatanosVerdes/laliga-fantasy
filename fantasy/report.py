@@ -775,6 +775,25 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   border-color:color-mix(in srgb,var(--warning) 45%,transparent)}
 .drawer-actions button[disabled]{opacity:.45;cursor:not-allowed}
 .drawer-note{font-size:11px;color:var(--muted);margin:16px 0 0}
+.effect{position:fixed;right:18px;bottom:18px;z-index:70;background:var(--surface);
+  border:1px solid var(--line);border-radius:11px;padding:14px 16px 13px;
+  box-shadow:0 14px 40px rgba(0,0,0,.28);max-width:340px;
+  opacity:0;transform:translateY(10px);transition:opacity .28s,transform .28s}
+.effect.in{opacity:1;transform:none}
+.effect h4{margin:0 0 9px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);font-weight:600}
+.effect table{border-collapse:collapse;font-size:12.5px}
+.effect th{text-align:left;font-weight:500;color:var(--ink-2);padding:2px 12px 2px 0;
+  position:static;background:none;font-size:12.5px;text-transform:none;letter-spacing:0;
+  cursor:default}
+.effect td{padding:2px 0;font-variant-numeric:tabular-nums;text-align:right}
+.effect td.arrow{padding:0 7px;color:var(--muted)}
+.effect td.delta{padding-left:11px;font-weight:600}
+.effect td.delta.up{color:var(--good)}
+.effect td.delta.down{color:var(--critical)}
+.effect-close{position:absolute;top:8px;right:10px;background:none;border:none;
+  color:var(--muted);font-size:17px;line-height:1;cursor:pointer;padding:2px}
+.effect-close:hover{color:var(--ink)}
 .always-panel{border:1px solid var(--line);border-radius:9px;padding:12px 13px 13px;
   background:var(--plane);display:flex;flex-direction:column;gap:10px}
 .always-panel h4{margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
@@ -1945,12 +1964,47 @@ async function swap(){
   if(stamp) stamp.textContent='actualizado '+new Date().toLocaleTimeString('es-ES');
 }
 
+const EFFECT_LABELS={cash:'Saldo',squad:'Jugadores',squad_value:'Valor de la plantilla',
+                     listed:'En el mercado',offers:'Ofertas recibidas'};
+const OPERATION_LABELS={sell_to_market:'Puesto en venta',accept_offer:'Oferta aceptada',
+  decline_offer:'Oferta rechazada',withdraw:'Retirado del mercado',bid:'Puja enviada',
+  modify_bid:'Puja modificada',cancel_bid:'Puja cancelada',direct_offer:'Oferta directa',
+  pay_clause:'Clausulazo pagado',raise_clause:'Clausula subida',
+  save_lineup:'Alineacion guardada',policy:'Instruccion ejecutada'};
+
+function showEffect(message){
+  // Lo que una operacion mueve de verdad: el antes y el despues, no un "hecho".
+  const rows=Object.entries(message.changed||{}).map(([key,change])=>{
+    const money=key==='cash'||key==='squad_value';
+    const fmt=(n)=> money?exact(n||0):String(n??0);
+    const sign=change.delta>0?'up':(change.delta<0?'down':'');
+    return `<tr><th>${EFFECT_LABELS[key]||key}</th><td>${fmt(change.before)}</td>`
+      +`<td class="arrow">→</td><td>${fmt(change.after)}</td>`
+      +`<td class="delta ${sign}">${change.delta>0?'+':''}${fmt(change.delta)}</td></tr>`;
+  }).join('');
+  if(!rows) return;
+  const box=document.createElement('div');
+  box.className='effect';
+  box.innerHTML=`<button class="effect-close" aria-label="Cerrar">×</button>`
+    +`<h4>${OPERATION_LABELS[message.operation]||message.operation}</h4>`
+    +`<table>${rows}</table>`;
+  document.body.appendChild(box);
+  box.querySelector('.effect-close').addEventListener('click',()=>box.remove());
+  requestAnimationFrame(()=>box.classList.add('in'));
+  setTimeout(()=>{box.classList.remove('in');setTimeout(()=>box.remove(),400);},12000);
+}
+
 function connect(){
   const dot=document.getElementById('live-dot');
   const source=new EventSource('/api/events');
   source.onopen=()=>{ if(dot){ dot.className='live-on'; dot.title='En vivo'; } };
   source.onmessage=(event)=>{
     const message=JSON.parse(event.data);
+    if(message.type==='effect'){
+      showEffect(message);
+      if(message.version!==currentVersion) swap();
+      return;
+    }
     if(message.type==='state'||message.type==='hello'){
       if(message.version!==currentVersion) swap();
     }

@@ -136,6 +136,32 @@ OPERATIONS = {
 }
 
 
+# Which cached answers a write makes false. Selling a player is not a local edit:
+# the cash changes, the squad changes, the market changes and so does every
+# recommendation computed from them, so the TTLs that make idle polling cheap are
+# exactly wrong for the seconds after an operation.
+EFFECTS = {
+    "sell_to_market": ("market", "squad", "money", "activity"),
+    "withdraw": ("market", "squad", "activity"),
+    "bid": ("market", "money"),
+    "modify_bid": ("market", "money"),
+    "cancel_bid": ("market", "money"),
+    "direct_offer": ("market", "money"),
+    "accept_offer": ("market", "squad", "money", "activity", "standing", "offers"),
+    "decline_offer": ("market", "offers"),
+    "pay_clause": ("squad", "money", "activity", "standing", "market"),
+    "raise_clause": ("squad",),
+    "save_lineup": ("lineup",),
+}
+
+
+_unknown = sorted(set(sum(EFFECTS.values(), ())) - laliga.TAGS)
+if _unknown:
+    # A misspelled tag drops no files and still reports success, which would leave a
+    # write believing it had invalidated data it had not.
+    log.error("EFFECTS names cache tags that do not exist", extra={"tags": _unknown})
+
+
 # --- two-step guard ---------------------------------------------------------
 
 def _purge() -> None:
@@ -269,6 +295,8 @@ def confirm(token: str, *, allow_writes: bool = False, dry_run: bool = False) ->
     except http.HttpError as exc:
         log.error("write failed", extra={"operation": operation, "status": exc.status})
         raise WriteError(f"la API ha respondido {exc.status}: {exc.body[:200]}") from exc
-    log.info("write done", extra={"operation": operation, "amount": args.get("amount")})
+    dropped = http.invalidate(*EFFECTS.get(operation, ()))
+    log.info("write done", extra={"operation": operation, "amount": args.get("amount"),
+                                 "cache_dropped": dropped})
     return {"ok": True, "operation": operation, "summary": pending["summary"],
             "response": result}
