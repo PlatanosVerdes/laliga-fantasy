@@ -242,3 +242,27 @@ func (c *Client) Me(ttl time.Duration) (map[string]any, error) {
 	err := c.get("/v4/user/me", true, ttl, "me", false, &me)
 	return me, err
 }
+
+// LineupLines are the four lines of the pitch, in the order the payload uses them.
+var LineupLines = []string{"goalkeeper", "defender", "midfield", "striker"}
+
+// Lineup is the current eleven. formation.tacticalFormation is the shape itself, e.g.
+// [3,4,3], and each slot carries playerMaster.lastStats: points per matchday.
+func (c *Client) Lineup(teamID string, ttl time.Duration) (map[string]any, error) {
+	var payload map[string]any
+	err := c.get(fmt.Sprintf("%s/teams/%s/lineup", config.CMP, teamID), true, ttl,
+		"lineup", false, &payload)
+	return payload, err
+}
+
+// Formations lists the shapes the account may use; the premium ones need the paid tier.
+func (c *Client) Formations(premium bool, ttl time.Duration) ([]string, error) {
+	option := "free"
+	if premium {
+		option = "premium"
+	}
+	var shapes []string
+	err := c.getList("/v4/teams/lineup/formations?option="+option, ttl, "formations",
+		false, &shapes)
+	return shapes, err
+}

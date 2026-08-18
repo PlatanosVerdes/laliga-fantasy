@@ -456,3 +456,17 @@ func newToken() string {
 	}
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
+
+// Do runs an operation in one step, for the ones that move no money: a lineup change is
+// undone by another lineup change, so making a person confirm it twice buys nothing. Anything
+// with an amount still goes through Prepare and Confirm.
+func (g *Guard) Do(name string, args Args, who Player, allowWrites bool) (map[string]any, error) {
+	if args.Amount != 0 {
+		return nil, fmt.Errorf("%s mueve dinero: usa prepare y confirm", name)
+	}
+	summary, err := g.Prepare(name, args, who, allowWrites)
+	if err != nil {
+		return nil, err
+	}
+	return g.Confirm(summary.Token, allowWrites, false)
+}

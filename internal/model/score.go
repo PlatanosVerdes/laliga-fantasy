@@ -1,8 +1,13 @@
 package model
 
 import (
+	"log/slog"
 	"math"
 	"sort"
+	"time"
+
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 )
 
 // Constants lifted verbatim from fantasy/analysis.py. Changing one here without changing
@@ -412,4 +417,53 @@ func populationStdev(values []float64, average float64) float64 {
 		total += (value - average) * (value - average)
 	}
 	return math.Sqrt(total / float64(len(values)))
+}
+
+// DeepEnrich replaces the price-derived baseline with real last-season output.
+//
+// The API ships no history for promoted clubs or for the star records it recreated this season,
+// so for a shortlist we read futbolfantasy's player page and recompute the baseline from the
+// matchdays he actually played. One request per player and the pages are heavy, hence opt-in
+// and shortlist-only.
+func DeepEnrich(players []*Player, limit int, ttl time.Duration) int {
+	fixed := 0
+	for index, player := range players {
+		if index >= limit {
+			break
+		}
+		if !player.PriorBased || player.FFID == nil {
+			continue
+		}
+		name := player.Name
+		if player.FFName != nil && *player.FFName != "" {
+			name = *player.FFName
+		}
+		page, err := futbolfantasy.PlayerPage(matching.SlugifyFF(name), ttl)
+		if err != nil {
+			slog.Debug("deep enrich skipped", "player", player.Name, "reason", err.Error())
+			continue
+		}
+		games := number(page["games_played"])
+		if games == 0 {
+			continue
+		}
+		total := number(page["total_points"])
+		baseWeek := total / WeeksInSeason
+		scale := 1.0
+		if player.BaseWeek != 0 {
+			scale = baseWeek / player.BaseWeek
+		}
+		player.BaseWeek = baseWeek
+		player.LastSeason = total
+		player.PriorBased = false
+		player.XPts *= scale
+		if player.Value != 0 {
+			player.PointsValue = player.XPts / (player.Value / 1e6)
+		} else {
+			player.PointsValue = 0
+		}
+		fixed++
+	}
+	slog.Info("deep enrich done", "fixed", fixed)
+	return fixed
 }

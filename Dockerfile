@@ -1,25 +1,35 @@
-# No dependencies to install: the tool is standard library only.
-FROM python:3.13-alpine
+# Zero dependencies either side of the build: the module has no requires, so there is
+# nothing to download and the build works offline.
+FROM golang:1.26-alpine AS build
+
+WORKDIR /src
+COPY go.mod ./
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+# Static binary: the runtime image has no libc to link against.
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/fantasy ./cmd/fantasy
+
+FROM alpine:3.21
 
 WORKDIR /app
-COPY fantasy.py README.md ./
-COPY fantasy/ ./fantasy/
-# The page's CSS and JS live here, read at import by both implementations.
+COPY --from=build /out/fantasy /usr/local/bin/fantasy
+# The page's CSS, JS and HTML pieces are read at render time.
 COPY assets/ ./assets/
+COPY README.md ./
 
-# The session, cache, settings and logs all live here — mount it to persist them.
+# The session, cache, settings and report all live here — mount it to persist them.
 # Kept outside /app so it never collides with the source tree.
 VOLUME /data
 
-ENV PYTHONUNBUFFERED=1 \
-    FANTASY_LOG_JSON=1 \
-    FANTASY_DATA_DIR=/data
+ENV FANTASY_LOG_JSON=1 \
+    FANTASY_DATA_DIR=/data \
+    FANTASY_ASSETS=/app/assets
 
 EXPOSE 8000
 
+# wget is in busybox, so the check needs nothing installed.
 HEALTHCHECK --interval=60s --timeout=10s --start-period=180s --retries=3 \
-    CMD python3 -c "import urllib.request,sys; \
-sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=8).status==200 else 1)"
+    CMD wget -qO- http://127.0.0.1:8000/healthz >/dev/null || exit 1
 
-ENTRYPOINT ["python3", "fantasy.py"]
+ENTRYPOINT ["fantasy"]
 CMD ["serve", "--port", "8000", "--interval", "3600"]

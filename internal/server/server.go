@@ -14,7 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
 
 // Heartbeat keeps the SSE connection alive through proxies that close idle sockets.
@@ -33,6 +35,18 @@ type Options struct {
 	Page func() string
 	// Refresh forces a rebuild, for /refresh.
 	Refresh func(cause string, force bool) error
+	// Client reads the live half of a request: the lineup, the value history, the balance.
+	Client *api.Client
+	// Guard is the two-step write path. Nil means the binary was built to only read.
+	Guard *writes.Guard
+	// Which league and team every write belongs to.
+	LeagueID string
+	MyTeamID string
+	// Settle makes the world catch up after a write, and is expected to block.
+	Settle func(cause string)
+	// Adopted runs once a session has just been stored: the world has to be built from
+	// scratch, and the league resolved, before the page can show anything.
+	Adopted func()
 }
 
 type Server struct {
@@ -53,7 +67,16 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/health", s.health)
 	mux.HandleFunc("/api/state", s.payload)
 	mux.HandleFunc("/api/events", s.events)
-	mux.HandleFunc("/api/player/", s.player)
+	mux.HandleFunc("/api/player/", s.detail)
+	mux.HandleFunc("/api/fragments", s.fragments)
+	mux.HandleFunc("/api/lineup", s.lineup)
+	mux.HandleFunc("/api/session", s.session)
+	mux.HandleFunc("/api/favourite", s.favourite)
+	mux.HandleFunc("/favourite", s.favourite)
+	mux.HandleFunc("/api/always", s.always)
+	mux.HandleFunc("/api/raid", s.raid)
+	mux.HandleFunc("/api/bid/prepare", s.prepare)
+	mux.HandleFunc("/api/bid/confirm", s.confirm)
 	mux.HandleFunc("/refresh", s.refresh)
 	mux.HandleFunc("/assets/", s.asset)
 	mux.HandleFunc("/", s.index)
@@ -114,28 +137,6 @@ func (s *Server) refresh(writer http.ResponseWriter, _ *http.Request) {
 	err := s.opts.Refresh("manual", true)
 	s.json(writer, http.StatusOK, map[string]any{"refreshed": err == nil,
 		"version": s.state.Health().Version})
-}
-
-// player answers one player: everything the drawer shows. The actions it can take are
-// computed here rather than in the browser, so a page that is out of date cannot offer an
-// operation that no longer applies.
-func (s *Server) player(writer http.ResponseWriter, request *http.Request) {
-	id := strings.TrimPrefix(request.URL.Path, "/api/player/")
-	universe := s.state.Universe()
-	if universe == nil {
-		s.json(writer, http.StatusServiceUnavailable, map[string]any{"error": "generando"})
-		return
-	}
-	for _, player := range universe.Players {
-		if player.ID != id {
-			continue
-		}
-		s.json(writer, http.StatusOK, map[string]any{
-			"player": player, "writes_enabled": s.opts.AllowWrites,
-		})
-		return
-	}
-	s.json(writer, http.StatusNotFound, map[string]any{"error": "no existe ese jugador"})
 }
 
 // events is the push channel. A browser gets told when the version moves and when an
@@ -199,6 +200,12 @@ func (s *Server) asset(writer http.ResponseWriter, request *http.Request) {
 func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 	if request.URL.Path != "/" {
 		http.NotFound(writer, request)
+		return
+	}
+	// No session: ask for one from the page itself rather than expecting somebody to ssh in
+	// and drop a tokens.json next to the binary.
+	if !HasSession() {
+		s.setup(writer, request)
 		return
 	}
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")

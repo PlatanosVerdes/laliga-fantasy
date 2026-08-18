@@ -398,3 +398,36 @@ func truthy(value any) bool {
 	}
 	return false
 }
+
+// Set writes one instruction, merging with whatever is already stored so a page that only
+// knows about one switch cannot wipe the amounts. Keys listed in unset are cleared.
+func Set(id string, apply func(*Policy), unset ...string) (Policy, error) {
+	armed, err := Load()
+	if err != nil {
+		return Policy{}, err
+	}
+	entry := armed[id]
+	entry.ID = id
+	apply(&entry)
+	for _, key := range unset {
+		switch key {
+		case "min_price":
+			entry.MinPrice = nil
+		case "accept_above":
+			entry.AcceptAbove = nil
+		case "max_pay":
+			entry.MaxPay = nil
+		}
+	}
+	armed[id] = entry
+	return entry, Save(armed)
+}
+
+func Remove(id string) error {
+	armed, err := Load()
+	if err != nil {
+		return err
+	}
+	delete(armed, id)
+	return Save(armed)
+}

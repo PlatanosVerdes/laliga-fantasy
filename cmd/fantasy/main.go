@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
@@ -73,12 +74,32 @@ func main() {
 		err = cmdSection(rest[1:])
 	case "plan":
 		err = cmdPlan(rest[1:])
-	case "advise":
-		err = cmdAdvise(rest[1:])
+	case "advise-json":
+		err = cmdAdviseJSON(rest[1:])
 	case "match":
 		err = cmdMatch(rest[1:])
 	case "scrape":
 		err = cmdScrape(rest[1:])
+	case "squad":
+		err = cmdSquad(rest[1:])
+	case "market":
+		err = cmdMarket(rest[1:])
+	case "advise":
+		err = cmdAdvise(rest[1:])
+	case "standings":
+		err = cmdStandings(rest[1:])
+	case "activity":
+		err = cmdActivity(rest[1:])
+	case "player":
+		err = cmdPlayer(rest[1:])
+	case "fav":
+		err = cmdFav(rest[1:])
+	case "always":
+		err = cmdAlways(rest[1:])
+	case "raid":
+		err = cmdRaid(rest[1:])
+	case "leagues":
+		err = cmdLeagues(rest[1:])
 	case "report":
 		err = cmdReport(rest[1:])
 	case "page":
@@ -107,6 +128,18 @@ func usage() {
 	fmt.Fprintln(os.Stderr, strings.TrimSpace(`
 uso: fantasy [-v|-q] <comando>
 
+  squad         tu plantilla
+  market        ranking del mercado
+  advise        que hacer: pujar, vender, clausulas, ofertas
+  standings     poder de compra de la liga
+  activity      movimientos de la liga
+  player <n>    la ficha de un jugador
+  fav           favoritos
+  always        instrucciones permanentes (siempre en mercado)
+  raid          clausulazos programados
+  leagues       tus ligas
+  report        la pagina, a un fichero
+  serve         el motor: pagina, API, SSE y refresco
   auth status   estado de la sesion
   cache         tamano de la cache
   probe         las dos peticiones del detector de cambios, y su huella
@@ -118,7 +151,7 @@ uso: fantasy [-v|-q] <comando>
   checks        que aceptaria y que rechazaria la guardia, caso por caso
   cells         como se formatea cada celda, para compararlo con Python
   plan <players.json> [saldo]   que harian las instrucciones permanentes
-  advise <universe.json> <saldo> [deuda] [limite]   los cubos de consejo, en JSON
+  advise-json <universe.json> <saldo>   los cubos de consejo en JSON, para comparar
   match <players.json> <ffmarket.json> <teams.json>   emparejar las dos fuentes
   scrape <que> <fichero.html>   parsear una pagina de futbolfantasy y volcarla en JSON
   report [--output f] [--generado t]   la pagina, desde el modelo propio
@@ -129,30 +162,81 @@ uso: fantasy [-v|-q] <comando>
 `))
 }
 
-// cmdServe runs the engine and the HTTP surface. Writes are off until step 8 of the port
-// has plan parity: a Go binary that can spend money before its plan has been compared
-// against Python's is exactly the thing the harnesses exist to prevent.
+// cmdServe runs the engine and the HTTP surface.
 func cmdServe(args []string) error {
 	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
 	host := flags.String("host", "0.0.0.0", "interfaz")
 	port := flags.Int("port", 8000, "puerto")
-	interval := flags.Duration("interval", 2*time.Minute, "cadencia base del sondeo")
+	// Accepts "90s", "2m" and a bare number of seconds, because the deployed command line
+	// has always been written the second way.
+	interval := flags.String("interval", "2m", "cadencia base del sondeo")
+	readOnly := flags.Bool("read-only", false, "no ejecutar ninguna escritura")
+	noAuto := flags.Bool("no-auto", false,
+		"mostrar las instrucciones permanentes sin ejecutarlas")
+	deep := flags.Bool("deep", false,
+		"leer la ficha de futbolfantasy de los candidatos sin historico")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-
-	leagueID, teamID, err := savedLeague()
+	tick, err := parseInterval(*interval)
 	if err != nil {
 		return err
 	}
+	allowWrites := !*readOnly
+
 	client := api.New()
+	var (
+		mu       sync.Mutex
+		leagueID string
+		teamID   string
+	)
+	// Resolved on first use rather than at startup: a fresh deploy has no settings.json and
+	// no session either, and the whole point of the setup page is to be reachable anyway.
+	ensureLeague := func() (string, string, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if leagueID != "" && teamID != "" {
+			return leagueID, teamID, nil
+		}
+		league, team, err := resolveLeague("")
+		if err != nil {
+			return "", "", err
+		}
+		leagueID, teamID = league, team
+		return league, team, nil
+	}
 
 	world := state.New(func() (*model.Universe, error) {
-		return model.BuildLive(client, leagueID, teamID, loadState(), 2*time.Hour)
+		league, team, err := ensureLeague()
+		if err != nil {
+			return nil, err
+		}
+		universe, err := model.BuildLive(client, league, team, loadState(), 2*time.Hour)
+		if err != nil {
+			return nil, err
+		}
+		if *deep {
+			shortlist := make([]*model.Player, 0, len(universe.Players))
+			for index := range universe.Players {
+				shortlist = append(shortlist, &universe.Players[index])
+			}
+			sort.SliceStable(shortlist, func(one, two int) bool {
+				return shortlist[one].Value > shortlist[two].Value
+			})
+			if model.DeepEnrich(shortlist, 20, 2*time.Hour) > 0 {
+				model.ApplyScores(universe.Players)
+			}
+		}
+		return universe, nil
 	})
 
-	if err := world.Refresh("arranque"); err != nil {
-		return err
+	guard := writes.NewGuard(client)
+	guard.Cash = func(team string) (int64, error) {
+		money, err := client.Money(team, time.Minute)
+		if err != nil {
+			return 0, err
+		}
+		return int64(money.TeamMoney), nil
 	}
 
 	var probeParts map[string]string
@@ -160,17 +244,21 @@ func cmdServe(args []string) error {
 		Payload:  world.SchedulePayload,
 		LastFull: world.LastFull,
 		Watchers: world.Watchers,
-		Tick:     *interval,
+		Tick:     tick,
 		Rebuild:  world.Refresh,
 		Invalidate: func(tags ...string) {
 			httpx.Invalidate(tags...)
 		},
 		Probe: func() (bool, []string, error) {
-			events, err := client.ActivityRaw(leagueID, 0, 0, true)
+			league, _, err := ensureLeague()
 			if err != nil {
 				return false, nil, err
 			}
-			listings, err := client.MarketRaw(leagueID, 0, true)
+			events, err := client.ActivityRaw(league, 0, 0, true)
+			if err != nil {
+				return false, nil, err
+			}
+			listings, err := client.MarketRaw(league, 0, true)
 			if err != nil {
 				return false, nil, err
 			}
@@ -190,22 +278,57 @@ func cmdServe(args []string) error {
 			return len(moved) > 0, moved, nil
 		},
 	})
-	// Seed the probe from what the first rebuild already read, so the loop does not begin
-	// by asking the API to confirm data it is holding.
-	if events, err := client.ActivityRaw(leagueID, 0, time.Minute, false); err == nil {
-		if listings, err := client.MarketRaw(leagueID, time.Minute, false); err == nil {
-			probeParts = schedule.ProbeParts(events, listings)
-		}
-	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go engineRef.Run(ctx)
 
-	world.OnFirstWatcher(engineRef.Nudge)
+	// boot is everything that needs a session: the first build, the probe seed and the loop.
+	// Called at startup when there is one, and from the setup page when one arrives.
+	var once sync.Once
+	boot := func() {
+		once.Do(func() {
+			if err := world.Refresh("arranque"); err != nil {
+				slog.Error("first build failed", "reason", err.Error())
+			}
+			// Seed the probe from what the first rebuild already read, so the loop does not
+			// begin by asking the API to confirm data it is holding.
+			if league, _, err := ensureLeague(); err == nil {
+				if events, err := client.ActivityRaw(league, 0, time.Minute, false); err == nil {
+					if listings, err := client.MarketRaw(league, time.Minute, false); err == nil {
+						probeParts = schedule.ProbeParts(events, listings)
+					}
+				}
+			}
+			go engineRef.Run(ctx)
+			world.OnFirstWatcher(engineRef.Nudge)
+		})
+	}
+
+	if server.HasSession() {
+		boot()
+	} else {
+		fmt.Println("Sin sesion: abre la pagina y pega el login.")
+	}
+	if *noAuto {
+		fmt.Println("--no-auto: las instrucciones se muestran pero no se ejecutan.")
+	}
+	if !allowWrites {
+		fmt.Println("--read-only: no se ejecutara ninguna escritura.")
+	}
+
+	league, team, _ := currentLeague(&mu, &leagueID, &teamID)
 	return server.New(world, server.Options{
-		Host: *host, Port: *port, AllowWrites: false,
+		Host: *host, Port: *port, AllowWrites: allowWrites,
 		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
+		Client: client, Guard: guard, LeagueID: league, MyTeamID: team,
+		Settle: func(cause string) {
+			// Force it: a write whose effect the fingerprint cannot see still has to make
+			// the page react, or the click looks like it did nothing.
+			if err := world.RefreshWith(cause, true); err != nil {
+				slog.Error("settle failed", "cause", cause, "reason", err.Error())
+			}
+		},
+		Adopted: boot,
 		// The page is rendered on demand from whatever the last rebuild left, so a slow
 		// refresh never blocks a request and a failed one still serves the last good world.
 		Page: func() string {
@@ -213,7 +336,11 @@ func cmdServe(args []string) error {
 			if universe == nil {
 				return ""
 			}
-			page, err := renderPage(universe, client, teamID, "")
+			_, team, err := ensureLeague()
+			if err != nil {
+				return ""
+			}
+			page, err := renderPage(universe, client, team, "")
 			if err != nil {
 				slog.Error("render failed", "reason", err.Error())
 				return "<title>Error</title><p>No he podido construir la pagina.</p>"
@@ -221,6 +348,30 @@ func cmdServe(args []string) error {
 			return page
 		},
 	}).ListenAndServe()
+}
+
+// currentLeague reads the ids the server was started with, if they are already known. The
+// server re-reads nothing: on a fresh deploy they arrive with the session, and the process is
+// restarted by the container as soon as anything else changes.
+func currentLeague(mu *sync.Mutex, leagueID, teamID *string) (string, string, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	if *leagueID == "" {
+		league, team, err := resolveLeague("")
+		if err != nil {
+			return "", "", err
+		}
+		*leagueID, *teamID = league, team
+	}
+	return *leagueID, *teamID, nil
+}
+
+// parseInterval accepts a Go duration or a bare number of seconds.
+func parseInterval(value string) (time.Duration, error) {
+	if seconds, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+		return time.Duration(seconds) * time.Second, nil
+	}
+	return time.ParseDuration(value)
 }
 
 // cmdModel dumps the universe so tools/diff_model.py can compare it against Python's.
@@ -279,6 +430,91 @@ func contains(values []string, wanted string) bool {
 		}
 	}
 	return false
+}
+
+// resolveLeague returns (league_id, team_id), remembering the choice in settings.json. A
+// fresh install has nothing saved, so the ids are discovered from the account: the first
+// league it belongs to, and our team inside it.
+func resolveLeague(wanted string) (string, string, error) {
+	settings := loadSettings()
+	leagueID := fallbackText(wanted, text(settings["league_id"]))
+	teamID := text(settings["team_id"])
+	if leagueID != "" && teamID != "" {
+		return leagueID, teamID, nil
+	}
+
+	client := api.New()
+	entries, err := client.Leagues(time.Hour)
+	if err != nil {
+		return "", "", err
+	}
+	if len(entries) == 0 {
+		return "", "", fmt.Errorf("la cuenta no esta en ninguna liga")
+	}
+	chosen := entries[0]
+	if leagueID != "" {
+		for _, entry := range entries {
+			if text(entry["id"]) == leagueID {
+				chosen = entry
+				break
+			}
+		}
+	}
+	leagueID = text(chosen["id"])
+	teamID = text(mapFrom(chosen["team"])["id"])
+	if teamID == "" {
+		// Some payloads leave the team out, so it has to be found by matching our own user
+		// id against the standings.
+		user, err := client.Me(time.Hour)
+		if err != nil {
+			return "", "", err
+		}
+		mine := fallbackText(text(user["id"]), text(user["userId"]))
+		rows, err := client.Standings(leagueID, time.Hour)
+		if err != nil {
+			return "", "", err
+		}
+		for _, row := range rows {
+			if text(row["userId"]) == mine {
+				teamID = text(row["teamId"])
+				break
+			}
+		}
+	}
+	if teamID == "" {
+		return "", "", fmt.Errorf("no encuentro tu equipo en la liga %s", leagueID)
+	}
+	if err := saveSettings(map[string]any{"league_id": leagueID, "team_id": teamID,
+		"league_name": chosen["name"]}); err != nil {
+		return "", "", err
+	}
+	slog.Info("league resolved", "league", leagueID, "team", teamID)
+	return leagueID, teamID, nil
+}
+
+func loadSettings() map[string]any {
+	settings := map[string]any{}
+	if raw, err := os.ReadFile(config.SettingsFile); err == nil {
+		if json.Unmarshal(raw, &settings) != nil {
+			return map[string]any{}
+		}
+	}
+	return settings
+}
+
+func saveSettings(values map[string]any) error {
+	if err := config.EnsureDirs(); err != nil {
+		return err
+	}
+	merged := loadSettings()
+	for key, value := range values {
+		merged[key] = value
+	}
+	blob, err := json.MarshalIndent(merged, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(config.SettingsFile, blob, 0o600)
 }
 
 func savedLeague() (string, string, error) {
@@ -548,9 +784,9 @@ func cmdPlan(args []string) error {
 // cmdAdvise runs the advice layer over a recorded universe, so the buckets can be compared
 // bucket by bucket. Budget and debt are arguments: they come from the API in a live run and
 // from the comparison in this one.
-func cmdAdvise(args []string) error {
+func cmdAdviseJSON(args []string) error {
 	if len(args) < 2 {
-		return fmt.Errorf("uso: advise <universe.json> <saldo> [deuda] [limite]")
+		return fmt.Errorf("uso: advise-json <universe.json> <saldo> [deuda] [limite]")
 	}
 	body, err := os.ReadFile(args[0])
 	if err != nil {
@@ -861,7 +1097,13 @@ func cmdPage(args []string) error {
 	return nil
 }
 
+// rowsFrom takes rows in either shape: []any when they were parsed from JSON, and
+// []map[string]any when they came straight from the advice layer. Handling only the first is
+// how every bucket in the CLI came back empty while the model was perfectly fine.
 func rowsFrom(value any) []map[string]any {
+	if already, ok := value.([]map[string]any); ok {
+		return already
+	}
 	list, ok := value.([]any)
 	if !ok {
 		return nil
