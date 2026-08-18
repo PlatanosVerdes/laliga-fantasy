@@ -915,16 +915,21 @@ func PlayerColumns(costLabel string, extra ...Column) []Column {
 			if rival == "" {
 				return nil
 			}
-			where := "fuera"
-			if truthy(row["next_home"]) {
-				where = "casa"
-			}
-			return rival + " (" + where + ")"
+			return rival + " " + Where(truthy(row["next_home"]))
 		}, "text"},
 		Column{"Pts 25/26", func(row map[string]any) any { return row["last_season_points"] }, "int"},
 		Column{"Score", func(row map[string]any) any { return row["score"] }, "num"},
 	)
 	return append(columns, extra...)
+}
+
+// Where is home or away in one glyph: a house or a plane. Two words repeated on every row
+// were reading as noise, and the glyph carries a title so it is not colour-alone reasoning.
+func Where(home bool) string {
+	if home {
+		return "🏠"
+	}
+	return "✈️"
 }
 
 // insert puts a column at a position, which is how the page adds a section's own column
