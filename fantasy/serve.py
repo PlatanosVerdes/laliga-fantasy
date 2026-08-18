@@ -62,6 +62,20 @@ class State:
     def refresh(self, *, force: bool = False) -> bool:
         try:
             universe, advice, context = self.builder()
+
+            # Standing instructions run off the same data the page is about to show,
+            # and before the payload is built so the API reports this cycle's actions
+            # rather than the previous one's.
+            settings = getattr(self, "policy_context", None) or {}
+            if settings.get("league_id"):
+                try:
+                    self.policy_actions = policies.enforce(
+                        universe["players"], league_id=settings["league_id"],
+                        my_team_id=settings["my_team_id"],
+                        allow_writes=settings["allow_writes"])
+                except Exception as exc:
+                    log.error("policies failed", extra={"reason": str(exc)[:200]})
+
             fingerprint = self._fingerprint(universe, advice)
             changed = force or fingerprint != self.fingerprint
             page = report.build(universe, advice, context=context,
@@ -85,19 +99,6 @@ class State:
             log.error("refresh failed", extra={"error_type": type(exc).__name__,
                                               "reason": str(exc)[:300]})
             return False
-
-        # Standing instructions run off the same data the page just rendered, so
-        # what the robot sees is exactly what you see.
-        context_for_policies = getattr(self, "policy_context", None)
-        if context_for_policies and context_for_policies.get("league_id"):
-            try:
-                self.policy_actions = policies.enforce(
-                    universe["players"],
-                    league_id=context_for_policies["league_id"],
-                    my_team_id=context_for_policies["my_team_id"],
-                    allow_writes=context_for_policies["allow_writes"])
-            except Exception as exc:
-                log.error("policies failed", extra={"reason": str(exc)[:200]})
 
         with self.lock:
             self.html = page
