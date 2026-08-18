@@ -312,6 +312,69 @@ func truthy(value any) bool {
 	return false
 }
 
+// Verdicts are the five recommendations, each with its glyph and status. The glyph is not
+// decoration: it is what carries the meaning where the colour cannot be seen.
+var Verdicts = map[string]struct{ Label, Icon, Status string }{
+	"buy":     {"Fichar", "▲", "good"},
+	"clause":  {"Clausulazo", "◆", "good"},
+	"protect": {"Subir clausula", "!", "warning"},
+	"sell":    {"Vender", "▼", "serious"},
+	"out":     {"Baja", "✕", "critical"},
+}
+
+// VerdictOrder is the sort order, worst first, so a table sorted by the column reads as a
+// severity list rather than alphabetically.
+var VerdictOrder = []string{"out", "buy", "clause", "protect", "sell"}
+
+var powerStatus = map[string]string{"holgado": "good", "normal": "neutral", "justo": "critical"}
+
+var raidStatus = map[string]string{
+	"chollo": "good", "renta": "good", "justo": "warning", "caro": "critical",
+	"no te llega": "critical", "sin datos": "neutral", "sin referencia": "neutral",
+}
+
+func VerdictBadge(verdict string) string {
+	spec, known := Verdicts[verdict]
+	if !known {
+		return Missing
+	}
+	return fmt.Sprintf(`<span class="badge-%s"><span class="badge-icon" aria-hidden="true">`+
+		`%s</span>%s</span>`, spec.Status, spec.Icon, spec.Label)
+}
+
+// RaidVerdict is whether paying this clause beats what you already own — not whether it is
+// cheap, which is a different question and the one that misleads.
+func RaidVerdict(row map[string]any) string {
+	verdict := text(row["verdict"])
+	if verdict == "" {
+		return Missing
+	}
+	status := raidStatus[verdict]
+	if status == "" {
+		status = "neutral"
+	}
+	note := ""
+	if ratio := asFloat(row["vs_market"]); ratio != nil && *ratio != 0 {
+		note = fmt.Sprintf(`<span class="pill-note">%s</span>`,
+			Esc(fmt.Sprintf("%.1fx tu plantilla", *ratio)))
+	}
+	return fmt.Sprintf(`<span class="pill-%s">%s</span>`, status, Esc(verdict)) + note
+}
+
+// PowerBadge is who can actually buy right now. Named, not just coloured.
+func PowerBadge(row map[string]any) string {
+	power := text(row["power"])
+	if power == "" {
+		return Missing
+	}
+	status := powerStatus[power]
+	if status == "" {
+		status = "neutral"
+	}
+	return fmt.Sprintf(`<span class="pill-%s">%s</span><span class="pill-note">%s</span>`,
+		status, Esc(power), Esc(text(row["power_note"])))
+}
+
 // BidButton is only rendered where a bid is actually possible; the server re-validates
 // anyway, because a page can be minutes old by the time somebody clicks.
 func BidButton(row map[string]any) string {
@@ -547,6 +610,25 @@ func field(name string) func(map[string]any) any {
 
 func whole(row map[string]any) any { return row }
 
+// clauseColumns are shared by both clause tables: mine and the rivals'.
+func clauseColumns() []Column {
+	return []Column{
+		{"Se abre en", whole, "hours"},
+		{"Fecha", func(row map[string]any) any {
+			stamp := text(row["unlock_at"])
+			if len(stamp) > 16 {
+				stamp = stamp[:16]
+			}
+			return strings.ReplaceAll(stamp, "T", " ")
+		}, "text"},
+		{"Jugador", whole, "player"},
+		{"Valor", field("value"), "money"},
+		{"Cláusula", field("clause"), "money"},
+		{"xPts/j", field("xpts"), "num"},
+		{"Score", field("score"), "num"},
+	}
+}
+
 // SectionTable renders one of the page's tables by name. Same columns, same order, same
 // section — the section matters because it decides whether a row says "mio".
 func SectionTable(name string, rows []map[string]any) (string, error) {
@@ -580,6 +662,25 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 	case "ventas":
 		columns := PlayerColumns("", Column{"Motivos", field("reasons"), "list"})
 		return TableIn(columns, rows, "Sin datos", "ventas", false), nil
+
+	case "vencimientos":
+		// Yours, and the clock is the subject: when the lock falls, anyone with the cash
+		// can pay. So the countdown is the first column, not an afterthought.
+		return TableIn(clauseColumns(), rows,
+			"Ninguna se desbloquea en los proximos 10 dias.", "vencimientos", false), nil
+
+	case "proximas":
+		// The other side of the same clock. "¿Renta?" goes first because the useful
+		// question is not when it opens but whether it is worth paying.
+		columns := insert(clauseColumns(), 3, Column{"Dueño", field("owner"), "text"})
+		columns = insert(columns, 0, Column{"¿Renta?", whole, "verdict_raid"})
+		columns = append(columns,
+			Column{"x valor", field("clause_premium"), "num"},
+			Column{"Pts/M pagando", field("ppm_at_clause"), "mag"},
+			Column{"Techo futbolfantasy", field("ideal_bid"), "ideal"},
+			Column{"Clausulazo", whole, "raid"})
+		return TableIn(columns, rows,
+			"Ninguna cláusula interesante se abre en los proximos 10 dias.", "", false), nil
 
 	case "enventa":
 		// What rivals are asking, next to what the player is worth: this is where the
@@ -754,6 +855,24 @@ func CellIn(value any, kind string, section string) (string, string) {
 			hours = &far
 		}
 		return Countdown(row), sortKey(hours)
+	case "verdict":
+		verdict := text(value)
+		order := 0
+		for index, name := range VerdictOrder {
+			if name == verdict {
+				order = index
+			}
+		}
+		return VerdictBadge(verdict), fmt.Sprintf("%d", order)
+	case "verdict_raid":
+		row, _ := value.(map[string]any)
+		// Sorted by the points per million you would get paying the clause, best first,
+		// which means the sort key is its negative.
+		return RaidVerdict(row), sortKey(negate(asFloat(row["ppm_at_clause"])))
+	case "power":
+		row, _ := value.(map[string]any)
+		order := map[string]string{"justo": "0", "normal": "1", "holgado": "2"}
+		return PowerBadge(row), order[text(row["power"])]
 	case "list":
 		items := asStrings(value)
 		if len(items) == 0 {
@@ -841,6 +960,15 @@ func sortKey(number *float64) string {
 		return PyFloat(0)
 	}
 	return PyFloat(*number)
+}
+
+func negate(number *float64) *float64 {
+	if number == nil {
+		zero := 0.0
+		return &zero
+	}
+	flipped := -*number
+	return &flipped
 }
 
 func anyHistory(rows []map[string]any) bool {

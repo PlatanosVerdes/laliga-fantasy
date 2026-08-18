@@ -11,6 +11,13 @@ on:
 permissions:
   contents: write
 
+# One tagger at a time. Several pushes landing together each computed the same free
+# number, and whoever pushed second was rejected with "reference already exists" —
+# which is what happened on 2026-08-18 with v2026.08.18-24.
+concurrency:
+  group: auto-tag
+  cancel-in-progress: false
+
 jobs:
   tag:
     runs-on: ubuntu-latest
@@ -21,16 +28,35 @@ jobs:
 
       - name: Create CalVer tag
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch --tags --quiet
-          base="v$(date +%Y.%m.%d)"
-          tag="$base"
-          n=1
-          while git rev-parse -q --verify "refs/tags/$tag" >/dev/null; do
-            tag="$base-$n"
-            n=$((n + 1))
+
+          # Serialising the job makes a collision unlikely, not impossible: a tag can also
+          # be pushed by hand between the fetch and the push. So the whole thing retries,
+          # re-reading the remote each time, and only gives up after five attempts.
+          for attempt in 1 2 3 4 5; do
+            git fetch --tags --force --prune-tags --quiet
+
+            base="v$(date +%Y.%m.%d)"
+            tag="$base"
+            n=1
+            while git rev-parse -q --verify "refs/tags/$tag" >/dev/null; do
+              tag="$base-$n"
+              n=$((n + 1))
+            done
+
+            git tag -a "$tag" -m "Release $tag"
+            if git push origin "$tag"; then
+              echo "Created tag $tag"
+              exit 0
+            fi
+
+            # Somebody took the name in the meantime: drop the local tag and recompute.
+            echo "El tag $tag ya existe en remoto, reintento ($attempt/5)"
+            git tag -d "$tag"
+            sleep $((attempt * 2))
           done
-          git tag -a "$tag" -m "Release $tag"
-          git push origin "$tag"
-          echo "Created tag $tag"
+
+          echo "No he podido crear el tag despues de 5 intentos"
+          exit 1
