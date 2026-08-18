@@ -57,6 +57,14 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
+	// The body is where the API says *why*, and without it a 400 is unreadable: this is the
+	// difference between "http 400" and "ya tienes una puja en este jugador".
+	if reason := strings.TrimSpace(e.Body); reason != "" {
+		if len(reason) > 300 {
+			reason = reason[:300]
+		}
+		return fmt.Sprintf("http %d for %s: %s", e.Status, e.URL, reason)
+	}
 	return fmt.Sprintf("http %d for %s", e.Status, e.URL)
 }
 
