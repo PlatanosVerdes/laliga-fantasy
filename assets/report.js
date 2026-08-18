@@ -408,7 +408,8 @@ function shirtHtml(player,line,index){
     : '<span class="wk wk-none">sin jornadas</span>';
   return `<div class="slot${statusRing(player)}" draggable="true" data-line="${line}"
     data-index="${index}" data-player="${player.id}" data-pt="${player.player_team_id}"
-    title="${player.name} · ${player.next_rival?('vs '+player.next_rival):''}">
+    title="${player.name}${player.next_rival?(' · vs '+player.next_rival
+      +(player.next_home?' (en casa)':' (fuera)')):''}">
     ${statusBadge(player)}
     ${faceHtml(player)}
     <span class="slot-name">${player.name}</span>
@@ -709,7 +710,9 @@ async function openDetail(playerId){
     return;
   }
   const p=data.player, l=data.listing||{};
-  const rival=p.next_rival?`${p.next_rival} (${p.next_home?'casa':'fuera'})`:'—';
+  // 🏠 en casa, ✈️ fuera: dos palabras repetidas en cada fila se leen como ruido.
+  const where=(home)=>home?'<span title="en casa">🏠</span>':'<span title="fuera">✈️</span>';
+  const rival=p.next_rival?`${p.next_rival} ${where(p.next_home)}`:'—';
   const owner=p.is_mine?'tu':(p.owner||'libre');
   // La foto identifica antes que el nombre; si no hay, queda el escudo del equipo.
   const face=p.image
