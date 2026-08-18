@@ -4,6 +4,8 @@ FROM python:3.13-alpine
 WORKDIR /app
 COPY fantasy.py README.md ./
 COPY fantasy/ ./fantasy/
+# The page's CSS and JS live here, read at import by both implementations.
+COPY assets/ ./assets/
 
 # The session, cache, settings and logs all live here — mount it to persist them.
 # Kept outside /app so it never collides with the source tree.

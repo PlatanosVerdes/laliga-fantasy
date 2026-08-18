@@ -345,6 +345,7 @@ fantasy/futbolfantasy.py  the three scrapers
 fantasy/matching.py   team and player identity resolution across sources
 fantasy/analysis.py   xPts, score, rival cash, recommendations
 fantasy/report.py     HTML report
+assets/               the page's CSS and JS, shared by both implementations
 fantasy/serve.py      HTTP server mode
 fantasy/schedule.py   when to wake up, and whether anything moved
 fantasy/logs.py       logging
