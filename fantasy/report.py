@@ -50,10 +50,10 @@ MODAL = '''<div class="modal" id="bid-modal" hidden role="dialog" aria-modal="tr
     <div class="modal-actions">
       <button class="bid-drop" type="button" hidden>Retirar mi puja</button>
       <button class="bid-cancel" type="button">Cancelar</button>
-      <button class="bid-next bid-step1" type="button">Revisar</button>
-      <button class="bid-confirm bid-step2" type="button" hidden>Confirmar puja</button>
+      <button class="bid-next bid-step1 primary" type="button">Continuar</button>
+      <button class="bid-confirm bid-step2" type="button" hidden>Aceptar y ejecutar</button>
     </div>
-    <p class="modal-note">Revisar comprueba el importe contra tu saldo antes de ejecutar.</p>
+    <p class="modal-note">Se comprueba contra tu saldo antes de ejecutar.</p>
   </div>
 </div>'''
 
@@ -1131,8 +1131,9 @@ if(modal){
     try{
       const res=await fetch('/api/bid/prepare',{method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({operation:'bid',amount,market_id:pending.market_id,
-                             player_id:pending.player_id})});
+        body:JSON.stringify({operation:pending.operation||'bid', amount,
+                             market_id:pending.market_id, player_id:pending.player_id,
+                             offer_id:pending.offer_id})});
       const data=await res.json();
       if(!res.ok) throw new Error(data.error||res.status);
       pending.token=data.token;
@@ -1167,7 +1168,7 @@ if(modal){
       modal.querySelector('.bid-step1').hidden=true;
       modal.querySelector('.bid-step2').hidden=false;
       modal.querySelector('.bid-drop').hidden=true;
-      modal.querySelector('.bid-confirm').textContent='Confirmar retirada';
+      modal.querySelector('.bid-confirm').textContent='Aceptar y retirar';
       modal.querySelector('.bid-confirm').hidden=false;
     }catch(err){ modal.querySelector('.bid-error').textContent=err.message; }
   });
@@ -1189,7 +1190,7 @@ if(modal){
     }catch(err){
       modal.querySelector('.bid-error').textContent=err.message;
     }finally{
-      button.disabled=false; button.textContent='Confirmar puja';
+      button.disabled=false; button.textContent='Aceptar y ejecutar';
     }
   });
 }
@@ -1215,7 +1216,7 @@ function wireOps(root=document){
       modal.querySelector('.bid-error').textContent='';
       modal.querySelector('.bid-summary').innerHTML='<p>Comprobando…</p>';
       modal.querySelector('.bid-confirm').hidden=false;
-      modal.querySelector('.bid-confirm').textContent='Confirmar';
+      modal.querySelector('.bid-confirm').textContent='Aceptar y ejecutar';
       try{
         const res=await fetch('/api/bid/prepare',{method:'POST',
           headers:{'Content-Type':'application/json'},
@@ -1318,7 +1319,7 @@ function shirtHtml(player,line,index){
     <span class="slot-meta">
       <span>${(player.xpts||0).toFixed(1)} xPts</span>
       ${player.start_probability!=null?`<span class="tit ${titClass(player.start_probability)}"
-        >${player.start_probability}% tit</span>`:''}
+        >${player.start_probability}%</span>`:''}
       <span class="slot-trend ${trend>=0?'up':'down'}">${trend>=0?'▲':'▼'}${Math.abs(trend).toFixed(1)}%</span>
     </span>
   </div>`;
