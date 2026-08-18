@@ -115,6 +115,16 @@ def market(league_id: str, ttl: float = MINUTE) -> list[dict]:
                         ttl=ttl, tag="market"))
 
 
+def player_offers(league_id: str, player_team_id: str, ttl: float = MINUTE) -> list[dict]:
+    """Offers received for one of your players.
+
+    The only route that lists them is keyed by playerTeamId, not by market id
+    (`/market/{id}/offer` is 405, POST-only), so callers need the squad slot id.
+    """
+    return _unwrap(_get(f"{CMP}/league/{league_id}/playerTeam/{player_team_id}/offer",
+                        authenticated=True, ttl=ttl, tag="offers"))
+
+
 def squad_players(squad: dict) -> list[dict]:
     if not squad:
         return []

@@ -13,7 +13,7 @@ import re
 from datetime import datetime
 from typing import Any, Callable, Sequence
 
-from . import crests
+from . import crests, policies
 from .config import POSITION_NAMES, POSITIONS, REPORT_FILE
 
 Column = tuple[str, Callable[[dict], Any], str]
@@ -180,6 +180,19 @@ def _magnitude_bar(value: Any, *, scale: float = 1.0, digits: int = 2) -> str:
         "</span>")
 
 
+def _offer_buttons(row: dict) -> str:
+    if not row.get("offer_id"):
+        return "—"
+    common = (f'data-op-market="{_esc(row.get("market_id"))}" '
+              f'data-op-offer="{_esc(row.get("offer_id"))}" '
+              f'data-op-player="{_esc(row.get("id"))}" '
+              f'data-op-name="{_esc(row.get("name"))}" '
+              f'data-op-amount="{int(row.get("offer_amount") or 0)}"')
+    return (f'<button class="op bid" data-op="accept_offer" {common} type="button">Aceptar'
+            f'</button> <button class="op ghost" data-op="decline_offer" {common} '
+            f'type="button">Rechazar</button>')
+
+
 def _bid_button(row: dict) -> str:
     """Only rendered where a bid is actually possible; the server still re-validates."""
     listing = row.get("market") or {}
@@ -293,6 +306,8 @@ def _cell(value: Any, kind: str) -> tuple[str, str]:
         return _countdown(value), str(float((value or {}).get("hours_left") or 1e9))
     if kind == "star":
         return _star(value), ("0" if value.get("starred") else "1")
+    if kind == "offer":
+        return _offer_buttons(value), str(float(value.get("offer_amount") or 0))
     if kind == "bid":
         return _bid_button(value), str(int((value.get("market") or {}).get("min_bid") or 0))
     return (_esc(value) if value not in (None, "") else "—"), _esc(value or "")
@@ -383,10 +398,34 @@ def _player_columns(*, cost_label: str | None = None,
     return columns
 
 
-def _kpi(label: str, value: str, hint: str = "") -> str:
-    hint_html = f'<span class="kpi-hint">{_esc(hint)}</span>' if hint else ""
-    return (f'<div class="kpi"><span class="kpi-label">{_esc(label)}</span>'
-            f'<span class="kpi-value">{_esc(value)}</span>{hint_html}</div>')
+def _kpi(label: str, value: str, hint: str = "", *, rank: str = "",
+         meter: float | None = None, status: str = "") -> str:
+    """A widget. `meter` (0..1) draws where you sit in the league for that number,
+    because a figure like "79.76M" only means something next to the other twelve."""
+    parts = [f'<span class="kpi-label">{_esc(label)}</span>',
+             f'<span class="kpi-value">{_esc(value)}</span>']
+    if rank:
+        parts.append(f'<span class="kpi-rank pill-{status or "neutral"}">{_esc(rank)}</span>')
+    if meter is not None:
+        width = max(2.0, min(100.0, meter * 100))
+        parts.append('<span class="kpi-meter" role="presentation">'
+                     f'<span class="kpi-meter-fill" style="width:{width:.0f}%"></span></span>')
+    if hint:
+        parts.append(f'<span class="kpi-hint">{_esc(hint)}</span>')
+    return f'<div class="kpi">{"".join(parts)}</div>'
+
+
+def _rank_of(value: float, others: list[float]) -> tuple[str, float, str]:
+    """Where a number sits among the league's: (label, 0..1 position, status)."""
+    ordered = sorted(others, reverse=True)
+    position = sum(1 for other in ordered if other > value) + 1
+    total = len(ordered)
+    if not total:
+        return "", 0.0, ""
+    share = 1 - (position - 1) / max(1, total - 1)
+    status = "good" if position <= max(1, total // 3) else \
+             "critical" if position > total - max(1, total // 3) else "neutral"
+    return f"{position}\u00ba de {total}", share, status
 
 
 def _section(title: str, body: str, *, note: str = "", badge: str = "",
@@ -433,10 +472,17 @@ body{margin:0;background:var(--plane);color:var(--ink);
 .wrap{max-width:1500px;margin:0 auto;padding:32px 20px 80px}
 header h1{font-size:27px;margin:0 0 4px;letter-spacing:-.015em}
 header p{margin:0;color:var(--ink-2);font-size:13px}
-nav.jump{display:flex;flex-wrap:wrap;gap:6px;margin:20px 0 0}
-nav.jump a{font-size:12px;color:var(--ink-2);text-decoration:none;border:1px solid var(--line);
-  background:var(--surface);border-radius:99px;padding:4px 11px}
-nav.jump a:hover{color:var(--ink);border-color:var(--baseline)}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;margin:22px 0 0;border-bottom:1px solid var(--line);
+  padding-bottom:0}
+.tab{font:inherit;font-size:13px;font-weight:600;color:var(--muted);background:none;
+  border:none;border-bottom:2px solid transparent;padding:9px 14px;cursor:pointer;
+  margin-bottom:-1px}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--ink);border-bottom-color:var(--accent)}
+.kpi-rank{align-self:flex-start;margin-top:2px}
+.kpi-meter{display:block;height:4px;background:var(--mid);border-radius:2px;margin-top:7px;
+  overflow:hidden}
+.kpi-meter-fill{display:block;height:4px;background:var(--seq-4);border-radius:2px}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin:20px 0 0}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
   display:flex;flex-direction:column;gap:1px}
@@ -551,6 +597,10 @@ button.bid{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
   letter-spacing:.05em;color:#fff;background:var(--accent);border:none;border-radius:6px;
   padding:4px 10px;cursor:pointer}
 button.bid:hover{filter:brightness(1.08)}
+button.ghost{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--ink-2);background:transparent;border:1px solid var(--line);
+  border-radius:6px;padding:3px 9px;cursor:pointer;margin-left:5px}
+button.ghost:hover{color:var(--ink);border-color:var(--baseline)}
 .live{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);
   margin-left:2px}
 #live-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
@@ -853,6 +903,89 @@ if(modal){
   });
 }
 
+// ---- operaciones genericas (aceptar/rechazar oferta, retirar) --------------
+const OP_LABELS={accept_offer:'Aceptar oferta por',decline_offer:'Rechazar oferta por',
+                 withdraw:'Retirar del mercado a',sell_to_market:'Poner en venta a'};
+
+function wireOps(root=document){
+  root.querySelectorAll('button.op').forEach(button=>{
+    if(button.dataset.wired) return;
+    button.dataset.wired='1';
+    button.addEventListener('click', async ()=>{
+      const d=button.dataset;
+      pending={operation:d.op, market_id:d.opMarket, offer_id:d.opOffer,
+               player_id:d.opPlayer, name:d.opName, amount:+d.opAmount||null};
+      modal.hidden=false;
+      modal.querySelector('.bid-who').textContent=d.opName;
+      modal.querySelector('#bid-title').textContent=
+        (OP_LABELS[d.op]||'Confirmar')+' '+d.opName;
+      modal.querySelector('.bid-step1').hidden=true;
+      modal.querySelector('.bid-step2').hidden=false;
+      modal.querySelector('.bid-drop').hidden=true;
+      modal.querySelector('.bid-error').textContent='';
+      modal.querySelector('.bid-summary').innerHTML='<p>Comprobando…</p>';
+      modal.querySelector('.bid-confirm').hidden=false;
+      modal.querySelector('.bid-confirm').textContent='Confirmar';
+      try{
+        const res=await fetch('/api/bid/prepare',{method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({operation:d.op,market_id:d.opMarket,offer_id:d.opOffer,
+                               player_id:d.opPlayer,amount:+d.opAmount||undefined})});
+        const data=await res.json();
+        if(!res.ok) throw new Error(data.error||res.status);
+        pending.token=data.token;
+        modal.querySelector('.bid-summary').innerHTML=
+          `<dl class="bid-dl">
+             <dt>Operacion</dt><dd>${data.label}</dd>
+             <dt>Jugador</dt><dd>${data.player_name||d.opName}</dd>
+             ${data.amount?`<dt>Importe</dt><dd><strong>${exact(data.amount)}</strong></dd>`:''}
+             <dt>Saldo</dt><dd>${exact(data.cash_before)}</dd>
+           </dl>` +
+          (data.warnings||[]).map(w=>`<p class="bid-warn-line">⚠ ${w}</p>`).join('');
+      }catch(err){
+        modal.querySelector('.bid-summary').innerHTML='';
+        modal.querySelector('.bid-error').textContent=err.message;
+        modal.querySelector('.bid-confirm').hidden=true;
+      }
+    });
+  });
+}
+
+// ---- pestañas: una vista a la vez ------------------------------------------
+const TABS=[
+  {id:'decidir', label:'Decidir', sections:['acciones','ofertas']},
+  {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
+  {id:'clausulas', label:'Cláusulas', sections:['calendario','vencimientos','oportunidades','riesgo','clausulas']},
+  {id:'plantilla', label:'Plantilla', sections:['plantilla','ventas']},
+  {id:'liga', label:'Liga', sections:['rivales','movimientos']},
+  {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
+];
+
+function showTab(id){
+  const tab=TABS.find(t=>t.id===id)||TABS[0];
+  document.querySelectorAll('section[id]').forEach(s=>{
+    s.hidden=!tab.sections.includes(s.id);
+  });
+  document.querySelectorAll('.tab').forEach(b=>{
+    const on=b.dataset.tab===tab.id;
+    b.classList.toggle('on',on);
+    b.setAttribute('aria-selected',on?'true':'false');
+  });
+  try{ localStorage.setItem('fantasy-tab',tab.id); }catch(e){}
+  applyFilters();
+}
+
+function wireTabs(){
+  const bar=document.getElementById('tabs');
+  if(!bar||bar.dataset.wired) return;
+  bar.dataset.wired='1';
+  bar.querySelectorAll('.tab').forEach(b=>
+    b.addEventListener('click',()=>showTab(b.dataset.tab)));
+  let saved=null;
+  try{ saved=localStorage.getItem('fantasy-tab'); }catch(e){}
+  showTab(location.hash.slice(1)||saved||'decidir');
+}
+
 // ---- push: recambiar solo lo que cambia -----------------------------------
 let currentVersion=null;
 
@@ -866,7 +999,8 @@ async function swap(){
     const node=document.getElementById(id);
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });
-  wireTables(); wireFilters(); wireStars(); wireBids(); tick();
+  wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); tick();
+  showTab(document.querySelector('.tab.on')?.dataset.tab||'decidir');
   const stamp=document.getElementById('live-stamp');
   if(stamp) stamp.textContent='actualizado '+new Date().toLocaleTimeString('es-ES');
 }
@@ -887,7 +1021,7 @@ function connect(){
   };
 }
 
-wireTables(); wireFilters(); wireStars(); wireBids(); tick();
+wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireTabs(); tick();
 if(window.EventSource && location.protocol.startsWith('http')) connect();
 
 // ---- legacy (fichero estatico) ----
@@ -1091,11 +1225,32 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
     if advice:
         squad_value = sum(p["value"] for p in advice["squad"])
         best_eleven = sum(sorted((p["xpts"] for p in advice["squad"]), reverse=True)[:11])
+        teams = list((universe.get("league_teams") or {}).values())
+        me = (universe.get("league_teams") or {}).get(str(universe.get("my_team_id"))) or {}
+        cash_rank, cash_share, cash_status = _rank_of(
+            advice["budget"], [t.get("estimated_cash") or 0 for t in teams])
+        value_rank, value_share, value_status = _rank_of(
+            squad_value, [t.get("squad_value") or 0 for t in teams])
+        points_rank, points_share, points_status = _rank_of(
+            me.get("points") or 0, [t.get("points") or 0 for t in teams])
+        good_offers = [o for o in advice.get("offers") or [] if o["worth_taking"]]
         kpis += [
-            _kpi("Saldo", _fmt_money(advice["budget"]),
-                 f"poder de compra {_fmt_money(advice['spending_power'])}"),
-            _kpi("Mi plantilla", f"{len(advice['squad'])} jug.",
-                 f"{_fmt_money(squad_value)} de valor"),
+            _kpi("Mi puesto", f"{me.get('position') or '?'}\u00ba",
+                 f"{me.get('points') or 0} puntos", rank=points_rank,
+                 meter=points_share, status=points_status),
+            _kpi("Mi saldo", _fmt_money(advice["budget"]),
+                 _esc(me.get("power_note") or ""), rank=cash_rank, meter=cash_share,
+                 status=cash_status),
+            _kpi("Valor de plantilla", _fmt_money(squad_value),
+                 f"{len(advice['squad'])} jugadores", rank=value_rank, meter=value_share,
+                 status=value_status),
+        ]
+        if good_offers:
+            kpis.append(_kpi(
+                "Ofertas que interesan", str(len(good_offers)),
+                ", ".join(o["name"] for o in good_offers[:3]),
+                rank="cobra", status="good"))
+        kpis += [
             _kpi("xPts del mejor 11", _fmt_num(best_eleven, 1), "por jornada"),
             _kpi("Pujables ahora", str(len(advice["bids_now"])),
                  f"{len(advice['asks'])} mas en venta por rivales"),
@@ -1118,7 +1273,7 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
              ("rentabilidad", "Rentabilidad")]
     if advice:
         links = [("acciones", "Que hacer"), ("fichajes", "Pujar ahora"),
-                 ("enventa", "En venta"), ("calendario", "Calendario"), ("vencimientos", "Mis cláusulas"),
+                 ("ofertas", "Ofertas"), ("enventa", "En venta"), ("calendario", "Calendario"), ("vencimientos", "Mis cláusulas"),
                  ("oportunidades", "Cláusulas rivales"), ("movimientos", "Movimientos"),
                  ("plantilla", "Mi plantilla"), ("ventas", "Vender"),
                  ("riesgo", "Riesgo"), ("rivales", "Rivales"),
@@ -1131,16 +1286,63 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
         + f' · jornada {_esc(week.get("weekNumber"))}</p>'
         + '<span class="live"><span id="live-dot" class="live-off"></span>'
           '<span id="live-stamp">estatico</span></span>'
-        + '<nav class="jump">'
-        + "".join(f'<a href="#{ident}">{_esc(label)}</a>' for ident, label in links)
-        + "</nav></header>"
+        + "</header>"
         f'<div class="kpis">{"".join(kpis)}</div>'
+        + ('<div class="tabs" id="tabs" role="tablist"><button class="tab" role="tab" data-tab="decidir" aria-selected="false" type="button">Decidir</button><button class="tab" role="tab" data-tab="mercado" aria-selected="false" type="button">Mercado</button><button class="tab" role="tab" data-tab="clausulas" aria-selected="false" type="button">Cláusulas</button><button class="tab" role="tab" data-tab="plantilla" aria-selected="false" type="button">Plantilla</button><button class="tab" role="tab" data-tab="liga" aria-selected="false" type="button">Liga</button><button class="tab" role="tab" data-tab="ranking" aria-selected="false" type="button">Ranking</button></div>' if advice else "")
     )
 
     sections: list[str] = []
 
     if advice:
         sections.append(_actions_section(advice))
+    if advice:
+        plan = policies.plan(universe["players"])
+        if plan:
+            entries = policies.load()
+            plan_columns: list[Column] = [
+                ("Jugador", lambda r: r.get("name"), "text"),
+                ("Accion", lambda r: r.get("action").replace("_", " "), "text"),
+                ("Importe", lambda r: r.get("amount"), "money"),
+                ("Precio minimo", lambda r: (entries.get(r["player_id"]) or {}).get("min_price"), "money"),
+                ("Acepto desde", lambda r: (entries.get(r["player_id"]) or {}).get("accept_above"), "money"),
+                ("Motivo", lambda r: r.get("why"), "text"),
+                ("Resultado", lambda r: r.get("result") or "pendiente", "text"),
+            ]
+            pending_actions = [a for a in plan if a["action"] != "ninguna"]
+            note = ("Instrucciones permanentes: mantener al jugador en el mercado y aceptar "
+                    "la mejor oferta a partir de un importe que fijas tu. "
+                    "Se configuran con <code>fantasy.py always add &lt;nombre&gt; --min N "
+                    "--accept N</code>.")
+            if pending_actions:
+                note += (" <strong>" + str(len(pending_actions)) + " accion(es) en cola.</strong> "
+                         "Solo se ejecutan si el servidor corre con <code>--allow-writes</code>.")
+            sections.append(_section(
+                "Siempre en mercado", _table(plan_columns, plan),
+                note=note, badge=f"{len(entries)}", anchor="siempre"))
+
+    if advice and advice.get("offers"):
+        offer_columns: list[Column] = [
+            ("Jugador", lambda r: r, "player"),
+            ("Valor", lambda r: r["value"], "money"),
+            ("Pides", lambda r: r.get("ask"), "money"),
+            ("Te ofrecen", lambda r: r.get("offer_amount"), "money"),
+            ("Sobre su valor", lambda r: r.get("vs_value"), "ratio"),
+            ("Ofertas", lambda r: r.get("offer_count"), "int"),
+            ("Caduca", lambda r: str(r.get("offer_expires") or "")[:16].replace("T", " "), "text"),
+            ("xPts/j", lambda r: r["xpts"], "num"),
+            ("", lambda r: r, "offer"),
+        ]
+        good = [o for o in advice["offers"] if o["worth_taking"]]
+        note = ("Lo que te ofrecen por los jugadores que tienes en venta. "
+                "<strong>Sobre su valor</strong> es lo que pagan comparado con lo que vale: "
+                "por encima de 1.00x te estan pagando de mas.")
+        if good:
+            note += (" Ahora mismo interesan: <strong>"
+                     + ", ".join(_esc(o["name"]) for o in good) + "</strong>.")
+        sections.append(_section(
+            "Ofertas que has recibido", _table(offer_columns, advice["offers"]),
+            note=note, badge=f"{len(advice['offers'])}", anchor="ofertas"))
+
     sections.append(_activity_section(activity or []))
 
     if advice:

@@ -234,8 +234,12 @@ def build_universe(
                               for p in players})
         with timed("load market", league_id=league_id):
             market_rows_league = load_market(league_id, my_team_id)
+        with timed("load offers", league_id=league_id):
+            offers_by_player = load_offers(
+                league_id, [m for m in market_rows_league if m["is_mine"]], ownership)
         enrich_activity_values(activity)
     market_by_player = {m["player_id"]: m for m in market_rows_league if m["player_id"]}
+    offers_by_player = locals().get("offers_by_player") or {}
     starred = favourites.ids()
 
     rows: list[dict[str, Any]] = []
@@ -331,6 +335,7 @@ def build_universe(
             "is_mine": bool(owner and my_team_id and owner.get("team_id") == str(my_team_id)),
             "starred": pid in starred,
             "market": market_by_player.get(pid),
+            "offers": offers_by_player.get(pid) or [],
         })
 
     apply_scores(rows)
@@ -592,6 +597,30 @@ def recommend(universe: dict[str, Any], *, budget: int, max_debt: int = 0,
     exposure.sort(key=lambda p: p["risk"], reverse=True)
     my_listings.sort(key=lambda p: p["entry_cost"], reverse=True)
 
+    offers = []
+    for player in mine:
+        received = player.get("offers") or []
+        if not received:
+            continue
+        best = received[0]
+        amount = float(best.get("money") or 0)
+        value = player["value"] or 1
+        listing = player.get("market") or {}
+        ask = float(listing.get("min_bid") or 0)
+        offers.append({**player,
+                       "offer_id": str(best.get("id")),
+                       "offer_amount": amount,
+                       "offer_expires": best.get("expirationDate"),
+                       "offer_count": len(received),
+                       "market_id": listing.get("market_id"),
+                       "ask": ask,
+                       "vs_value": amount / value,
+                       "vs_ask": (amount / ask) if ask else None,
+                       # Worth taking when they pay over the market value, or over what
+                       # futbolfantasy thinks the player is worth paying for.
+                       "worth_taking": amount >= value or (ask and amount >= ask)})
+    offers.sort(key=lambda o: -o["vs_value"])
+
     clauses = universe.get("clauses") or {}
     # A rival's clause is only an opportunity if it opens soon AND you can pay it.
     upcoming_raids = [{**p, "entry_cost": p.get("clause"),
@@ -613,6 +642,7 @@ def recommend(universe: dict[str, Any], *, budget: int, max_debt: int = 0,
         "asks": asks[:limit],
         "watchlist": watchlist[:limit],
         "my_listings": my_listings,
+        "offers": offers,
         "raids": raids[:limit],
         "sells": sells[:limit],
         "exposure": exposure[:limit],
@@ -797,6 +827,33 @@ def _find_bid_id(entry: dict[str, Any]) -> str | None:
                 if isinstance(item, dict) and item.get("id"):
                     return str(item["id"])
     return None
+
+
+def load_offers(league_id: str, listings: list[dict[str, Any]],
+                ownership: dict[str, dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Offers received for the players you have listed.
+
+    Keyed by playerTeamId, which only the squad walk knows, so ownership has to
+    supply it. One request per listing, and only for your own listings.
+    """
+    offers: dict[str, list[dict[str, Any]]] = {}
+    for listing in listings:
+        player_id = listing.get("player_id")
+        slot = ownership.get(str(player_id)) or {}
+        player_team_id = slot.get("player_team_id")
+        if not player_team_id:
+            continue
+        try:
+            received = laliga.player_offers(league_id, str(player_team_id))
+        except Exception as exc:
+            log.debug("offers unreachable", extra={"player_id": player_id,
+                                                  "error_type": type(exc).__name__})
+            continue
+        pending = [o for o in received if (o.get("status") or "pending") == "pending"]
+        if pending:
+            offers[str(player_id)] = sorted(pending, key=lambda o: -(o.get("money") or 0))
+    log.info("offers loaded", extra={"listings": len(listings), "with_offers": len(offers)})
+    return offers
 
 
 def clause_calendar(players: Iterable[dict], *, horizon_hours: int = 24 * 10) -> dict[str, Any]:

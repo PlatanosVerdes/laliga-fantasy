@@ -26,6 +26,10 @@ _pending: dict[str, dict[str, Any]] = {}
 _lock = threading.Lock()
 
 
+def _money(amount: float) -> str:
+    return f"{amount:,.0f}".replace(",", ".")
+
+
 class WriteError(Exception):
     pass
 
@@ -69,7 +73,33 @@ def _raise_clause(league_id: str, player_id: str, amount: int) -> Any:
                     {"playerId": player_id, "factor": 1, "valueToIncrease": amount})
 
 
+def _accept_offer(league_id: str, market_id: str, offer_id: str, amount: int) -> Any:
+    # The API demands the amount in the body as a confirmation of what is being
+    # accepted; without it, it answers 400.
+    return _request("POST",
+                    f"{CMP}/league/{league_id}/market/{market_id}/offer/{offer_id}/accept",
+                    {"offerMoney": amount})
+
+
+def _decline_offer(league_id: str, market_id: str, offer_id: str) -> Any:
+    return _request("POST",
+                    f"{CMP}/league/{league_id}/market/{market_id}/offer/{offer_id}/reject")
+
+
+def _sell_to_market(league_id: str, player_id: str, amount: int) -> Any:
+    return _request("POST", f"{CMP}/league/{league_id}/market/sell",
+                    {"playerId": player_id, "salePrice": amount})
+
+
+def _withdraw(league_id: str, market_id: str) -> Any:
+    return _request("DELETE", f"{CMP}/league/{league_id}/market/{market_id}/delete")
+
+
 OPERATIONS = {
+    "accept_offer": {"run": _accept_offer, "label": "aceptar oferta"},
+    "decline_offer": {"run": _decline_offer, "label": "rechazar oferta"},
+    "sell_to_market": {"run": _sell_to_market, "label": "poner en venta"},
+    "withdraw": {"run": _withdraw, "label": "retirar del mercado"},
     "bid": {"run": _bid, "label": "puja"},
     "modify_bid": {"run": _modify_bid, "label": "modificar puja"},
     "cancel_bid": {"run": _cancel_bid, "label": "cancelar puja"},
@@ -87,6 +117,7 @@ def _purge() -> None:
 
 def prepare(operation: str, *, league_id: str, my_team_id: str, amount: int | None = None,
             market_id: str | None = None, bid_id: str | None = None,
+            offer_id: str | None = None, player_id: str | None = None,
             player: dict[str, Any] | None = None, allow_writes: bool = False) -> dict[str, Any]:
     """Validate an operation and return a summary plus a single-use token."""
     if not allow_writes:
@@ -102,6 +133,13 @@ def prepare(operation: str, *, league_id: str, my_team_id: str, amount: int | No
         log.warning("cash unreadable before write", extra={"error_type": type(exc).__name__})
 
     warnings: list[str] = []
+    if operation == "accept_offer":
+        value = float(player.get("value") or 0)
+        if value and amount and amount < value * 0.9:
+            warnings.append(f"por debajo de su valor de mercado ({_money(value)})")
+        ideal = int(player.get("ideal_bid") or 0)
+        if ideal and amount and amount > ideal:
+            warnings.append("te pagan mas de lo que futbolfantasy considera rentable: buena venta")
     if operation in ("bid", "modify_bid"):
         if not amount or amount <= 0:
             raise WriteError("la puja tiene que ser un importe positivo")
@@ -139,7 +177,8 @@ def prepare(operation: str, *, league_id: str, my_team_id: str, amount: int | No
     with _lock:
         _pending[token] = {"created": time.time(), "operation": operation,
                            "args": {"league_id": league_id, "market_id": market_id,
-                                    "bid_id": bid_id, "amount": amount},
+                                    "bid_id": bid_id, "offer_id": offer_id,
+                                    "player_id": player_id, "amount": amount},
                            "summary": summary}
     log.info("write prepared", extra={"operation": operation, "amount": amount,
                                      "player": player.get("name")})
@@ -162,7 +201,11 @@ def confirm(token: str, *, allow_writes: bool = False, dry_run: bool = False) ->
     call = {"bid": ("league_id", "market_id", "amount"),
             "modify_bid": ("league_id", "market_id", "bid_id", "amount"),
             "cancel_bid": ("league_id", "market_id", "bid_id"),
-            "raise_clause": ("league_id", "player_id", "amount")}[operation]
+            "raise_clause": ("league_id", "player_id", "amount"),
+            "accept_offer": ("league_id", "market_id", "offer_id", "amount"),
+            "decline_offer": ("league_id", "market_id", "offer_id"),
+            "sell_to_market": ("league_id", "player_id", "amount"),
+            "withdraw": ("league_id", "market_id")}[operation]
     values = [args.get(name) for name in call]
 
     if dry_run:

@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable
 
-from . import auth, favourites, report, writes
+from . import auth, favourites, policies, report, writes
 from .logs import log
 
 HEARTBEAT = 20
@@ -76,6 +76,8 @@ class State:
                 "rivals": (advice or {}).get("rivals"),
                 "cash_model": (advice or {}).get("cash_model"),
                 "favourites": sorted(favourites.ids()),
+                "policies": policies.load(),
+                "policy_actions": getattr(self, "policy_actions", []),
                 "players": universe["players"],
             }
         except Exception as exc:
@@ -83,6 +85,19 @@ class State:
             log.error("refresh failed", extra={"error_type": type(exc).__name__,
                                               "reason": str(exc)[:300]})
             return False
+
+        # Standing instructions run off the same data the page just rendered, so
+        # what the robot sees is exactly what you see.
+        context_for_policies = getattr(self, "policy_context", None)
+        if context_for_policies and context_for_policies.get("league_id"):
+            try:
+                self.policy_actions = policies.enforce(
+                    universe["players"],
+                    league_id=context_for_policies["league_id"],
+                    my_team_id=context_for_policies["my_team_id"],
+                    allow_writes=context_for_policies["allow_writes"])
+            except Exception as exc:
+                log.error("policies failed", extra={"reason": str(exc)[:200]})
 
         with self.lock:
             self.html = page
@@ -314,6 +329,8 @@ def run(builder: Callable[[], tuple[dict, dict | None, dict]], *,
         allow_writes: bool = False, league_id: str | None = None,
         my_team_id: str | None = None) -> int:
     state = State(builder)
+    state.policy_context = {"league_id": league_id, "my_team_id": my_team_id,
+                            "allow_writes": allow_writes}
     state.refresh(force=True)
 
     def loop() -> None:

@@ -8,7 +8,7 @@ import webbrowser
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
-from . import analysis, auth, favourites, futbolfantasy as ff, http, laliga, logs, matching, report
+from . import analysis, auth, favourites, futbolfantasy as ff, http, laliga, logs, matching, policies, report
 from .config import DATA_DIR, POSITION_NAMES, SETTINGS_FILE, ensure_dirs
 
 BOLD = "\033[1m"
@@ -609,6 +609,51 @@ def cmd_fav(args) -> int:
     return 0
 
 
+def cmd_always(args) -> int:
+    """`always` = standing instructions: keep listed, accept over a threshold."""
+    if args.action == "list" or not args.name:
+        entries = policies.load()
+        if not entries:
+            print("Sin instrucciones. Añade con:\n"
+                  "  python3 fantasy.py always add <nombre> --min 12000000 --accept 13000000")
+            return 0
+        heading("Siempre en mercado")
+        print(table(["jugador", "precio minimo", "acepto por encima de"],
+                    [[e.get("name") or e["id"], money(e.get("min_price")),
+                      money(e.get("accept_above"))] for e in entries.values()],
+                    right={1, 2}))
+        universe, advice, _ = _load(args)
+        plan = policies.plan(universe["players"])
+        if plan:
+            heading("Que haria ahora mismo")
+            print(table(["jugador", "accion", "importe", "motivo"],
+                        [[a["name"], a["action"], money(a.get("amount")), a["why"]]
+                         for a in plan], right={2}))
+            print(paint("  Nada de esto se ejecuta salvo que el servidor corra con "
+                        "--allow-writes.", DIM))
+        return 0
+
+    universe, advice, _ = _load(args)
+    query = matching.normalize(args.name)
+    hits = [p for p in universe["players"] if p["is_mine"]
+            and (query in matching.normalize(p["name"])
+                 or query in matching.normalize(p.get("full_name")))]
+    if not hits:
+        print(paint(f"'{args.name}' no esta en tu plantilla.", RED))
+        return 1
+    player = hits[0]
+    if args.action == "rm":
+        print(("Quitado" if policies.remove(player["id"]) else "No estaba") +
+              f": {player['name']}")
+        return 0
+    entry = policies.set_policy(player["id"], name=player["name"],
+                                min_price=args.min or int(player["value"]),
+                                accept_above=args.accept or int(player["value"]))
+    print(paint(f"{player['name']}: siempre en mercado a {money(entry['min_price'])}, "
+                f"acepto ofertas desde {money(entry['accept_above'])}.", GREEN))
+    return 0
+
+
 def cmd_serve(args) -> int:
     from . import serve
 
@@ -740,6 +785,14 @@ def build_parser() -> argparse.ArgumentParser:
     fav_parser.add_argument("action", nargs="?", default="list", choices=["list", "add", "rm"])
     fav_parser.add_argument("name", nargs="?")
     fav_parser.set_defaults(func=cmd_fav)
+
+    always_parser = sub.add_parser("always", parents=[common],
+                                   help="siempre en mercado: relistar y aceptar la mejor oferta")
+    always_parser.add_argument("action", nargs="?", default="list", choices=["list", "add", "rm"])
+    always_parser.add_argument("name", nargs="?")
+    always_parser.add_argument("--min", type=int, help="precio minimo al listarlo")
+    always_parser.add_argument("--accept", type=int, help="aceptar ofertas desde este importe")
+    always_parser.set_defaults(func=cmd_always)
 
     serve_parser = sub.add_parser("serve", parents=[common],
                                   help="servir el informe por HTTP y regenerarlo periodicamente")
