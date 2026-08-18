@@ -770,17 +770,6 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
             _kpi("Sesion", "sin liga", "solo datos publicos"),
         ]
 
-    # Only link to sections this run actually renders: without a session most of
-    # them do not exist, and a chip that jumps nowhere is worse than no chip.
-    links = [("movimientos", "Movimientos"), ("ranking", "Ranking"),
-             ("rentabilidad", "Rentabilidad")]
-    if advice:
-        links = [("acciones", "Que hacer"), ("fichajes", "Pujar ahora"),
-                 ("ofertas", "Ofertas"), ("enventa", "En venta"), ("calendario", "Calendario"), ("vencimientos", "Mis cláusulas"),
-                 ("oportunidades", "Cláusulas rivales"), ("movimientos", "Movimientos"),
-                 ("plantilla", "Mi plantilla"), ("ventas", "Vender"),
-                 ("riesgo", "Riesgo"), ("rivales", "Rivales"),
-                 ("ranking", "Ranking"), ("rentabilidad", "Rentabilidad")]
     header = (
         '<header><h1>LaLiga Fantasy · panel de decisiones</h1>'
         f'<p>{generated}'

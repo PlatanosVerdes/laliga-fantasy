@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import base64
 import json
-import urllib.error
-import urllib.request
 from typing import Any, Iterable
 
+from . import http
 from .config import CACHE_DIR, FF_HEADERS, ensure_dirs
 from .logs import log
 
@@ -42,11 +41,11 @@ def data_uris(teams: Iterable[dict[str, Any]]) -> dict[str, str]:
         url = team.get("badgeColor") or team.get("badgeWhite")
         if not team_id or not url or team_id in cache:
             continue
-        request = urllib.request.Request(url, headers={"User-Agent": FF_HEADERS["User-Agent"]})
         try:
-            with urllib.request.urlopen(request, timeout=15) as response:
-                raw = response.read(MAX_BYTES + 1)
-        except (urllib.error.URLError, OSError, TimeoutError) as exc:
+            raw = http.fetch_bytes(url, headers={"User-Agent": FF_HEADERS["User-Agent"]},
+                                   limit=MAX_BYTES)
+        except Exception as exc:
+            # A missing badge costs a grey square, so it is never worth failing a page for.
             log.debug("crest unavailable", extra={"team_id": team_id,
                                                  "error_type": type(exc).__name__})
             continue

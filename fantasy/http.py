@@ -189,6 +189,26 @@ def fetch(
     raise last_error if last_error else RuntimeError(f"unreachable: {url}")
 
 
+def fetch_bytes(url: str, *, headers: Mapping[str, str] | None = None,
+                timeout: float = 15, limit: int | None = None) -> bytes:
+    """Binary fetch for images, through here rather than around it.
+
+    The crests used to call urllib directly, which meant two things nobody wanted: they
+    were invisible to the request counter, and FANTASY_FREEZE did not stop them — so a
+    "frozen" run still went to the network and the page it produced was not reproducible.
+    """
+    if FROZEN:
+        raise FrozenMiss(url, "binary")
+    STATS["requests"] += 1
+    request = urllib.request.Request(url, headers=dict(headers or {}))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.read(limit + 1 if limit else None)
+    except (urllib.error.URLError, OSError, TimeoutError):
+        STATS["errors"] += 1
+        raise
+
+
 def get_json(url: str, **kwargs) -> Any:
     return json.loads(fetch(url, **kwargs))
 

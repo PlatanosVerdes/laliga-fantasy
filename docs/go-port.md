@@ -87,7 +87,11 @@ it was taken, which is exactly what happened the first time one was reused.
 Rules that keep it honest:
 
 * **Frozen inputs.** `FANTASY_DATA_DIR` points at a copy of the cache and the TTLs are
-  set to infinity, so neither side reaches the network and both see identical bytes.
+  ignored, so neither side reaches the network and both see identical bytes. That has to be
+  airtight to be worth anything: the crests were downloading through `urllib` directly,
+  around `http.py`, so a "frozen" run still went to the network, the request counter never
+  saw it, and the page it produced was not reproducible — two runs differed by a few bytes
+  inside one badge. Binary fetches go through `http.fetch_bytes` now.
 * **Every field, not a summary.** Comparing totals hides compensating errors. The
   comparator walks player by player and reports the first mismatch per field with both
   values.
