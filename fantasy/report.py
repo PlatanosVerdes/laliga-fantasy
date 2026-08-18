@@ -187,6 +187,25 @@ def _magnitude_bar(value: Any, *, scale: float = 1.0, digits: int = 2) -> str:
         "</span>")
 
 
+def _raid_button(row: dict) -> str:
+    """Schedule the raid from the row that told you the clause is coming.
+
+    The whole point is arming it *before* the lock lifts, so the button has to live
+    in the table that shows the countdown.
+    """
+    if row.get("is_mine") or not row.get("owner"):
+        return "—"
+    if row.get("shielded"):
+        return '<span class="pill-critical">blindado</span>'
+    clause = float(row.get("clause") or 0)
+    suggested = int(row.get("max_pay") or (clause * 1.2 if clause else row["value"] * 1.5))
+    label = "Reprogramar" if row.get("raid_scheduled") else "Programar"
+    return (f'<button class="raid-btn bid" type="button" '
+            f'data-raid="{_esc(row.get("id"))}" data-raid-name="{_esc(row.get("name"))}" '
+            f'data-raid-max="{suggested}" '
+            f'data-raid-clause="{int(clause)}">{label}</button>')
+
+
 def _offer_buttons(row: dict) -> str:
     if not row.get("offer_id"):
         return "—"
@@ -336,6 +355,8 @@ def _cell(value: Any, kind: str) -> tuple[str, str]:
         return _countdown(value), str(float((value or {}).get("hours_left") or 1e9))
     if kind == "star":
         return _star(value), ("0" if value.get("starred") else "1")
+    if kind == "raid":
+        return _raid_button(value), str(float((value.get("clause") or 0)))
     if kind == "offer":
         return _offer_buttons(value), str(float(value.get("offer_amount") or 0))
     if kind == "bid":
@@ -1177,6 +1198,36 @@ async function runAction(a,player){
   }
 }
 
+async function scheduleRaid(dataset){
+  const suggested=group(+dataset.raidMax||0);
+  const clause=+dataset.raidClause||0;
+  const answer=prompt('Clausulazo programado para '+dataset.raidName+'.\n\n'
+    +'Se pagara SOLO en el momento en que la clausula se libere, y solo si entonces '
+    +'sigue por debajo del importe que pongas aqui.\n'
+    +(clause?('Clausula ahora: '+clause.toLocaleString('es-ES')+' €\n'):'')
+    +'Si el dueño la sube por encima de tu limite, o blinda al jugador, se cancela '
+    +'sola y no se paga nada.\n\n'
+    +'Pago maximo (€):', suggested);
+  if(answer===null) return;
+  const max_pay=digits(answer);
+  if(!max_pay) return;
+  const res=await fetch('/api/raid',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id:dataset.raid,name:dataset.raidName,max_pay})});
+  if(!res.ok){ alert('No se ha podido programar.'); return; }
+  alert(dataset.raidName+': programado con limite '+max_pay.toLocaleString('es-ES')+' €.\n'
+    +'Se ejecutara solo si el servidor corre con --auto.');
+  swap();
+}
+
+function wireRaids(root=document){
+  root.querySelectorAll('button.raid-btn').forEach(button=>{
+    if(button.dataset.wired) return;
+    button.dataset.wired='1';
+    button.addEventListener('click',()=>scheduleRaid(button.dataset));
+  });
+}
+
 function wireDetails(root=document){
   root.querySelectorAll('button[data-detail]').forEach(button=>{
     if(button.dataset.wired) return;
@@ -1239,7 +1290,7 @@ async function swap(){
     const node=document.getElementById(id);
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });
-  wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); tick();
+  wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids(); tick();
   showTab(document.querySelector('.tab.on')?.dataset.tab||'decidir');
   const stamp=document.getElementById('live-stamp');
   if(stamp) stamp.textContent='actualizado '+new Date().toLocaleTimeString('es-ES');
@@ -1261,7 +1312,7 @@ function connect(){
   };
 }
 
-wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails();
+wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids();
 wireTabs(); tick();
 if(window.EventSource && location.protocol.startsWith('http')) connect();
 
@@ -1455,6 +1506,12 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
           activity: Sequence[dict] | None = None) -> str:
     context = context or {}
     CRESTS.update(crests.data_uris(universe.get("teams") or []))
+    scheduled_raids = {k: v for k, v in policies.load().items() if v.get("raid")}
+    for row in universe.get("players") or []:
+        entry = scheduled_raids.get(str(row.get("id")))
+        row["raid_scheduled"] = bool(entry)
+        if entry:
+            row["max_pay"] = entry.get("max_pay")
     week = universe["week"]
     players = universe["players"]
     generated = datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -1682,6 +1739,7 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
         raid_columns = _player_columns(cost_label="Cláusula")
         raid_columns.insert(1, ("Dueño", lambda r: r.get("owner"), "text"))
         raid_columns.insert(4, ("x valor", lambda r: r.get("clause_premium"), "num"))
+        raid_columns.append(("Clausulazo", lambda r: r, "raid"))
         sections.append(_section(
             "Cláusulas pagables",
             _table(raid_columns, advice["raids"],
@@ -1739,6 +1797,7 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
         rival_clause_columns.insert(3, ("Dueño", lambda r: r.get("owner"), "text"))
         rival_clause_columns.append(
             ("Te llega", lambda r: "si" if r.get("affordable") else "no", "text"))
+        rival_clause_columns.append(("Clausulazo", lambda r: r, "raid"))
         sections.append(_section(
             "Cláusulas de rivales que se abren",
             _table(rival_clause_columns, rival_clauses,

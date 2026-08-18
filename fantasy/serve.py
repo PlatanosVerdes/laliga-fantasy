@@ -459,11 +459,13 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
 
 def run(builder: Callable[[], tuple[dict, dict | None, dict]], *,
         host: str = "0.0.0.0", port: int = 8000, interval: int = 120,
-        allow_writes: bool = True, league_id: str | None = None,
+        allow_writes: bool = True, auto: bool = False, league_id: str | None = None,
         my_team_id: str | None = None) -> int:
     state = State(builder)
+    # Buttons you confirm twice and a robot acting unattended are different risks:
+    # the first follows allow_writes, the second needs --auto on top.
     state.policy_context = {"league_id": league_id, "my_team_id": my_team_id,
-                            "allow_writes": allow_writes}
+                            "allow_writes": allow_writes and auto}
     state.refresh(force=True)
 
     def loop() -> None:
@@ -479,7 +481,8 @@ def run(builder: Callable[[], tuple[dict, dict | None, dict]], *,
                               "writes": allow_writes})
     print(f"Sirviendo en http://{host}:{port}")
     print(f"  refresco cada {interval}s · push por SSE · "
-          f"{'operaciones activas' if allow_writes else 'solo lectura'}")
+          f"{'operaciones activas' if allow_writes else 'solo lectura'}"
+          f"{' · automatico' if (allow_writes and auto) else ''}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

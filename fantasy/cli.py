@@ -722,20 +722,28 @@ def cmd_serve(args) -> int:
         return universe, advice, context
 
     allow_writes = not args.read_only
-    if allow_writes:
-        pending = [a for a in policies.plan(builder()[0]["players"])
-                   if a["action"] != "ninguna"]
-        if pending:
-            print(paint(f"Hay {len(pending)} accion(es) programada(s) que se ejecutaran "
-                        f"en el primer refresco:", YELLOW))
-            for action in pending:
-                print(f"  · {action['name']}: {action['action']} — {action['why']}")
-            print(paint("Arranca con --read-only si no quieres que se ejecuten.", DIM))
-    else:
+    if not allow_writes:
         print(paint("Solo lectura: ninguna operacion movera dinero.", DIM))
+    elif args.auto:
+        universe = builder()[0]
+        cash = 0
+        pending = [a for a in policies.plan(universe["players"]) if a["action"] != "ninguna"]
+        pending += [a for a in policies.raid_plan(universe["players"], cash=cash)
+                    if a["action"] == "pagar_clausula"]
+        print(paint("AUTOMATICO: las instrucciones programadas se ejecutaran solas.", YELLOW))
+        if pending:
+            print(paint(f"  {len(pending)} se ejecutara(n) en el primer refresco:", YELLOW))
+            for action in pending:
+                print(f"    · {action['name']}: {action['action']} — {action['why']}")
+            print(paint("  Ctrl-C ahora si no es lo que quieres.", YELLOW))
+        else:
+            print(paint("  Ninguna en cola ahora mismo.", DIM))
+    else:
+        print(paint("Las instrucciones programadas se muestran pero NO se ejecutan. "
+                    "Añade --auto para que actuen solas.", DIM))
 
     return serve.run(builder, host=args.host, port=args.port, interval=args.interval,
-                     allow_writes=allow_writes, league_id=league_id,
+                     allow_writes=allow_writes, auto=args.auto, league_id=league_id,
                      my_team_id=my_team_id)
 
 
@@ -882,6 +890,10 @@ def build_parser() -> argparse.ArgumentParser:
                               help="segundos entre refrescos (default 120)")
     serve_parser.add_argument("--read-only", action="store_true",
                               help="desactivar cualquier operacion que mueva dinero")
+    serve_parser.add_argument("--auto", action="store_true",
+                              help="ejecutar solo las instrucciones programadas sin preguntar "
+                                   "(siempre-en-mercado y clausulazos). Sin esto se muestran "
+                                   "pero no se ejecutan")
     serve_parser.set_defaults(func=cmd_serve)
 
     probe_parser = sub.add_parser("probe", parents=[common], help="volcar respuestas crudas")
