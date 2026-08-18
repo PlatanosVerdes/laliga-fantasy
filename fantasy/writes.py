@@ -102,11 +102,22 @@ def _pay_clause(league_id: str, player_id: str, amount: int) -> Any:
                     {"buyoutClauseToPay": amount})
 
 
+def _save_lineup(team_id: str, goalkeeper: str, defender: list, midfield: list,
+                 striker: list, formation: list) -> Any:
+    # Shape matters: goalkeeper is a single id, not a list, and the key is snake_case.
+    # Anything else answers 500.
+    return _request("PUT", f"{CMP}/teams/{team_id}/lineup",
+                    {"goalkeeper": goalkeeper, "defender": defender,
+                     "midfield": midfield, "striker": striker,
+                     "tactical_formation": formation})
+
+
 def _withdraw(league_id: str, market_id: str) -> Any:
     return _request("DELETE", f"{CMP}/league/{league_id}/market/{market_id}/delete")
 
 
 OPERATIONS = {
+    "save_lineup": {"run": _save_lineup, "label": "guardar alineacion"},
     "direct_offer": {"run": _direct_offer, "label": "oferta directa"},
     "pay_clause": {"run": _pay_clause, "label": "pagar clausula"},
     "accept_offer": {"run": _accept_offer, "label": "aceptar oferta"},
@@ -237,7 +248,9 @@ def confirm(token: str, *, allow_writes: bool = False, dry_run: bool = False) ->
             "sell_to_market": ("league_id", "player_id", "amount"),
             "direct_offer": ("league_id", "player_id", "amount"),
             "pay_clause": ("league_id", "player_id", "amount"),
-            "withdraw": ("league_id", "market_id")}[operation]
+            "withdraw": ("league_id", "market_id"),
+            "save_lineup": ("team_id", "goalkeeper", "defender", "midfield", "striker",
+                            "formation")}[operation]
     values = [args.get(name) for name in call]
 
     if dry_run:

@@ -115,6 +115,23 @@ def market(league_id: str, ttl: float = MINUTE) -> list[dict]:
                         ttl=ttl, tag="market"))
 
 
+LINEUP_LINES = ("goalkeeper", "defender", "midfield", "striker")
+
+
+def lineup(team_id: str, ttl: float = MINUTE) -> dict:
+    """Current lineup. `formation.tacticalFormation` is the shape itself, e.g. [3,4,3],
+    and each slot carries playerMaster.lastStats: points per matchday with the full
+    stat breakdown."""
+    return _get(f"{CMP}/teams/{team_id}/lineup", authenticated=True, ttl=ttl, tag="lineup")
+
+
+def formations(premium: bool = False, ttl: float = 24 * HOUR) -> list[str]:
+    option = "premium" if premium else "free"
+    payload = _get(f"/v4/teams/lineup/formations?option={option}", authenticated=True,
+                   ttl=ttl, tag="formations")
+    return payload if isinstance(payload, list) else []
+
+
 def player_offers(league_id: str, player_team_id: str, ttl: float = MINUTE) -> list[dict]:
     """Offers received for one of your players.
 

@@ -217,6 +217,8 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                 with state.lock:
                     payload = {"version": state.version, "sections": state.sections}
                 self._json(200, payload)
+            elif path == "/api/lineup":
+                self._lineup()
             elif path.startswith("/api/player/"):
                 self._player_detail(path.rsplit("/", 1)[-1])
             elif path == "/api/events":
@@ -229,6 +231,81 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                                  "version": state.version})
             else:
                 self._send(404, b"not found", "text/plain; charset=utf-8")
+
+        def _lineup(self) -> None:
+            """The pitch: who starts where, who sits, and each one's recent form.
+
+            Merged with the analysis so a shirt on the pitch carries the same numbers
+            as its row in every table — xPts, value trend, odds of starting.
+            """
+            if not my_team_id:
+                self._json(400, {"error": "sin equipo resuelto"})
+                return
+            try:
+                payload = laliga.lineup(str(my_team_id))
+                free = laliga.formations()
+                premium = laliga.formations(premium=True)
+            except Exception as exc:
+                self._json(502, {"error": f"no he podido leer la alineacion: {exc}"})
+                return
+
+            with state.lock:
+                players = {str(p["id"]): p for p in state.payload.get("players") or []}
+            formation = payload.get("formation") or {}
+
+            def shirt(slot: dict) -> dict[str, Any]:
+                master = slot.get("playerMaster") or {}
+                pid = str(master.get("id") or "")
+                extra = players.get(pid) or {}
+                weeks = [{"week": s.get("weekNumber"), "points": s.get("totalPoints")}
+                         for s in (master.get("lastStats") or [])]
+                return {
+                    "player_team_id": str(slot.get("playerTeamId") or ""),
+                    "id": pid,
+                    "name": master.get("nickname") or master.get("name"),
+                    "position_id": master.get("positionId"),
+                    "team_id": str(master.get("teamId") or extra.get("team_id") or ""),
+                    "value": master.get("marketValue") or extra.get("value"),
+                    "status": master.get("playerStatus") or extra.get("status"),
+                    "week_points": master.get("weekPoints"),
+                    "average": master.get("averagePoints"),
+                    "last_season_points": master.get("lastSeasonPoints"),
+                    "weeks": weeks,
+                    # from the analysis, so the pitch agrees with the tables
+                    "xpts": extra.get("xpts"),
+                    "projected_pct": extra.get("projected_pct"),
+                    "start_probability": extra.get("start_probability"),
+                    "next_rival": extra.get("next_rival"),
+                    "next_home": extra.get("next_home"),
+                    "starred": extra.get("starred"),
+                }
+
+            lines = {line: [shirt(slot) for slot in (formation.get(line) or [])]
+                     for line in laliga.LINEUP_LINES}
+            starters = {s["id"] for group in lines.values() for s in group}
+            # The payload's bench comes back empty, so the reserves are simply the rest
+            # of the squad, rebuilt into the same shirt shape as the starters.
+            bench = []
+            for player in players.values():
+                if not player.get("is_mine") or str(player["id"]) in starters:
+                    continue
+                bench.append(shirt({
+                    "playerTeamId": player.get("player_team_id") or "",
+                    "playerMaster": {
+                        "id": player["id"], "nickname": player["name"],
+                        "positionId": player["position_id"], "teamId": player["team_id"],
+                        "marketValue": player["value"], "playerStatus": player["status"],
+                        "lastStats": [],
+                    },
+                }))
+
+            self._json(200, {
+                "lines": lines, "bench": bench,
+                "formation": formation.get("tacticalFormation"),
+                "formations": {"free": free, "premium": premium},
+                "updated_at": payload.get("updatedAt"),
+                "writes_enabled": allow_writes,
+            })
 
         def _player_detail(self, player_id: str) -> None:
             """Everything about one player, plus what can be done with him right now.
@@ -387,6 +464,31 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                 threading.Thread(target=state.refresh, kwargs={"force": True},
                                  daemon=True).start()
                 self._json(200, {"id": player_id, "always_listed": on})
+                return
+
+            if path == "/api/lineup":
+                try:
+                    summary = writes.prepare(
+                        "save_lineup", league_id=str(league_id), my_team_id=str(my_team_id),
+                        player={"name": "tu alineacion"}, allow_writes=allow_writes)
+                    pending = writes._pending[summary["token"]]
+                    pending["args"] = {
+                        "team_id": str(my_team_id),
+                        "goalkeeper": body.get("goalkeeper"),
+                        "defender": body.get("defender") or [],
+                        "midfield": body.get("midfield") or [],
+                        "striker": body.get("striker") or [],
+                        "formation": body.get("formation") or [],
+                    }
+                    result = writes.confirm(summary["token"], allow_writes=allow_writes)
+                except writes.WritesDisabled as exc:
+                    self._json(403, {"error": str(exc)})
+                except writes.WriteError as exc:
+                    self._json(400, {"error": str(exc)})
+                else:
+                    threading.Thread(target=state.refresh, kwargs={"force": True},
+                                     daemon=True).start()
+                    self._json(200, {"ok": True, "saved": bool(result)})
                 return
 
             if path == "/api/raid":

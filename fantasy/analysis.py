@@ -343,6 +343,7 @@ def build_universe(
             "clause_locked_until": owner.get("locked_until") if owner else None,
             "clause_locked": owner.get("locked") if owner else False,
             "shielded": owner.get("shielded") if owner else False,
+            "player_team_id": owner.get("player_team_id") if owner else None,
             "is_mine": bool(owner and my_team_id and owner.get("team_id") == str(my_team_id)),
             "starred": pid in starred,
             "market": market_by_player.get(pid),
@@ -750,9 +751,15 @@ def _rival_cash(universe: dict[str, Any], my_real_budget: int) -> list[dict[str,
             team["power"] = "justo"
             team["power_note"] = f"no le llega ni al jugador medio ({_short(median_price)})"
 
-    rivals = [t for t in teams.values() if str(t["team_id"]) != str(my_team_id)]
-    rivals.sort(key=lambda t: t["estimated_cash"], reverse=True)
-    return rivals
+    # Your own row belongs in the ranking: the number only means something next to
+    # the others, and leaving yourself out makes the table unreadable as a standing.
+    everyone = list(teams.values())
+    for team in everyone:
+        team["is_me"] = str(team["team_id"]) == str(my_team_id)
+    everyone.sort(key=lambda t: t["estimated_cash"], reverse=True)
+    for position, team in enumerate(everyone, start=1):
+        team["cash_position"] = position
+    return everyone
 
 
 def _short(amount: float) -> str:

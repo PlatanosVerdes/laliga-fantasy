@@ -461,10 +461,11 @@ def _table(columns: Sequence[Column], rows: Sequence[dict], *,
                 cls = "bar"
             cells.append(f'<td{f" class=\"{cls}\"" if cls else ""} '
                          f'data-sort="{_esc(sort_key)}">{inner}</td>')
+        classes = ' class="row-me"' if row.get("is_me") else ""
         attrs = (f' data-position="{_esc(row.get("position"))}"'
                  f' data-price="{float(row.get("entry_cost") or row.get("value") or 0):.0f}"'
                  f' data-name="{_esc((row.get("name") or "").lower())}"') if filterable else ""
-        body.append(f"<tr{attrs}>{''.join(cells)}</tr>")
+        body.append(f"<tr{classes}{attrs}>{''.join(cells)}</tr>")
     return ('<div class="table-wrap"><table class="sortable"><thead><tr>' + head
             + "</tr></thead><tbody>" + "".join(body) + "</tbody></table></div>")
 
@@ -548,6 +549,7 @@ CSS = """
   /* blue ramp, ordinal-safe end first (light: no lighter than step 250) */
   --seq-2:#86b6ef; --seq-4:#2a78d6; --seq-6:#184f95;
   --pos-por:#eb6834; --pos-def:#4a3aa7; --pos-med:#1baf7a; --pos-del:#eda100;
+  --pitch-green:#1f6b3f;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -557,6 +559,7 @@ CSS = """
     --accent:#3987e5;
     --seq-2:#184f95; --seq-4:#3987e5; --seq-6:#9ec5f4;
     --pos-por:#d95926; --pos-def:#9085e9; --pos-med:#199e70; --pos-del:#c98500;
+    --pitch-green:#17492d;
   }
 }
 :root[data-theme="dark"]{
@@ -566,6 +569,7 @@ CSS = """
   --accent:#3987e5;
   --seq-2:#184f95; --seq-4:#3987e5; --seq-6:#9ec5f4;
   --pos-por:#d95926; --pos-def:#9085e9; --pos-med:#199e70; --pos-del:#c98500;
+  --pitch-green:#17492d;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--plane);color:var(--ink);
@@ -624,6 +628,9 @@ th.sorted-asc::after{content:" ↑";color:var(--accent)}
 th.sorted-desc::after{content:" ↓";color:var(--accent)}
 td.num{text-align:right;font-variant-numeric:tabular-nums}
 tbody tr:hover{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+tbody tr.row-me{background:color-mix(in srgb,var(--accent) 10%,transparent);
+  box-shadow:inset 3px 0 0 var(--accent)}
+tbody tr.row-me td:nth-child(2){font-weight:700}
 .p-cell{display:inline-flex;align-items:center;gap:7px}
 .crest{width:17px;height:17px;flex:0 0 auto;display:inline-block;
   background-repeat:no-repeat;background-position:center;background-size:contain}
@@ -806,6 +813,67 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .cal-mine{background:color-mix(in srgb,var(--warning) 15%,transparent);
   box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warning) 40%,transparent)}
 .cal-more{font-size:11px;color:var(--muted);padding:2px 6px}
+
+.pitch-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px}
+.pitch-bar label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.pitch-bar select{font:inherit;font-size:13px;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:7px;padding:6px 9px}
+.pitch-bar button{font:inherit;font-size:12px;font-weight:600;border-radius:7px;padding:7px 13px;
+  cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.pitch-bar button.primary{background:var(--accent);color:#fff;border-color:transparent}
+.pitch-bar button[disabled]{opacity:.45;cursor:not-allowed}
+#pitch-status{margin-left:auto}
+.pitch-wrap{display:grid;grid-template-columns:1fr 260px;gap:16px;align-items:start}
+@media (max-width:900px){.pitch-wrap{grid-template-columns:1fr}}
+.pitch{position:relative;border-radius:14px;padding:22px 16px;display:flex;
+  flex-direction:column;justify-content:space-between;gap:14px;min-height:560px;
+  background:
+    repeating-linear-gradient(180deg,
+      color-mix(in srgb,var(--pitch-green) 96%,#000) 0 46px,
+      color-mix(in srgb,var(--pitch-green) 88%,#000) 46px 92px);
+  box-shadow:inset 0 0 0 2px color-mix(in srgb,#fff 22%,transparent)}
+.pitch::before{content:"";position:absolute;left:8%;right:8%;top:50%;height:2px;
+  background:color-mix(in srgb,#fff 22%,transparent)}
+.pitch::after{content:"";position:absolute;left:50%;top:50%;width:88px;height:88px;
+  transform:translate(-50%,-50%);border:2px solid color-mix(in srgb,#fff 22%,transparent);
+  border-radius:50%}
+.pitch-line{display:flex;justify-content:space-evenly;gap:8px;position:relative;z-index:1}
+.slot{width:104px;min-height:112px;border-radius:10px;display:flex;flex-direction:column;
+  align-items:center;gap:3px;padding:7px 5px;transition:transform .14s ease,box-shadow .14s ease;
+  background:color-mix(in srgb,#000 34%,transparent);cursor:grab;
+  backdrop-filter:blur(2px)}
+.slot:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.35)}
+.slot.dragging{opacity:.35;cursor:grabbing}
+.slot.drop-target{box-shadow:inset 0 0 0 2px var(--warning)}
+.slot.empty{background:color-mix(in srgb,#000 18%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,#fff 24%,transparent);cursor:default;
+  align-items:center;justify-content:center;color:color-mix(in srgb,#fff 55%,transparent);
+  font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.slot .crest{width:20px;height:20px}
+.slot-name{font-size:12px;font-weight:700;color:#fff;text-align:center;line-height:1.15;
+  text-shadow:0 1px 2px rgba(0,0,0,.55)}
+.slot-meta{display:flex;gap:4px;align-items:center;font-size:10px;
+  color:color-mix(in srgb,#fff 78%,transparent)}
+.slot-weeks{display:flex;gap:3px;flex-wrap:wrap;justify-content:center}
+.wk{font-size:10px;font-weight:700;border-radius:4px;padding:1px 4px;color:#fff;
+  font-variant-numeric:tabular-nums}
+.wk-hi{background:#0ca30c}.wk-mid{background:#2a78d6}.wk-lo{background:#8a5a00}
+.wk-neg{background:#d03b3b}.wk-none{background:rgba(255,255,255,.18)}
+.slot-trend{font-size:10px;font-weight:700;font-variant-numeric:tabular-nums}
+.slot-trend.up{color:#8ee6a8}.slot-trend.down{color:#ffb1a8}
+.slot-out{box-shadow:inset 0 0 0 2px var(--critical)}
+.bench{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
+.bench h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted)}
+.bench-list{display:flex;flex-direction:column;gap:7px;min-height:120px}
+.bench.drop-target{border-color:var(--warning)}
+.bench-item{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;
+  background:var(--plane);font-size:12px;cursor:grab}
+.bench-item:hover{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.bench-item.dragging{opacity:.35}
+.bench-item .crest{width:16px;height:16px}
+.bench-name{font-weight:600}
+.bench-empty{color:var(--muted);font-size:12px;font-style:italic}
 .callout{background:color-mix(in srgb,var(--warning) 12%,transparent);
   border-left:3px solid var(--warning);border-radius:0 8px 8px 0;padding:11px 14px;
   font-size:13px;margin:0 0 14px;color:var(--ink)}
@@ -1121,6 +1189,228 @@ function wireOps(root=document){
 }
 
 
+
+// ---- alineacion: campo, arrastrar y guardar --------------------------------
+const LINE_ORDER=['striker','midfield','defender','goalkeeper'];   // arriba -> abajo
+const LINE_LABEL={goalkeeper:'POR',defender:'DEF',midfield:'MED',striker:'DEL'};
+const LINE_POS={goalkeeper:1,defender:2,midfield:3,striker:4};
+let pitchState=null, pitchDirty=false, dragged=null;
+
+function weekChip(w){
+  const p=w.points;
+  const cls = p==null?'wk-none': p<0?'wk-neg': p>=8?'wk-hi': p>=4?'wk-mid':'wk-lo';
+  return `<span class="wk ${cls}" title="Jornada ${w.week}">${p==null?'–':p}</span>`;
+}
+
+function shirtHtml(player,line,index){
+  if(!player) return `<div class="slot empty" data-line="${line}" data-index="${index}">`
+    +`${LINE_LABEL[line]}<br>libre</div>`;
+  const trend=player.projected_pct||0;
+  const weeks=(player.weeks||[]).slice(-5).map(weekChip).join('')
+    || '<span class="wk wk-none">sin jornadas</span>';
+  const out=player.status&&player.status!=='ok'&&player.status!=='doubtful';
+  return `<div class="slot${out?' slot-out':''}" draggable="true" data-line="${line}"
+    data-index="${index}" data-player="${player.id}" data-pt="${player.player_team_id}"
+    title="${player.name} · ${player.next_rival?('vs '+player.next_rival):''}">
+    <span class="crest crest-${player.team_id}"></span>
+    <span class="slot-name">${player.name}</span>
+    <span class="slot-weeks">${weeks}</span>
+    <span class="slot-meta">
+      <span>${(player.xpts||0).toFixed(1)} xPts</span>
+      <span class="slot-trend ${trend>=0?'up':'down'}">${trend>=0?'▲':'▼'}${Math.abs(trend).toFixed(1)}%</span>
+    </span>
+  </div>`;
+}
+
+function benchHtml(player){
+  const trend=player.projected_pct||0;
+  return `<div class="bench-item" draggable="true" data-player="${player.id}"
+    data-pt="${player.player_team_id}" data-from="bench" title="${player.name}">
+    <span class="crest crest-${player.team_id}"></span>
+    <span class="pos pos-${(LINE_LABEL[Object.keys(LINE_POS).find(k=>LINE_POS[k]===player.position_id)]||'ENT').toLowerCase()}">${
+      {1:'POR',2:'DEF',3:'MED',4:'DEL'}[player.position_id]||'ENT'}</span>
+    <span class="bench-name">${player.name}</span>
+    <span class="slot-trend ${trend>=0?'up':'down'}" style="margin-left:auto">${
+      (player.xpts||0).toFixed(1)}</span>
+  </div>`;
+}
+
+function renderPitch(){
+  if(!pitchState) return;
+  const pitch=document.getElementById('pitch');
+  const benchList=document.getElementById('bench-list');
+  if(!pitch) return;
+  pitch.innerHTML=LINE_ORDER.map(line=>{
+    const slots=pitchState.lines[line]||[];
+    return `<div class="pitch-line" data-line="${line}">`
+      + slots.map((p,i)=>shirtHtml(p,line,i)).join('') + '</div>';
+  }).join('');
+  benchList.innerHTML=(pitchState.bench||[]).map(benchHtml).join('')
+    || '<p class="bench-empty">Sin reservas</p>';
+  document.getElementById('pitch-formation').textContent=
+    (pitchState.formation||[]).join('-');
+  const save=document.getElementById('pitch-save');
+  save.disabled=!pitchDirty||!pitchState.writes_enabled;
+  document.getElementById('pitch-status').textContent = pitchDirty
+    ? 'cambios sin guardar' : (pitchState.writes_enabled?'':'servidor en solo lectura');
+  wireDrag();
+}
+
+function wireDrag(){
+  document.querySelectorAll('.slot[draggable], .bench-item[draggable]').forEach(node=>{
+    node.addEventListener('dragstart',e=>{
+      dragged={id:node.dataset.player, pt:node.dataset.pt,
+               from:node.dataset.from||'pitch',
+               line:node.dataset.line, index:+node.dataset.index};
+      node.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain',node.dataset.player);
+    });
+    node.addEventListener('dragend',()=>{ node.classList.remove('dragging'); dragged=null;
+      document.querySelectorAll('.drop-target').forEach(n=>n.classList.remove('drop-target')); });
+  });
+  const targets=[...document.querySelectorAll('.slot'), document.getElementById('bench')];
+  targets.forEach(node=>{
+    if(!node) return;
+    node.addEventListener('dragover',e=>{ e.preventDefault(); node.classList.add('drop-target'); });
+    node.addEventListener('dragleave',()=>node.classList.remove('drop-target'));
+    node.addEventListener('drop',e=>{
+      e.preventDefault(); node.classList.remove('drop-target');
+      if(!dragged) return;
+      if(node.id==='bench') dropOnBench();
+      else dropOnSlot(node.dataset.line, +node.dataset.index);
+    });
+  });
+}
+
+function takeFrom(source){
+  if(source.from==='bench'){
+    const i=pitchState.bench.findIndex(p=>p&&p.id===source.id);
+    return i<0?null:pitchState.bench.splice(i,1)[0];
+  }
+  const arr=pitchState.lines[source.line];
+  const player=arr[source.index]; arr[source.index]=null;
+  return player;
+}
+
+function dropOnSlot(line,index){
+  const moving=dragged;
+  if(moving.from==='pitch'&&moving.line===line&&moving.index===index) return;
+  const target=pitchState.lines[line][index]||null;
+  const player=takeFrom(moving);
+  if(!player) return;
+  // Una linea solo acepta su propia posicion; el portero es intransferible.
+  if(player.position_id!==LINE_POS[line]){
+    // devolver y avisar
+    if(moving.from==='bench') pitchState.bench.push(player);
+    else pitchState.lines[moving.line][moving.index]=player;
+    flashPitch(`${player.name} es ${{1:'portero',2:'defensa',3:'medio',4:'delantero'}[player.position_id]}`
+      +`, no puede jugar de ${{goalkeeper:'portero',defender:'defensa',midfield:'medio',striker:'delantero'}[line]}.`);
+    return;
+  }
+  pitchState.lines[line][index]=player;
+  if(target){
+    if(moving.from==='bench') pitchState.bench.push(target);
+    else pitchState.lines[moving.line][moving.index]=target;   // intercambio
+  }
+  pitchDirty=true; renderPitch();
+}
+
+function dropOnBench(){
+  if(dragged.from==='bench') return;
+  const player=takeFrom(dragged);
+  if(player) pitchState.bench.push(player);
+  pitchDirty=true; renderPitch();
+}
+
+function flashPitch(message){
+  const status=document.getElementById('pitch-status');
+  status.textContent=message;
+  status.style.color='var(--warning)';
+  setTimeout(()=>{ status.style.color=''; renderPitch(); },2600);
+}
+
+function applyFormation(text){
+  const [d,m,s]=text.split(',').map(Number);
+  const want={goalkeeper:1,defender:d,midfield:m,striker:s};
+  const spare=[];
+  LINE_ORDER.forEach(line=>{
+    const arr=pitchState.lines[line]||[];
+    while(arr.length>want[line]){ const p=arr.pop(); if(p) spare.push(p); }
+    while(arr.length<want[line]) arr.push(null);
+    pitchState.lines[line]=arr;
+  });
+  // rellenar huecos con reservas de esa posicion, el resto al banquillo
+  LINE_ORDER.forEach(line=>{
+    pitchState.lines[line]=pitchState.lines[line].map(slot=>{
+      if(slot) return slot;
+      const pool=spare.concat(pitchState.bench);
+      const i=pool.findIndex(p=>p&&p.position_id===LINE_POS[line]);
+      if(i<0) return null;
+      const chosen=pool[i];
+      const inSpare=spare.indexOf(chosen);
+      if(inSpare>=0) spare.splice(inSpare,1);
+      else pitchState.bench.splice(pitchState.bench.indexOf(chosen),1);
+      return chosen;
+    });
+  });
+  pitchState.bench=pitchState.bench.concat(spare);
+  pitchState.formation=[d,m,s];
+  pitchDirty=true; renderPitch();
+}
+
+async function loadPitch(){
+  const pitch=document.getElementById('pitch');
+  if(!pitch) return;
+  try{
+    const res=await fetch('/api/lineup');
+    if(!res.ok) throw new Error(res.status);
+    pitchState=await res.json();
+  }catch(e){
+    pitch.innerHTML='<p class="slot empty" style="width:auto">Solo disponible en la '
+      +'version servida</p>';
+    return;
+  }
+  pitchDirty=false;
+  const select=document.getElementById('pitch-formation-select');
+  const all=[...(pitchState.formations.free||[]),...(pitchState.formations.premium||[])];
+  const current=(pitchState.formation||[]).join(',');
+  select.innerHTML=all.map(f=>{
+    const premium=(pitchState.formations.premium||[]).includes(f);
+    return `<option value="${f}"${f===current?' selected':''}>${f.replace(/,/g,'-')}`
+      +`${premium?' (premium)':''}</option>`;
+  }).join('');
+  if(!select.dataset.wired){
+    select.dataset.wired='1';
+    select.addEventListener('change',()=>applyFormation(select.value));
+    document.getElementById('pitch-reset').addEventListener('click',loadPitch);
+    document.getElementById('pitch-save').addEventListener('click',savePitch);
+  }
+  renderPitch();
+}
+
+async function savePitch(){
+  const missing=LINE_ORDER.some(l=>(pitchState.lines[l]||[]).some(p=>!p));
+  if(missing){ flashPitch('Hay huecos sin cubrir: completa el once antes de guardar.');
+    return; }
+  const ids=l=>pitchState.lines[l].map(p=>p.player_team_id);
+  const button=document.getElementById('pitch-save');
+  button.disabled=true; button.textContent='Guardando…';
+  try{
+    const res=await fetch('/api/lineup',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({goalkeeper:ids('goalkeeper')[0], defender:ids('defender'),
+                           midfield:ids('midfield'), striker:ids('striker'),
+                           formation:pitchState.formation})});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error||res.status);
+    pitchDirty=false;
+    document.getElementById('pitch-status').textContent='guardada';
+    await loadPitch();
+  }catch(err){ flashPitch('No se ha guardado: '+err.message); }
+  finally{ button.textContent='Guardar alineación'; }
+}
+
 // ---- cajon de jugador: un nombre, todas sus acciones ----------------------
 const drawer=document.getElementById('drawer');
 
@@ -1315,7 +1605,7 @@ const TABS=[
   {id:'decidir', label:'Decidir', sections:['acciones','ofertas']},
   {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
   {id:'clausulas', label:'Cláusulas', sections:['programados','calendario','vencimientos','oportunidades','riesgo','clausulas']},
-  {id:'plantilla', label:'Plantilla', sections:['plantilla','ventas']},
+  {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
   {id:'liga', label:'Liga', sections:['rivales','movimientos']},
   {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
 ];
@@ -1347,6 +1637,7 @@ function showTab(id,{section=null,updateHash=true}={}){
     // disparar hashchange sobre nosotros mismos.
     history.replaceState(null,'','#'+(section||tab.id));
   }
+  if(tab.sections.includes('once') && !pitchState) loadPitch();
   if(section){
     const node=document.getElementById(section);
     if(node) node.scrollIntoView({behavior:'smooth',block:'start'});
@@ -1659,8 +1950,6 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
             _kpi("xPts del mejor 11", _fmt_num(best_eleven, 1), "por jornada"),
             _kpi("Pujables ahora", str(len(advice["bids_now"])),
                  f"{len(advice['asks'])} mas en venta por rivales", tab="mercado"),
-            _kpi("Favoritos", str(len(advice.get("starred") or [])), "marcados con estrella",
-                 tab="ranking"),
             _kpi("Cláusulas a tiro", str(len(advice["raids"])),
                  (f"bloqueadas hasta {str(advice.get('clauses_unlock_from'))[:10]}"
                   if not advice["raids"] and advice.get("clauses_locked")
@@ -1784,6 +2073,8 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
                      else ("sobra" if data["surplus"] else "ok"))
             shape_bits.append(f'{POSITION_NAMES[position_id]} {data["owned"]}/{data["ideal"]} '
                               f'({state})')
+
+        sections.append(PITCH)
         sections.append(_section(
             "Mi plantilla", _table(_player_columns(), advice["squad"], section="plantilla"),
             note=" · ".join(shape_bits), anchor="plantilla"))
@@ -1925,6 +2216,7 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
 
         if advice.get("rivals"):
             rival_columns: list[Column] = [
+                ("#", lambda r: r.get("cash_position"), "int"),
                 ("Manager", lambda r: r.get("manager") or r.get("name"), "text"),
                 ("Poder de compra", lambda r: r, "power"),
                 ("Puntos", lambda r: r.get("points"), "int"),
@@ -2053,6 +2345,27 @@ def _calendar_section(universe: dict[str, Any], advice: dict[str, Any]) -> str:
              "expuesto y a la vez puedes atacar. Al arrancar la temporada se abren todas "
              "de golpe, asi que el dia importa mas que la hora.",
         anchor="calendario")
+
+
+PITCH = '''<section id="once">
+  <h2>Alineación<span class="badge-count" id="pitch-formation"></span></h2>
+  <p class="note">Arrastra un jugador del campo al banquillo o al revés para cambiarlo.
+    Cambia la formación con el selector y las plazas se ajustan solas. Debajo de cada
+    uno: puntos por jornada, tendencia de valor y xPts esperados.</p>
+  <div class="pitch-bar">
+    <label>Formación <select id="pitch-formation-select"></select></label>
+    <span id="pitch-status" class="kpi-label"></span>
+    <button id="pitch-reset" type="button">Descartar cambios</button>
+    <button id="pitch-save" class="primary" type="button" disabled>Guardar alineación</button>
+  </div>
+  <div class="pitch-wrap">
+    <div class="pitch" id="pitch"></div>
+    <aside class="bench" id="bench">
+      <h3>Banquillo</h3>
+      <div class="bench-list" id="bench-list"></div>
+    </aside>
+  </div>
+</section>'''
 
 
 SECTION_RE = re.compile(r'<section id="([a-z]+)">(.*?)</section>', re.S)
