@@ -91,13 +91,16 @@ function tick(){
   document.querySelectorAll('[data-deadline]').forEach(el=>{
     const left=new Date(el.dataset.deadline).getTime()-now;
     if(isNaN(left)) return;
-    if(left<=0){ el.textContent='ya'; el.className='pill-critical'; return; }
+    const plain=el.dataset.plain==='1';
+    if(left<=0){ el.textContent='ya'; if(!plain) el.className='pill-critical'; return; }
     const h=Math.floor(left/3600000), m=Math.floor(left%3600000/60000),
           s=Math.floor(left%60000/1000);
     el.textContent = h>=24 ? Math.floor(h/24)+'d '+(h%24)+'h'
                    : h>0   ? h+'h '+String(m).padStart(2,'0')+'m'
                            : m+'m '+String(s).padStart(2,'0')+'s';
-    el.className = h<1 ? 'pill-critical' : h<24 ? 'pill-warning' : 'pill-neutral';
+    // El valor de un widget no es una pastilla: solo cambia el color, no la clase entera.
+    if(plain) el.style.color = h<1 ? 'var(--critical)' : h<6 ? 'var(--warning)' : '';
+    else el.className = h<1 ? 'pill-critical' : h<24 ? 'pill-warning' : 'pill-neutral';
   });
 }
 setInterval(tick,1000);
@@ -137,10 +140,13 @@ function wireBids(root=document){
 }
 
 function openBid(data){
+  // Con una puja puesta la operacion es cambiarla: la API rechaza una segunda con un 400.
+  const existing=data.bid||null;
   pending={market_id:data.market, player_id:data.player, name:data.name,
-           min_bid:+data.min, ideal:+data.ideal||0, value:+data.value};
+           min_bid:+data.min, ideal:+data.ideal||0, value:+data.value,
+           bid_id:existing, operation:existing?'modify_bid':'bid'};
   modal.hidden=false;
-  modal.querySelector('.bid-action').textContent='Pujar por';
+  modal.querySelector('.bid-action').textContent=existing?'Cambiar tu puja por':'Pujar por';
   modal.querySelector('.bid-who').textContent=data.name;
   const suggested = pending.ideal && pending.ideal>=pending.min_bid ? pending.ideal : pending.min_bid;
   const input=modal.querySelector('.bid-amount');
@@ -150,7 +156,6 @@ function openBid(data){
   modal.querySelector('.bid-value').textContent=exact(pending.value);
   showRivals(+data.bids||0, data.expires);
   const drop=modal.querySelector('.bid-drop');
-  pending.bid_id=data.bid||null;
   drop.hidden=!pending.bid_id;
   showStep(1);
   modal.querySelector('.bid-error').textContent='';
@@ -162,7 +167,8 @@ function showRivals(count, expires){
   const wrap=modal.querySelector('.bid-rivals-wrap');
   const node=modal.querySelector('.bid-rivals');
   if(!wrap) return;
-  const isBid = pending && (pending.operation==='bid' || !pending.operation);
+  const isBid = pending && (pending.operation==='bid' || pending.operation==='modify_bid'
+                            || !pending.operation);
   wrap.hidden = !isBid;
   if(!isBid) return;
   node.textContent = count ? String(count) : 'ninguna';
@@ -383,6 +389,15 @@ function weekChip(w){
   return `<span class="wk ${cls}" title="Jornada ${w.week}">${p==null?'–':p}</span>`;
 }
 
+// La cara identifica mas rapido que el nombre; el escudo se queda en la esquina porque el
+// rival de la jornada se lee por equipo. Si la imagen no carga, queda el escudo solo.
+function faceHtml(player){
+  const crest=`<span class="crest crest-${player.team_id}"></span>`;
+  if(!player.image) return crest;
+  return `<span class="slot-avatar"><img class="slot-face" src="${player.image}" alt=""
+    loading="lazy" onerror="this.remove()">${crest}</span>`;
+}
+
 function shirtHtml(player,line,index){
   if(!player) return `<div class="slot empty" data-line="${line}" data-index="${index}">`
     +`${LINE_LABEL[line]}<br>libre</div>`;
@@ -395,7 +410,7 @@ function shirtHtml(player,line,index){
     data-index="${index}" data-player="${player.id}" data-pt="${player.player_team_id}"
     title="${player.name} · ${player.next_rival?('vs '+player.next_rival):''}">
     ${statusBadge(player)}
-    <span class="crest crest-${player.team_id}"></span>
+    ${faceHtml(player)}
     <span class="slot-name">${player.name}</span>
     <span class="slot-weeks">${weeks}</span>
     <span class="slot-meta">
@@ -412,7 +427,7 @@ function benchHtml(player){
   return `<div class="bench-item${statusRing(player)}" draggable="true" data-player="${player.id}"
     data-pt="${player.player_team_id}" data-from="bench" title="${player.name}">
     ${statusBadge(player)}
-    <span class="crest crest-${player.team_id}"></span>
+    ${faceHtml(player)}
     <span class="pos pos-${(LINE_LABEL[Object.keys(LINE_POS).find(k=>LINE_POS[k]===player.position_id)]||'ENT').toLowerCase()}">${
       {1:'POR',2:'DEF',3:'MED',4:'DEL'}[player.position_id]||'ENT'}</span>
     <span class="bench-name">${player.name}</span>
@@ -615,19 +630,67 @@ const drawer=document.getElementById('drawer');
 
 function closeDrawer(){ if(drawer) drawer.hidden=true; }
 
+// Una curva sin cifras solo dice "sube" o "baja". Con el cursor encima dice cuanto y que dia,
+// que es la pregunta que se hace mirandola.
+let chartDays=[];
+
 function sparkSvg(history){
-  const points=history.map(h=>h.value).filter(v=>v!=null);
+  const days=history.filter(h=>h.value!=null);
+  const points=days.map(h=>h.value);
   if(points.length<3) return '';
+  chartDays=days;
   const w=440,h=90,lo=Math.min(...points),hi=Math.max(...points),span=(hi-lo)||1;
   const step=w/(points.length-1);
-  const path=points.map((v,i)=>`${(i*step).toFixed(1)},${(h-4-(v-lo)/span*(h-12)).toFixed(1)}`).join(' ');
+  const xy=(v,i)=>[i*step, h-4-(v-lo)/span*(h-12)];
+  const path=points.map((v,i)=>xy(v,i).map(n=>n.toFixed(1)).join(',')).join(' ');
   const rising=points[points.length-1]>=points[0];
-  return `<svg class="drawer-chart" width="100%" height="${h}" viewBox="0 0 ${w} ${h}"
-    preserveAspectRatio="none" aria-label="Historico de valor">
-    <polyline points="${path}" fill="none" stroke="var(--${rising?'pole-pos':'pole-neg'})"
-      stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <p class="drawer-note">Valor diario, ultimos ${points.length} dias ·
-      min ${fmt(lo)} · max ${fmt(hi)}</p>`;
+  return `<div class="chart-wrap">
+    <svg class="drawer-chart" width="100%" height="${h}" viewBox="0 0 ${w} ${h}"
+      preserveAspectRatio="none" aria-label="Historico de valor">
+      <polyline points="${path}" fill="none" stroke="var(--${rising?'pole-pos':'pole-neg'})"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <line class="chart-cross" x1="0" y1="0" x2="0" y2="${h}" stroke="var(--muted)"
+        stroke-width="1" stroke-dasharray="3 3" style="opacity:0"/>
+      <circle class="chart-dot" r="3.5" fill="var(--${rising?'pole-pos':'pole-neg'})"
+        style="opacity:0"/>
+    </svg>
+    <div class="chart-tip" hidden></div>
+  </div>
+  <p class="drawer-note">Valor diario, ultimos ${points.length} dias ·
+    min ${fmt(lo)} · max ${fmt(hi)} · pasa el cursor para ver cada dia</p>`;
+}
+
+function wireChart(root){
+  const wrap=root.querySelector('.chart-wrap');
+  if(!wrap || chartDays.length<3) return;
+  const svg=wrap.querySelector('.drawer-chart'), tip=wrap.querySelector('.chart-tip'),
+        cross=wrap.querySelector('.chart-cross'), dot=wrap.querySelector('.chart-dot');
+  const values=chartDays.map(d=>d.value);
+  const lo=Math.min(...values), hi=Math.max(...values), span=(hi-lo)||1;
+  const w=440, h=90, step=w/(values.length-1);
+
+  const move=(event)=>{
+    const box=svg.getBoundingClientRect();
+    const ratio=Math.min(1,Math.max(0,(event.clientX-box.left)/box.width));
+    const index=Math.round(ratio*(values.length-1));
+    const day=chartDays[index];
+    // El viewBox se estira con preserveAspectRatio="none", asi que la x en pantalla es la
+    // proporcion, no la del viewBox: el punto y la linea van en coordenadas del viewBox.
+    const x=index*step, y=h-4-(values[index]-lo)/span*(h-12);
+    cross.setAttribute('x1',x); cross.setAttribute('x2',x); cross.style.opacity='.6';
+    dot.setAttribute('cx',x); dot.setAttribute('cy',y); dot.style.opacity='1';
+    const first=values[0], change=first?((values[index]-first)/first*100):0;
+    tip.hidden=false;
+    tip.innerHTML=`<b>${exact(day.value)}</b><span>${day.date||''}</span>`+
+      `<span class="${change>=0?'up':'down'}">${change>=0?'+':''}${change.toFixed(1)}% desde el inicio</span>`;
+    const left=Math.min(box.width-120, Math.max(0, ratio*box.width-60));
+    tip.style.left=left+'px';
+  };
+  svg.addEventListener('mousemove',move);
+  svg.addEventListener('touchmove',(e)=>{ if(e.touches[0]) move(e.touches[0]); });
+  svg.addEventListener('mouseleave',()=>{
+    tip.hidden=true; cross.style.opacity='0'; dot.style.opacity='0';
+  });
 }
 
 async function openDetail(playerId){
@@ -687,6 +750,7 @@ async function openDetail(playerId){
   body.querySelectorAll('button[data-action]').forEach(button=>
     button.addEventListener('click',()=>runAction(JSON.parse(button.dataset.action),p)));
   wireAlways(body,p);
+  wireChart(body);
 }
 
 // El pie del panel dice en palabras que va a pasar: cambiar de "no vende solo" a
@@ -939,7 +1003,7 @@ const TABS=[
   {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
   {id:'clausulas', label:'Cláusulas', sections:['programados','calendario','vencimientos','oportunidades','riesgo','clausulas']},
   {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
-  {id:'liga', label:'Liga', sections:['rivales','movimientos']},
+  {id:'liga', label:'Liga', sections:['rivales','partidos','movimientos']},
   {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
 ];
 

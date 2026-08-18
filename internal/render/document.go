@@ -79,6 +79,7 @@ func (d Document) HTML() string {
 		sections = append(sections, d.marketSections()...)
 		sections = append(sections, d.clauseSections()...)
 	}
+	sections = append(sections, d.scheduleSection(players))
 	sections = append(sections, d.rankingSections(players)...)
 
 	kpis := d.widgets(week, players)
@@ -106,26 +107,32 @@ var Pitch, Filters string
 // --- widgets ---------------------------------------------------------------------------
 
 func (d Document) widgets(week map[string]any, players []map[string]any) []string {
-	live := "cerrada"
+	// The one number on this card that keeps changing is how long is left, so that is the
+	// number, ticking every second. What state the week is in becomes the small print.
+	state := "cerrada"
 	if truthy(week["isLive"]) {
-		live = "en juego"
+		state = "en juego"
 	}
-	hint := "cerrada"
-	if truthy(week["isLive"]) {
-		hint = "en juego"
+	closing := text(week["closingWeekDate"])
+	value := state
+	deadline := ""
+	if closing != "" {
+		value = LeftUntil(closing)
+		deadline = closing
 	}
-	if closes := whenLabel(text(week["closingWeekDate"])); closes != "" {
-		hint = "cierra " + closes
+	hint := state
+	if closes := whenLabel(closing); closes != "" {
+		hint = state + " · cierra " + closes
 	}
-	nextOpens := whenLabel(text(d.Universe["next_week_opens"]))
-	nextHint := ""
-	if nextOpens != "" {
-		nextHint = fmt.Sprintf("J%d desde %s", int(number(week["nextWeek"])), nextOpens)
+	if nextOpens := whenLabel(text(d.Universe["next_week_opens"])); nextOpens != "" {
+		hint += fmt.Sprintf(" · J%d desde %s", int(number(week["nextWeek"])), nextOpens)
 	}
 
 	kpis := []string{Widget(KPI{
-		Label: fmt.Sprintf("Jornada %d", int(number(week["weekNumber"]))),
-		Value: live, Hint: nextHint, Rank: hint, Status: "neutral"})}
+		Label:    fmt.Sprintf("Jornada %d", int(number(week["weekNumber"]))),
+		Value:    value,
+		Deadline: deadline,
+		Hint:     hint, Status: "neutral"})}
 
 	if len(d.Advice) == 0 {
 		kpis = append(kpis,
@@ -173,10 +180,10 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 	kpis = append(kpis,
 		Widget(KPI{Label: "Mi puesto", Value: position + "º",
 			Hint: fmt.Sprintf("%d puntos", int(number(me["points"]))),
-			Rank: pointsRank, Meter: &pointsShare, Status: pointsStatus, Tab: "liga"}),
+			Rank: pointsRank, Meter: &pointsShare, Status: pointsStatus, Tab: "rivales"}),
 		Widget(KPI{Label: "Mi saldo", Value: Money(budget),
 			Hint: text(me["power_note"]), Rank: cashRank, Meter: &cashShare,
-			Status: cashStatus, Tab: "liga"}),
+			Status: cashStatus, Tab: "rivales"}),
 		Widget(KPI{Label: "Valor de plantilla", Value: Money(&squadValue),
 			Hint: fmt.Sprintf("%d jugadores", len(squad)),
 			Rank: valueRank, Meter: &valueShare, Status: valueStatus, Tab: "plantilla"}))
@@ -197,7 +204,7 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 		}
 		kpis = append(kpis, Widget(KPI{Label: "Ofertas que interesan",
 			Value: fmt.Sprintf("%d", len(goodOffers)), Hint: strings.Join(names, ", "),
-			Rank: "cobra", Status: "good", Tab: "decidir"}))
+			Rank: "cobra", Status: "good", Tab: "ofertas"}))
 	}
 
 	bids := rows(d.Advice["bids_now"])
@@ -214,7 +221,7 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 	kpis = append(kpis,
 		Widget(KPI{Label: "xPts del mejor 11", Value: Num(&bestEleven, 1), Hint: "por jornada"}),
 		Widget(KPI{Label: "Pujables ahora", Value: fmt.Sprintf("%d", len(bids)),
-			Hint: fmt.Sprintf("%d mas en venta por rivales", len(asks)), Tab: "mercado"}),
+			Hint: fmt.Sprintf("%d mas en venta por rivales", len(asks)), Tab: "fichajes"}),
 		Widget(KPI{Label: "Cláusulas a tiro", Value: fmt.Sprintf("%d", len(raids)),
 			Hint: clauseHint, Tab: "clausulas"}))
 	return kpis
@@ -237,7 +244,7 @@ func (d Document) actionsSection() string {
 	rowsOut := d.actionRows()
 	legend := `<div class="legend">`
 	// Same order as Python's dict literal, which is insertion order.
-	for _, key := range []string{"buy", "clause", "protect", "sell", "out"} {
+	for _, key := range []string{"buy", "bidding", "clause", "protect", "sell", "out"} {
 		spec := Verdicts[key]
 		legend += fmt.Sprintf(`<span><span class="swatch" style="background:var(--%s)"></span>%s</span>`,
 			spec.Status, spec.Label)
@@ -296,8 +303,16 @@ func (d Document) actionRows() []map[string]any {
 		cost := number(player["entry_cost"])
 		profitable := ideal != nil && *ideal > 0 && cost <= *ideal
 
+		listing := mapOf(player["market"])
+		mine := text(listing["my_bid_id"]) != ""
+
 		var why string
 		switch {
+		case mine:
+			why = "ya tienes " + Money(asFloat(listing["my_bid"])) + " puestos"
+			if profitable {
+				why += " · el techo esta en " + Money(ideal)
+			}
 		case profitable:
 			why = "puja hasta " + Money(ideal)
 		case hasVerdict:
@@ -316,8 +331,16 @@ func (d Document) actionRows() []map[string]any {
 			why += " · te falta un " +
 				strings.ToLower(positionNames[text(player["position_id"])])
 		}
-		out = append(out, merge(player, map[string]any{"verdict": "buy", "why": why}))
-		buys++
+		verdict := "buy"
+		if mine {
+			// Already bid: it is no longer a decision to take, it is one taken. Counting it
+			// as a buy would also make "nothing is worth buying today" wrong.
+			verdict = "bidding"
+		}
+		out = append(out, merge(player, map[string]any{"verdict": verdict, "why": why}))
+		if verdict == "buy" {
+			buys++
+		}
 		if buys >= 8 {
 			break
 		}
@@ -493,6 +516,33 @@ func (d Document) offersSection() string {
 
 // feedSection is outside the advice block on purpose: the league moves whether or not this
 // run could read a squad, and an empty feed says something worth reading.
+// scheduleSection is the fixture list ahead: what each of your players faces, month by month.
+// It answers the question the weekly widget cannot — whether a good run of matches is coming.
+func (d Document) scheduleSection(players []map[string]any) string {
+	fixtures := rows(d.Universe["schedule"])
+	if len(fixtures) == 0 {
+		return ""
+	}
+	mine := map[string]int{}
+	for _, player := range players {
+		if truthy(player["is_mine"]) {
+			mine[text(player["team_id"])]++
+		}
+	}
+	return Section("Calendario de partidos", MatchCalendar(fixtures, mine),
+		"Las proximas jornadas, con los partidos de tus jugadores marcados. "+
+			"Una racha buena o mala se ve aqui antes que en el precio.",
+		fmt.Sprintf("%d jornadas", weeksIn(fixtures)), "partidos")
+}
+
+func weeksIn(fixtures []map[string]any) int {
+	seen := map[int]bool{}
+	for _, fixture := range fixtures {
+		seen[int(number(fixture["week"]))] = true
+	}
+	return len(seen)
+}
+
 func (d Document) feedSection() string {
 	events := rows(d.Universe["activity"])
 	if len(events) == 0 {

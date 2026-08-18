@@ -89,6 +89,7 @@ type Player struct {
 	FFValue          *float64               `json:"ff_value"`
 	Absence          map[string]any         `json:"absence"`
 	ClauseHoursLeft  *float64               `json:"clause_hours_left"`
+	Image            string                 `json:"image"`
 	Starred          bool                   `json:"starred"`
 	RaidScheduled    bool                   `json:"raid_scheduled"`
 	MarketEntry      *Listing               `json:"market"`
@@ -125,6 +126,7 @@ type Listing struct {
 
 type Fixture struct {
 	ID           string `json:"id"`
+	Week         int    `json:"week,omitempty"`
 	Kickoff      string `json:"kickoff"`
 	State        int    `json:"state"`
 	LocalID      string `json:"local_id"`
@@ -149,6 +151,7 @@ type Universe struct {
 	MatchedCount    int                `json:"matched_count"`
 	LeagueTeams     map[string]*LeagueTeam `json:"league_teams"`
 	Activity        []Event            `json:"activity"`
+	Schedule        []Fixture          `json:"schedule"`
 	CashModel       CashModel          `json:"cash_model"`
 	Clauses         map[string]any     `json:"clauses"`
 }
@@ -272,6 +275,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		Week:           week,
 		NextWeekOpens:  nextOpens,
 		Fixtures:       LoadFixtures(client, week, teams),
+		Schedule:       LoadSchedule(client, week, teams),
 		CompletedWeeks: completedWeeks,
 		CurrentWeight:  currentWeight,
 	}
@@ -313,13 +317,16 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 	}
 
 	ownership := map[string]slot{}
+	// Faces come from wherever they appear — squads and the market — because the public
+	// player list carries none.
+	faces := map[string]string{}
 	if leagueID != "" {
 		ownership, universe.LeagueTeams, err = loadOwnership(client, leagueID)
 		if err != nil {
 			return nil, fmt.Errorf("ownership: %w", err)
 		}
 		universe.OwnershipLoaded = len(ownership) > 0
-		universe.Market, err = loadMarket(client, leagueID, myTeamID)
+		universe.Market, err = loadMarket(client, leagueID, myTeamID, faces)
 		if err != nil {
 			return nil, fmt.Errorf("market: %w", err)
 		}
@@ -440,9 +447,15 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 
 		player.Starred = state.Starred[id]
 		player.RaidScheduled = state.Raids[id]
+		if face, ok := faces[id]; ok {
+			player.Image = face
+		}
 
 		if owned, ok := ownership[id]; ok {
 			player.Owner = &owned.Owner
+			if owned.Image != "" {
+				player.Image = owned.Image
+			}
 			player.OwnerTeamID = &owned.TeamID
 			player.Clause = owned.Clause
 			player.ClauseUntil = owned.LockedUntil
@@ -531,6 +544,9 @@ func allPlayers(client *api.Client) ([]map[string]any, error) {
 type slot struct {
 	Owner        string
 	TeamID       string
+	// The cutout the app uses. The public players list does not carry it, but every squad
+	// slot does, which is the only reason a face can be shown at all.
+	Image        string
 	Clause       *float64
 	LockedUntil  *string
 	Locked       bool
@@ -577,7 +593,8 @@ func loadOwnership(client *api.Client, leagueID string) (map[string]slot,
 			if id == "" {
 				continue
 			}
-			held := slot{Owner: owner, TeamID: teamID}
+			held := slot{Owner: owner, TeamID: teamID,
+				Image: text(nested(raw, "playerMaster", "images", "transparent", "256x256"))}
 			if clause, ok := raw["buyoutClause"]; ok && clause != nil {
 				value := number(clause)
 				held.Clause = &value
@@ -784,7 +801,8 @@ func squadPlayers(squad map[string]any) []map[string]any {
 	return nil
 }
 
-func loadMarket(client *api.Client, leagueID, myTeamID string) ([]Listing, error) {
+func loadMarket(client *api.Client, leagueID, myTeamID string,
+	faces map[string]string) ([]Listing, error) {
 	entries, err := client.MarketRaw(leagueID, time.Minute, false)
 	if err != nil {
 		return nil, err
@@ -813,6 +831,9 @@ func loadMarket(client *api.Client, leagueID, myTeamID string) ([]Listing, error
 		if expires := text(entry["expirationDate"]); expires != "" {
 			listing.Expires = &expires
 		}
+		if face := text(nested(entry, "playerMaster", "images", "transparent", "256x256")); face != "" {
+			faces[listing.PlayerID] = face
+		}
 		if seller := text(nested(entry, "sellerTeam", "manager", "managerName")); seller != "" {
 			listing.Seller = &seller
 		}
@@ -822,6 +843,45 @@ func loadMarket(client *api.Client, leagueID, myTeamID string) ([]Listing, error
 		out = append(out, listing)
 	}
 	return out, nil
+}
+
+// UpcomingWeeks is how far ahead the fixture calendar looks. Ten matchdays is about two and
+// a half months, which is as far as a decision about a player reaches; each one is a request,
+// cached for a day.
+const UpcomingWeeks = 10
+
+// LoadSchedule is the fixture list beyond this week: same shape as the live fixtures, one
+// entry per match, tagged with its matchday so the page can group it.
+func LoadSchedule(client *api.Client, week api.Week, teams []api.Team) []Fixture {
+	names := map[string]string{}
+	for _, team := range teams {
+		names[team.ID] = fallback(team.ShortName, team.Name)
+	}
+
+	out := []Fixture{}
+	for number := week.WeekNumber; number < week.WeekNumber+UpcomingWeeks; number++ {
+		matches, err := client.Calendar(number, 24*time.Hour)
+		if err != nil {
+			slog.Debug("calendar unavailable", "week", number, "reason", err.Error())
+			continue
+		}
+		for _, match := range matches {
+			local := strconv.Itoa(match.LocalID)
+			visitor := strconv.Itoa(match.VisitorID)
+			out = append(out, Fixture{
+				ID: match.ID, Week: number,
+				Kickoff:   fallback(match.MatchDate, match.Date),
+				State:     match.MatchState,
+				LocalID:   local, VisitorID: visitor,
+				Local:     fallback(names[local], local),
+				Visitor:   fallback(names[visitor], visitor),
+				LocalScore: match.LocalScore, VisitorScore: match.VisitorScore,
+			})
+		}
+	}
+	sort.SliceStable(out, func(one, two int) bool { return out[one].Kickoff < out[two].Kickoff })
+	slog.Info("schedule loaded", "matches", len(out), "from", week.WeekNumber)
+	return out
 }
 
 // LoadFixtures is this week's matches. A match changes neither the transfer log nor the

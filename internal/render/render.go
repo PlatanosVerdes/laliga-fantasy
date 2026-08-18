@@ -269,16 +269,25 @@ func PlayerCell(row map[string]any, section string) string {
 		flags = append(flags, `<span class="flag-mine">mio</span>`)
 	}
 
-	team := text(row["team_short"])
-	if team == "" {
-		team = text(row["team"])
+	// The three-letter team only earns its space when there is no crest: with one, it is the
+	// same fact printed twice.
+	team := ""
+	if badge == "" {
+		team = text(row["team_short"])
+		if team == "" {
+			team = text(row["team"])
+		}
+	}
+	meta := ""
+	if team != "" {
+		meta = `<span class="p-meta">` + Esc(team) + `</span>`
 	}
 	return fmt.Sprintf(`<span class="p-cell">%s`+
 		`<button class="p-name" type="button" data-detail="%s">%s</button>`+
 		`<span class="pos pos-%s">%s</span>`+
-		`<span class="p-meta">%s</span>%s</span>`,
+		`%s%s</span>`,
 		badge, Esc(text(row["id"])), Esc(text(row["name"])), slug,
-		Esc(text(row["position"])), Esc(team), strings.Join(flags, ""))
+		Esc(text(row["position"])), meta, strings.Join(flags, ""))
 }
 
 // text is for identifiers and names: an id that arrived as 1300.0 has to read "1300", so a
@@ -330,19 +339,26 @@ func truthy(value any) bool {
 // KPI is a widget. `meter` (0..1) draws where you sit in the league for that number,
 // because a figure like "79.76M" only means something next to the other twelve.
 type KPI struct {
-	Label  string
-	Value  string
-	Hint   string
-	Rank   string
-	Meter  *float64
+	Label string
+	Value string
+	Hint  string
+	Rank  string
+	Meter *float64
 	Status string
 	Tab    string
+	// Deadline turns the value into a live countdown: the server renders the first value and
+	// stamps the instant, the browser keeps it honest every second.
+	Deadline string
 }
 
 func Widget(kpi KPI) string {
+	stamp := ""
+	if kpi.Deadline != "" {
+		stamp = ` data-deadline="` + Esc(kpi.Deadline) + `" data-plain="1"`
+	}
 	parts := []string{
 		`<span class="kpi-label">` + Esc(kpi.Label) + `</span>`,
-		`<span class="kpi-value">` + Esc(kpi.Value) + `</span>`,
+		`<span class="kpi-value"` + stamp + `>` + Esc(kpi.Value) + `</span>`,
 	}
 	if kpi.Rank != "" {
 		status := kpi.Status
@@ -577,6 +593,7 @@ func FeedRow(event map[string]any) string {
 // decoration: it is what carries the meaning where the colour cannot be seen.
 var Verdicts = map[string]struct{ Label, Icon, Status string }{
 	"buy":     {"Fichar", "▲", "good"},
+	"bidding": {"Pujado", "●", "neutral"},
 	"clause":  {"Clausulazo", "◆", "good"},
 	"protect": {"Subir clausula", "!", "warning"},
 	"sell":    {"Vender", "▼", "serious"},
@@ -585,7 +602,7 @@ var Verdicts = map[string]struct{ Label, Icon, Status string }{
 
 // VerdictOrder is the sort order, worst first, so a table sorted by the column reads as a
 // severity list rather than alphabetically.
-var VerdictOrder = []string{"out", "buy", "clause", "protect", "sell"}
+var VerdictOrder = []string{"out", "buy", "bidding", "clause", "protect", "sell"}
 
 var powerStatus = map[string]string{"holgado": "good", "normal": "neutral", "justo": "critical"}
 
@@ -647,10 +664,12 @@ func BidButton(row map[string]any) string {
 	bid := ""
 	label := "Pujar"
 	if existing := text(listing["my_bid_id"]); existing != "" {
-		// Unquoted, as Python writes it: the value is an id and the attribute parses
-		// either way, and a byte comparison does not forgive improvements.
-		bid = " data-bid=" + existing
-		label = "Mi puja"
+		bid = ` data-bid="` + Esc(existing) + `"`
+		// The amount is the point: "mi puja" told you nothing you could act on.
+		label = "Tu puja"
+		if amount := asFloat(listing["my_bid"]); amount != nil {
+			label = "Tu puja " + Money(amount)
+		}
 	}
 	return fmt.Sprintf(`<button class="bid" type="button" data-market="%s" `+
 		`data-player="%s" data-name="%s" data-min="%d" data-ideal="%d" data-value="%d"%s>%s</button>`,
@@ -702,6 +721,28 @@ func OfferButtons(row map[string]any) string {
 	return fmt.Sprintf(`<button class="op bid" data-op="accept_offer" %s type="button">Aceptar`+
 		`</button> <button class="op danger" data-op="decline_offer" %s `+
 		`type="button">Rechazar</button>`, common, common)
+}
+
+// LeftUntil is the first render of a countdown: how long from now to the instant, in the same
+// words the browser will keep writing.
+func LeftUntil(stamp string) string {
+	when, err := time.Parse(time.RFC3339, stamp)
+	if err != nil {
+		return "?"
+	}
+	left := time.Until(when)
+	if left <= 0 {
+		return "ya"
+	}
+	hours := int(left.Hours())
+	switch {
+	case hours >= 24:
+		return fmt.Sprintf("%dd %dh", hours/24, hours%24)
+	case hours > 0:
+		return fmt.Sprintf("%dh %02dm", hours, int(left.Minutes())%60)
+	default:
+		return fmt.Sprintf("%dm", int(left.Minutes()))
+	}
 }
 
 // Countdown is a live countdown: the server renders a first value and stamps the deadline,
@@ -905,6 +946,110 @@ var weekdays = []string{"lun", "mar", "mie", "jue", "vie", "sab", "dom"}
 // A table sorts; a calendar answers a different question — *when does the league open up* —
 // and at the start of a season the answer is dramatic: everything on the same day. That is
 // worth seeing as a shape rather than reading as 28 rows.
+var monthNames = []string{"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+	"agosto", "septiembre", "octubre", "noviembre", "diciembre"}
+
+var dayNames = []string{"dom", "lun", "mar", "mie", "jue", "vie", "sab"}
+
+// MatchCalendar is the fixture list ahead, grouped by month and matchday. Your own teams are
+// marked, because the only reason to read a fixture list here is to see who your players face.
+func MatchCalendar(fixtures []map[string]any, mine map[string]int) string {
+	if len(fixtures) == 0 {
+		return `<p class="empty">Sin calendario disponible.</p>`
+	}
+
+	type group struct {
+		week  int
+		when  time.Time
+		rows  []map[string]any
+	}
+	order := []string{}
+	weeks := map[string]*group{}
+	for _, fixture := range fixtures {
+		kickoff, err := time.Parse(time.RFC3339, text(fixture["kickoff"]))
+		if err != nil {
+			continue
+		}
+		key := fmt.Sprintf("%d", int(number(fixture["week"])))
+		if _, seen := weeks[key]; !seen {
+			weeks[key] = &group{week: int(number(fixture["week"])), when: kickoff}
+			order = append(order, key)
+		}
+		if kickoff.Before(weeks[key].when) {
+			weeks[key].when = kickoff
+		}
+		weeks[key].rows = append(weeks[key].rows, fixture)
+	}
+
+	var out strings.Builder
+	out.WriteString(`<div class="months">`)
+	month := ""
+	for _, key := range order {
+		block := weeks[key]
+		label := fmt.Sprintf("%s %d", monthNames[int(block.when.Month())-1], block.when.Year())
+		if label != month {
+			if month != "" {
+				out.WriteString(`</div>`)
+			}
+			month = label
+			fmt.Fprintf(&out, `<div class="month"><h4>%s</h4>`, Esc(label))
+		}
+
+		yours := 0
+		var matches strings.Builder
+		for _, fixture := range block.rows {
+			local, visitor := text(fixture["local_id"]), text(fixture["visitor_id"])
+			count := mine[local] + mine[visitor]
+			yours += count
+			classes := "match"
+			if count > 0 {
+				classes += " match-mine"
+			}
+			kickoff, _ := time.Parse(time.RFC3339, text(fixture["kickoff"]))
+			stamp := fmt.Sprintf("%s %02d:%02d", dayNames[int(kickoff.Weekday())],
+				kickoff.Hour(), kickoff.Minute())
+			tag := ""
+			if count > 0 {
+				tag = fmt.Sprintf(`<span class="match-mine-tag">%d tuyo%s</span>`,
+					count, plural(count))
+			}
+			fmt.Fprintf(&matches, `<div class="%s"><span class="match-side">%s%s</span>`+
+				`<span class="match-vs">–</span><span class="match-side">%s%s</span>`+
+				`<span class="match-when">%s</span>%s</div>`,
+				classes, crestOf(local), Esc(text(fixture["local"])),
+				crestOf(visitor), Esc(text(fixture["visitor"])), Esc(stamp), tag)
+		}
+
+		note := ""
+		if yours > 0 {
+			note = fmt.Sprintf(`<span class="j-mine">%d de los tuyos juegan</span>`, yours)
+		}
+		fmt.Fprintf(&out, `<div class="jornada"><div class="j-head"><span class="j-num">J%d</span>`+
+			`<span class="j-when">desde %s %d %s</span>%s</div>%s</div>`,
+			block.week, dayNames[int(block.when.Weekday())], block.when.Day(),
+			monthNames[int(block.when.Month())-1][:3], note, matches.String())
+	}
+	if month != "" {
+		out.WriteString(`</div>`)
+	}
+	out.WriteString(`</div>`)
+	return out.String()
+}
+
+func crestOf(teamID string) string {
+	if _, known := Crests[teamID]; !known {
+		return ""
+	}
+	return `<span class="crest crest-` + Esc(teamID) + `"></span>`
+}
+
+func plural(count int) string {
+	if count == 1 {
+		return ""
+	}
+	return "s"
+}
+
 func Calendar(entries []map[string]any, spending float64) string {
 	if len(entries) == 0 {
 		return `<p class="empty">Sin cláusulas con fecha conocida.</p>`
@@ -1059,8 +1204,10 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 			Column{"Pujas", func(row map[string]any) any {
 				listing, _ := row["market"].(map[string]any)
 				return listing["bids"]
-			}, "int"},
-			Column{"", whole, "bid"})
+			}, "int"})
+		// First column, not last: the table scrolls sideways and a button that scrolls out
+		// of view is a button that does not exist.
+		columns = insert(columns, 0, Column{"", whole, "bid"})
 		return TableIn(columns, rows, "El mercado libre esta vacio ahora mismo", "mercado",
 			true), nil
 
@@ -1166,8 +1313,8 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		columns = append(columns,
 			Column{"x valor", field("clause_premium"), "num"},
 			Column{"Pts/M pagando", field("ppm_at_clause"), "mag"},
-			Column{"Techo futbolfantasy", field("ideal_bid"), "ideal"},
-			Column{"Clausulazo", whole, "raid"})
+			Column{"Techo futbolfantasy", field("ideal_bid"), "ideal"})
+		columns = insert(columns, 0, Column{"Clausulazo", whole, "raid"})
 		return TableIn(columns, rows,
 			"Ninguna cláusula interesante se abre en los proximos 10 dias.", "", false), nil
 
@@ -1177,14 +1324,14 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		columns := insert(PlayerColumns("Pide"), 2,
 			Column{"Vende", field("seller"), "text"})
 		columns = insert(columns, 5, Column{"Sobre valor", field("ask_ratio"), "ratio"})
-		columns = append(columns, Column{"", whole, "bid"})
+		columns = insert(columns, 0, Column{"", whole, "bid"})
 		return TableIn(columns, rows, "Nadie ha puesto a nadie en venta", "", true), nil
 
 	case "clausulas":
 		columns := insert(PlayerColumns("Cláusula"), 1,
 			Column{"Dueño", field("owner"), "text"})
 		columns = insert(columns, 4, Column{"x valor", field("clause_premium"), "num"})
-		columns = append(columns, Column{"Clausulazo", whole, "raid"})
+		columns = insert(columns, 0, Column{"Clausulazo", whole, "raid"})
 		return TableIn(columns, rows, "Ninguna cláusula a tu alcance", "", false), nil
 
 	case "ofertas":
@@ -1288,9 +1435,19 @@ func TableIn(columns []Column, rows []map[string]any, empty, section string,
 		}
 		body.WriteString("</tr>")
 	}
-	return `<div class="table-wrap"><table class="sortable"><thead><tr>` + head.String() +
+	// A table whose first column is a button pins that column: the scroll is horizontal and
+	// the button is the reason the row is there.
+	wrap := "table-wrap"
+	if len(columns) > 0 && ActionKinds[columns[0].Kind] {
+		wrap += " sticky-first"
+	}
+	return `<div class="` + wrap + `"><table class="sortable"><thead><tr>` + head.String() +
 		"</tr></thead><tbody>" + body.String() + "</tbody></table></div>"
 }
+
+// ActionKinds are the cells that hold a button rather than a fact.
+var ActionKinds = map[string]bool{"bid": true, "raid": true, "offer": true, "verdict": true,
+	"verdict_raid": true}
 
 // Cell returns (inner HTML, sort key) for one value. `section` only matters to the player
 // cell, which drops the "mio" flag where every row is yours.
