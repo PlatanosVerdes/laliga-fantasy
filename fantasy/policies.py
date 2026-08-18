@@ -38,6 +38,7 @@ def save(policies: dict[str, dict[str, Any]]) -> None:
 
 def set_policy(player_id: str, *, name: str | None = None, always_listed: bool | None = None,
                min_price: int | None = None, accept_above: int | None = None,
+               auto_sell: bool | None = None,
                raid: bool | None = None, max_pay: int | None = None,
                unset: tuple[str, ...] = ()) -> dict[str, Any]:
     """`unset` removes keys outright, which is how a threshold is taken back off.
@@ -58,6 +59,8 @@ def set_policy(player_id: str, *, name: str | None = None, always_listed: bool |
         entry["min_price"] = int(min_price)
     if accept_above is not None:
         entry["accept_above"] = int(accept_above)
+    if auto_sell is not None:
+        entry["auto_sell"] = auto_sell
     if raid is not None:
         entry["raid"] = raid
     if max_pay is not None:
@@ -144,12 +147,20 @@ def plan(players: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
         value = float(player.get("value") or 0)
         floor = int(policy.get("min_price") or value)
-        # No threshold means no automatic sale, ever. Selling needs a number from you.
-        threshold = policy.get("accept_above")
-        threshold = int(threshold) if threshold else None
         listing = player.get("market") or {}
         offers = player.get("offers") or []
         best = offers[0] if offers else None
+        asking = int(listing.get("min_bid") or floor or value)
+
+        # Two ways to authorise a sale, and no third. An explicit `accept_above` is a
+        # number you chose. `auto_sell` means "if somebody pays what I am asking, sell":
+        # the threshold is the asking price, which is already yours and already on screen,
+        # so the switch hides no invented figure. Without either, nothing is ever sold.
+        threshold = policy.get("accept_above")
+        threshold = int(threshold) if threshold else None
+        source = "tu limite"
+        if threshold is None and policy.get("auto_sell") and asking:
+            threshold, source = asking, "tu precio de venta"
 
         if threshold is not None and best and float(best.get("money") or 0) >= threshold:
             actions.append({
@@ -157,7 +168,7 @@ def plan(players: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "action": "aceptar_oferta", "amount": int(best["money"]),
                 "offer_id": str(best.get("id")), "market_id": listing.get("market_id"),
                 "why": f"ofrecen {int(best['money']):,}".replace(",", ".")
-                       + f", tu limite es {threshold:,}".replace(",", ".")})
+                       + f", {source} es {threshold:,}".replace(",", ".")})
         elif not listing:
             price = max(floor, int(value))
             actions.append({
@@ -165,11 +176,25 @@ def plan(players: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "action": "poner_en_venta", "amount": price,
                 "why": f"no esta en el mercado; lo listo a {price:,}".replace(",", ".")})
         else:
-            why = (f"ya listado a {int(listing.get('min_bid') or 0):,}".replace(",", ".")
+            listed_at = int(listing.get("min_bid") or 0)
+            why = (f"ya listado a {listed_at:,}".replace(",", ".")
                    + (f", mejor oferta {int(best['money']):,}".replace(",", ".")
                       if best else ", sin ofertas"))
+            # An offer that already covers the asking price, on a player nobody
+            # authorised selling: worth saying out loud rather than leaving in a table
+            # nobody reads. It is a notice, not an action — enforce skips it.
+            if (best and threshold is None and listed_at
+                    and float(best.get("money") or 0) >= listed_at):
+                actions.append({
+                    "player_id": str(player["id"]), "name": player["name"],
+                    "action": "avisar", "amount": int(best["money"]),
+                    "offer_id": str(best.get("id")), "market_id": listing.get("market_id"),
+                    "why": f"ofrecen {int(best['money']):,}".replace(",", ".")
+                           + f", lo que pides ({listed_at:,})".replace(",", ".")
+                           + "; no vendo solo, decides tu"})
+                continue
             if threshold is None:
-                why += "; no vendo solo (sin umbral)"
+                why += "; no vendo solo"
             actions.append({"player_id": str(player["id"]), "name": player["name"],
                             "action": "ninguna", "why": why})
     return actions
@@ -231,7 +256,8 @@ def enforce(players: list[dict[str, Any]], *, league_id: str, my_team_id: str,
     for action in actions:
         if action["action"] == "ninguna":
             continue
-        if action["action"] in ("bloqueada", "esperando", "cancelada", "sin_saldo"):
+        if action["action"] in ("bloqueada", "esperando", "cancelada", "sin_saldo",
+                                "avisar"):
             continue
         operation = {"aceptar_oferta": "accept_offer",
                      "poner_en_venta": "sell_to_market",

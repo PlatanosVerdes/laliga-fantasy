@@ -798,6 +798,11 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   background:var(--plane);display:flex;flex-direction:column;gap:10px}
 .always-panel h4{margin:0;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
   color:var(--muted);font-weight:600}
+.always-check{display:flex;gap:9px;align-items:flex-start;font-size:12px;line-height:1.4;
+  cursor:pointer;color:var(--ink-2)}
+.always-check input{margin:1px 0 0;width:15px;height:15px;flex:0 0 auto;accent-color:var(--accent)}
+.always-check b{color:var(--ink)}
+.always-check i{color:var(--muted);font-style:normal;font-size:11px}
 .always-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .always-grid label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--muted)}
 .always-grid input{font:inherit;font-size:15px;font-variant-numeric:tabular-nums;
@@ -1666,12 +1671,39 @@ async function openDetail(playerId){
   wireAlways(body,p);
 }
 
+// El pie del panel dice en palabras que va a pasar: cambiar de "no vende solo" a
+// "vendo desde X" es justo lo que hay que ver confirmado.
+function note(panel,data){
+  const line=panel.querySelector('.always-foot p');
+  line.innerHTML = data.accept_above
+    ? '<b>Vendo desde ese importe</b>, sin preguntar. El importe manda sobre el '
+      +'interruptor de arriba.'
+    : (data.auto_sell
+        ? '<b>Vendo si llegan a tu precio de venta.</b> Si prefieres otro numero, '
+          +'ponlo en «aceptar desde».'
+        : 'No vende solo: si llega una oferta buena <b>te aviso</b> y decides tu.');
+}
+
 function wireAlways(scope,player){
   const panel=scope.querySelector('.always-panel');
   if(!panel) return;
   const min=panel.querySelector('.always-min');
   const accept=panel.querySelector('.always-accept');
   const save=panel.querySelector('.always-save');
+  const auto=panel.querySelector('.always-auto');
+  auto.addEventListener('change',async()=>{
+    auto.disabled=true;
+    try{
+      const res=await fetch('/api/always',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({id:player.id,name:player.name,auto_sell:auto.checked})});
+      if(!res.ok) throw new Error(res.status);
+      const data=await res.json();
+      auto.checked=!!data.auto_sell;
+      note(panel,data);
+    }catch(e){ auto.checked=!auto.checked; }
+    finally{ auto.disabled=false; }
+  });
   [min,accept].forEach(input=>input.addEventListener('input',()=>{
     const n=digits(input.value);
     input.value=isNaN(n)?'':group(n);
@@ -1689,13 +1721,7 @@ function wireAlways(scope,player){
       const data=await res.json();
       min.value=data.min_price?group(data.min_price):'';
       accept.value=data.accept_above?group(data.accept_above):'';
-      // Repintar el aviso: pasar de "no vende solo" a "venta automatica" es
-      // justo lo que hay que ver confirmado.
-      const note=panel.querySelector('.always-foot p');
-      note.innerHTML=data.accept_above
-        ? '<b>Venta automatica activada</b>: acepto la mejor oferta a partir de ese '
-          +'importe, sin preguntar.'
-        : 'Sin importe en «aceptar desde» <b>no vende solo</b>, solo lo mantiene listado.';
+      note(panel,{...data,auto_sell:auto.checked});
       save.textContent='Guardado'; save.classList.add('always-saved');
       setTimeout(()=>{save.classList.remove('always-saved');
                       save.textContent='Guardar'; save.disabled=false;},1600);
@@ -1710,8 +1736,15 @@ function alwaysPanel(a){
   // lo dice con palabras en vez de dejar un hueco que parece "sin limite".
   const min=a.min_price?group(a.min_price):'';
   const acc=a.accept_above?group(a.accept_above):'';
+  const ask=a.asking||a.min_price||a.value||0;
   return `<div class="always-panel">
     <h4>Siempre en mercado</h4>
+    <label class="always-check"><input type="checkbox" class="always-auto"
+      ${a.auto_sell?'checked':''}>
+      <span><b>Vender automaticamente</b> si alguien llega a lo que pides
+      ${ask?`(${exact(ask)})`:''}<br>
+      <i>para jugadores que te dan igual: si la oferta es minimamente buena, fuera</i></span>
+    </label>
     <div class="always-grid">
       <label>Precio de listado
         <input class="always-min" type="text" inputmode="numeric" autocomplete="off"
@@ -1721,9 +1754,11 @@ function alwaysPanel(a){
                value="${acc}" placeholder="no vendo solo"></label>
     </div>
     <div class="always-foot">
-      <p>${acc?'<b>Venta automatica activada</b>: acepto la mejor oferta a partir de ese '
-             +'importe, sin preguntar.'
-            :'Sin importe en «aceptar desde» <b>no vende solo</b>, solo lo mantiene listado.'}</p>
+      <p>${acc?'<b>Vendo desde ese importe</b>, sin preguntar. El importe manda sobre el '
+             +'interruptor de arriba.'
+            :(a.auto_sell?'<b>Vendo si llegan a tu precio de venta.</b> Si prefieres otro '
+                          +'numero, ponlo en «aceptar desde».'
+                        :'No vende solo: si llega una oferta buena <b>te aviso</b> y decides tu.')}</p>
       <button class="always-save">Guardar</button>
     </div></div>`;
 }
@@ -2330,12 +2365,12 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
                 ("Resultado", lambda r: r.get("result") or "pendiente", "text"),
             ]
             pending_actions = [a for a in plan if a["action"] != "ninguna"]
-            note = ("Instrucciones permanentes: mantener al jugador en el mercado, que es "
-                    "lo unico que hace el interruptor. <strong>Nunca vende solo</strong> "
-                    "mientras no le pongas un importe: el valor de mercado no sirve de "
-                    "umbral, porque las ofertas lo igualan constantemente. Para autorizar "
-                    "la venta automatica, <code>fantasy.py always add &lt;nombre&gt; "
-                    "--min N --accept N</code>.")
+            note = ("Instrucciones permanentes. El interruptor solo mantiene al jugador "
+                    "en el mercado. Para que se venda solo hay dos formas, y ninguna es "
+                    "automatica por defecto: marcar <strong>vender automaticamente</strong> "
+                    "en su ficha, que acepta cualquier oferta que llegue a lo que pides, o "
+                    "fijar un importe en «aceptar desde». Sin una de las dos, una oferta "
+                    "buena solo <strong>avisa</strong> y decides tu.")
             if pending_actions:
                 note += (" <strong>" + str(len(pending_actions)) + " accion(es) en cola</strong>, "
                          "se ejecutan en el proximo refresco (salvo <code>--read-only</code>).")

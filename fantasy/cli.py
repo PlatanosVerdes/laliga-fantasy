@@ -670,10 +670,11 @@ def cmd_always(args) -> int:
                   "  python3 fantasy.py always add <nombre> --min 12000000 --accept 13000000")
             return 0
         heading("Siempre en mercado")
-        print(table(["jugador", "precio minimo", "acepto por encima de"],
+        print(table(["jugador", "precio minimo", "vendo solo si"],
                     [[e.get("name") or e["id"], money(e.get("min_price")),
-                      money(e["accept_above"]) if e.get("accept_above")
-                      else "no vendo solo"] for e in entries.values()],
+                      (money(e["accept_above"]) if e.get("accept_above")
+                       else ("llegan a tu precio" if e.get("auto_sell")
+                             else "no vendo solo"))] for e in entries.values()],
                     right={1, 2}))
         universe, advice, _ = _load(args)
         plan = policies.plan(universe["players"])
@@ -701,10 +702,13 @@ def cmd_always(args) -> int:
         return 0
     entry = policies.set_policy(player["id"], name=player["name"],
                                 min_price=args.min or int(player["value"]),
-                                accept_above=args.accept)
+                                accept_above=args.accept,
+                                auto_sell=True if args.auto else None)
     tail = (f"acepto ofertas desde {money(entry['accept_above'])}."
             if entry.get("accept_above")
-            else "no lo vendo solo; con --accept <importe> defines a partir de cuanto.")
+            else ("vendo en cuanto lleguen a tu precio de venta."
+                  if entry.get("auto_sell")
+                  else "no lo vendo solo; con --auto o --accept <importe> lo autorizas."))
     print(paint(f"{player['name']}: siempre en mercado a {money(entry['min_price'])}, "
                 + tail, GREEN))
     return 0
@@ -938,6 +942,8 @@ def build_parser() -> argparse.ArgumentParser:
     always_parser.add_argument("name", nargs="?")
     always_parser.add_argument("--min", type=int, help="precio minimo al listarlo")
     always_parser.add_argument("--accept", type=int, help="aceptar ofertas desde este importe")
+    always_parser.add_argument("--auto", action="store_true",
+                               help="vender en cuanto alguien llegue a tu precio de venta")
     always_parser.set_defaults(func=cmd_always)
 
     serve_parser = sub.add_parser("serve", parents=[common],

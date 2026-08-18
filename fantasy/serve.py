@@ -483,6 +483,8 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                                 "kind": "toggle", "on": starred,
                                 "min_price": policy_now.get("min_price"),
                                 "accept_above": policy_now.get("accept_above"),
+                                "auto_sell": bool(policy_now.get("auto_sell")),
+                                "asking": int(listing.get("min_bid") or 0),
                                 "value": int(player.get("value") or 0)})
                 if listing.get("market_id"):
                     actions.append({"op": "withdraw", "label": "Quitar del mercado",
@@ -615,6 +617,19 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                 player_id = str(body.get("id") or "")
                 if not player_id:
                     self._json(400, {"error": "falta el id"})
+                    return
+                # The auto-sell switch: its own key so it can be flipped without
+                # touching the amounts, and so turning it off never looks like clearing
+                # the instruction entirely.
+                if "auto_sell" in body:
+                    entry = policies.set_policy(player_id, name=body.get("name"),
+                                                always_listed=True,
+                                                auto_sell=bool(body.get("auto_sell")))
+                    threading.Thread(target=state.rerender, daemon=True).start()
+                    self._json(200, {"id": player_id, "always_listed": True,
+                                     "auto_sell": bool(entry.get("auto_sell")),
+                                     "min_price": entry.get("min_price"),
+                                     "accept_above": entry.get("accept_above")})
                     return
                 # Amounts present: set them. Otherwise it is the plain on/off toggle.
                 if "min_price" in body or "accept_above" in body:
