@@ -843,6 +843,8 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   background:color-mix(in srgb,#000 34%,transparent);cursor:grab;
   backdrop-filter:blur(2px)}
 .slot:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.35)}
+.slot:hover .slot-name{text-decoration:underline;text-decoration-style:dotted;
+  text-underline-offset:2px}
 .slot.dragging{opacity:.35;cursor:grabbing}
 .slot.drop-target{box-shadow:inset 0 0 0 2px var(--warning)}
 .slot.empty{background:color-mix(in srgb,#000 18%,transparent);
@@ -1326,8 +1328,15 @@ function renderPitch(){
   wireDrag();
 }
 
+let justDragged=false;
+
 function wireDrag(){
   document.querySelectorAll('.slot[draggable], .bench-item[draggable]').forEach(node=>{
+    // Arrastrar y clicar empiezan igual, asi que un drop no puede abrir la ficha.
+    node.addEventListener('click',()=>{
+      if(justDragged) return;
+      if(node.dataset.player) openDetail(node.dataset.player);
+    });
     node.addEventListener('dragstart',e=>{
       dragged={id:node.dataset.player, pt:node.dataset.pt,
                from:node.dataset.from||'pitch',
@@ -1336,7 +1345,9 @@ function wireDrag(){
       e.dataTransfer.effectAllowed='move';
       e.dataTransfer.setData('text/plain',node.dataset.player);
     });
-    node.addEventListener('dragend',()=>{ node.classList.remove('dragging'); dragged=null;
+    node.addEventListener('dragend',()=>{
+      node.classList.remove('dragging'); dragged=null;
+      justDragged=true; setTimeout(()=>{ justDragged=false; },250);
       document.querySelectorAll('.drop-target').forEach(n=>n.classList.remove('drop-target')); });
   });
   const targets=[...document.querySelectorAll('.slot'), document.getElementById('bench')];
@@ -1541,7 +1552,14 @@ async function openDetail(playerId){
       ${l.market_id?`<div><dt>En mercado</dt><dd>${exact(l.min_bid)}</dd></div>`:''}
       ${l.kind==='libre'?`<div><dt>Pujas vigentes</dt><dd${l.bids?' style="color:var(--warning)"':''}>${l.bids||'ninguna'}</dd></div>`:''}
       ${l.expires?`<div><dt>Cierra</dt><dd>${String(l.expires).slice(11,16)}</dd></div>`:''}
-      ${p.status&&p.status!=='ok'?`<div><dt>Estado</dt><dd>${p.status}</dd></div>`:''}
+      ${p.status&&p.status!=='ok'?`<div><dt>Estado</dt><dd style="color:var(--${
+        p.status==='suspended'||p.status==='sanctioned'?'critical':'warning'})">${
+        {injured:'lesionado',doubtful:'duda',suspended:'sancionado',
+         sanctioned:'sancionado'}[p.status]||p.status}</dd></div>`:''}
+      ${p.absence&&p.absence.reason?`<div style="grid-column:1/-1"><dt>Motivo</dt><dd
+        style="text-align:left;font-weight:400">${p.absence.reason}${
+        p.absence.since?' · '+p.absence.since:''}${
+        p.absence.until?' · '+p.absence.until:''}</dd></div>`:''}
     </dl>
     ${sparkSvg(data.history||[])}
     <div class="drawer-actions">${(data.actions||[]).map(actionButton).join('')}</div>
