@@ -200,7 +200,7 @@ def _raid_button(row: dict) -> str:
     clause = float(row.get("clause") or 0)
     suggested = int(row.get("max_pay") or (clause * 1.2 if clause else row["value"] * 1.5))
     label = "Reprogramar" if row.get("raid_scheduled") else "Programar"
-    return (f'<button class="raid-btn bid" type="button" '
+    return (f'<button class="raid-btn" type="button" '
             f'data-raid="{_esc(row.get("id"))}" data-raid-name="{_esc(row.get("name"))}" '
             f'data-raid-max="{suggested}" '
             f'data-raid-clause="{int(clause)}">{label}</button>')
@@ -479,7 +479,7 @@ def _player_columns(*, cost_label: str | None = None,
 
 
 def _kpi(label: str, value: str, hint: str = "", *, rank: str = "",
-         meter: float | None = None, status: str = "") -> str:
+         meter: float | None = None, status: str = "", tab: str = "") -> str:
     """A widget. `meter` (0..1) draws where you sit in the league for that number,
     because a figure like "79.76M" only means something next to the other twelve."""
     parts = [f'<span class="kpi-label">{_esc(label)}</span>',
@@ -492,6 +492,10 @@ def _kpi(label: str, value: str, hint: str = "", *, rank: str = "",
                      f'<span class="kpi-meter-fill" style="width:{width:.0f}%"></span></span>')
     if hint:
         parts.append(f'<span class="kpi-hint">{_esc(hint)}</span>')
+    if tab:
+        # A widget that states a fact should take you to where the fact is explained.
+        return (f'<button class="kpi kpi-link" type="button" data-goto="{_esc(tab)}">'
+                f'{"".join(parts)}</button>')
     return f'<div class="kpi">{"".join(parts)}</div>'
 
 
@@ -562,12 +566,18 @@ header p{margin:0;color:var(--ink-2);font-size:13px}
 .tab:hover{color:var(--ink)}
 .tab.on{color:var(--ink);border-bottom-color:var(--accent)}
 .kpi-rank{align-self:flex-start;margin-top:2px}
+.kpi-rank.pill-neutral{background:none;color:var(--muted);padding-left:0;padding-right:0}
 .kpi-meter{display:block;height:4px;background:var(--mid);border-radius:2px;margin-top:7px;
   overflow:hidden}
 .kpi-meter-fill{display:block;height:4px;background:var(--seq-4);border-radius:2px}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin:20px 0 0}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
-  display:flex;flex-direction:column;gap:1px}
+  display:flex;flex-direction:column;gap:1px;text-align:left;font:inherit;color:inherit}
+button.kpi-link{cursor:pointer}
+button.kpi-link:hover{border-color:var(--accent)}
+button.kpi-link::after{content:"›";position:absolute;top:10px;right:12px;color:var(--muted);
+  font-size:15px}
+button.kpi-link{position:relative}
 .kpi-label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
 .kpi-value{font-size:21px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
 .kpi-hint{font-size:11px;color:var(--ink-2)}
@@ -681,6 +691,11 @@ button.bid{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
   letter-spacing:.05em;color:#fff;background:var(--accent);border:none;border-radius:6px;
   padding:4px 10px;cursor:pointer}
 button.bid:hover{filter:brightness(1.08)}
+button.raid-btn{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--warning);background:transparent;border-radius:6px;
+  border:1px solid color-mix(in srgb,var(--warning) 50%,transparent);padding:3px 9px;
+  cursor:pointer}
+button.raid-btn:hover{background:color-mix(in srgb,var(--warning) 14%,transparent)}
 button.ghost{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
   letter-spacing:.05em;color:var(--ink-2);background:transparent;border:1px solid var(--line);
   border-radius:6px;padding:3px 9px;cursor:pointer;margin-left:5px}
@@ -761,8 +776,14 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   border-radius:99px;padding:2px 8px}
 .cal-meta{font-size:11px;color:var(--muted);margin:3px 0 10px}
 .cal-chips{display:flex;flex-direction:column;gap:4px}
-.cal-chip{display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 6px;
-  border-radius:6px;background:var(--plane)}
+.cal-chip{display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 7px;
+  border-radius:6px;background:var(--plane);width:100%;border:1px solid transparent;
+  font:inherit;font-size:12px;color:var(--ink);cursor:pointer;text-align:left}
+.cal-chip:hover{border-color:var(--warning)}
+.cal-chip[data-raid]:hover{background:color-mix(in srgb,var(--warning) 10%,transparent)}
+.cal-armed{border-color:color-mix(in srgb,var(--warning) 60%,transparent)}
+.cal-armed-mark{font-size:9px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--warning);font-weight:700}
 .cal-chip b{margin-left:auto;font-variant-numeric:tabular-nums;font-size:11px;
   color:var(--ink-2)}
 .cal-mine{background:color-mix(in srgb,var(--warning) 15%,transparent);
@@ -1221,10 +1242,24 @@ async function scheduleRaid(dataset){
 }
 
 function wireRaids(root=document){
-  root.querySelectorAll('button.raid-btn').forEach(button=>{
+  root.querySelectorAll('button.raid-btn, .cal-chip[data-raid]').forEach(button=>{
     if(button.dataset.wired) return;
     button.dataset.wired='1';
     button.addEventListener('click',()=>scheduleRaid(button.dataset));
+  });
+  // Tus propios chips del calendario no se clausulan: abren su ficha.
+  root.querySelectorAll('.cal-chip:not([data-raid])').forEach(chip=>{
+    if(chip.dataset.wired) return;
+    chip.dataset.wired='1';
+    chip.addEventListener('click',()=>openDetail(chip.dataset.detailAlt));
+  });
+  root.querySelectorAll('button[data-goto]').forEach(card=>{
+    if(card.dataset.wired) return;
+    card.dataset.wired='1';
+    card.addEventListener('click',()=>{
+      showTab(card.dataset.goto);
+      document.querySelector('.tabs').scrollIntoView({behavior:'smooth',block:'start'});
+    });
   });
 }
 
@@ -1516,9 +1551,22 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
     players = universe["players"]
     generated = datetime.now().strftime("%d/%m/%Y %H:%M")
 
+    def _when(value: Any) -> str:
+        try:
+            moment = datetime.fromisoformat(str(value))
+        except (TypeError, ValueError):
+            return ""
+        return f"{WEEKDAYS[moment.weekday()]} {moment.day} {MONTHS[moment.month]} " \
+               f"{moment:%H:%M}"
+
+    closes = _when(week.get("closingWeekDate"))
+    next_opens = _when(universe.get("next_week_opens"))
+    hint = ("cierra " + closes) if closes else ("en juego" if week.get("isLive") else "cerrada")
     kpis = [
-        _kpi("Jornada", str(week.get("weekNumber")),
-             "en juego" if week.get("isLive") else "cerrada"),
+        _kpi(f"Jornada {week.get('weekNumber')}",
+             "en juego" if week.get("isLive") else "cerrada",
+             (f"J{week.get('nextWeek')} desde {next_opens}" if next_opens else ""),
+             rank=hint, status="neutral"),
     ]
     if advice:
         squad_value = sum(p["value"] for p in advice["squad"])
@@ -1535,28 +1583,29 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
         kpis += [
             _kpi("Mi puesto", f"{me.get('position') or '?'}\u00ba",
                  f"{me.get('points') or 0} puntos", rank=points_rank,
-                 meter=points_share, status=points_status),
+                 meter=points_share, status=points_status, tab="liga"),
             _kpi("Mi saldo", _fmt_money(advice["budget"]),
                  _esc(me.get("power_note") or ""), rank=cash_rank, meter=cash_share,
-                 status=cash_status),
+                 status=cash_status, tab="liga"),
             _kpi("Valor de plantilla", _fmt_money(squad_value),
                  f"{len(advice['squad'])} jugadores", rank=value_rank, meter=value_share,
-                 status=value_status),
+                 status=value_status, tab="plantilla"),
         ]
         if good_offers:
             kpis.append(_kpi(
                 "Ofertas que interesan", str(len(good_offers)),
                 ", ".join(o["name"] for o in good_offers[:3]),
-                rank="cobra", status="good"))
+                rank="cobra", status="good", tab="decidir"))
         kpis += [
             _kpi("xPts del mejor 11", _fmt_num(best_eleven, 1), "por jornada"),
             _kpi("Pujables ahora", str(len(advice["bids_now"])),
-                 f"{len(advice['asks'])} mas en venta por rivales"),
-            _kpi("Favoritos", str(len(advice.get("starred") or [])), "marcados con estrella"),
+                 f"{len(advice['asks'])} mas en venta por rivales", tab="mercado"),
+            _kpi("Favoritos", str(len(advice.get("starred") or [])), "marcados con estrella",
+                 tab="ranking"),
             _kpi("Cláusulas a tiro", str(len(advice["raids"])),
                  (f"bloqueadas hasta {str(advice.get('clauses_unlock_from'))[:10]}"
                   if not advice["raids"] and advice.get("clauses_locked")
-                  else "desbloqueadas y pagables")),
+                  else "desbloqueadas y pagables"), tab="clausulas"),
         ]
     else:
         kpis += [
@@ -1907,10 +1956,19 @@ def _calendar_section(universe: dict[str, Any], advice: dict[str, Any]) -> str:
         except ValueError:
             label = day
         chips = "".join(
-            f'<span class="cal-chip{" cal-mine" if row.get("is_mine") else ""}">'
+            f'<button class="cal-chip{" cal-mine" if row.get("is_mine") else ""}'
+            f'{" cal-armed" if row.get("raid_scheduled") else ""}" type="button"'
+            + ("" if row.get("is_mine") else
+               f' data-raid="{_esc(row.get("id"))}"'
+               f' data-raid-name="{_esc(row["name"])}"'
+               f' data-raid-max="{int(row.get("max_pay") or (row.get("clause") or 0) * 1.2)}"'
+               f' data-raid-clause="{int(row.get("clause") or 0)}"')
+            + f' data-detail-alt="{_esc(row.get("id"))}"'
+            f' title="{"Tuyo: ese dia queda expuesto" if row.get("is_mine") else "Programar clausulazo"}">'
             f'<span class="crest crest-{_esc(row.get("team_id"))}"></span>'
             f'{_esc(row["name"])}'
-            f'<b>{_esc(_fmt_money(row.get("clause")))}</b></span>'
+            f'{"<span class=cal-armed-mark>armado</span>" if row.get("raid_scheduled") else ""}'
+            f'<b>{_esc(_fmt_money(row.get("clause")))}</b></button>'
             for row in rows[:14])
         more = (f'<span class="cal-more">+{len(rows) - 14} mas</span>'
                 if len(rows) > 14 else "")

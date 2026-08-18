@@ -215,6 +215,16 @@ def build_universe(
     strength = team_strength(players)
     curves = price_prior(players)
 
+    next_week_opens = None
+    if week.get("nextWeek"):
+        try:
+            fixtures = laliga.calendar(int(week["nextWeek"]))
+            dates = sorted(f.get("date") for f in fixtures if f.get("date"))
+            next_week_opens = dates[0] if dates else None
+        except Exception as exc:
+            log.debug("next week calendar unavailable",
+                      extra={"error_type": type(exc).__name__})
+
     completed_weeks = max(0, int(week.get("weekNumber") or 1) - 1)
     current_weight = min(1.0, completed_weeks / 8.0)
 
@@ -348,6 +358,7 @@ def build_universe(
     apply_scores(rows)
     return {
         "week": week,
+        "next_week_opens": next_week_opens,
         "completed_weeks": completed_weeks,
         "current_weight": current_weight,
         "players": rows,
