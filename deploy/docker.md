@@ -44,20 +44,26 @@ The image sets `FANTASY_DATA_DIR=/data`, which collapses config, state and cache
 one directory so there is a single volume to mount. Outside a container the files follow the
 XDG spec instead — see [Where things live](../README.md#where-things-live).
 
-The image is `python:3.13-alpine` with the package copied in: there are no dependencies
-to install, so it builds in seconds and runs anywhere Python does, ARM included.
+The image is a two-stage build: `golang:1.26-alpine` compiles a static binary, `alpine:3.21`
+carries it plus the page's assets. There are no dependencies to download, so it builds
+anywhere, ARM included, and the result is about 24 MB.
 
 ## The session
 
-The container cannot log in on its own — the flow needs a browser once (see the README).
-Do it on your machine, then hand the result over one of two ways.
+**Just open the page.** With no session, `/` serves the login instead of the report: it prints
+the authorize URL, you sign in, the browser fails to open `authredirect://…` — which is
+expected — and you paste the address bar back into the box. The container exchanges the code,
+stores `tokens.json` at `0600` and builds the world. It also accepts a whole `tokens.json`
+pasted in, and checks it against `/user/me` before accepting it, so a session that cannot read
+anything is rejected there and then rather than hours later.
 
-**Copy the file into the volume** (`~/.config/laliga-fantasy/tokens.json` is where the
-login leaves it):
+The league resolves itself afterwards, so there is nothing to configure before the first run.
+
+The two older ways still work. **Copy the file into the volume**:
 
 ```bash
-python3 fantasy.py auth browser
-python3 fantasy.py auth code '<the redirect URL>'
+./fantasy auth browser
+./fantasy auth code '<the redirect URL>'
 docker cp ~/.config/laliga-fantasy/tokens.json laliga-fantasy:/data/tokens.json
 ```
 
@@ -91,6 +97,9 @@ does. `/healthz` reports how much life it has left, so a blackbox probe against 
 | `/api/fragments` | each section rendered, for partial swaps |
 | `/healthz` | `200` when the last refresh worked, `503` otherwise; includes session TTL |
 | `/refresh` | force a refresh now |
+| `/api/session` | POST the pasted redirect (or a `tokens.json`) when there is no session |
+| `/api/bid/prepare` · `/api/bid/confirm` | the two steps of every operation that moves money |
+| `/api/always` · `/api/raid` · `/api/favourite` | standing instructions and stars |
 
 ## What it is allowed to do
 
@@ -107,6 +116,6 @@ are for, since a clause opens when it opens.
 Writes go through a two-step confirmation with a single-use token, and the standing
 instructions only ever touch players you named explicitly, never below a floor you set.
 
-**Put authentication in front of it.** Anyone who can reach the page can spend your money.
-A reverse proxy with basic auth on a private network is the minimum; do not expose it to
-the internet.
+**Keep it off the open internet.** Anyone who can reach the page can spend your money. A
+private network (a tailnet, a VPN) is the minimum, with basic auth on top if more than one
+person can reach it; do not expose it to the internet.

@@ -10,18 +10,22 @@ It merges two sources:
 | `fantasy-api.llt-services.com` (official API) | 733 players with price, status, last-season points, live points; teams; calendar; daily market-value history; **your league, squad, cash, rivals' squads and clauses** | Bearer, league data only |
 | `futbolfantasy.com` (HTML scrape) | value deltas over 1/2/3/7/14/30 days, trend, acceleration, next fixture, **odds of starting it**, "puja máxima rentable", per-matchday points and injury history | none |
 
-Read-only: it never bids, sells or changes your lineup.
+It can also act: bid, sell, accept an offer, pay a clause, save a lineup. Nothing moves
+without confirming it first — every operation is prepared, shown with its amount and what it
+leaves in the bank, and only then confirmed with a single-use token. `--read-only` refuses all
+of them.
 
-No third-party packages. Python 3.11+ and the standard library.
+No dependencies. Go 1.26 and the standard library.
 
 ## Quick start
 
 ```bash
-python3 fantasy.py market --no-auth --global-only   # public ranking, no session needed
-python3 fantasy.py auth browser                     # log in (two steps, see below)
-python3 fantasy.py advise                           # the main command
-python3 fantasy.py report --open --deep              # HTML dashboard
-python3 fantasy.py serve --port 8777                # or keep it live on a port
+go build -o fantasy ./cmd/fantasy
+
+./fantasy auth browser              # log in (two steps, see below)
+./fantasy advise                    # the main command
+./fantasy report                    # HTML dashboard, written to the state directory
+./fantasy serve --port 8777         # or keep it live on a port, with the write API
 ```
 
 ## Session
@@ -42,9 +46,12 @@ PKCE flow from any desktop browser, federated logins included. Two commands, bec
 browser step happens in between:
 
 ```bash
-python3 fantasy.py auth browser          # prints the URL, stores the PKCE verifier
-python3 fantasy.py auth code '<url>'     # exchanges the code the browser redirected to
+./fantasy auth browser          # prints the URL, stores the PKCE verifier
+./fantasy auth code '<url>'     # exchanges the code the browser redirected to
 ```
+
+`serve` does the same thing without a terminal: with no session, the page itself shows the
+login link and a box to paste the redirect into, which is how a fresh deploy authenticates.
 
 **Step 1 — get the URL.** `auth browser` builds it and saves the PKCE verifier and `state`
 to `pending_auth.json` in the config directory (valid 15 minutes). It looks like this, with the app's client id
@@ -93,7 +100,7 @@ authredirect://com.lfp.laligafantasy/?state=hYTieap…&code=eyJraWQiOiJDandFaWN0
 **Step 5 — exchange it.** Quote it: the `&` would otherwise split in the shell.
 
 ```bash
-python3 fantasy.py auth code 'authredirect://com.lfp.laligafantasy/?state=…&code=…'
+./fantasy auth code 'authredirect://com.lfp.laligafantasy/?state=…&code=…'
 # Sesion guardada. tu@email · caduca en 1439 min · refresh: si
 ```
 
@@ -109,10 +116,8 @@ directory — see [Where things live](#where-things-live).
 
 ### Other routes
 
-* `auth snippet` + `auth paste` — if you ever do get a browser session, this lifts the tokens
-  out of `localStorage`/`sessionStorage`. Kept as a fallback.
-* `auth login` — B2C resource-owner-password flow. Only works for accounts that actually have
-  a password, not federated ones.
+* Pasting a whole `tokens.json` into the page's login box works too, and is checked against
+  `/user/me` before it is accepted. Useful when a session already exists on another machine.
 
 ## Commands
 
@@ -326,7 +331,7 @@ what the container image does, so Vector's docker source collects it with no con
 Set `FANTASY_LOG_URL` to also push records straight into VictoriaLogs:
 
 ```bash
-FANTASY_LOG_URL='http://<pi>:9428/insert/jsonline?_stream_fields=service' python3 fantasy.py advise
+FANTASY_LOG_URL='http://<pi>:9428/insert/jsonline?_stream_fields=service' ./fantasy advise
 ```
 
 Pushes are fire-and-forget on a daemon thread, so an unreachable sink never blocks or fails
@@ -336,21 +341,26 @@ from repo roots into VictoriaLogs and needs no configuration.
 ## Layout
 
 ```
-fantasy.py            entry point
-fantasy/config.py     endpoints, ids, squad rules, team aliases
-fantasy/http.py       urllib client with on-disk TTL cache and retries
-fantasy/auth.py       token store, B2C refresh, browser snippet
-fantasy/laliga.py     official API client
-fantasy/futbolfantasy.py  the three scrapers
-fantasy/matching.py   team and player identity resolution across sources
-fantasy/analysis.py   xPts, score, rival cash, recommendations
-fantasy/report.py     HTML report
-assets/               the page's CSS and JS, shared by both implementations
-fantasy/serve.py      HTTP server mode
-fantasy/schedule.py   when to wake up, and whether anything moved
-fantasy/logs.py       logging
-Dockerfile            dependency-free image for the homeserver
-deploy/docker.md      running it as a container, endpoints, write flags
+cmd/fantasy/              the commands
+internal/config/          endpoints, ids, squad rules, paths
+internal/httpx/           HTTP client with on-disk TTL cache, retries and a freeze switch
+internal/auth/            token store, B2C refresh, the login flow
+internal/api/             official API client
+internal/futbolfantasy/   the four scrapers
+internal/matching/        team and player identity resolution across sources
+internal/model/           the universe: squads, clauses, cash, absences, xPts, score
+internal/advice/          what to do: signings, clauses, sales, offers
+internal/policies/        standing instructions, and what counts as a good offer
+internal/render/          the HTML page, cell by cell
+internal/server/          HTTP surface: JSON API, SSE push, writes, session setup
+internal/state/           the built world, its version and who is watching
+internal/engine/          when to wake up and what to invalidate
+internal/schedule/        deadlines, live matches, change detection
+internal/writes/          the operations, their validation and the two-step guard
+internal/cli/             terminal tables and colour
+assets/                   the page's CSS, JS and HTML pieces
+Dockerfile                dependency-free image for the homeserver
+deploy/docker.md          running it as a container, endpoints, write flags
 ```
 
 ## Endpoint notes
