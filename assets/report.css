@@ -59,7 +59,7 @@ button.kpi-link::after{content:"›";position:absolute;top:10px;right:12px;color
 button.kpi-link{position:relative}
 .kpi-label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
 .kpi-value{font-size:21px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.kpi-hint{font-size:11px;color:var(--ink-2)}
+.kpi-hint{font-size:11px;color:var(--ink-2);display:block}
 section{margin:40px 0}
 h2{font-size:17px;margin:0 0 6px;display:flex;align-items:center;gap:9px;letter-spacing:-.01em}
 .badge-count{font-size:11px;font-weight:500;color:var(--ink-2);background:var(--mid);
@@ -224,6 +224,15 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .drawer-stats dd.tit-mid{color:var(--warning)}
 .drawer-stats dd.tit-lo{color:var(--serious)}
 .drawer-stats dd.tit-out{color:var(--critical)}
+/* La cabecera del cajon: foto a la izquierda del nombre, del tamano de la linea. */
+.drawer-head{display:flex;align-items:center;gap:10px}
+.drawer-head h3{margin:0}
+.drawer-face{width:38px;height:38px;flex:0 0 auto;border-radius:50%;object-fit:cover;
+  object-position:top center;background:color-mix(in srgb,#fff 8%,transparent);
+  box-shadow:0 0 0 1px var(--line)}
+/* Los datos de un widget, uno por linea: leidos en fila con puntos no se distinguen. */
+.kpi-note{display:block;color:var(--muted);font-size:11px;line-height:1.45}
+
 /* El grafico contesta al cursor: valor y dia del punto que tiene debajo. */
 .chart-wrap{position:relative;margin-top:14px}
 .chart-wrap .drawer-chart{margin-top:0}
