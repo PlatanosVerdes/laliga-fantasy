@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -347,7 +348,9 @@ func pythonRepr(value any) string {
 		if typed == float64(int64(typed)) {
 			return fmt.Sprintf("%d", int64(typed))
 		}
-		return fmt.Sprintf("%v", typed)
+		// Not %v: it would write 1.7761424e+07 where Python writes the digits, and the two
+		// digests would never agree again.
+		return strconv.FormatFloat(typed, 'f', -1, 64)
 	default:
 		return fmt.Sprint(typed)
 	}

@@ -278,6 +278,8 @@ func PlayerCell(row map[string]any, section string) string {
 		Esc(text(row["position"])), Esc(team), strings.Join(flags, ""))
 }
 
+// text is for identifiers and names: an id that arrived as 1300.0 has to read "1300", so a
+// whole float loses its decimals here. Anything else goes through PyText.
 func text(value any) string {
 	if value == nil {
 		return ""
@@ -288,7 +290,7 @@ func text(value any) string {
 	if asFloat := number(value); asFloat == math.Trunc(asFloat) {
 		return fmt.Sprintf("%d", int64(asFloat))
 	}
-	return fmt.Sprint(value)
+	return PyText(value)
 }
 
 func number(value any) float64 {
@@ -357,7 +359,7 @@ func asStrings(value any) []string {
 	}
 	out := make([]string, 0, len(items))
 	for _, item := range items {
-		out = append(out, fmt.Sprint(item))
+		out = append(out, PyText(item))
 	}
 	return out
 }
@@ -628,19 +630,20 @@ func CellIn(value any, kind string, section string) (string, string) {
 	if value == nil || value == "" {
 		return Missing, Esc("")
 	}
-	return Esc(fmt.Sprint(value)), Esc(fmt.Sprint(value))
+	return Esc(PyText(value)), Esc(PyText(value))
 }
 
-// sortKey is the numeric sort value the browser reads, rendered as Python's str(float(x)).
+// PyFloat writes a float the way Python's str() does.
 //
-// Not as Go's %v, which switches to scientific notation around ten million — right in the
-// middle of the range every price in this game lives in. Python only goes scientific at an
-// exponent of 16 or below -4, so those two cases are the only ones that get it.
-func sortKey(number *float64) string {
-	amount := 0.0
-	if number != nil {
-		amount = *number
-	}
+// Go's default (%v, fmt.Sprint) switches to scientific notation around ten million, which
+// is the middle of the range every price in this game lives in: a value of 17761424.4 comes
+// out as "1.7761424e+07". As a sort key that sorts wrongly while looking fine, and as
+// visible text it is simply wrong. Python only goes scientific at an exponent of 16 or
+// under -4, so those are the only cases that get it.
+//
+// One implementation, used everywhere a number becomes text, because the failure is
+// invisible and would otherwise be reintroduced one call site at a time.
+func PyFloat(amount float64) string {
 	magnitude := math.Abs(amount)
 	if magnitude >= 1e16 || (amount != 0 && magnitude < 1e-4) {
 		return strconv.FormatFloat(amount, 'g', -1, 64)
@@ -649,6 +652,40 @@ func sortKey(number *float64) string {
 		return fmt.Sprintf("%.1f", amount)
 	}
 	return strconv.FormatFloat(amount, 'f', -1, 64)
+}
+
+// PyText is any value as Python's str() would render it.
+func PyText(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	case bool:
+		if typed {
+			return "True"
+		}
+		return "False"
+	case float64:
+		return PyFloat(typed)
+	case int:
+		return fmt.Sprintf("%d", typed)
+	case int64:
+		return fmt.Sprintf("%d", typed)
+	}
+	return fmt.Sprint(value)
+}
+
+// sortKey is the numeric sort value the browser reads, rendered as Python's str(float(x)).
+//
+// Not as Go's %v, which switches to scientific notation around ten million — right in the
+// middle of the range every price in this game lives in. Python only goes scientific at an
+// exponent of 16 or below -4, so those two cases are the only ones that get it.
+func sortKey(number *float64) string {
+	if number == nil {
+		return PyFloat(0)
+	}
+	return PyFloat(*number)
 }
 
 func anyHistory(rows []map[string]any) bool {

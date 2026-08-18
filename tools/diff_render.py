@@ -57,6 +57,14 @@ CASES: list[tuple[str, object]] = [
                 "team_short": "GET", "team_id": "17", "position": "DEL", "position_id": 4.0,
                 "available": True, "status": "doubtful", "prior_based": True,
                 "is_mine": True}),
+    ("text", 17761424.4), ("text", 130960400.0), ("text", 0.00001),
+    ("num", 17761424.4), ("money", 17761424.4),
+    ("list", ["score bajo", "valor cayendo"]), ("list", []),
+    ("pct_plain", 5.83), ("pct_plain", None),
+    ("ratio", None), ("ratio", 0.9), ("ratio", 1.0), ("ratio", 1.06), ("ratio", 1.31),
+    ("ratio_sell", 1.16), ("ratio_sell", 1.03), ("ratio_sell", 0.99), ("ratio_sell", 0.95),
+    ("ratio_sell", 0.5),
+    ("ideal", None), ("ideal", 0), ("ideal", 11_000_000.0),
 ]
 
 

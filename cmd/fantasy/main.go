@@ -449,6 +449,16 @@ var cellCases = []struct {
 	{"player", map[string]any{"id": "8", "name": "Dudoso", "team": "Getafe",
 		"team_short": "GET", "team_id": "17", "position": "DEL", "position_id": 4.0,
 		"available": true, "status": "doubtful", "prior_based": true, "is_mine": true}},
+	// Big and fractional, in a column that renders it as text: the shape that turned into
+	// scientific notation and sorted wrongly while looking fine.
+	{"text", 17761424.4}, {"text", 130960400.0}, {"text", 0.00001},
+	{"num", 17761424.4}, {"money", 17761424.4},
+	{"list", []any{"score bajo", "valor cayendo"}}, {"list", []any{}},
+	{"pct_plain", 5.83}, {"pct_plain", nil},
+	{"ratio", nil}, {"ratio", 0.9}, {"ratio", 1.0}, {"ratio", 1.06}, {"ratio", 1.31},
+	{"ratio_sell", 1.16}, {"ratio_sell", 1.03}, {"ratio_sell", 0.99}, {"ratio_sell", 0.95},
+	{"ratio_sell", 0.5},
+	{"ideal", nil}, {"ideal", 0}, {"ideal", 11_000_000.0},
 }
 
 // cmdSection renders one section from rows handed to it, so the HTML can be compared

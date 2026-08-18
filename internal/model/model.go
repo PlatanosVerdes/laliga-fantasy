@@ -771,6 +771,8 @@ func text(value any) string {
 	case nil:
 		return ""
 	default:
+		// Never %v on a number: Go turns eight figures into scientific notation, and these
+		// strings are ids and names that get compared against Python's.
 		return fmt.Sprint(typed)
 	}
 }

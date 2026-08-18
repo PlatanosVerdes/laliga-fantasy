@@ -144,6 +144,23 @@ say `traspaso` rather than `mercado`, a deadline must rebuild without wasting th
 requests, the *same* deadline must not fire twice, a nudge must cut the wait short, and a
 probe that errors must still rebuild — silence is the failure mode to avoid.
 
+## Where the two languages disagree about numbers
+
+Found the hard way, so written down rather than rediscovered:
+
+* **Go's default float formatting goes scientific at ten million**, which is the middle of
+  the range every price in this game lives in: `%v` and `fmt.Sprint` turn 17761424.4 into
+  `1.7761424e+07`. Python's `str()` only does that at an exponent of 16 or under -4. As a
+  sort key it sorts wrongly while looking fine; as visible text it is simply wrong. There is
+  one `render.PyFloat` now, used everywhere a number becomes text, because the failure is
+  invisible and would otherwise creep back one call site at a time.
+* **JSON encoding differs too**, and neither is wrong: Python writes `130960400.0` and
+  `1e+16`, Go writes `130960400` and `10000000000000000`; Python writes `1e-05` where Go
+  writes `0.00001`. It affects nothing that is compared today, because every JSON comparison
+  parses both sides and compares values. It *will* matter the moment the Go page embeds a
+  JSON blob the way the activity feed does for an unknown event — a page compared byte for
+  byte would differ on a whole number's `.0`.
+
 ## Risks, and what each one costs
 
 * **Cash reconstruction is the subtlest code in the project** — it anchors the whole
