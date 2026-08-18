@@ -862,6 +862,12 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .slot-trend{font-size:10px;font-weight:700;font-variant-numeric:tabular-nums}
 .slot-trend.up{color:#8ee6a8}.slot-trend.down{color:#ffb1a8}
 .slot{position:relative}
+.ring-red{box-shadow:inset 0 0 0 2px var(--critical)}
+.ring-amber{box-shadow:inset 0 0 0 2px var(--warning)}
+.slot.ring-red:hover,.slot.ring-amber:hover{box-shadow:inset 0 0 0 2px currentColor,
+  0 8px 22px rgba(0,0,0,.35)}
+.slot.ring-red:hover{color:var(--critical)}
+.slot.ring-amber:hover{color:var(--warning)}
 .badge-status{position:absolute;top:5px;right:5px;width:16px;height:20px;border-radius:3px;
   display:flex;align-items:center;justify-content:center;z-index:2;font-weight:900;
   font-size:13px;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.5)}
@@ -1241,6 +1247,11 @@ function statusOf(player){
   return null;
 }
 
+function statusRing(player){
+  const s=statusOf(player);
+  return s ? ' ring-'+(s.cls==='st-sancionado'?'red':'amber') : '';
+}
+
 function statusBadge(player){
   const s=statusOf(player);
   if(!s) return '';
@@ -1266,7 +1277,7 @@ function shirtHtml(player,line,index){
   const trend=player.projected_pct||0;
   const weeks=(player.weeks||[]).slice(-5).map(weekChip).join('')
     || '<span class="wk wk-none">sin jornadas</span>';
-  return `<div class="slot" draggable="true" data-line="${line}"
+  return `<div class="slot${statusRing(player)}" draggable="true" data-line="${line}"
     data-index="${index}" data-player="${player.id}" data-pt="${player.player_team_id}"
     title="${player.name} · ${player.next_rival?('vs '+player.next_rival):''}">
     ${statusBadge(player)}
@@ -1282,7 +1293,7 @@ function shirtHtml(player,line,index){
 
 function benchHtml(player){
   const trend=player.projected_pct||0;
-  return `<div class="bench-item" draggable="true" data-player="${player.id}"
+  return `<div class="bench-item${statusRing(player)}" draggable="true" data-player="${player.id}"
     data-pt="${player.player_team_id}" data-from="bench" title="${player.name}">
     ${statusBadge(player)}
     <span class="crest crest-${player.team_id}"></span>
