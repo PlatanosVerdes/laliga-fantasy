@@ -20,6 +20,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/auth"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/cli"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/engine"
@@ -153,7 +154,7 @@ uso: fantasy [-v|-q] <comando>
   leagues       tus ligas
   report        la pagina, a un fichero
   serve         el motor: pagina, API, SSE y refresco
-  auth status   estado de la sesion
+  auth          browser, code y status: la sesion
   cache         tamano de la cache
   probe         las dos peticiones del detector de cambios, y su huella
   serve         el motor: API JSON, SSE y refresco por vencimientos
@@ -1261,15 +1262,57 @@ func cmdPaths() error {
 }
 
 func cmdAuth(args []string) error {
-	if len(args) == 0 || args[0] != "status" {
-		return fmt.Errorf("solo `auth status` esta portado todavia")
+	action := "status"
+	if len(args) > 0 {
+		action = args[0]
 	}
+	switch action {
+	case "browser":
+		pending, err := auth.StartLogin()
+		if err != nil {
+			return err
+		}
+		fmt.Println("Abre esto, entra, y cuando el navegador falle al ir a")
+		fmt.Println("authredirect:// copia la direccion completa de la barra:")
+		fmt.Println()
+		fmt.Println(pending.URL)
+		fmt.Println()
+		fmt.Println(cli.Dim("  Luego: fantasy auth code '<la direccion>'"))
+		fmt.Println(cli.Dim("  Caduca en 15 minutos."))
+		return nil
+
+	case "code":
+		if len(args) < 2 {
+			return fmt.Errorf("uso: auth code '<url de redireccion>'")
+		}
+		pending, err := auth.LoadPending()
+		if err != nil {
+			return fmt.Errorf("no hay login empezado: ejecuta `auth browser` primero")
+		}
+		code, err := auth.ExtractCode(strings.Join(args[1:], " "), pending.State)
+		if err != nil {
+			return err
+		}
+		tokens, err := auth.ExchangeCode(code, pending.Verifier)
+		if err != nil {
+			return err
+		}
+		fmt.Println(cli.Green(fmt.Sprintf("Sesion guardada para %s",
+			fallbackText(tokens.Email, "tu cuenta"))))
+		return nil
+
+	case "status":
+	default:
+		return fmt.Errorf("no se que es `auth %s`: usa browser, code o status", action)
+	}
+
 	tokens, err := auth.Load()
 	if err != nil {
 		return err
 	}
 	if tokens == nil {
-		fmt.Println("Sin sesion. Ejecuta: python3 fantasy.py auth browser")
+		fmt.Println("Sin sesion. Ejecuta: fantasy auth browser")
+		fmt.Println(cli.Dim("  O abre la pagina: si no hay sesion, la pide ella misma."))
 		return nil
 	}
 	left := tokens.SecondsLeft()

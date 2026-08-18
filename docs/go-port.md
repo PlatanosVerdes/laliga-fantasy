@@ -194,3 +194,30 @@ Found the hard way, so written down rather than rediscovered:
 * **Automation stays off until the harness agrees.** No standing instruction runs from Go
   until plan parity holds on the recorded payloads, and the first live run is with
   `--read-only`.
+
+## Cerrado
+
+El puerto esta terminado y Python borrado en la misma rama que este parrafo. Lo que se
+compraba con el arnes diferencial ya se cobro: cada pieza se comparo contra la
+implementacion de Python sobre la misma instantanea congelada antes de que Python
+desapareciera.
+
+| Comparado | Resultado |
+|---|---|
+| modelo | 52 campos × 729 jugadores |
+| scrapers | 141 paginas de futbolfantasy |
+| emparejador | 596 parejas, incluidas las 101 que un `*float64` leido como cero se comia |
+| consejo | 22 cubos con todos sus campos calculados |
+| politicas | el plan sobre la plantilla real y sobre una sintetica |
+| render | 74 celdas, 15 tablas, 2 formas, 5 piezas del armazon |
+| pagina | 796.081 bytes identicos, desde el mundo que construye Go |
+| planificador | 36 decisiones |
+| escrituras | 11 llamadas y 15 validaciones, sin enviar ninguna |
+| ciclo | 19 tests de Go con `-race` |
+
+Los comparadores (`tools/diff_*.py`) se van con Python: sin el otro lado que comparar no
+hacen nada. Lo que **queda** es la mitad de Go de cada uno, que sigue siendo util por si
+misma para inspeccionar sin liga ni sesion: `model --json`, `advise-json`, `plan`, `match`,
+`scrape`, `cells`, `section`, `shell`, `page`, `calls`, `checks`, `wake` y `probe`. Con
+`FANTASY_FREEZE=1` todas leen de la cache y se niegan a tocar la red, que es lo que hacia
+reproducible la comparacion y sigue haciendo reproducible el diagnostico.
