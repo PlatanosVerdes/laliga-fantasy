@@ -41,7 +41,6 @@ MODAL = '''<div class="modal" id="bid-modal" hidden role="dialog" aria-modal="tr
         <span>Valor <b class="bid-value"></b></span>
         <span class="bid-rivals-wrap">Pujas vigentes <b class="bid-rivals"></b></span>
       </p>
-      <p class="bid-rivals-note" hidden></p>
       <p class="bid-warn" hidden></p>
     </div>
     <div class="bid-step2" hidden>
@@ -757,7 +756,6 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .bid-refs{display:flex;gap:14px;font-size:12px;color:var(--ink-2);margin:2px 0 0;flex-wrap:wrap}
 .bid-refs b{color:var(--ink);font-variant-numeric:tabular-nums}
 .bid-refs b.rivals-on{color:var(--warning)}
-.bid-rivals-note{font-size:12px;color:var(--ink-2);margin:10px 0 0}
 .bid-warn,.bid-warn-line{font-size:12px;color:var(--warning);margin:10px 0 0}
 .bid-error{font-size:12px;color:var(--critical);margin:10px 0 0;min-height:1em}
 .bid-dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:4px 0 0;font-size:13px}
@@ -963,14 +961,6 @@ function showRivals(count, expires){
   if(!isBid) return;
   node.textContent = count ? String(count) : 'ninguna';
   node.className = 'bid-rivals'+(count?' rivals-on':'');
-  const note=modal.querySelector('.bid-rivals-note');
-  if(note){
-    note.hidden=!count && !expires;
-    note.textContent =
-      (count?`Compites contra ${count} puja(s). Gana la mas alta al cierre y los importes `
-             +`de los demas no se publican. ` : '')
-      + (expires?`Cierra ${String(expires).slice(11,16)}.`:'');
-  }
 }
 
 function checkAmount(){
