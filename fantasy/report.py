@@ -27,9 +27,9 @@ DRAWER = '''<div class="drawer" id="drawer" hidden role="dialog" aria-modal="tru
 
 
 MODAL = '''<div class="modal" id="bid-modal" hidden role="dialog" aria-modal="true"
-     aria-labelledby="bid-title">
+     aria-label="Confirmar operacion">
   <div class="modal-card">
-    <h3 id="bid-title">Pujar por <span class="bid-who"></span></h3>
+    <h3><span class="bid-action">Pujar por</span> <span class="bid-who"></span></h3>
     <div class="bid-step1">
       <div class="bid-field">
         <label for="bid-amount">Importe de la puja</label>
@@ -52,8 +52,7 @@ MODAL = '''<div class="modal" id="bid-modal" hidden role="dialog" aria-modal="tr
       <button class="bid-next bid-step1" type="button">Revisar</button>
       <button class="bid-confirm bid-step2" type="button" hidden>Confirmar puja</button>
     </div>
-    <p class="modal-note">Dos pasos a proposito: el primero valida contra tu saldo y el
-      techo de futbolfantasy, el segundo ejecuta. El token es de un solo uso.</p>
+    <p class="modal-note">Revisar comprueba el importe contra tu saldo antes de ejecutar.</p>
   </div>
 </div>'''
 
@@ -326,6 +325,10 @@ def _cell(value: Any, kind: str) -> tuple[str, str]:
         return _ratio_badge(value), str(float(value or 0))
     if kind == "ratio_sell":
         return _ratio_badge(value, selling=True), str(float(value or 0))
+    if kind == "status":
+        label, status = value
+        return (f'<span class="pill-{status or "neutral"}">'
+                f'{_esc(str(label).replace("_", " "))}</span>'), str(label)
     if kind == "power":
         order = {"justo": "0", "normal": "1", "holgado": "2"}
         return _power_badge(value), order.get((value or {}).get("power"), "1")
@@ -886,6 +889,7 @@ function openBid(data){
   pending={market_id:data.market, player_id:data.player, name:data.name,
            min_bid:+data.min, ideal:+data.ideal||0, value:+data.value};
   modal.hidden=false;
+  modal.querySelector('.bid-action').textContent='Pujar por';
   modal.querySelector('.bid-who').textContent=data.name;
   const suggested = pending.ideal && pending.ideal>=pending.min_bid ? pending.ideal : pending.min_bid;
   const input=modal.querySelector('.bid-amount');
@@ -1012,8 +1016,7 @@ function wireOps(root=document){
                player_id:d.opPlayer, name:d.opName, amount:+d.opAmount||null};
       modal.hidden=false;
       modal.querySelector('.bid-who').textContent=d.opName;
-      modal.querySelector('#bid-title').textContent=
-        (OP_LABELS[d.op]||'Confirmar')+' '+d.opName;
+      modal.querySelector('.bid-action').textContent=OP_LABELS[d.op]||'Confirmar';
       modal.querySelector('.bid-step1').hidden=true;
       modal.querySelector('.bid-step2').hidden=false;
       modal.querySelector('.bid-drop').hidden=true;
@@ -1105,21 +1108,38 @@ async function openDetail(playerId){
     </dl>
     ${sparkSvg(data.history||[])}
     <div class="drawer-actions">${(data.actions||[]).map(actionButton).join('')}</div>
-    ${data.writes_enabled?'':'<p class="drawer-note">Las acciones que mueven dinero '
-      +'necesitan que el servidor corra con <code>--allow-writes</code>.</p>'}`;
+    ${data.writes_enabled?'':'<p class="drawer-note">Servidor en modo solo lectura: '
+      +'las operaciones estan desactivadas.</p>'}`;
   body.querySelectorAll('button[data-action]').forEach(button=>
     button.addEventListener('click',()=>runAction(JSON.parse(button.dataset.action),p)));
 }
 
 function actionButton(a){
+  if(a.kind==='note') return `<p class="drawer-note">${a.label}</p>`;
   const cls=a.op==='decline_offer'||a.op==='withdraw' ? 'danger-full'
-          : a.op==='always' ? (a.on?'on':'') : 'primary';
+          : (a.op==='always'||a.op==='raid') ? (a.on?'on':'') : 'primary';
   const off=a.blocked?' disabled':'';
   return `<button class="${cls}" data-action='${JSON.stringify(a).replace(/'/g,"&#39;")}'${off}>`
     +`${a.label}${a.blocked?' — no te llega':''}</button>`;
 }
 
 async function runAction(a,player){
+  if(a.op==='note') return;
+  if(a.op==='raid'){
+    const current=group(a.suggested);
+    const answer=prompt('Clausulazo programado para '+player.name+'.\n\n'
+      +'Se pagara en cuanto se libere la clausula, y SOLO si entonces sigue por debajo '
+      +'del importe que pongas aqui. Si el dueño la sube o le pone blindaje, se cancela.\n\n'
+      +'Pago maximo (€):', current);
+    if(answer===null) return;
+    const max_pay=digits(answer);
+    if(!max_pay) return;
+    const res=await fetch('/api/raid',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:player.id,name:player.name,max_pay})});
+    if(res.ok) openDetail(player.id);
+    return;
+  }
   if(a.op==='always'){
     const res=await fetch('/api/always',{method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -1133,7 +1153,7 @@ async function runAction(a,player){
              offer_id:a.offer_id, name:player.name, min_bid:a.min||0,
              ideal:player.ideal_bid||0, value:player.value};
     modal.hidden=false;
-    modal.querySelector('#bid-title').textContent=a.label+' — '+player.name;
+    modal.querySelector('.bid-action').textContent=a.label+' —';
     modal.querySelector('.bid-who').textContent=player.name;
     modal.querySelector('.bid-amount').value=group(a.suggested||a.min||0);
     modal.querySelector('.bid-min').textContent=a.min?exact(a.min):'sin minimo';
@@ -1175,7 +1195,7 @@ if(drawer){
 const TABS=[
   {id:'decidir', label:'Decidir', sections:['acciones','ofertas']},
   {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
-  {id:'clausulas', label:'Cláusulas', sections:['calendario','vencimientos','oportunidades','riesgo','clausulas']},
+  {id:'clausulas', label:'Cláusulas', sections:['programados','calendario','vencimientos','oportunidades','riesgo','clausulas']},
   {id:'plantilla', label:'Plantilla', sections:['plantilla','ventas']},
   {id:'liga', label:'Liga', sections:['rivales','movimientos']},
   {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
@@ -1535,11 +1555,37 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
                     "Se configuran con <code>fantasy.py always add &lt;nombre&gt; --min N "
                     "--accept N</code>.")
             if pending_actions:
-                note += (" <strong>" + str(len(pending_actions)) + " accion(es) en cola.</strong> "
-                         "Solo se ejecutan si el servidor corre con <code>--allow-writes</code>.")
+                note += (" <strong>" + str(len(pending_actions)) + " accion(es) en cola</strong>, "
+                         "se ejecutan en el proximo refresco (salvo <code>--read-only</code>).")
             sections.append(_section(
                 "Siempre en mercado", _table(plan_columns, plan, section="siempre"),
                 note=note, badge=f"{len(entries)}", anchor="siempre"))
+
+    if advice:
+        raids_scheduled = policies.raid_plan(universe["players"],
+                                            cash=advice.get("budget") or 0)
+        if raids_scheduled:
+            RAID_STATUS = {"pagar_clausula": "good", "esperando": "neutral",
+                           "cancelada": "warning", "bloqueada": "critical",
+                           "sin_saldo": "warning", "ninguna": "neutral"}
+            raid_columns: list[Column] = [
+                ("Jugador", lambda r: r.get("name"), "text"),
+                ("Dueño", lambda r: r.get("owner"), "text"),
+                ("Cláusula", lambda r: r.get("clause"), "money"),
+                ("Mi limite", lambda r: r.get("max_pay"), "money"),
+                ("Estado", lambda r: (r.get("action"), RAID_STATUS.get(r.get("action"))),
+                 "status"),
+                ("Motivo", lambda r: r.get("why"), "text"),
+            ]
+            armed = [r for r in raids_scheduled if r["action"] == "pagar_clausula"]
+            note = ("Clausulazos programados: se pagan solos en cuanto la cláusula se "
+                    "libere, <strong>y solo si sigue por debajo del limite que fijaste</strong>. "
+                    "Si el dueño la sube o blinda al jugador, se cancela en vez de pagar de mas.")
+            if armed:
+                note += (" <strong>" + str(len(armed)) + " listo(s) para ejecutar ahora.</strong>")
+            sections.append(_section(
+                "Clausulazos programados", _table(raid_columns, raids_scheduled),
+                note=note, badge=f"{len(raids_scheduled)}", anchor="programados"))
 
     if advice and advice.get("offers"):
         offer_columns: list[Column] = [

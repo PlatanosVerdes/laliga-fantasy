@@ -72,7 +72,8 @@ class State:
                     self.policy_actions = policies.enforce(
                         universe["players"], league_id=settings["league_id"],
                         my_team_id=settings["my_team_id"],
-                        allow_writes=settings["allow_writes"])
+                        allow_writes=settings["allow_writes"],
+                        cash=(advice or {}).get("budget") or 0)
                 except Exception as exc:
                     log.error("policies failed", extra={"reason": str(exc)[:200]})
 
@@ -285,6 +286,21 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                                                  or listing.get("min_bid") or 0),
                                 "min": int(listing.get("min_bid") or 0)})
             elif player.get("owner"):
+                scheduled = (policies_now.get(str(player_id)) or {}).get("raid")
+                if player.get("shielded"):
+                    actions.append({"op": "note", "kind": "note",
+                                    "label": f"{player['owner']} lo tiene blindado: "
+                                             "no se puede clausular"})
+                else:
+                    actions.append({
+                        "op": "raid", "kind": "amount",
+                        "label": ("Cambiar clausulazo programado" if scheduled
+                                  else "Programar clausulazo"),
+                        "player_id": player_id, "on": bool(scheduled),
+                        "suggested": int((policies_now.get(str(player_id)) or {}).get("max_pay")
+                                         or (clause * 1.2 if clause else player["value"] * 1.5)),
+                        "note": ("Se paga en cuanto se libere la clausula, y solo si sigue "
+                                 "por debajo de este importe.")})
                 actions.append({"op": "direct_offer",
                                 "label": f"Ofrecer a {player['owner']}", "kind": "amount",
                                 "player_id": player_id,
@@ -371,6 +387,20 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                 self._json(200, {"id": player_id, "always_listed": on})
                 return
 
+            if path == "/api/raid":
+                player_id = str(body.get("id") or "")
+                max_pay = int(float(body.get("max_pay") or 0))
+                if not player_id or max_pay <= 0:
+                    self._json(400, {"error": "falta el id o el pago maximo"})
+                    return
+                entry = policies.set_policy(player_id, name=body.get("name"),
+                                            raid=True, max_pay=max_pay)
+                log.info("raid scheduled", extra={"player_id": player_id, "max_pay": max_pay})
+                threading.Thread(target=state.refresh, kwargs={"force": True},
+                                 daemon=True).start()
+                self._json(200, entry)
+                return
+
             if path == "/api/bid/prepare":
                 self._prepare(body)
                 return
@@ -429,7 +459,7 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
 
 def run(builder: Callable[[], tuple[dict, dict | None, dict]], *,
         host: str = "0.0.0.0", port: int = 8000, interval: int = 120,
-        allow_writes: bool = False, league_id: str | None = None,
+        allow_writes: bool = True, league_id: str | None = None,
         my_team_id: str | None = None) -> int:
     state = State(builder)
     state.policy_context = {"league_id": league_id, "my_team_id": my_team_id,
@@ -448,8 +478,8 @@ def run(builder: Callable[[], tuple[dict, dict | None, dict]], *,
     log.info("serving", extra={"host": host, "port": port, "interval": interval,
                               "writes": allow_writes})
     print(f"Sirviendo en http://{host}:{port}")
-    print(f"  refresco cada {interval}s · push por SSE · escritura "
-          f"{'ACTIVADA' if allow_writes else 'desactivada'}")
+    print(f"  refresco cada {interval}s · push por SSE · "
+          f"{'operaciones activas' if allow_writes else 'solo lectura'}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

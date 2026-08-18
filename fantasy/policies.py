@@ -2,8 +2,8 @@
 
 Listings expire and get pulled; if you want somebody permanently on the market you
 have to relist him by hand every day. This is that chore, automated — but only for
-players you name explicitly, never below a floor you set, and only when the server
-was started with writes enabled.
+players you name explicitly and never below a floor you set. `serve --read-only`
+stops it dead.
 
 Nothing here decides on its own what a good price is: `min_price` and
 `accept_above` come from you. The default for both is the player's market value,
@@ -35,17 +35,23 @@ def save(policies: dict[str, dict[str, Any]]) -> None:
     POLICY_FILE.write_text(json.dumps(policies, indent=2, ensure_ascii=False))
 
 
-def set_policy(player_id: str, *, name: str | None = None, always_listed: bool = True,
-               min_price: int | None = None, accept_above: int | None = None) -> dict[str, Any]:
+def set_policy(player_id: str, *, name: str | None = None, always_listed: bool | None = None,
+               min_price: int | None = None, accept_above: int | None = None,
+               raid: bool | None = None, max_pay: int | None = None) -> dict[str, Any]:
     policies = load()
     entry = {**policies.get(str(player_id), {}), "id": str(player_id)}
     if name:
         entry["name"] = name
-    entry["always_listed"] = always_listed
+    if always_listed is not None:
+        entry["always_listed"] = always_listed
     if min_price is not None:
         entry["min_price"] = int(min_price)
     if accept_above is not None:
         entry["accept_above"] = int(accept_above)
+    if raid is not None:
+        entry["raid"] = raid
+    if max_pay is not None:
+        entry["max_pay"] = int(max_pay)
     policies[str(player_id)] = entry
     save(policies)
     return entry
@@ -58,6 +64,54 @@ def remove(player_id: str) -> bool:
     policies.pop(str(player_id))
     save(policies)
     return True
+
+
+def raid_plan(players: list[dict[str, Any]], *, cash: float) -> list[dict[str, Any]]:
+    """Scheduled clause raids: pay the moment the lock lifts, if it is still worth it.
+
+    The whole point is to fire the instant the clause opens, but a clause is not a
+    fixed price: the owner can raise it, and he can shield the player outright. So
+    the instruction carries `max_pay` — above that we stand down rather than
+    overpay for something we wanted at yesterday's price.
+    """
+    policies = load()
+    actions: list[dict[str, Any]] = []
+    for player in players:
+        policy = policies.get(str(player.get("id")))
+        if not policy or not policy.get("raid"):
+            continue
+
+        clause = float(player.get("clause") or 0)
+        ceiling = int(policy.get("max_pay") or 0)
+        row = {"player_id": str(player["id"]), "name": player["name"],
+               "clause": clause, "max_pay": ceiling, "owner": player.get("owner")}
+
+        if player.get("is_mine"):
+            actions.append({**row, "action": "ninguna", "why": "ya es tuyo"})
+        elif not player.get("owner"):
+            actions.append({**row, "action": "ninguna", "why": "ya no lo tiene nadie"})
+        elif player.get("shielded"):
+            actions.append({**row, "action": "bloqueada",
+                            "why": f"{player['owner']} lo ha blindado"})
+        elif player.get("clause_locked"):
+            hours = player.get("clause_hours_left")
+            actions.append({**row, "action": "esperando",
+                            "why": ("clausula bloqueada"
+                                    + (f", se abre en {hours:.0f}h" if hours else ""))})
+        elif ceiling and clause > ceiling:
+            actions.append({**row, "action": "cancelada",
+                            "why": f"la clausula subio a {int(clause):,}".replace(",", ".")
+                                   + f", tu limite es {ceiling:,}".replace(",", ".")})
+        elif clause > cash:
+            actions.append({**row, "action": "sin_saldo",
+                            "why": f"cuesta {int(clause):,}".replace(",", ".")
+                                   + f" y tienes {int(cash):,}".replace(",", ".")})
+        else:
+            actions.append({**row, "action": "pagar_clausula", "amount": int(clause),
+                            "why": f"abierta a {int(clause):,}".replace(",", ".")
+                                   + f", por debajo de tu limite de {ceiling:,}"
+                                     .replace(",", ".")})
+    return actions
 
 
 def plan(players: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -108,18 +162,23 @@ def plan(players: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def enforce(players: list[dict[str, Any]], *, league_id: str, my_team_id: str,
-            allow_writes: bool) -> list[dict[str, Any]]:
-    """Carry out the plan. A no-op unless writes are enabled."""
+            allow_writes: bool, cash: float = 0) -> list[dict[str, Any]]:
+    """Carry out both plans. A no-op in read-only mode."""
     from . import writes
 
-    actions = plan(players)
+    actions = plan(players) + raid_plan(players, cash=cash)
     if not allow_writes:
         return actions
     for action in actions:
         if action["action"] == "ninguna":
             continue
-        operation = ("accept_offer" if action["action"] == "aceptar_oferta"
-                     else "sell_to_market")
+        if action["action"] in ("bloqueada", "esperando", "cancelada", "sin_saldo"):
+            continue
+        operation = {"aceptar_oferta": "accept_offer",
+                     "poner_en_venta": "sell_to_market",
+                     "pagar_clausula": "pay_clause"}.get(action["action"])
+        if not operation:
+            continue
         try:
             summary = writes.prepare(
                 operation, league_id=league_id, my_team_id=my_team_id,

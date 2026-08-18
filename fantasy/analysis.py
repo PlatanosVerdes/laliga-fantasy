@@ -332,11 +332,18 @@ def build_universe(
             "clause": owner.get("clause") if owner else None,
             "clause_locked_until": owner.get("locked_until") if owner else None,
             "clause_locked": owner.get("locked") if owner else False,
+            "shielded": owner.get("shielded") if owner else False,
             "is_mine": bool(owner and my_team_id and owner.get("team_id") == str(my_team_id)),
             "starred": pid in starred,
             "market": market_by_player.get(pid),
             "offers": offers_by_player.get(pid) or [],
         })
+
+    now_utc = datetime.now(timezone.utc)
+    for row in rows:
+        unlock = _parse_iso(row.get("clause_locked_until"))
+        row["clause_hours_left"] = ((unlock - now_utc).total_seconds() / 3600
+                                    if unlock else None)
 
     apply_scores(rows)
     return {
@@ -447,6 +454,7 @@ def _load_ownership(league_id: str) -> tuple[dict[str, dict[str, Any]], dict[str
                 "locked_until": slot.get("buyoutClauseLockedEndTime"),
                 "locked": bool(unlock and unlock > now),
                 "player_team_id": slot.get("playerTeamId") or slot.get("id"),
+                "shielded": bool(slot.get("isShielded")),
             }
             squad_value += float(master.get("marketValue") or 0)
             clause_total += float(slot.get("buyoutClause") or 0)

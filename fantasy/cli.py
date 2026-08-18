@@ -609,6 +609,57 @@ def cmd_fav(args) -> int:
     return 0
 
 
+def cmd_raid(args) -> int:
+    """Programar un clausulazo para cuando se libere la clausula."""
+    universe, advice, _ = _load(args)
+    cash = (advice or {}).get("budget") or 0
+    if args.action == "list" or not args.name:
+        scheduled = {k: v for k, v in policies.load().items() if v.get("raid")}
+        if not scheduled:
+            print("Sin clausulazos programados. Añade con:\n"
+                  "  python3 fantasy.py raid add <nombre> --max 25000000")
+            return 0
+        heading("Clausulazos programados")
+        print(table(["jugador", "pago maximo"],
+                    [[e.get("name") or e["id"], money(e.get("max_pay"))]
+                     for e in scheduled.values()], right={1}))
+        plan = policies.raid_plan(universe["players"], cash=cash)
+        heading("Estado ahora mismo")
+        print(table(["jugador", "dueño", "clausula", "mi limite", "estado", "motivo"],
+                    [[a["name"], (a.get("owner") or "-")[:14], money(a.get("clause")),
+                      money(a.get("max_pay")), a["action"], a["why"]] for a in plan],
+                    right={2, 3}))
+        return 0
+
+    query = matching.normalize(args.name)
+    hits = [p for p in universe["players"] if not p["is_mine"]
+            and (query in matching.normalize(p["name"])
+                 or query in matching.normalize(p.get("full_name")))]
+    if not hits:
+        print(paint(f"'{args.name}' no aparece como jugador de otro manager.", RED))
+        return 1
+    hits.sort(key=lambda p: p["score"], reverse=True)
+    player = hits[0]
+    if args.action == "rm":
+        policies.set_policy(player["id"], raid=False)
+        print(f"Clausulazo cancelado: {player['name']}")
+        return 0
+
+    clause = player.get("clause") or 0
+    ceiling = args.max or int(clause * 1.2) or int(player["value"] * 1.5)
+    policies.set_policy(player["id"], name=player["name"], raid=True, max_pay=ceiling)
+    print(paint(f"Clausulazo programado: {player['name']} ({player.get('owner')}).", GREEN))
+    print(f"  Clausula ahora : {money(clause)}")
+    print(f"  Pago maximo    : {money(ceiling)}")
+    if clause and ceiling < clause:
+        print(paint("  Tu limite esta por debajo de la clausula actual: no se ejecutara "
+                    "salvo que baje.", YELLOW))
+    if player.get("clause_locked"):
+        print(paint(f"  Se disparara en cuanto se libere "
+                    f"({str(player.get('clause_locked_until'))[:16]}).", DIM))
+    return 0
+
+
 def cmd_always(args) -> int:
     """`always` = standing instructions: keep listed, accept over a threshold."""
     if args.action == "list" or not args.name:
@@ -629,8 +680,8 @@ def cmd_always(args) -> int:
             print(table(["jugador", "accion", "importe", "motivo"],
                         [[a["name"], a["action"], money(a.get("amount")), a["why"]]
                          for a in plan], right={2}))
-            print(paint("  Nada de esto se ejecuta salvo que el servidor corra con "
-                        "--allow-writes.", DIM))
+            print(paint("  Se ejecuta en el proximo refresco del servidor; con "
+                        "--read-only no.", DIM))
         return 0
 
     universe, advice, _ = _load(args)
@@ -670,19 +721,21 @@ def cmd_serve(args) -> int:
             analysis.enrich_buckets(advice, limit=args.limit)
         return universe, advice, context
 
-    if args.allow_writes:
-        print(paint("ESCRITURA ACTIVADA: esta pagina puede pujar, vender y aceptar "
-                    "ofertas con dinero real.", YELLOW))
+    allow_writes = not args.read_only
+    if allow_writes:
         pending = [a for a in policies.plan(builder()[0]["players"])
                    if a["action"] != "ninguna"]
         if pending:
-            print(paint(f"  Hay {len(pending)} accion(es) de 'siempre en mercado' en cola "
-                        f"que se ejecutaran en el primer refresco:", YELLOW))
+            print(paint(f"Hay {len(pending)} accion(es) programada(s) que se ejecutaran "
+                        f"en el primer refresco:", YELLOW))
             for action in pending:
-                print(f"    · {action['name']}: {action['action']} — {action['why']}")
+                print(f"  · {action['name']}: {action['action']} — {action['why']}")
+            print(paint("Arranca con --read-only si no quieres que se ejecuten.", DIM))
+    else:
+        print(paint("Solo lectura: ninguna operacion movera dinero.", DIM))
 
     return serve.run(builder, host=args.host, port=args.port, interval=args.interval,
-                     allow_writes=args.allow_writes, league_id=league_id,
+                     allow_writes=allow_writes, league_id=league_id,
                      my_team_id=my_team_id)
 
 
@@ -806,6 +859,13 @@ def build_parser() -> argparse.ArgumentParser:
     fav_parser.add_argument("name", nargs="?")
     fav_parser.set_defaults(func=cmd_fav)
 
+    raid_parser = sub.add_parser("raid", parents=[common],
+                                 help="programar un clausulazo al liberarse la clausula")
+    raid_parser.add_argument("action", nargs="?", default="list", choices=["list", "add", "rm"])
+    raid_parser.add_argument("name", nargs="?")
+    raid_parser.add_argument("--max", type=int, help="pago maximo que aceptas")
+    raid_parser.set_defaults(func=cmd_raid)
+
     always_parser = sub.add_parser("always", parents=[common],
                                    help="siempre en mercado: relistar y aceptar la mejor oferta")
     always_parser.add_argument("action", nargs="?", default="list", choices=["list", "add", "rm"])
@@ -820,8 +880,8 @@ def build_parser() -> argparse.ArgumentParser:
     serve_parser.add_argument("--port", type=int, default=8000)
     serve_parser.add_argument("--interval", type=int, default=120,
                               help="segundos entre refrescos (default 120)")
-    serve_parser.add_argument("--allow-writes", action="store_true",
-                              help="permitir pujas desde la pagina (doble confirmacion)")
+    serve_parser.add_argument("--read-only", action="store_true",
+                              help="desactivar cualquier operacion que mueva dinero")
     serve_parser.set_defaults(func=cmd_serve)
 
     probe_parser = sub.add_parser("probe", parents=[common], help="volcar respuestas crudas")

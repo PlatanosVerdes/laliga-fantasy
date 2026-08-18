@@ -5,8 +5,9 @@ against your cash and futbolfantasy's ceiling and hands back a single-use token;
 confirm spends that token and calls the API. A double click, a retry or a replayed
 request therefore cannot bid twice.
 
-Writes are refused unless the caller enabled them explicitly (`serve --allow-writes`),
-so the copy running on the homeserver cannot spend money by accident.
+Operations are enabled by default — an app that cannot bid, sell or accept an offer
+is a spectator — and `serve --read-only` turns them off. The real guard is not a flag
+but the two-step token: nothing moves money without a second, explicit confirmation.
 """
 from __future__ import annotations
 
@@ -133,7 +134,7 @@ def prepare(operation: str, *, league_id: str, my_team_id: str, amount: int | No
             player: dict[str, Any] | None = None, allow_writes: bool = False) -> dict[str, Any]:
     """Validate an operation and return a summary plus a single-use token."""
     if not allow_writes:
-        raise WritesDisabled("la escritura esta desactivada: arranca con --allow-writes")
+        raise WritesDisabled("este servidor corre en modo solo lectura")
     if operation not in OPERATIONS:
         raise WriteError(f"operacion desconocida: {operation}")
 
@@ -211,7 +212,7 @@ def prepare(operation: str, *, league_id: str, my_team_id: str, amount: int | No
 def confirm(token: str, *, allow_writes: bool = False, dry_run: bool = False) -> dict[str, Any]:
     """Spend the token and perform the call. The token is consumed either way."""
     if not allow_writes:
-        raise WritesDisabled("la escritura esta desactivada")
+        raise WritesDisabled("este servidor corre en modo solo lectura")
     _purge()
     with _lock:
         pending = _pending.pop(token, None)
