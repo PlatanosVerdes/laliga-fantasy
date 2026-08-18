@@ -41,6 +41,8 @@ class State:
         self.last_error: str | None = None
         self.runs = 0
         self.fingerprint = ""
+        self.universe: dict | None = None
+        self.advice: dict | None = None
         self.subscribers: set[queue.Queue] = set()
 
     # --- refresh ------------------------------------------------------------
@@ -102,6 +104,8 @@ class State:
             return False
 
         with self.lock:
+            self.universe = universe
+            self.advice = advice
             self.html = page
             self.sections = report.split_sections(page)
             self.payload = payload
@@ -118,6 +122,34 @@ class State:
             log.info("state changed", extra={"version": self.version, "runs": self.runs})
         else:
             log.debug("state unchanged", extra={"runs": self.runs})
+        return True
+
+    def rerender(self) -> bool:
+        """Repaint from the universe already in memory, with no network at all.
+
+        Starring a player or arming an instruction changes what the page says but not
+        the data behind it, and a full refresh for that meant a dozen requests and
+        several seconds of the button looking dead.
+        """
+        with self.lock:
+            universe, advice, context = self.universe, self.advice, self.context
+        if not universe:
+            return self.refresh(force=True)
+        try:
+            page = report.build(universe, advice, context=context,
+                                activity=universe.get("activity"))
+        except Exception as exc:
+            log.error("rerender failed", extra={"reason": str(exc)[:200]})
+            return False
+        with self.lock:
+            self.html = page
+            self.sections = report.split_sections(page)
+            self.payload = {**self.payload,
+                            "favourites": sorted(favourites.ids()),
+                            "policies": policies.load()}
+            self.version += 1
+        self.publish({"type": "state", "version": self.version})
+        log.debug("rerendered", extra={"version": self.version})
         return True
 
     # --- push ---------------------------------------------------------------
@@ -446,8 +478,12 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                 starred = favourites.toggle(player_id, body.get("name"))
                 log.info("favourite toggled", extra={"player_id": player_id,
                                                     "starred": starred})
-                threading.Thread(target=state.refresh, kwargs={"force": True},
-                                 daemon=True).start()
+                # Keep the in-memory universe in step so the repaint shows the change.
+                with state.lock:
+                    for row in (state.universe or {}).get("players") or []:
+                        if str(row.get("id")) == player_id:
+                            row["starred"] = starred
+                threading.Thread(target=state.rerender, daemon=True).start()
                 self._json(200, {"id": player_id, "starred": starred})
                 return
 
@@ -460,10 +496,9 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                     policies.remove(player_id)
                     on = False
                 else:
-                    policies.set_policy(player_id, name=body.get("name"))
+                    policies.set_policy(player_id, name=body.get("name"), always_listed=True)
                     on = True
-                threading.Thread(target=state.refresh, kwargs={"force": True},
-                                 daemon=True).start()
+                threading.Thread(target=state.rerender, daemon=True).start()
                 self._json(200, {"id": player_id, "always_listed": on})
                 return
 
@@ -502,8 +537,7 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                 entry = policies.set_policy(player_id, name=body.get("name"),
                                             raid=True, max_pay=max_pay)
                 log.info("raid scheduled", extra={"player_id": player_id, "max_pay": max_pay})
-                threading.Thread(target=state.refresh, kwargs={"force": True},
-                                 daemon=True).start()
+                threading.Thread(target=state.rerender, daemon=True).start()
                 self._json(200, entry)
                 return
 

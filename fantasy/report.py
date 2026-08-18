@@ -342,6 +342,13 @@ def _cell(value: Any, kind: str) -> tuple[str, str]:
         return _esc(_fmt_num(value)), str(float(value or 0))
     if kind == "int":
         return ("—" if value is None else f"{int(value)}"), str(float(value or 0))
+    if kind == "starts":
+        if value is None:
+            return "—", "-1"
+        share = int(value)
+        status = ("good" if share >= 75 else "warning" if share >= 50
+                  else "serious" if share >= 30 else "critical")
+        return f'<span class="pill-{status}">{share}%</span>', str(share)
     if kind == "pct_plain":
         return _esc(_fmt_pct(value)), str(float(value or 0))
     if kind == "list":
@@ -414,7 +421,7 @@ def _player_cell(row: dict) -> str:
             + "".join(flags) + "</span>")
 
 
-NUMERIC_KINDS = {"money", "num", "int", "pct", "pct_plain", "mag", "ideal"}
+NUMERIC_KINDS = {"money", "num", "int", "pct", "pct_plain", "mag", "ideal", "starts"}
 
 
 class _in_section:
@@ -482,7 +489,7 @@ def _player_columns(*, cost_label: str | None = None,
     columns += [
         ("xPts/j", lambda r: r["xpts"], "num"),
         ("Pts/M", lambda r: r["points_value"], "mag"),
-        ("Titular", lambda r: r.get("start_probability"), "int"),
+        ("Titular", lambda r: r.get("start_probability"), "starts"),
         ("Valor 7d", lambda r: r.get("projected_pct"), "pct"),
         ("Historico", lambda r: r.get("value_history"), "spark"),
         ("Proximo rival", lambda r: (f"{r.get('next_rival')} "
@@ -672,6 +679,7 @@ button.p-name:hover{color:var(--accent);border-bottom-color:var(--accent)}
 .pill-warning{color:var(--warning);background:color-mix(in srgb,var(--warning) 18%,transparent)}
 .pill-critical{color:var(--critical);background:color-mix(in srgb,var(--critical) 15%,transparent)}
 .pill-neutral{color:var(--ink-2);background:var(--mid)}
+.pill-serious{color:var(--serious);background:color-mix(in srgb,var(--serious) 16%,transparent)}
 .pill-note{font-size:10px;color:var(--muted);margin-left:6px;text-transform:uppercase;
   letter-spacing:.04em}
 .star{background:none;border:none;cursor:pointer;font-size:15px;line-height:1;padding:0 2px;
@@ -838,7 +846,7 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   transform:translate(-50%,-50%);border:2px solid color-mix(in srgb,#fff 22%,transparent);
   border-radius:50%}
 .pitch-line{display:flex;justify-content:space-evenly;gap:8px;position:relative;z-index:1}
-.slot{width:104px;min-height:112px;border-radius:10px;display:flex;flex-direction:column;
+.slot{width:112px;min-height:118px;border-radius:10px;display:flex;flex-direction:column;
   align-items:center;gap:3px;padding:7px 5px;transition:transform .14s ease,box-shadow .14s ease;
   background:color-mix(in srgb,#000 34%,transparent);cursor:grab;
   backdrop-filter:blur(2px)}
@@ -854,13 +862,19 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .slot .crest{width:20px;height:20px}
 .slot-name{font-size:12px;font-weight:700;color:#fff;text-align:center;line-height:1.15;
   text-shadow:0 1px 2px rgba(0,0,0,.55)}
-.slot-meta{display:flex;gap:4px;align-items:center;font-size:10px;
-  color:color-mix(in srgb,#fff 78%,transparent)}
+.slot-meta{display:flex;gap:5px;align-items:center;justify-content:center;font-size:10px;
+  flex-wrap:wrap;white-space:nowrap;color:color-mix(in srgb,#fff 78%,transparent)}
 .slot-weeks{display:flex;gap:3px;flex-wrap:wrap;justify-content:center}
 .wk{font-size:10px;font-weight:700;border-radius:4px;padding:1px 4px;color:#fff;
   font-variant-numeric:tabular-nums}
 .wk-hi{background:#0ca30c}.wk-mid{background:#2a78d6}.wk-lo{background:#8a5a00}
 .wk-neg{background:#d03b3b}.wk-none{background:rgba(255,255,255,.18)}
+.tit{font-size:10px;font-weight:800;border-radius:4px;padding:1px 4px;
+  font-variant-numeric:tabular-nums}
+.tit-hi{background:#0ca30c;color:#fff}
+.tit-mid{background:#fab219;color:#3a2c00}
+.tit-lo{background:#ec835a;color:#2b1200}
+.tit-out{background:#d03b3b;color:#fff}
 .slot-trend{font-size:10px;font-weight:700;font-variant-numeric:tabular-nums}
 .slot-trend.up{color:#8ee6a8}.slot-trend.down{color:#ffb1a8}
 .slot{position:relative}
@@ -1267,6 +1281,11 @@ function statusBadge(player){
     +`<span class="tip">${bits.join('<br>')}</span></span>`;
 }
 
+// Titularidad: el numero que decide si los xPts se van a materializar.
+function titClass(p){
+  return p>=75?'tit-hi':p>=50?'tit-mid':p>=30?'tit-lo':'tit-out';
+}
+
 function weekChip(w){
   const p=w.points;
   const cls = p==null?'wk-none': p<0?'wk-neg': p>=8?'wk-hi': p>=4?'wk-mid':'wk-lo';
@@ -1287,6 +1306,8 @@ function shirtHtml(player,line,index){
     <span class="slot-name">${player.name}</span>
     <span class="slot-weeks">${weeks}</span>
     <span class="slot-meta">
+      ${player.start_probability!=null?`<span class="tit ${titClass(player.start_probability)}"
+        >${player.start_probability}%</span>`:''}
       <span>${(player.xpts||0).toFixed(1)} xPts</span>
       <span class="slot-trend ${trend>=0?'up':'down'}">${trend>=0?'▲':'▼'}${Math.abs(trend).toFixed(1)}%</span>
     </span>
@@ -1596,10 +1617,32 @@ async function runAction(a,player){
     return;
   }
   if(a.op==='always'){
-    const res=await fetch('/api/always',{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({id:player.id,name:player.name})});
-    if(res.ok){ openDetail(player.id); }
+    // Pintar antes de preguntar: el servidor confirma en milisegundos, pero volver a
+    // cargar la ficha entera hacia que el boton pareciera muerto.
+    const button=[...document.querySelectorAll('.drawer-actions button')]
+      .find(b=>b.textContent.includes('mercado'));
+    const turningOn=!a.on;
+    if(button){
+      button.classList.toggle('on',turningOn);
+      button.textContent=turningOn?'Quitar de siempre-en-mercado':'Siempre en mercado';
+      button.disabled=true;
+    }
+    try{
+      const res=await fetch('/api/always',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({id:player.id,name:player.name})});
+      if(!res.ok) throw new Error(res.status);
+      const data=await res.json();
+      if(button){
+        button.classList.toggle('on',!!data.always_listed);
+        button.textContent=data.always_listed?'Quitar de siempre-en-mercado'
+                                             :'Siempre en mercado';
+      }
+      a.on=!!data.always_listed;
+    }catch(e){
+      if(button){ button.classList.toggle('on',a.on);
+        button.textContent=a.on?'Quitar de siempre-en-mercado':'Siempre en mercado'; }
+    }finally{ if(button) button.disabled=false; }
     return;
   }
   closeDrawer();
