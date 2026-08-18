@@ -711,8 +711,12 @@ async function openDetail(playerId){
   const p=data.player, l=data.listing||{};
   const rival=p.next_rival?`${p.next_rival} (${p.next_home?'casa':'fuera'})`:'—';
   const owner=p.is_mine?'tu':(p.owner||'libre');
+  // La foto identifica antes que el nombre; si no hay, queda el escudo del equipo.
+  const face=p.image
+    ? `<img class="drawer-face" src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
+    : `<span class="drawer-face crest crest-${p.team_id}"></span>`;
   body.innerHTML=`
-    <h3>${p.name}</h3>
+    <div class="drawer-head">${face}<h3>${p.name}</h3></div>
     <p class="sub"><span class="pos pos-${(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
       ${p.team||''} · ${owner}${p.starred?' · ★':''}</p>
     <dl class="drawer-stats">
@@ -1003,7 +1007,8 @@ const TABS=[
   {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
   {id:'clausulas', label:'Cláusulas', sections:['programados','calendario','vencimientos','oportunidades','riesgo','clausulas']},
   {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
-  {id:'liga', label:'Liga', sections:['rivales','partidos','movimientos']},
+  {id:'partidos', label:'Partidos', sections:['partidos']},
+  {id:'liga', label:'Liga', sections:['rivales','movimientos']},
   {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
 ];
 

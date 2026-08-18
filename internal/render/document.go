@@ -120,19 +120,19 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 		value = LeftUntil(closing)
 		deadline = closing
 	}
-	hint := state
+	notes := []string{}
 	if closes := whenLabel(closing); closes != "" {
-		hint = state + " · cierra " + closes
+		notes = append(notes, "cierra "+closes)
 	}
 	if nextOpens := whenLabel(text(d.Universe["next_week_opens"])); nextOpens != "" {
-		hint += fmt.Sprintf(" · J%d desde %s", int(number(week["nextWeek"])), nextOpens)
+		notes = append(notes, fmt.Sprintf("J%d desde %s", int(number(week["nextWeek"])), nextOpens))
 	}
 
 	kpis := []string{Widget(KPI{
 		Label:    fmt.Sprintf("Jornada %d", int(number(week["weekNumber"]))),
 		Value:    value,
 		Deadline: deadline,
-		Hint:     hint, Status: "neutral"})}
+		Hint:     state, Notes: notes, Status: "neutral"})}
 
 	if len(d.Advice) == 0 {
 		kpis = append(kpis,

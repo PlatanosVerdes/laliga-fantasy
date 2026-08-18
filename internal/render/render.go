@@ -349,6 +349,8 @@ type KPI struct {
 	// Deadline turns the value into a live countdown: the server renders the first value and
 	// stamps the instant, the browser keeps it honest every second.
 	Deadline string
+	// Notes are extra facts, one per line under the hint.
+	Notes []string
 }
 
 func Widget(kpi KPI) string {
@@ -375,6 +377,10 @@ func Widget(kpi KPI) string {
 	}
 	if kpi.Hint != "" {
 		parts = append(parts, `<span class="kpi-hint">`+Esc(kpi.Hint)+`</span>`)
+	}
+	// Several short facts read as a list, not as a sentence with dots: one line each.
+	for _, line := range kpi.Notes {
+		parts = append(parts, `<span class="kpi-note">`+Esc(line)+`</span>`)
 	}
 	if kpi.Tab != "" {
 		// A widget that states a fact should take you to where the fact is explained.
@@ -407,13 +413,15 @@ func RankOf(value float64, others []float64) (string, float64, string) {
 	return fmt.Sprintf("%dº de %d", position, total), share, status
 }
 
-// Tabs are the page's six groups. Rendered only when there is a session, because a chip
+// Tabs are the page's groups. Rendered only when there is a session, because a chip
 // that jumps nowhere is worse than no chip.
 const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
 	`<button class="tab" role="tab" data-tab="decidir" aria-selected="false" type="button">Decidir</button>` +
 	`<button class="tab" role="tab" data-tab="mercado" aria-selected="false" type="button">Mercado</button>` +
 	`<button class="tab" role="tab" data-tab="clausulas" aria-selected="false" type="button">Cláusulas</button>` +
 	`<button class="tab" role="tab" data-tab="plantilla" aria-selected="false" type="button">Plantilla</button>` +
+	`<button class="tab" role="tab" data-tab="partidos" aria-selected="false" type="button">Partidos<`+
+	`/button>`+
 	`<button class="tab" role="tab" data-tab="liga" aria-selected="false" type="button">Liga</button>` +
 	`<button class="tab" role="tab" data-tab="ranking" aria-selected="false" type="button">Ranking</button></div>`
 
