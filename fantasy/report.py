@@ -39,7 +39,9 @@ MODAL = '''<div class="modal" id="bid-modal" hidden role="dialog" aria-modal="tr
         <span>Puja minima <b class="bid-min"></b></span>
         <span>Techo rentable <b class="bid-ideal"></b></span>
         <span>Valor <b class="bid-value"></b></span>
+        <span class="bid-rivals-wrap">Pujas vigentes <b class="bid-rivals"></b></span>
       </p>
+      <p class="bid-rivals-note" hidden></p>
       <p class="bid-warn" hidden></p>
     </div>
     <div class="bid-step2" hidden>
@@ -754,6 +756,8 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   color:var(--ink)}
 .bid-refs{display:flex;gap:14px;font-size:12px;color:var(--ink-2);margin:2px 0 0;flex-wrap:wrap}
 .bid-refs b{color:var(--ink);font-variant-numeric:tabular-nums}
+.bid-refs b.rivals-on{color:var(--warning)}
+.bid-rivals-note{font-size:12px;color:var(--ink-2);margin:10px 0 0}
 .bid-warn,.bid-warn-line{font-size:12px;color:var(--warning);margin:10px 0 0}
 .bid-error{font-size:12px;color:var(--critical);margin:10px 0 0;min-height:1em}
 .bid-dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:4px 0 0;font-size:13px}
@@ -939,6 +943,7 @@ function openBid(data){
   modal.querySelector('.bid-min').textContent=exact(pending.min_bid);
   modal.querySelector('.bid-ideal').textContent=pending.ideal?exact(pending.ideal):'sin margen';
   modal.querySelector('.bid-value').textContent=exact(pending.value);
+  showRivals(+data.bids||0, data.expires);
   const drop=modal.querySelector('.bid-drop');
   pending.bid_id=data.bid||null;
   drop.hidden=!pending.bid_id;
@@ -947,6 +952,25 @@ function openBid(data){
   modal.querySelector('.bid-error').textContent='';
   checkAmount();
   input.focus();
+}
+
+function showRivals(count, expires){
+  const wrap=modal.querySelector('.bid-rivals-wrap');
+  const node=modal.querySelector('.bid-rivals');
+  if(!wrap) return;
+  const isBid = pending && (pending.operation==='bid' || !pending.operation);
+  wrap.hidden = !isBid;
+  if(!isBid) return;
+  node.textContent = count ? String(count) : 'ninguna';
+  node.className = 'bid-rivals'+(count?' rivals-on':'');
+  const note=modal.querySelector('.bid-rivals-note');
+  if(note){
+    note.hidden=!count && !expires;
+    note.textContent =
+      (count?`Compites contra ${count} puja(s). Gana la mas alta al cierre y los importes `
+             +`de los demas no se publican. ` : '')
+      + (expires?`Cierra ${String(expires).slice(11,16)}.`:'');
+  }
 }
 
 function checkAmount(){
@@ -1146,6 +1170,8 @@ async function openDetail(playerId){
       <div><dt>Techo rentable</dt><dd>${p.ideal_bid?exact(p.ideal_bid):'sin margen'}</dd></div>
       <div><dt>Clausula</dt><dd>${p.clause?exact(p.clause):'—'}${p.clause_locked?' 🔒':''}</dd></div>
       ${l.market_id?`<div><dt>En mercado</dt><dd>${exact(l.min_bid)}</dd></div>`:''}
+      ${l.kind==='libre'?`<div><dt>Pujas vigentes</dt><dd${l.bids?' style="color:var(--warning)"':''}>${l.bids||'ninguna'}</dd></div>`:''}
+      ${l.expires?`<div><dt>Cierra</dt><dd>${String(l.expires).slice(11,16)}</dd></div>`:''}
       ${p.status&&p.status!=='ok'?`<div><dt>Estado</dt><dd>${p.status}</dd></div>`:''}
     </dl>
     ${sparkSvg(data.history||[])}
@@ -1201,6 +1227,7 @@ async function runAction(a,player){
     modal.querySelector('.bid-min').textContent=a.min?exact(a.min):'sin minimo';
     modal.querySelector('.bid-ideal').textContent=player.ideal_bid?exact(player.ideal_bid):'sin margen';
     modal.querySelector('.bid-value').textContent=exact(player.value);
+    showRivals(+a.bids||0, a.expires);
     modal.querySelector('.bid-step1').hidden=false;
     modal.querySelector('.bid-step2').hidden=true;
     modal.querySelector('.bid-drop').hidden=true;

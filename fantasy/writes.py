@@ -178,6 +178,13 @@ def prepare(operation: str, *, league_id: str, my_team_id: str, amount: int | No
             warnings.append("futbolfantasy no le ve rentabilidad a este precio")
         if cash is not None and amount > 0.5 * cash:
             warnings.append("te deja con menos de la mitad del saldo")
+        rivals = player.get("bids")
+        if rivals:
+            # The game resolves at close and only publishes the count, never the
+            # amounts, so the honest thing is to say how many, not to pretend to know
+            # what they bid.
+            warnings.append(f"ya hay {rivals} puja(s) por el: gana la mas alta al cierre "
+                            "y los importes de los demas no se publican")
 
     _purge()
     token = secrets.token_urlsafe(18)
@@ -188,6 +195,8 @@ def prepare(operation: str, *, league_id: str, my_team_id: str, amount: int | No
         "player_name": player.get("name"),
         "amount": amount,
         "min_bid": player.get("min_bid"),
+        "bids": player.get("bids"),
+        "expires": player.get("expires"),
         "ideal_bid": player.get("ideal_bid"),
         "market_value": player.get("value"),
         "cash_before": cash,

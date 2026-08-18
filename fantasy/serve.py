@@ -284,7 +284,9 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                                 "market_id": listing.get("market_id"),
                                 "suggested": int(player.get("ideal_bid")
                                                  or listing.get("min_bid") or 0),
-                                "min": int(listing.get("min_bid") or 0)})
+                                "min": int(listing.get("min_bid") or 0),
+                                "bids": listing.get("bids"),
+                                "expires": listing.get("expires")})
             elif player.get("owner"):
                 scheduled = (policies_now.get(str(player_id)) or {}).get("raid")
                 if player.get("shielded"):
@@ -417,7 +419,10 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                     listing = player.get("market") or {}
                     return {"name": player.get("name"), "value": player.get("value"),
                             "ideal_bid": player.get("ideal_bid"),
-                            "min_bid": listing.get("min_bid")}
+                            "min_bid": listing.get("min_bid"),
+                            "clause": player.get("clause"),
+                            "bids": listing.get("bids"),
+                            "expires": listing.get("expires")}
             return {}
 
         def _prepare(self, body: dict[str, Any]) -> None:
