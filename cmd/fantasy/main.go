@@ -467,20 +467,11 @@ func cmdSection(args []string) error {
 		return err
 	}
 
-	switch args[0] {
-	case "plantilla":
-		fmt.Print(render.TableIn(render.PlayerColumns(""), rows, "Sin datos", "plantilla", false))
-	case "mercado":
-		// The buying table adds the price it would cost and what futbolfantasy still
-		// considers profitable, right next to it.
-		columns := render.PlayerColumns("Puja minima")
-		ideal := render.Column{Header: "Puja max. rentable", Kind: "ideal",
-			Read: func(row map[string]any) any { return row["ideal_bid"] }}
-		columns = append(columns[:4], append([]render.Column{ideal}, columns[4:]...)...)
-		fmt.Print(render.TableIn(columns, rows, "Sin datos", "mercado", true))
-	default:
-		return fmt.Errorf("seccion desconocida: %s", args[0])
+	html, err := render.SectionTable(args[0], rows)
+	if err != nil {
+		return err
 	}
+	fmt.Print(html)
 	return nil
 }
 

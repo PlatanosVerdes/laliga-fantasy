@@ -10,6 +10,7 @@ package render
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 )
 
@@ -430,6 +431,73 @@ func PlayerColumns(costLabel string, extra ...Column) []Column {
 	return append(columns, extra...)
 }
 
+// insert puts a column at a position, which is how the page adds a section's own column
+// in the middle of the shared ones rather than at the end.
+func insert(columns []Column, at int, column Column) []Column {
+	out := make([]Column, 0, len(columns)+1)
+	out = append(out, columns[:at]...)
+	out = append(out, column)
+	return append(out, columns[at:]...)
+}
+
+func field(name string) func(map[string]any) any {
+	return func(row map[string]any) any { return row[name] }
+}
+
+func whole(row map[string]any) any { return row }
+
+// SectionTable renders one of the page's tables by name. Same columns, same order, same
+// section — the section matters because it decides whether a row says "mio".
+func SectionTable(name string, rows []map[string]any) (string, error) {
+	switch name {
+	case "plantilla":
+		return TableIn(PlayerColumns(""), rows, "Sin datos", "plantilla", false), nil
+
+	case "mercado":
+		// The buying table puts what futbolfantasy still considers profitable right next
+		// to what the player would cost.
+		columns := insert(PlayerColumns("Puja minima"), 4,
+			Column{"Puja max. rentable", field("ideal_bid"), "ideal"})
+		return TableIn(columns, rows, "Sin datos", "mercado", true), nil
+
+	case "misventas":
+		// Yours, so no star and no "mio": what matters is what you are asking against what
+		// he is worth.
+		columns := []Column{
+			{"Jugador", whole, "player"},
+			{"Valor", field("value"), "money"},
+			{"Pides", field("entry_cost"), "money"},
+			{"Sobre valor", field("ask_ratio"), "ratio"},
+			{"xPts/j", field("xpts"), "num"},
+			{"Valor 7d", field("projected_pct"), "pct"},
+		}
+		return TableIn(columns, rows, "Sin datos", "misventas", false), nil
+
+	case "seguimiento":
+		return TableIn(PlayerColumns(""), rows, "Sin datos", "", false), nil
+
+	case "ventas":
+		columns := PlayerColumns("", Column{"Motivos", field("reasons"), "list"})
+		return TableIn(columns, rows, "Sin datos", "ventas", false), nil
+
+	case "riesgo":
+		// Not "who is good" but "who can be taken from you today", which is why the count
+		// of rivals who could pay is a column of its own.
+		columns := []Column{
+			{"Jugador", whole, "player"},
+			{"Valor", field("value"), "money"},
+			{"Cláusula", field("clause"), "money"},
+			{"x valor", field("clause_margin"), "num"},
+			{"Rivales que pueden", field("threats"), "int"},
+			{"El mas rico", field("top_threat"), "text"},
+			{"xPts/j", field("xpts"), "num"},
+			{"Score", field("score"), "num"},
+		}
+		return TableIn(columns, rows, "Sin exposicion relevante", "riesgo", false), nil
+	}
+	return "", fmt.Errorf("seccion desconocida: %s", name)
+}
+
 // Table renders the sortable table the whole page is made of. The data-sort attribute is
 // what makes a column sortable without shipping the data twice.
 func Table(columns []Column, rows []map[string]any, empty string) string {
@@ -564,15 +632,23 @@ func CellIn(value any, kind string, section string) (string, string) {
 }
 
 // sortKey is the numeric sort value the browser reads, rendered as Python's str(float(x)).
+//
+// Not as Go's %v, which switches to scientific notation around ten million — right in the
+// middle of the range every price in this game lives in. Python only goes scientific at an
+// exponent of 16 or below -4, so those two cases are the only ones that get it.
 func sortKey(number *float64) string {
 	amount := 0.0
 	if number != nil {
 		amount = *number
 	}
-	if amount == math.Trunc(amount) && math.Abs(amount) < 1e15 {
+	magnitude := math.Abs(amount)
+	if magnitude >= 1e16 || (amount != 0 && magnitude < 1e-4) {
+		return strconv.FormatFloat(amount, 'g', -1, 64)
+	}
+	if amount == math.Trunc(amount) {
 		return fmt.Sprintf("%.1f", amount)
 	}
-	return fmt.Sprintf("%v", amount)
+	return strconv.FormatFloat(amount, 'f', -1, 64)
 }
 
 func anyHistory(rows []map[string]any) bool {

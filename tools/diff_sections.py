@@ -25,18 +25,88 @@ sys.path.insert(0, str(ROOT))
 
 from fantasy import report  # noqa: E402
 
-# (name, which bucket of the advice, how the columns differ)
+# (name, which bucket of the advice, whether the filter bar acts on it)
 SECTIONS = [
-    ("plantilla", "squad", {}),
-    ("mercado", "bids_now", {"cost_label": "Puja minima"}),
+    ("plantilla", "squad", False),
+    ("mercado", "bids_now", True),
+    ("misventas", "my_listings", False),
+    ("seguimiento", "watchlist", False),
+    ("ventas", "sells", False),
+    ("riesgo", "exposure", False),
 ]
 
+# The empty-state text is part of the output, so it belongs to the spec and not to a
+# default: "Sin exposicion relevante" is what the risk table says when there is none.
+EMPTY = {"riesgo": "Sin exposicion relevante"}
 
-def columns_for(name: str, kwargs: dict):
-    columns = report._player_columns(**kwargs)
+
+def columns_for(name: str):
+    """The same columns Python's build uses for that section, in the same order."""
+    if name == "plantilla":
+        return report._player_columns()
     if name == "mercado":
+        columns = report._player_columns(cost_label="Puja minima")
         columns.insert(4, ("Puja max. rentable", lambda row: row.get("ideal_bid"), "ideal"))
-    return columns
+        return columns
+    if name == "misventas":
+        return [
+            ("Jugador", lambda r: r, "player"),
+            ("Valor", lambda r: r["value"], "money"),
+            ("Pides", lambda r: r.get("entry_cost"), "money"),
+            ("Sobre valor", lambda r: r.get("ask_ratio"), "ratio"),
+            ("xPts/j", lambda r: r["xpts"], "num"),
+            ("Valor 7d", lambda r: r.get("projected_pct"), "pct"),
+        ]
+    if name == "seguimiento":
+        return report._player_columns()
+    if name == "ventas":
+        return report._player_columns(extra=[("Motivos", lambda r: r.get("reasons"), "list")])
+    if name == "riesgo":
+        return [
+            ("Jugador", lambda r: r, "player"),
+            ("Valor", lambda r: r["value"], "money"),
+            ("Cláusula", lambda r: r.get("clause"), "money"),
+            ("x valor", lambda r: r.get("clause_margin"), "num"),
+            ("Rivales que pueden", lambda r: r.get("threats"), "int"),
+            ("El mas rico", lambda r: r.get("top_threat"), "text"),
+            ("xPts/j", lambda r: r["xpts"], "num"),
+            ("Score", lambda r: r["score"], "num"),
+        ]
+    raise SystemExit(f"seccion sin columnas: {name}")
+
+
+def synthetic(name: str, advice: dict) -> list[dict]:
+    """Rows for a section the current world has none of."""
+    base = (advice.get("squad") or [])[:3]
+    if not base:
+        return []
+    if name == "riesgo":
+        return [{**row,
+                 "clause": (row.get("value") or 0) * 1.8,
+                 "clause_margin": 1.8,
+                 "threats": index,
+                 "top_threat": ["La rataneta", None, "TheMessias"][index % 3]}
+                for index, row in enumerate(base)]
+    return []
+
+
+def compare_empty(binary: str, scratch: Path) -> int:
+    """The empty state is output too, and every section words it differently."""
+    path = scratch / "empty.json"
+    path.write_text("[]")
+    failures = 0
+    print("\n  con cero filas:")
+    for name, _bucket, filterable in SECTIONS:
+        python = report._table(columns_for(name), [], section=name, filterable=filterable,
+                              **({"empty": EMPTY[name]} if name in EMPTY else {}))
+        go = subprocess.run([binary, "section", name, str(path)],
+                            capture_output=True, text=True, cwd=ROOT).stdout
+        if python == go:
+            print(f"    ok  {name:12} {python}")
+        else:
+            failures += 1
+            print(f"    DISTINTO  {name}\n        py={python}\n        go={go}")
+    return failures
 
 
 def main() -> int:
@@ -54,22 +124,35 @@ def main() -> int:
     scratch = Path(tempfile.mkdtemp())
     failures = 0
 
-    for name, bucket, kwargs in SECTIONS:
+    for name, bucket, filterable in SECTIONS:
         rows = advice.get(bucket) or []
+        origin = ""
         if not rows:
-            print(f"  {name}: el volcado no trae filas, no se puede comparar")
+            # A bucket can legitimately be empty — no clause exposure today is good news —
+            # but the renderer still has to be compared. Synthetic rows do that job: what
+            # is under test is the HTML, and plausible input exercises the same code.
+            rows = synthetic(name, advice)
+            origin = " (filas sinteticas)"
+        if not rows:
+            print(f"  {name}: sin filas y sin manera de fabricarlas")
             failures += 1
             continue
 
         path = scratch / f"{name}.json"
         path.write_text(json.dumps(rows))
-        python = report._table(columns_for(name, kwargs), rows, section=name,
-                              filterable=(name == "mercado"))
+        # `seguimiento` is the one table Python builds without a section marker, so its
+        # rows still say "mio" — the players are unowned, and a row that is somehow yours
+        # there is worth flagging.
+        section = "" if name == "seguimiento" else name
+        python = report._table(columns_for(name), rows,
+                              section=section, filterable=filterable,
+                              **({"empty": EMPTY[name]} if name in EMPTY else {}))
         go = subprocess.run([binary, "section", name, str(path)],
                             capture_output=True, text=True, cwd=ROOT).stdout
 
         if python == go:
-            print(f"  ok  {name:12} {len(rows):3} filas · {len(python):>6} bytes identicos")
+            print(f"  ok  {name:12} {len(rows):3} filas · {len(python):>6} bytes "
+                  f"identicos{origin}")
             continue
 
         failures += 1
@@ -82,6 +165,8 @@ def main() -> int:
             print(f"      py={python[i1:i2][:110]!r}")
             print(f"      go={go[j1:j2][:110]!r}")
             shown += 1
+
+    failures += compare_empty(binary, scratch)
 
     print(f"\n{'VERDE' if not failures else 'ROJO'}: {len(SECTIONS)} secciones, "
           f"{failures} discrepancias")
