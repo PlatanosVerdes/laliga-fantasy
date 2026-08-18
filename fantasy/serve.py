@@ -102,6 +102,7 @@ class State:
             payload = {
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "week": universe["week"],
+                "fixtures": universe.get("fixtures"),
                 "budget": (advice or {}).get("budget"),
                 "market": universe.get("market"),
                 "clauses": universe.get("clauses"),
@@ -202,6 +203,10 @@ class State:
             "squad_value": round(sum(float(p.get("value") or 0) for p in mine)),
             "listed": sum(1 for m in (self.payload.get("market") or []) if m.get("is_mine")),
             "offers": sum(len(p.get("offers") or []) for p in mine),
+            # A match changes neither the transfer log nor the market, but it changes
+            # these two, which is the whole reason they are in here.
+            "points": round(sum(float(p.get("season_points") or 0) for p in mine)),
+            "absences": sum(1 for p in mine if p.get("absence")),
         }
 
     @staticmethod
@@ -266,7 +271,7 @@ class State:
 # Figures that only move when something actually happened. Squad value drifts on its
 # own every time the market revalues a player, so it is worth reporting after an
 # operation but would cry wolf on an ordinary refresh.
-DISCRETE = ("cash", "squad", "listed", "offers")
+DISCRETE = ("cash", "squad", "listed", "offers", "points", "absences")
 
 
 def settle(state: State, cause: str, *, force: bool = True,
@@ -788,12 +793,21 @@ def run(builder: Callable[[], tuple[dict, dict | None, dict]], *,
                 log.debug("sleep cut short", extra={"had_left": round(when - time.time(), 1)})
                 continue
 
+            live = schedule.live_matches(state.payload, now=time.time())
+            if live or why.startswith(("termina", "cierra")):
+                # Points come from the player master, cached for six hours because it
+                # barely changes — except while a match is on, when it is the only
+                # thing that changes. A match is the one case where the long TTLs have
+                # to be pushed aside, and the final points land after the whistle.
+                http.invalidate("players", "lineup", "week")
+
             if kind == schedule.DEADLINE:
                 # Remember it as spent, so an expiry the API keeps reporting as
                 # imminent cannot be woken for twice.
                 state.deadline_floor = when + schedule.LEAD + 1
                 log.info("waking on a deadline", extra={"why": why})
-                settle(state, "vencimiento", force=False, keys=DISCRETE)
+                settle(state, "partido" if live else "vencimiento",
+                       force=False, keys=DISCRETE)
                 if state.needs_followup:
                     state.needs_followup = False
                     settle(state, "policy")
@@ -811,12 +825,15 @@ def run(builder: Callable[[], tuple[dict, dict | None, dict]], *,
                                                   "reason": str(exc)[:200]})
                 settle(state, "refresco", force=False, keys=DISCRETE)
                 continue
-            if moved or kind == schedule.REBUILD:
+            if moved or live or kind == schedule.REBUILD:
                 log.info("rebuilding", extra={"why": ("se movio: " + ", ".join(halves))
-                                                     if moved else why})
+                                                     if moved else
+                                                     (f"{len(live)} partido(s) en juego"
+                                                      if live else why)})
                 # A transfer in the log is somebody else acting on our squad — a sale
                 # we did not make lands here, not in a write path.
-                cause = "traspaso" if "events" in halves else "mercado"
+                cause = ("partido" if live else
+                         "traspaso" if "events" in halves else "mercado")
                 settle(state, cause, force=False, keys=DISCRETE)
             else:
                 log.debug("nothing moved", extra={"probes": state.probes})

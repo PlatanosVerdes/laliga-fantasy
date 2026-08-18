@@ -30,8 +30,47 @@ CEILING = 900.0
 # somebody has the page open, because for them the page is supposed to be live.
 BUSY_WINDOW = 600.0
 IDLE_FACTOR = 4
+# How long a match is worth treating as under way. Kick-off plus stoppage, halftime and
+# the minutes it takes for the last points to settle.
+MATCH_WINDOW = 130 * 60
+# While the ball is rolling, points move and nothing announces it. Two minutes rather
+# than one because a live rebuild is not cheap — the player master has to be re-read —
+# and points do not change meaningfully faster than that.
+LIVE_TICK = 120.0
 
 PROBE, REBUILD, DEADLINE = "probe", "rebuild", "deadline"
+# matchState 7 is a finished match; see analysis.load_fixtures.
+FINISHED = 7
+
+
+def live_matches(payload: dict[str, Any], *, now: float,
+                 mine_only: bool = False) -> list[dict[str, Any]]:
+    """Matches whose ball is presumably rolling, judged by the clock.
+
+    The API's code for a live match is not known — 1 is pending and 7 is finished, and
+    that is all that has been observed — so this asks whether we are inside the window
+    that starts at kick-off, and trusts the finished state when it is set. Over-polling
+    a postponed match costs a request; missing a live one costs the points.
+
+    `mine_only` keeps the matches our own players are in. Somebody else's fixture moves
+    the standings, ours moves our score, and only the second deserves the fast cadence.
+    """
+    teams = set()
+    if mine_only:
+        teams = {str(p.get("team_id")) for p in (payload.get("players") or [])
+                 if p.get("is_mine") and p.get("team_id")}
+    live = []
+    for fixture in payload.get("fixtures") or []:
+        kickoff = _parse(fixture.get("kickoff"))
+        if not kickoff or fixture.get("state") == FINISHED:
+            continue
+        if not kickoff <= now <= kickoff + MATCH_WINDOW:
+            continue
+        if mine_only and not ({str(fixture.get("local_id")),
+                               str(fixture.get("visitor_id"))} & teams):
+            continue
+        live.append(fixture)
+    return live
 
 
 def _parse(value: Any) -> float | None:
@@ -73,6 +112,21 @@ def deadlines(payload: dict[str, Any], *, now: float, after: float = 0.0,
             who = names.get(str(listing.get("player_id"))) or "un jugador"
             found.append((when, f"cierra la subasta de {who}"))
 
+    for fixture in payload.get("fixtures") or []:
+        kickoff = _parse(fixture.get("kickoff"))
+        if not kickoff:
+            continue
+        pair = f"{fixture.get('local')} - {fixture.get('visitor')}"
+        if kickoff > now:
+            found.append((kickoff, f"empieza {pair}"))
+        elif fixture.get("state") != FINISHED and kickoff + MATCH_WINDOW > now:
+            # The final points land after the whistle, not on it.
+            found.append((kickoff + MATCH_WINDOW, f"termina {pair}"))
+
+    closing = _parse((payload.get("week") or {}).get("closingWeekDate"))
+    if closing and closing > now:
+        found.append((closing, f"cierra la jornada {(payload.get('week') or {}).get('weekNumber')}"))
+
     for player in players:
         policy = policies.get(str(player.get("id"))) or {}
         if policy.get("raid"):
@@ -94,6 +148,12 @@ def next_wake(payload: dict[str, Any], *, now: float, tick: float,
     """(when, why, kind). The why is logged and shown, so it has to read plainly."""
     upcoming = deadlines(payload, now=now, after=after, policies=policies)
     busy = watched or bool(upcoming and upcoming[0][0] - now <= BUSY_WINDOW)
+
+    if live_matches(payload, now=now, mine_only=True):
+        # Our own players on the pitch: points move and no endpoint announces it.
+        tick, busy = min(tick, LIVE_TICK), True
+    elif live_matches(payload, now=now):
+        busy = True     # somebody else's match: the standings move, our score does not
 
     when = now + (tick if busy else tick * IDLE_FACTOR)
     why, kind = "a ver si se ha movido algo", PROBE

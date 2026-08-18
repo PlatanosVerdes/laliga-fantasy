@@ -1965,13 +1965,15 @@ async function swap(){
 }
 
 const EFFECT_LABELS={cash:'Saldo',squad:'Jugadores',squad_value:'Valor de la plantilla',
-                     listed:'En el mercado',offers:'Ofertas recibidas'};
+                     listed:'En el mercado',offers:'Ofertas recibidas',
+                     points:'Puntos de la plantilla',absences:'Bajas'};
 const OPERATION_LABELS={sell_to_market:'Puesto en venta',accept_offer:'Oferta aceptada',
   decline_offer:'Oferta rechazada',withdraw:'Retirado del mercado',bid:'Puja enviada',
   modify_bid:'Puja modificada',cancel_bid:'Puja cancelada',direct_offer:'Oferta directa',
   pay_clause:'Clausulazo pagado',raise_clause:'Clausula subida',
   save_lineup:'Alineacion guardada',policy:'Instruccion ejecutada',
   traspaso:'Se ha movido la liga',mercado:'Cambios en el mercado',
+  partido:'Partido en juego',
   vencimiento:'Ha vencido algo',refresco:'Actualizado'};
 
 function showEffect(message){
@@ -1979,7 +1981,8 @@ function showEffect(message){
   const rows=Object.entries(message.changed||{}).map(([key,change])=>{
     const money=key==='cash'||key==='squad_value';
     const fmt=(n)=> money?exact(n||0):String(n??0);
-    const sign=change.delta>0?'up':(change.delta<0?'down':'');
+    const worse=key==='absences';
+    const sign=change.delta>0?(worse?'down':'up'):(change.delta<0?(worse?'up':'down'):'');
     return `<tr><th>${EFFECT_LABELS[key]||key}</th><td>${fmt(change.before)}</td>`
       +`<td class="arrow">→</td><td>${fmt(change.after)}</td>`
       +`<td class="delta ${sign}">${change.delta>0?'+':''}${fmt(change.delta)}</td></tr>`;

@@ -239,11 +239,13 @@ def build_universe(
     strength = team_strength(players)
     curves = price_prior(players)
 
+    fixtures = load_fixtures(week, teams)
+
     next_week_opens = None
     if week.get("nextWeek"):
         try:
-            fixtures = laliga.calendar(int(week["nextWeek"]))
-            dates = sorted(f.get("date") for f in fixtures if f.get("date"))
+            next_fixtures = laliga.calendar(int(week["nextWeek"]))
+            dates = sorted(f.get("date") for f in next_fixtures if f.get("date"))
             next_week_opens = dates[0] if dates else None
         except Exception as exc:
             log.debug("next week calendar unavailable",
@@ -384,6 +386,7 @@ def build_universe(
     apply_scores(rows)
     return {
         "week": week,
+        "fixtures": fixtures,
         "next_week_opens": next_week_opens,
         "completed_weeks": completed_weeks,
         "current_weight": current_weight,
@@ -955,6 +958,47 @@ def load_offers(league_id: str, listings: list[dict[str, Any]],
             offers[str(player_id)] = sorted(pending, key=lambda o: -(o.get("money") or 0))
     log.info("offers loaded", extra={"listings": len(listings), "with_offers": len(offers)})
     return offers
+
+
+# matchState observed from the calendar: 1 not started, 7 finished with a score. The
+# code for a match under way has not been seen, so liveness is derived from the clock
+# instead of a guessed constant — see schedule.live_matches.
+MATCH_PENDING, MATCH_FINISHED = 1, 7
+
+
+def load_fixtures(week: dict[str, Any],
+                  teams: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    """This week's matches, with kick-off and state.
+
+    A match is the other thing that changes the world without touching the transfer
+    log or the market: points accrue, lineups lock, someone limps off. The refresh
+    loop cannot see any of that from the two cheap endpoints, so it needs the
+    fixture list to know when to look.
+    """
+    try:
+        rows = laliga.calendar(int(week.get("weekNumber") or 1))
+    except Exception as exc:
+        log.debug("calendar unavailable", extra={"error_type": type(exc).__name__})
+        return []
+
+    names = {str(team.get("id")): team.get("shortName") or team.get("name")
+             for team in (teams or [])}
+    fixtures = []
+    for row in rows:
+        local, visitor = str(row.get("localId") or ""), str(row.get("visitorId") or "")
+        fixtures.append({
+            "id": str(row.get("id") or ""),
+            "kickoff": row.get("matchDate") or row.get("date"),
+            "state": row.get("matchState"),
+            "local_id": local, "visitor_id": visitor,
+            "local": names.get(local) or local, "visitor": names.get(visitor) or visitor,
+            "local_score": row.get("localScore"), "visitor_score": row.get("visitorScore"),
+        })
+    log.debug("fixtures loaded", extra={"week": week.get("weekNumber"),
+                                       "matches": len(fixtures),
+                                       "pending": sum(1 for f in fixtures
+                                                      if f["state"] == MATCH_PENDING)})
+    return fixtures
 
 
 def clause_calendar(players: Iterable[dict], *, horizon_hours: int = 24 * 10) -> dict[str, Any]:

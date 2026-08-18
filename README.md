@@ -264,11 +264,28 @@ Three kinds of wake-up, and `/healthz` names the next one (`next_wake_in`,
 | Wake-up | When | What it does |
 |---|---|---|
 | probe | every `--interval`; ×4 only when no deadline is within 10 min **and** nobody has the page open | 2 requests, then usually nothing |
-| deadline | 2 s before an expiry or a scheduled unlock | rebuilds unconditionally: this is the instant we may have to act |
-| rebuild | 15 min since the last full one | catches the drift nothing announces — values, points, futbolfantasy |
+| deadline | 2 s before an expiry, a scheduled unlock, a kick-off, a final whistle or the matchday close | rebuilds unconditionally: this is the instant we may have to act |
+| live match | every 2 min while one of *our* players is on the pitch | rebuilds, and drops the six-hour player cache first |
+| rebuild | 15 min since the last full one | catches the drift nothing announces — values, futbolfantasy |
 
 `/healthz` also reports the request counter (`requests`, `cache_hits`, `errors`), so the
 cost of a refresh policy is a measurement rather than a claim.
+
+**A match is the third thing that changes the world.** It touches neither the transfer
+log nor the market, so the probe is blind to it, and the data that does move sits behind
+the longest TTLs in the app: points come from the player master, cached for six hours
+because it barely changes — except while a match is on, when it is the only thing that
+changes. So the week's fixtures are part of the model, and their kick-offs, final
+whistles and the matchday close are deadlines like any other.
+
+Liveness is judged by the clock, not by a state code: `matchState` 1 is pending and 7 is
+finished, and no live value has been observed, so a match counts as under way from
+kick-off until 130 minutes later unless it says finished. Over-polling a postponed match
+costs a request; missing a live one costs the points. While one of *our* players is on
+the pitch the cadence tightens to two minutes and the player, lineup and week caches are
+dropped each time; somebody else's fixture only moves the standings, so it gets the base
+tick. The panel then reports the two figures a match moves: `Puntos de la plantilla` and
+`Bajas` — the latter coloured the other way round, since more of them is not good news.
 
 **Anything that moves the world says what it moved.** A completed sale changes the
 cash, the squad, the market and every recommendation derived from them, so the world is
