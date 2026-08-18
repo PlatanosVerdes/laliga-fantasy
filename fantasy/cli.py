@@ -657,13 +657,33 @@ def cmd_always(args) -> int:
 def cmd_serve(args) -> int:
     from . import serve
 
+    league_id = my_team_id = None
+    if not args.no_auth:
+        try:
+            league_id, my_team_id, _ = resolve_league(args)
+        except Exception as exc:
+            print(paint(f"Sin liga ({exc}): sirvo solo datos publicos.", YELLOW))
+
     def builder():
         universe, advice, context = _load(args)
         if advice:
             analysis.enrich_buckets(advice, limit=args.limit)
         return universe, advice, context
 
-    return serve.run(builder, host=args.host, port=args.port, interval=args.interval)
+    if args.allow_writes:
+        print(paint("ESCRITURA ACTIVADA: esta pagina puede pujar, vender y aceptar "
+                    "ofertas con dinero real.", YELLOW))
+        pending = [a for a in policies.plan(builder()[0]["players"])
+                   if a["action"] != "ninguna"]
+        if pending:
+            print(paint(f"  Hay {len(pending)} accion(es) de 'siempre en mercado' en cola "
+                        f"que se ejecutaran en el primer refresco:", YELLOW))
+            for action in pending:
+                print(f"    · {action['name']}: {action['action']} — {action['why']}")
+
+    return serve.run(builder, host=args.host, port=args.port, interval=args.interval,
+                     allow_writes=args.allow_writes, league_id=league_id,
+                     my_team_id=my_team_id)
 
 
 def cmd_probe(args) -> int:
