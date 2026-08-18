@@ -19,6 +19,8 @@ import (
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 )
 
 // Observed match states: 1 not started, 7 finished with a score. Nothing has ever been
@@ -86,6 +88,7 @@ type Player struct {
 	FFName           *string                `json:"ff_name"`
 	FFValue          *float64               `json:"ff_value"`
 	Absence          map[string]any         `json:"absence"`
+	ClauseHoursLeft  *float64               `json:"clause_hours_left"`
 	Starred          bool                   `json:"starred"`
 	RaidScheduled    bool                   `json:"raid_scheduled"`
 	MarketEntry      *Listing               `json:"market"`
@@ -136,12 +139,14 @@ type Universe struct {
 	MyTeamID        *string            `json:"my_team_id"`
 	OwnershipLoaded bool               `json:"ownership_loaded"`
 	CompletedWeeks  int                `json:"completed_weeks"`
+	NextWeekOpens   string             `json:"next_week_opens"`
 	CurrentWeight   float64            `json:"current_weight"`
 	TeamStrength    map[string]float64 `json:"team_strength"`
 	MatchedCount    int                `json:"matched_count"`
 	LeagueTeams     map[string]*LeagueTeam `json:"league_teams"`
 	Activity        []Event            `json:"activity"`
 	CashModel       CashModel          `json:"cash_model"`
+	Clauses         map[string]any     `json:"clauses"`
 }
 
 // Positions as the API numbers them, with the names the report uses.
@@ -155,6 +160,63 @@ var positions = map[int]string{1: "POR", 2: "DEF", 3: "MED", 4: "DEL", 5: "ENT"}
 type State struct {
 	Starred map[string]bool
 	Raids   map[string]bool
+}
+
+// BuildLive is Build with the futbolfantasy half fetched and matched in Go, which is what
+// the server uses now that nothing goes through Python.
+func BuildLive(client *api.Client, leagueID, myTeamID string, state State,
+	ffTTL time.Duration) (*Universe, error) {
+	bridge, err := LoadBridge(client, ffTTL)
+	if err != nil {
+		return nil, err
+	}
+	return Build(client, leagueID, myTeamID, bridge, state)
+}
+
+// LoadBridge is what used to be a Python subprocess: the market page scraped, matched to
+// LaLiga ids, and the absences resolved to the players they belong to.
+func LoadBridge(client *api.Client, ffTTL time.Duration) (*Bridge, error) {
+	players, err := allPlayers(client)
+	if err != nil {
+		return nil, err
+	}
+	teams, err := client.TeamsMaster(24 * time.Hour)
+	if err != nil {
+		return nil, err
+	}
+	teamRows := make([]map[string]any, 0, len(teams))
+	for _, team := range teams {
+		teamRows = append(teamRows, map[string]any{
+			"id": team.ID, "name": team.Name, "slug": team.Slug,
+			"shortName": team.ShortName})
+	}
+
+	market, err := futbolfantasy.Market(ffTTL)
+	if err != nil {
+		return nil, err
+	}
+	matched, unmatched := matching.MatchMarket(players, market,
+		matching.BuildTeamIndex(teamRows))
+
+	trends := make(map[string]Trend, len(matched))
+	for id, row := range matched {
+		blob, err := json.Marshal(row)
+		if err != nil {
+			continue
+		}
+		var trend Trend
+		if err := json.Unmarshal(blob, &trend); err == nil {
+			trends[id] = trend
+		}
+	}
+
+	absences := MatchAbsences(players, futbolfantasy.Absences(3*time.Hour))
+	loose := make([]any, 0, len(unmatched))
+	for _, row := range unmatched {
+		loose = append(loose, row)
+	}
+	return &Bridge{Trends: trends, Absences: absences, Unmatched: loose,
+		MatchedCount: len(matched)}, nil
 }
 
 func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
@@ -184,8 +246,27 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 	// months; before that they are a handful of matches and mostly noise.
 	currentWeight := math.Min(1.0, float64(completedWeeks)/8.0)
 
+	// The first kick-off of next week: the widget says when the market opens again, and
+	// without it the page loses that line entirely.
+	nextOpens := ""
+	if week.NextWeek != 0 {
+		if fixtures, err := client.Calendar(week.NextWeek, 6*time.Hour); err == nil {
+			var dates []string
+			for _, match := range fixtures {
+				if when := fallback(match.Date, match.MatchDate); when != "" {
+					dates = append(dates, when)
+				}
+			}
+			sort.Strings(dates)
+			if len(dates) > 0 {
+				nextOpens = dates[0]
+			}
+		}
+	}
+
 	universe := &Universe{
 		Week:           week,
+		NextWeekOpens:  nextOpens,
 		Fixtures:       LoadFixtures(client, week, teams),
 		CompletedWeeks: completedWeeks,
 		CurrentWeight:  currentWeight,
@@ -414,9 +495,22 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		}
 		universe.CashModel = ReconstructCash(universe.Activity, universe.LeagueTeams,
 			myTeamID, myCash)
+		EnrichActivityValues(client, universe.Activity, 18)
 	}
 
 	ApplyScores(universe.Players)
+
+	// Clock-derived, so it comes after the rows exist and before anything reads it.
+	now := time.Now().UTC()
+	for index := range universe.Players {
+		if until := universe.Players[index].ClauseUntil; until != nil {
+			if when, err := parseTime(*until); err == nil {
+				hours := when.Sub(now).Hours()
+				universe.Players[index].ClauseHoursLeft = &hours
+			}
+		}
+	}
+	universe.Clauses = ClauseCalendar(universe.Players, 24*10)
 
 	slog.Debug("universe built", "players", len(universe.Players),
 		"owned", len(ownership), "listings", len(universe.Market),
@@ -760,10 +854,29 @@ func nested(source map[string]any, keys ...string) any {
 	return current
 }
 
+// Values from the scrapers are pointers, so absence survives into JSON as null rather than
+// as a zero. Every reader has to dereference, and forgetting it is silent: a *string reads as
+// "" and a match quietly fails. The comparison harness hid this by passing the rows through
+// JSON first, which flattens them.
 func text(value any) string {
 	switch typed := value.(type) {
 	case string:
 		return typed
+	case *string:
+		if typed == nil {
+			return ""
+		}
+		return *typed
+	case *float64:
+		if typed == nil {
+			return ""
+		}
+		return strconv.FormatFloat(*typed, 'f', -1, 64)
+	case *int:
+		if typed == nil {
+			return ""
+		}
+		return strconv.Itoa(*typed)
 	case float64:
 		return strconv.FormatFloat(typed, 'f', -1, 64)
 	case json.Number:
@@ -781,6 +894,18 @@ func number(value any) float64 {
 	switch typed := value.(type) {
 	case float64:
 		return typed
+	case *float64:
+		if typed == nil {
+			return 0
+		}
+		return *typed
+	case *int:
+		if typed == nil {
+			return 0
+		}
+		return float64(*typed)
+	case int:
+		return float64(typed)
 	case string:
 		parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
 		if err != nil {

@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -80,6 +79,8 @@ func main() {
 		err = cmdMatch(rest[1:])
 	case "scrape":
 		err = cmdScrape(rest[1:])
+	case "report":
+		err = cmdReport(rest[1:])
 	case "page":
 		err = cmdPage(rest[1:])
 	case "shell":
@@ -120,6 +121,7 @@ uso: fantasy [-v|-q] <comando>
   advise <universe.json> <saldo> [deuda] [limite]   los cubos de consejo, en JSON
   match <players.json> <ffmarket.json> <teams.json>   emparejar las dos fuentes
   scrape <que> <fichero.html>   parsear una pagina de futbolfantasy y volcarla en JSON
+  report [--output f] [--generado t]   la pagina, desde el modelo propio
   page <dump.json> <generado> [liga]   la pagina entera, desde un volcado
   shell <caso>  cabecera, widget, pie o pestanas, para compararlo
   section <n> <rows.json>   una seccion renderizada, para compararla
@@ -146,13 +148,7 @@ func cmdServe(args []string) error {
 	client := api.New()
 
 	world := state.New(func() (*model.Universe, error) {
-		bridge, err := loadBridge()
-		if err != nil {
-			// The scrapers are Python's; without them the model loses the futbolfantasy
-			// half, and pretending otherwise would produce quietly wrong scores.
-			return nil, err
-		}
-		return model.Build(client, leagueID, teamID, bridge, loadState())
+		return model.BuildLive(client, leagueID, teamID, loadState(), 2*time.Hour)
 	})
 
 	if err := world.Refresh("arranque"); err != nil {
@@ -210,6 +206,20 @@ func cmdServe(args []string) error {
 	return server.New(world, server.Options{
 		Host: *host, Port: *port, AllowWrites: false,
 		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
+		// The page is rendered on demand from whatever the last rebuild left, so a slow
+		// refresh never blocks a request and a failed one still serves the last good world.
+		Page: func() string {
+			universe := world.Universe()
+			if universe == nil {
+				return ""
+			}
+			page, err := renderPage(universe, client, teamID, "")
+			if err != nil {
+				slog.Error("render failed", "reason", err.Error())
+				return "<title>Error</title><p>No he podido construir la pagina.</p>"
+			}
+			return page
+		},
 	}).ListenAndServe()
 }
 
@@ -221,11 +231,7 @@ func cmdModel(args []string) error {
 	if err != nil {
 		return err
 	}
-	bridge, err := loadBridge()
-	if err != nil {
-		return err
-	}
-	universe, err := model.Build(api.New(), leagueID, teamID, bridge, loadState())
+	universe, err := model.BuildLive(api.New(), leagueID, teamID, loadState(), 2*time.Hour)
 	if err != nil {
 		return err
 	}
@@ -242,12 +248,8 @@ func cmdModel(args []string) error {
 	return nil
 }
 
-// loadBridge runs the Python side and reads its JSON. That subprocess is the port's
-// boundary: the futbolfantasy scrapers and the cross-source name matching stay in
-// Python, because they are regex over HTML that changes without notice and the most
-// fragile code in the project. What crosses is data, never parsing.
-// loadState reads the two files that hold what we chose rather than what the feed says.
-// A missing file is not an error: no stars and no instructions is a perfectly good state.
+// loadState reads the two files that hold what we chose rather than what the feed says. A
+// missing file is not an error: no stars and no instructions is a perfectly good state.
 func loadState() model.State {
 	state := model.State{Starred: map[string]bool{}, Raids: map[string]bool{}}
 
@@ -259,33 +261,15 @@ func loadState() model.State {
 			}
 		}
 	}
-	var policies map[string]map[string]any
-	if raw, err := os.ReadFile(config.PolicyFile); err == nil {
-		if json.Unmarshal(raw, &policies) == nil {
-			for id, entry := range policies {
-				if raid, ok := entry["raid"].(bool); ok && raid {
-					state.Raids[id] = true
-				}
+	armed, err := policies.Load()
+	if err == nil {
+		for id, policy := range armed {
+			if policy.Raid {
+				state.Raids[id] = true
 			}
 		}
 	}
 	return state
-}
-
-func loadBridge() (*model.Bridge, error) {
-	command := exec.Command("python3", "fantasy.py", "bridge")
-	command.Stderr = os.Stderr
-	blob, err := command.Output()
-	if err != nil {
-		return nil, fmt.Errorf("el puente de futbolfantasy ha fallado: %w", err)
-	}
-	var bridge model.Bridge
-	if err := json.Unmarshal(blob, &bridge); err != nil {
-		return nil, fmt.Errorf("el puente no ha devuelto JSON valido: %w", err)
-	}
-	slog.Debug("bridge loaded", "trends", len(bridge.Trends),
-		"absences", len(bridge.Absences))
-	return &bridge, nil
 }
 
 func contains(values []string, wanted string) bool {
@@ -691,6 +675,131 @@ func cmdScrape(args []string) error {
 	}
 	fmt.Println(string(blob))
 	return nil
+}
+
+// cmdReport is the page from Go's own model: its API client, its scrapers, its matcher, its
+// advice layer, its renderer. Nothing calls Python.
+func cmdReport(args []string) error {
+	flags := flag.NewFlagSet("report", flag.ContinueOnError)
+	output := flags.String("output", "", "donde escribirla (por defecto, salida estandar)")
+	generated := flags.String("generado", "", "marca de tiempo fija, para comparar")
+	budget := flags.Float64("budget", 0, "saldo, si no se quiere leer de la API")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+
+	leagueID, teamID, err := savedLeague()
+	if err != nil {
+		return err
+	}
+	client := api.New()
+	universe, err := model.BuildLive(client, leagueID, teamID, loadState(), 2*time.Hour)
+	if err != nil {
+		return err
+	}
+	if *budget != 0 {
+		cashOverride = budget
+	}
+
+	page, err := renderPage(universe, client, teamID, *generated)
+	if err != nil {
+		return err
+	}
+	if *output == "" {
+		fmt.Print(page)
+		return nil
+	}
+	return os.WriteFile(*output, []byte(page), 0o644)
+}
+
+// cashOverride lets `report --budget` skip reading /money, which the frozen comparison needs.
+var cashOverride *float64
+
+// renderPage is the whole document from a built universe: the advice layer, the per-player
+// enrichment, the standing instructions and the renderer. Shared by `report` and the server,
+// so the page cannot differ between them.
+func renderPage(universe *model.Universe, client *api.Client, teamID, generated string) (string, error) {
+	cash := 0.0
+	if cashOverride != nil {
+		cash = *cashOverride
+	} else if money, err := client.Money(teamID, time.Minute); err == nil {
+		cash = money.TeamMoney
+	}
+
+	// The advice layer and the page read the same generic rows, so the universe goes through
+	// JSON once. One conversion, in one place, rather than two shapes of the world.
+	blob, err := json.Marshal(universe)
+	if err != nil {
+		return "", err
+	}
+	var generic map[string]any
+	if err := json.Unmarshal(blob, &generic); err != nil {
+		return "", err
+	}
+	buckets := advice.Recommend(generic, cash, 0, 15)
+	// The per-player pages, once each: this is what fills the profitable ceiling and the
+	// value history the page draws.
+	advice.EnrichBuckets(buckets, 15, 24*time.Hour)
+
+	armed, err := policies.Load()
+	if err != nil {
+		return "", err
+	}
+	players := rowsFrom(generic["players"])
+	policyRows := map[string]map[string]any{}
+	for id, policy := range armed {
+		row := map[string]any{}
+		if policy.MinPrice != nil {
+			row["min_price"] = *policy.MinPrice
+		}
+		if policy.AcceptAbove != nil {
+			row["accept_above"] = *policy.AcceptAbove
+		}
+		policyRows[id] = row
+	}
+
+	stamp := generated
+	if stamp == "" {
+		stamp = time.Now().Format("02/01/2006 15:04")
+	}
+	league := ""
+	if settings, err := os.ReadFile(config.SettingsFile); err == nil {
+		var parsed struct {
+			LeagueName string `json:"league_name"`
+		}
+		if json.Unmarshal(settings, &parsed) == nil {
+			league = parsed.LeagueName
+		}
+	}
+
+	assets := os.Getenv("FANTASY_ASSETS")
+	if assets == "" {
+		assets = "assets"
+	}
+	read := func(name string) string {
+		body, err := os.ReadFile(filepath.Join(assets, name))
+		if err != nil {
+			return ""
+		}
+		return string(body)
+	}
+	render.Pitch, render.Filters = read("pitch.html"), read("filters.html")
+	var crests map[string]string
+	if body, err := os.ReadFile(filepath.Join(config.CacheDir, "crests.json")); err == nil {
+		if json.Unmarshal(body, &crests) == nil {
+			render.Crests = crests
+		}
+	}
+
+	document := render.Document{
+		Universe: generic, Advice: buckets, Generated: stamp, LeagueName: league,
+		CSS: read("report.css"), JS: read("report.js"),
+		Modal: read("modal.html"), Drawer: read("drawer.html"),
+		Plan:     policies.Plan(players, armed),
+		Raids:    policies.RaidPlan(players, armed, cash),
+		Policies: policyRows,
+	}
+	return document.HTML(), nil
 }
 
 // cmdPage renders the whole document from a dump, so it can be compared with Python's

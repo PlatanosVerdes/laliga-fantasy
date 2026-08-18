@@ -290,6 +290,12 @@ func text(value any) string {
 	if asString, ok := value.(string); ok {
 		return asString
 	}
+	if pointer, ok := value.(*string); ok {
+		if pointer == nil {
+			return ""
+		}
+		return *pointer
+	}
 	if asFloat := number(value); asFloat == math.Trunc(asFloat) {
 		return fmt.Sprintf("%d", int64(asFloat))
 	}
@@ -307,6 +313,12 @@ func truthy(value any) bool {
 	switch typed := value.(type) {
 	case bool:
 		return typed
+	case *bool:
+		return typed != nil && *typed
+	case *string:
+		return typed != nil && *typed != ""
+	case *float64:
+		return typed != nil && *typed != 0
 	case float64:
 		return typed != 0
 	case string:
@@ -764,6 +776,9 @@ func RatioBadge(ratio *float64, selling bool) string {
 }
 
 func asStrings(value any) []string {
+	if already, ok := value.([]string); ok {
+		return already
+	}
 	items, ok := value.([]any)
 	if !ok {
 		return nil
@@ -1470,12 +1485,34 @@ func anyHistory(rows []map[string]any) bool {
 	return false
 }
 
+// Rows reach here two ways: parsed from JSON, where every value is a plain float64 or
+// string, and straight from the model, where absence is a nil pointer. Both have to read the
+// same, and forgetting a pointer case is silent — a *float64 reads as zero and a whole table
+// quietly loses its rows. It cost the actions table its four "vender" rows and three of its
+// "fichar" ones before the page comparison caught it.
 func asFloat(value any) *float64 {
 	switch typed := value.(type) {
 	case nil:
 		return nil
 	case float64:
 		return &typed
+	case *float64:
+		return typed
+	case *int:
+		if typed == nil {
+			return nil
+		}
+		converted := float64(*typed)
+		return &converted
+	case *bool:
+		if typed == nil {
+			return nil
+		}
+		converted := 0.0
+		if *typed {
+			converted = 1
+		}
+		return &converted
 	case int:
 		converted := float64(typed)
 		return &converted

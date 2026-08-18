@@ -497,12 +497,31 @@ func SortedKeys(source map[string]map[string]any) []string {
 	return keys
 }
 
+// Values from the scrapers are pointers, so absence survives into JSON as null rather than
+// as a zero. Every reader has to dereference, and forgetting it is silent: a *string reads as
+// "" and a match quietly fails. The comparison harness hid this by passing the rows through
+// JSON first, which flattens them.
 func text(value any) string {
 	switch typed := value.(type) {
 	case nil:
 		return ""
 	case string:
 		return typed
+	case *string:
+		if typed == nil {
+			return ""
+		}
+		return *typed
+	case *float64:
+		if typed == nil {
+			return ""
+		}
+		return strconv.FormatFloat(*typed, 'f', -1, 64)
+	case *int:
+		if typed == nil {
+			return ""
+		}
+		return strconv.Itoa(*typed)
 	case float64:
 		// Ids arrive as numbers when they come from JSON: "1300", never "1300.0".
 		if typed == math.Trunc(typed) {
@@ -517,6 +536,18 @@ func number(value any) float64 {
 	switch typed := value.(type) {
 	case float64:
 		return typed
+	case *float64:
+		if typed == nil {
+			return 0
+		}
+		return *typed
+	case *int:
+		if typed == nil {
+			return 0
+		}
+		return float64(*typed)
+	case int:
+		return float64(typed)
 	case string:
 		parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
 		if err != nil {

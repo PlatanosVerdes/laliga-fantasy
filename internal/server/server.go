@@ -28,6 +28,9 @@ type Options struct {
 	// Nudge lets a request tighten the refresh cadence (a browser connecting, a write
 	// landing) without the server knowing what the engine is.
 	Nudge func(string)
+	// Page renders the current world. Injected so the server does not need to know what a
+	// document is, and so a run without a session can still answer /healthz.
+	Page func() string
 	// Refresh forces a rebuild, for /refresh.
 	Refresh func(cause string, force bool) error
 }
@@ -192,25 +195,17 @@ func (s *Server) asset(writer http.ResponseWriter, request *http.Request) {
 	_, _ = writer.Write(body)
 }
 
-// index is honest about the state of the port: the JSON and the push channel are Go's, the
-// page is still rendered by Python. Serving half a page would be worse than saying so.
+// index serves the page.
 func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 	if request.URL.Path != "/" {
 		http.NotFound(writer, request)
 		return
 	}
-	health := s.state.Health()
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(writer, `<title>laliga-fantasy (Go)</title>
-<style>body{font:15px/1.5 system-ui;max-width:60ch;margin:6vh auto;padding:0 1rem}
-code{background:#eee;padding:1px 4px;border-radius:3px}</style>
-<h1>Motor en Go</h1>
-<p>La API y el canal de eventos ya los sirve Go. La pagina todavia la construye Python:
-es el paso 7c del puerto, y servir media pagina seria peor que decirlo.</p>
-<ul>
-<li><code>/api/state</code> — el mundo en JSON (version %d)</li>
-<li><code>/api/events</code> — SSE</li>
-<li><code>/api/player/{id}</code> — un jugador</li>
-<li><code>/healthz</code> — %s, %d reconstrucciones</li>
-</ul>`, health.Version, health.Status, health.Runs)
+	writer.Header().Set("Cache-Control", "no-store")
+	if s.opts.Page == nil {
+		fmt.Fprint(writer, "<title>Generando</title><p>Generando el primer informe…</p>")
+		return
+	}
+	fmt.Fprint(writer, s.opts.Page())
 }

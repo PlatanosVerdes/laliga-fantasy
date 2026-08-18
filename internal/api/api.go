@@ -192,6 +192,14 @@ func (c *Client) PlayerOffers(leagueID, playerTeamID string, ttl time.Duration) 
 	return offers, err
 }
 
+// PlayerMarketValue is the daily value series for one player.
+func (c *Client) PlayerMarketValue(playerID string, ttl time.Duration) ([]map[string]any, error) {
+	var series []map[string]any
+	err := c.getList(fmt.Sprintf("%s/player/%s/market-value", config.CMP, playerID), ttl,
+		"mv", false, &series)
+	return series, err
+}
+
 func (c *Client) TeamSquad(leagueID, teamID string, ttl time.Duration) (map[string]any, error) {
 	var squad map[string]any
 	err := c.get(fmt.Sprintf("%s/leagues/%s/teams/%s", config.CMP, leagueID, teamID),

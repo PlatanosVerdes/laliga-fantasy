@@ -346,6 +346,11 @@ func text(value any) string {
 		return ""
 	case string:
 		return typed
+	case *string:
+		if typed == nil {
+			return ""
+		}
+		return *typed
 	case float64:
 		if typed == math.Trunc(typed) {
 			return strconv.FormatInt(int64(typed), 10)
@@ -359,6 +364,11 @@ func number(value any) float64 {
 	switch typed := value.(type) {
 	case float64:
 		return typed
+	case *float64:
+		if typed == nil {
+			return 0
+		}
+		return *typed
 	case int:
 		return float64(typed)
 	case int64:
@@ -377,6 +387,10 @@ func truthy(value any) bool {
 	switch typed := value.(type) {
 	case bool:
 		return typed
+	case *bool:
+		return typed != nil && *typed
+	case *float64:
+		return typed != nil && *typed != 0
 	case float64:
 		return typed != 0
 	case string:

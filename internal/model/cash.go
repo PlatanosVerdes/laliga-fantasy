@@ -44,6 +44,10 @@ type Event struct {
 	Player   *string        `json:"player"`
 	PlayerID *string        `json:"player_id"`
 	Amount   *float64       `json:"amount"`
+	// Filled by EnrichActivityValues for the biggest trades only.
+	ValueThen  *float64 `json:"value_then,omitempty"`
+	Premium    *float64 `json:"premium,omitempty"`
+	PremiumAbs *float64 `json:"premium_abs,omitempty"`
 	Raw      map[string]any `json:"raw"`
 }
 
