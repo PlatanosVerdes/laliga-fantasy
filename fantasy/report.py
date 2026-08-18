@@ -18,6 +18,14 @@ from .config import POSITION_NAMES, POSITIONS, REPORT_FILE
 
 Column = tuple[str, Callable[[dict], Any], str]
 
+DRAWER = '''<div class="drawer" id="drawer" hidden role="dialog" aria-modal="true">
+  <div class="drawer-panel">
+    <button class="drawer-close" type="button" aria-label="Cerrar">&times;</button>
+    <div class="drawer-body"><p class="empty">Cargando…</p></div>
+  </div>
+</div>'''
+
+
 MODAL = '''<div class="modal" id="bid-modal" hidden role="dialog" aria-modal="true"
      aria-labelledby="bid-title">
   <div class="modal-card">
@@ -189,7 +197,7 @@ def _offer_buttons(row: dict) -> str:
               f'data-op-name="{_esc(row.get("name"))}" '
               f'data-op-amount="{int(row.get("offer_amount") or 0)}"')
     return (f'<button class="op bid" data-op="accept_offer" {common} type="button">Aceptar'
-            f'</button> <button class="op ghost" data-op="decline_offer" {common} '
+            f'</button> <button class="op danger" data-op="decline_offer" {common} '
             f'type="button">Rechazar</button>')
 
 
@@ -218,11 +226,28 @@ def _star(row: dict) -> str:
             f'{"★" if on else "☆"}</button>')
 
 
-def _ratio_badge(ratio: Any) -> str:
-    """How the asking price compares with market value, named as well as coloured."""
+def _ratio_badge(ratio: Any, *, selling: bool = False) -> str:
+    """Price against market value, named as well as coloured.
+
+    The same multiple means opposite things depending on which side you are on:
+    paying 1.30x is expensive, being *paid* 1.30x is a gift. `selling` flips it.
+    """
     if ratio is None:
         return "—"
     value = float(ratio)
+    if selling:
+        if value >= 1.15:
+            status, label = "good", "te pagan de mas"
+        elif value >= 1.02:
+            status, label = "good", "buen precio"
+        elif value >= 0.98:
+            status, label = "neutral", "a valor"
+        elif value >= 0.9:
+            status, label = "warning", "por debajo"
+        else:
+            status, label = "critical", "te lowballean"
+        return (f'<span class="pill-{status}">{value:.2f}x</span>'
+                f'<span class="pill-note">{label}</span>')
     if value <= 0.98:
         status, label = "good", "chollo"
     elif value <= 1.06:
@@ -299,6 +324,8 @@ def _cell(value: Any, kind: str) -> tuple[str, str]:
         return _magnitude_bar(value), str(float(value or 0))
     if kind == "ratio":
         return _ratio_badge(value), str(float(value or 0))
+    if kind == "ratio_sell":
+        return _ratio_badge(value, selling=True), str(float(value or 0))
     if kind == "power":
         order = {"justo": "0", "normal": "1", "holgado": "2"}
         return _power_badge(value), order.get((value or {}).get("power"), "1")
@@ -316,6 +343,12 @@ def _cell(value: Any, kind: str) -> tuple[str, str]:
 CRESTS: dict[str, str] = {}
 
 
+# Sections where every row is yours by definition: repeating "mio" there is noise.
+ALL_MINE = {"plantilla", "ventas", "ofertas", "misventas", "vencimientos", "riesgo",
+            "siempre"}
+_current_section = ""
+
+
 def _player_cell(row: dict) -> str:
     flags = []
     team_id = str(row.get("team_id"))
@@ -331,10 +364,11 @@ def _player_cell(row: dict) -> str:
         flags.append('<span class="flag-warning">duda</span>')
     if row.get("prior_based"):
         flags.append('<span class="flag-muted" title="Sin historico: estimado por precio">est.</span>')
-    if row.get("is_mine"):
+    if row.get("is_mine") and _current_section not in ALL_MINE:
         flags.append('<span class="flag-mine">mio</span>')
     return (f'<span class="p-cell">{badge}'
-            f'<span class="p-name">{_esc(row.get("name"))}</span>'
+            f'<button class="p-name" type="button" data-detail="{_esc(row.get("id"))}">'
+            f'{_esc(row.get("name"))}</button>'
             f'<span class="pos pos-{slug}">{_esc(row.get("position"))}</span>'
             f'<span class="p-meta">{_esc(row.get("team_short") or row.get("team"))}</span>'
             + "".join(flags) + "</span>")
@@ -343,8 +377,30 @@ def _player_cell(row: dict) -> str:
 NUMERIC_KINDS = {"money", "num", "int", "pct", "pct_plain", "mag", "ideal"}
 
 
+class _in_section:
+    """Marks which section a table is being built for, so row flags can adapt."""
+
+    def __init__(self, name: str):
+        self.name = name
+
+    def __enter__(self):
+        global _current_section
+        self.previous = _current_section
+        _current_section = self.name
+        return self
+
+    def __exit__(self, *exc):
+        global _current_section
+        _current_section = self.previous
+        return False
+
+
 def _table(columns: Sequence[Column], rows: Sequence[dict], *,
-           empty: str = "Sin datos", filterable: bool = False) -> str:
+           empty: str = "Sin datos", filterable: bool = False,
+           section: str = "") -> str:
+    if section:
+        with _in_section(section):
+            return _table(columns, rows, empty=empty, filterable=filterable)
     if not rows:
         return f'<p class="empty">{_esc(empty)}</p>'
     # A column nobody has data for is noise: drop it rather than ship an empty strip.
@@ -430,6 +486,8 @@ def _rank_of(value: float, others: list[float]) -> tuple[str, float, str]:
 
 def _section(title: str, body: str, *, note: str = "", badge: str = "",
              anchor: str = "") -> str:
+    # body is already rendered by the time we get here, so the flag suppression is
+    # driven by _in_section() around the table build instead.
     badge_html = f'<span class="badge-count">{_esc(badge)}</span>' if badge else ""
     note_html = f'<p class="note">{note}</p>' if note else ""
     ident = f' id="{_esc(anchor)}"' if anchor else ""
@@ -519,7 +577,9 @@ tbody tr:hover{background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .p-cell{display:inline-flex;align-items:center;gap:7px}
 .crest{width:17px;height:17px;flex:0 0 auto;display:inline-block;
   background-repeat:no-repeat;background-position:center;background-size:contain}
-.p-name{font-weight:600}
+button.p-name{font:inherit;font-weight:600;color:var(--ink);background:none;border:none;
+  padding:0;cursor:pointer;text-align:left;border-bottom:1px dotted var(--baseline)}
+button.p-name:hover{color:var(--accent);border-bottom-color:var(--accent)}
 .p-meta{color:var(--muted);font-size:11px}
 .pos{font-size:10px;font-weight:700;letter-spacing:.05em;padding:2px 6px;border-radius:5px;
   text-transform:uppercase}
@@ -601,11 +661,46 @@ button.ghost{font:inherit;font-size:11px;font-weight:700;text-transform:uppercas
   letter-spacing:.05em;color:var(--ink-2);background:transparent;border:1px solid var(--line);
   border-radius:6px;padding:3px 9px;cursor:pointer;margin-left:5px}
 button.ghost:hover{color:var(--ink);border-color:var(--baseline)}
+button.danger{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--critical);background:transparent;
+  border:1px solid color-mix(in srgb,var(--critical) 50%,transparent);border-radius:6px;
+  padding:3px 9px;cursor:pointer;margin-left:5px}
+button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent)}
 .live{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);
   margin-left:2px}
 #live-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
 #live-dot.live-on{background:var(--good);box-shadow:0 0 0 3px color-mix(in srgb,var(--good) 22%,transparent)}
 #live-dot.live-off{background:var(--muted)}
+.drawer{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60;display:flex;
+  justify-content:flex-end}
+.drawer[hidden]{display:none}
+.drawer-panel{background:var(--surface);border-left:1px solid var(--line);width:min(520px,100%);
+  height:100%;overflow-y:auto;padding:24px 26px;position:relative;
+  box-shadow:-18px 0 50px rgba(0,0,0,.3)}
+.drawer-close{position:absolute;top:14px;right:16px;background:none;border:none;
+  font-size:26px;line-height:1;color:var(--muted);cursor:pointer}
+.drawer-close:hover{color:var(--ink)}
+.drawer h3{margin:0 0 2px;font-size:20px;letter-spacing:-.01em}
+.drawer .sub{color:var(--muted);font-size:12px;margin:0 0 18px;display:flex;align-items:center;
+  gap:7px;flex-wrap:wrap}
+.drawer-stats{display:grid;grid-template-columns:1fr 1fr;gap:9px 16px;margin:0 0 18px;
+  font-size:13px}
+.drawer-stats dt{color:var(--muted);font-size:11px;text-transform:uppercase;
+  letter-spacing:.05em}
+.drawer-stats dd{margin:0 0 6px;font-weight:600;font-variant-numeric:tabular-nums}
+.drawer-chart{margin:0 0 20px}
+.drawer-actions{display:flex;flex-direction:column;gap:8px}
+.drawer-actions button{font:inherit;font-size:13px;font-weight:600;padding:10px 13px;
+  border-radius:8px;cursor:pointer;text-align:left;border:1px solid var(--line);
+  background:var(--plane);color:var(--ink)}
+.drawer-actions button:hover{border-color:var(--baseline)}
+.drawer-actions button.primary{background:var(--accent);color:#fff;border-color:transparent}
+.drawer-actions button.danger-full{color:var(--critical);
+  border-color:color-mix(in srgb,var(--critical) 45%,transparent)}
+.drawer-actions button.on{background:color-mix(in srgb,var(--warning) 16%,transparent);
+  border-color:color-mix(in srgb,var(--warning) 45%,transparent)}
+.drawer-actions button[disabled]{opacity:.45;cursor:not-allowed}
+.drawer-note{font-size:11px;color:var(--muted);margin:16px 0 0}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;
   justify-content:center;z-index:50;padding:20px}
 .modal[hidden]{display:none}
@@ -951,6 +1046,131 @@ function wireOps(root=document){
   });
 }
 
+
+// ---- cajon de jugador: un nombre, todas sus acciones ----------------------
+const drawer=document.getElementById('drawer');
+
+function closeDrawer(){ if(drawer) drawer.hidden=true; }
+
+function sparkSvg(history){
+  const points=history.map(h=>h.value).filter(v=>v!=null);
+  if(points.length<3) return '';
+  const w=440,h=90,lo=Math.min(...points),hi=Math.max(...points),span=(hi-lo)||1;
+  const step=w/(points.length-1);
+  const path=points.map((v,i)=>`${(i*step).toFixed(1)},${(h-4-(v-lo)/span*(h-12)).toFixed(1)}`).join(' ');
+  const rising=points[points.length-1]>=points[0];
+  return `<svg class="drawer-chart" width="100%" height="${h}" viewBox="0 0 ${w} ${h}"
+    preserveAspectRatio="none" aria-label="Historico de valor">
+    <polyline points="${path}" fill="none" stroke="var(--${rising?'pole-pos':'pole-neg'})"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <p class="drawer-note">Valor diario, ultimos ${points.length} dias ·
+      min ${fmt(lo)} · max ${fmt(hi)}</p>`;
+}
+
+async function openDetail(playerId){
+  if(!drawer) return;
+  drawer.hidden=false;
+  const body=drawer.querySelector('.drawer-body');
+  body.innerHTML='<p class="empty">Cargando…</p>';
+  let data;
+  try{
+    const res=await fetch('/api/player/'+playerId);
+    if(!res.ok) throw new Error(res.status);
+    data=await res.json();
+  }catch(e){
+    body.innerHTML='<p class="empty">Solo disponible en la version servida '
+      +'(<code>fantasy serve</code>).</p>';
+    return;
+  }
+  const p=data.player, l=data.listing||{};
+  const rival=p.next_rival?`${p.next_rival} (${p.next_home?'casa':'fuera'})`:'—';
+  const owner=p.is_mine?'tu':(p.owner||'libre');
+  body.innerHTML=`
+    <h3>${p.name}</h3>
+    <p class="sub"><span class="pos pos-${(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
+      ${p.team||''} · ${owner}${p.starred?' · ★':''}</p>
+    <dl class="drawer-stats">
+      <div><dt>Valor de mercado</dt><dd>${exact(p.value)}</dd></div>
+      <div><dt>xPts por jornada</dt><dd>${(p.xpts||0).toFixed(2)}</dd></div>
+      <div><dt>Puntos por millon</dt><dd>${(p.points_value||0).toFixed(3)}</dd></div>
+      <div><dt>Puntos 25/26</dt><dd>${p.last_season_points||0}</dd></div>
+      <div><dt>Puntos temporada</dt><dd>${p.season_points||0}</dd></div>
+      <div><dt>Titularidad</dt><dd>${p.start_probability!=null?p.start_probability+'%':'—'}</dd></div>
+      <div><dt>Proximo rival</dt><dd>${rival}</dd></div>
+      <div><dt>Valor 7d</dt><dd>${(p.projected_pct||0).toFixed(2)}%</dd></div>
+      <div><dt>Techo rentable</dt><dd>${p.ideal_bid?exact(p.ideal_bid):'sin margen'}</dd></div>
+      <div><dt>Clausula</dt><dd>${p.clause?exact(p.clause):'—'}${p.clause_locked?' 🔒':''}</dd></div>
+      ${l.market_id?`<div><dt>En mercado</dt><dd>${exact(l.min_bid)}</dd></div>`:''}
+      ${p.status&&p.status!=='ok'?`<div><dt>Estado</dt><dd>${p.status}</dd></div>`:''}
+    </dl>
+    ${sparkSvg(data.history||[])}
+    <div class="drawer-actions">${(data.actions||[]).map(actionButton).join('')}</div>
+    ${data.writes_enabled?'':'<p class="drawer-note">Las acciones que mueven dinero '
+      +'necesitan que el servidor corra con <code>--allow-writes</code>.</p>'}`;
+  body.querySelectorAll('button[data-action]').forEach(button=>
+    button.addEventListener('click',()=>runAction(JSON.parse(button.dataset.action),p)));
+}
+
+function actionButton(a){
+  const cls=a.op==='decline_offer'||a.op==='withdraw' ? 'danger-full'
+          : a.op==='always' ? (a.on?'on':'') : 'primary';
+  const off=a.blocked?' disabled':'';
+  return `<button class="${cls}" data-action='${JSON.stringify(a).replace(/'/g,"&#39;")}'${off}>`
+    +`${a.label}${a.blocked?' — no te llega':''}</button>`;
+}
+
+async function runAction(a,player){
+  if(a.op==='always'){
+    const res=await fetch('/api/always',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:player.id,name:player.name})});
+    if(res.ok){ openDetail(player.id); }
+    return;
+  }
+  closeDrawer();
+  if(a.kind==='amount'){
+    pending={operation:a.op, market_id:a.market_id, player_id:a.player_id||player.id,
+             offer_id:a.offer_id, name:player.name, min_bid:a.min||0,
+             ideal:player.ideal_bid||0, value:player.value};
+    modal.hidden=false;
+    modal.querySelector('#bid-title').textContent=a.label+' — '+player.name;
+    modal.querySelector('.bid-who').textContent=player.name;
+    modal.querySelector('.bid-amount').value=group(a.suggested||a.min||0);
+    modal.querySelector('.bid-min').textContent=a.min?exact(a.min):'sin minimo';
+    modal.querySelector('.bid-ideal').textContent=player.ideal_bid?exact(player.ideal_bid):'sin margen';
+    modal.querySelector('.bid-value').textContent=exact(player.value);
+    modal.querySelector('.bid-step1').hidden=false;
+    modal.querySelector('.bid-step2').hidden=true;
+    modal.querySelector('.bid-drop').hidden=true;
+    modal.querySelector('.bid-confirm').hidden=true;
+    modal.querySelector('.bid-next').hidden=false;
+    modal.querySelector('.bid-error').textContent='';
+    checkAmount();
+  }else{
+    const button=document.createElement('button');
+    button.className='op'; button.dataset.op=a.op;
+    button.dataset.opMarket=a.market_id||''; button.dataset.opOffer=a.offer_id||'';
+    button.dataset.opPlayer=a.player_id||player.id; button.dataset.opName=player.name;
+    button.dataset.opAmount=a.amount||'';
+    document.body.appendChild(button); wireOps(document.body); button.click();
+    button.remove();
+  }
+}
+
+function wireDetails(root=document){
+  root.querySelectorAll('button[data-detail]').forEach(button=>{
+    if(button.dataset.wired) return;
+    button.dataset.wired='1';
+    button.addEventListener('click',()=>openDetail(button.dataset.detail));
+  });
+}
+
+if(drawer){
+  drawer.querySelector('.drawer-close').addEventListener('click',closeDrawer);
+  drawer.addEventListener('click',(e)=>{ if(e.target===drawer) closeDrawer(); });
+  document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeDrawer(); });
+}
+
 // ---- pestañas: una vista a la vez ------------------------------------------
 const TABS=[
   {id:'decidir', label:'Decidir', sections:['acciones','ofertas']},
@@ -999,7 +1219,7 @@ async function swap(){
     const node=document.getElementById(id);
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });
-  wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); tick();
+  wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); tick();
   showTab(document.querySelector('.tab.on')?.dataset.tab||'decidir');
   const stamp=document.getElementById('live-stamp');
   if(stamp) stamp.textContent='actualizado '+new Date().toLocaleTimeString('es-ES');
@@ -1021,7 +1241,8 @@ function connect(){
   };
 }
 
-wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireTabs(); tick();
+wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails();
+wireTabs(); tick();
 if(window.EventSource && location.protocol.startsWith('http')) connect();
 
 // ---- legacy (fichero estatico) ----
@@ -1317,7 +1538,7 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
                 note += (" <strong>" + str(len(pending_actions)) + " accion(es) en cola.</strong> "
                          "Solo se ejecutan si el servidor corre con <code>--allow-writes</code>.")
             sections.append(_section(
-                "Siempre en mercado", _table(plan_columns, plan),
+                "Siempre en mercado", _table(plan_columns, plan, section="siempre"),
                 note=note, badge=f"{len(entries)}", anchor="siempre"))
 
     if advice and advice.get("offers"):
@@ -1326,7 +1547,7 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
             ("Valor", lambda r: r["value"], "money"),
             ("Pides", lambda r: r.get("ask"), "money"),
             ("Te ofrecen", lambda r: r.get("offer_amount"), "money"),
-            ("Sobre su valor", lambda r: r.get("vs_value"), "ratio"),
+            ("Sobre su valor", lambda r: r.get("vs_value"), "ratio_sell"),
             ("Ofertas", lambda r: r.get("offer_count"), "int"),
             ("Caduca", lambda r: str(r.get("offer_expires") or "")[:16].replace("T", " "), "text"),
             ("xPts/j", lambda r: r["xpts"], "num"),
@@ -1340,7 +1561,7 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
             note += (" Ahora mismo interesan: <strong>"
                      + ", ".join(_esc(o["name"]) for o in good) + "</strong>.")
         sections.append(_section(
-            "Ofertas que has recibido", _table(offer_columns, advice["offers"]),
+            "Ofertas que has recibido", _table(offer_columns, advice["offers"], section="ofertas"),
             note=note, badge=f"{len(advice['offers'])}", anchor="ofertas"))
 
     sections.append(_activity_section(activity or []))
@@ -1353,7 +1574,7 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
             shape_bits.append(f'{POSITION_NAMES[position_id]} {data["owned"]}/{data["ideal"]} '
                               f'({state})')
         sections.append(_section(
-            "Mi plantilla", _table(_player_columns(), advice["squad"]),
+            "Mi plantilla", _table(_player_columns(), advice["squad"], section="plantilla"),
             note=" · ".join(shape_bits), anchor="plantilla"))
 
         bid_columns = _player_columns(cost_label="Puja minima")
@@ -1401,7 +1622,7 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
                          + ", ".join(_esc(p["name"]) for p in under)
                          + " esta por debajo de su valor de mercado.")
             sections.append(_section("Mis ventas en curso",
-                                     _table(mine_columns, advice["my_listings"]),
+                                     _table(mine_columns, advice["my_listings"], section="misventas"),
                                      note=note, anchor="misventas"))
 
         if advice.get("watchlist"):
@@ -1427,7 +1648,7 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
         sell_columns = _player_columns(
             extra=[("Motivos", lambda r: r.get("reasons"), "list")])
         sections.append(_section(
-            "Candidatos a vender", _table(sell_columns, advice["sells"]),
+            "Candidatos a vender", _table(sell_columns, advice["sells"], section="ventas"),
             note="Ordenados por presion de venta: score bajo, valor cayendo, poca titularidad "
                  "o exceso en la posicion.", anchor="ventas"))
 
@@ -1443,7 +1664,7 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
         ]
         sections.append(_section(
             "Riesgo de cláusula",
-            _table(exposure_columns, advice["exposure"], empty="Sin exposicion relevante"),
+            _table(exposure_columns, advice["exposure"], empty="Sin exposicion relevante", section="riesgo"),
             note="Tus jugadores buenos con cláusula baja, contando cuantos rivales tienen caja "
                  "para pagarla ahora mismo.", anchor="riesgo"))
 
@@ -1459,7 +1680,7 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
         mine_clauses = advice.get("my_clauses_soon") or []
         sections.append(_section(
             "Mis cláusulas que vencen",
-            _table(clause_columns, mine_clauses,
+            _table(clause_columns, mine_clauses, section="vencimientos",
                    empty="Ninguna se desbloquea en los proximos 10 dias."),
             note="Cuando el candado cae, cualquiera con caja suficiente puede pagarla. "
                  "Subir la cláusula antes de esa fecha es la unica defensa.",
@@ -1536,7 +1757,7 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
                         for team_id, uri in sorted(CRESTS.items()))
     return (f'<title>Panel Fantasy</title><style>{CSS}{crest_css}</style>'
             f'<div class="wrap">{header}{"".join(sections)}{footer}</div>'
-            + MODAL
+            + MODAL + DRAWER
             + f"<script>{JS}</script>")
 
 

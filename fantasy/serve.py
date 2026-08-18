@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable
 
-from . import auth, favourites, policies, report, writes
+from . import auth, favourites, laliga, policies, report, writes
 from .logs import log
 
 HEARTBEAT = 20
@@ -216,6 +216,8 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                 with state.lock:
                     payload = {"version": state.version, "sections": state.sections}
                 self._json(200, payload)
+            elif path.startswith("/api/player/"):
+                self._player_detail(path.rsplit("/", 1)[-1])
             elif path == "/api/events":
                 self._stream()
             elif path in ("/healthz", "/api/health"):
@@ -226,6 +228,90 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                                  "version": state.version})
             else:
                 self._send(404, b"not found", "text/plain; charset=utf-8")
+
+        def _player_detail(self, player_id: str) -> None:
+            """Everything about one player, plus what can be done with him right now.
+
+            The actions are computed here rather than in the page because only the
+            server knows the current market, offers and clause state — and because
+            the page must never offer a button the API would refuse.
+            """
+            with state.lock:
+                players = state.payload.get("players") or []
+                policies_now = dict(state.payload.get("policies") or {})
+                budget = state.payload.get("budget") or 0
+            player = next((p for p in players if str(p.get("id")) == str(player_id)), None)
+            if not player:
+                # Coaches are in the game (positionId 5) and even appear in the market,
+                # but they are excluded from the analysis, so say that rather than 404.
+                self._json(404, {"error": "sin datos para este id: puede ser un entrenador, "
+                                          "que el juego lista pero el analisis no cubre"})
+                return
+
+            listing = player.get("market") or {}
+            offers = player.get("offers") or []
+            clause = player.get("clause") or 0
+            actions: list[dict[str, Any]] = []
+
+            if player.get("is_mine"):
+                starred = str(player_id) in policies_now
+                actions.append({"op": "always", "label": ("Quitar de siempre-en-mercado"
+                                                          if starred else "Siempre en mercado"),
+                                "kind": "toggle", "on": starred})
+                if listing.get("market_id"):
+                    actions.append({"op": "withdraw", "label": "Quitar del mercado",
+                                    "kind": "confirm", "market_id": listing["market_id"]})
+                else:
+                    actions.append({"op": "sell_to_market", "label": "Poner en venta",
+                                    "kind": "amount", "suggested": int(player["value"] or 0),
+                                    "player_id": player_id})
+                for offer in offers:
+                    actions.append({"op": "accept_offer",
+                                    "label": f"Aceptar {int(offer['money']):,}".replace(",", "."),
+                                    "kind": "confirm", "offer_id": str(offer["id"]),
+                                    "market_id": listing.get("market_id"),
+                                    "amount": int(offer["money"])})
+                    actions.append({"op": "decline_offer", "label": "Rechazar",
+                                    "kind": "confirm", "danger": True,
+                                    "offer_id": str(offer["id"]),
+                                    "market_id": listing.get("market_id")})
+                actions.append({"op": "raise_clause", "label": "Subir clausula",
+                                "kind": "amount", "player_id": player_id,
+                                "suggested": int((player["value"] or 0) * 0.5)})
+            elif listing.get("kind") == "libre":
+                actions.append({"op": "bid", "label": "Pujar", "kind": "amount",
+                                "market_id": listing.get("market_id"),
+                                "suggested": int(player.get("ideal_bid")
+                                                 or listing.get("min_bid") or 0),
+                                "min": int(listing.get("min_bid") or 0)})
+            elif player.get("owner"):
+                actions.append({"op": "direct_offer",
+                                "label": f"Ofrecer a {player['owner']}", "kind": "amount",
+                                "player_id": player_id,
+                                "suggested": int(player["value"] or 0)})
+                if listing.get("market_id"):
+                    actions.append({"op": "bid", "label": "Pujar por su venta",
+                                    "kind": "amount", "market_id": listing["market_id"],
+                                    "suggested": int(listing.get("min_bid") or 0),
+                                    "min": int(listing.get("min_bid") or 0)})
+                if clause and not player.get("clause_locked"):
+                    actions.append({"op": "pay_clause",
+                                    "label": f"Pagar clausula ({int(clause):,})".replace(",", "."),
+                                    "kind": "amount", "player_id": player_id,
+                                    "suggested": int(clause), "min": int(clause),
+                                    "blocked": clause > budget})
+
+            history = []
+            try:
+                history = [{"date": point.get("date", "")[:10],
+                            "value": point.get("marketValue")}
+                           for point in laliga.player_market_value(str(player_id))][-90:]
+            except Exception:
+                pass
+
+            self._json(200, {"player": player, "offers": offers, "listing": listing,
+                             "actions": actions, "history": history,
+                             "writes_enabled": allow_writes})
 
         def _stream(self) -> None:
             """Server-sent events: one line per change, plus a heartbeat."""
@@ -267,6 +353,22 @@ def _handler(state: State, *, allow_writes: bool, league_id: str | None,
                 threading.Thread(target=state.refresh, kwargs={"force": True},
                                  daemon=True).start()
                 self._json(200, {"id": player_id, "starred": starred})
+                return
+
+            if path == "/api/always":
+                player_id = str(body.get("id") or "")
+                if not player_id:
+                    self._json(400, {"error": "falta el id"})
+                    return
+                if policies.load().get(player_id):
+                    policies.remove(player_id)
+                    on = False
+                else:
+                    policies.set_policy(player_id, name=body.get("name"))
+                    on = True
+                threading.Thread(target=state.refresh, kwargs={"force": True},
+                                 daemon=True).start()
+                self._json(200, {"id": player_id, "always_listed": on})
                 return
 
             if path == "/api/bid/prepare":

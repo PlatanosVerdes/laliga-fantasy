@@ -91,11 +91,23 @@ def _sell_to_market(league_id: str, player_id: str, amount: int) -> Any:
                     {"playerId": player_id, "salePrice": amount})
 
 
+def _direct_offer(league_id: str, player_id: str, amount: int) -> Any:
+    return _request("POST", f"{CMP}/league/{league_id}/market/direct-offer",
+                    {"playerId": player_id, "money": amount})
+
+
+def _pay_clause(league_id: str, player_id: str, amount: int) -> Any:
+    return _request("POST", f"{CMP}/league/{league_id}/buyout/{player_id}/pay",
+                    {"buyoutClauseToPay": amount})
+
+
 def _withdraw(league_id: str, market_id: str) -> Any:
     return _request("DELETE", f"{CMP}/league/{league_id}/market/{market_id}/delete")
 
 
 OPERATIONS = {
+    "direct_offer": {"run": _direct_offer, "label": "oferta directa"},
+    "pay_clause": {"run": _pay_clause, "label": "pagar clausula"},
     "accept_offer": {"run": _accept_offer, "label": "aceptar oferta"},
     "decline_offer": {"run": _decline_offer, "label": "rechazar oferta"},
     "sell_to_market": {"run": _sell_to_market, "label": "poner en venta"},
@@ -140,6 +152,15 @@ def prepare(operation: str, *, league_id: str, my_team_id: str, amount: int | No
         ideal = int(player.get("ideal_bid") or 0)
         if ideal and amount and amount > ideal:
             warnings.append("te pagan mas de lo que futbolfantasy considera rentable: buena venta")
+    if operation in ("direct_offer", "pay_clause"):
+        if not amount or amount <= 0:
+            raise WriteError("el importe tiene que ser positivo")
+        if cash is not None and amount > cash:
+            raise WriteError(f"no te llega: tienes {_money(cash)}")
+        if operation == "pay_clause":
+            clause = int(player.get("clause") or 0)
+            if clause and amount < clause:
+                raise WriteError(f"la clausula es {_money(clause)}")
     if operation in ("bid", "modify_bid"):
         if not amount or amount <= 0:
             raise WriteError("la puja tiene que ser un importe positivo")
@@ -169,8 +190,10 @@ def prepare(operation: str, *, league_id: str, my_team_id: str, amount: int | No
         "ideal_bid": player.get("ideal_bid"),
         "market_value": player.get("value"),
         "cash_before": cash,
-        "cash_after": (cash - amount) if (cash is not None and amount
-                                         and operation in ("bid", "modify_bid")) else cash,
+        "cash_after": (cash - amount) if (cash is not None and amount and operation in
+                                         ("bid", "modify_bid", "direct_offer", "pay_clause"))
+                      else ((cash + amount) if (cash is not None and amount
+                                               and operation == "accept_offer") else cash),
         "warnings": warnings,
         "expires_in": PREPARE_TTL,
     }
@@ -205,6 +228,8 @@ def confirm(token: str, *, allow_writes: bool = False, dry_run: bool = False) ->
             "accept_offer": ("league_id", "market_id", "offer_id", "amount"),
             "decline_offer": ("league_id", "market_id", "offer_id"),
             "sell_to_market": ("league_id", "player_id", "amount"),
+            "direct_offer": ("league_id", "player_id", "amount"),
+            "pay_clause": ("league_id", "player_id", "amount"),
             "withdraw": ("league_id", "market_id")}[operation]
     values = [args.get(name) for name in call]
 
