@@ -152,11 +152,20 @@ def compare_cash(py: dict, go: dict, tolerance: float, limit: int) -> int:
             print(f"    NO {field}: py={left!r} go={right!r}")
             bad += 1
 
-    py_teams = {str(k): v for k, v in (py.get("league_teams") or {}).items()}
+    py_raw = py.get("league_teams") or {}
+    py_teams = ({str(k): v for k, v in py_raw.items()} if isinstance(py_raw, dict)
+                else {str(t["team_id"]): t for t in py_raw})
     go_raw = go.get("league_teams") or {}
     go_teams = ({str(k): v for k, v in go_raw.items()} if isinstance(go_raw, dict)
                 else {str(t["team_id"]): t for t in go_raw})
     print(f"  league_teams: py={len(py_teams)} go={len(go_teams)}")
+    if not py_teams or not go_teams:
+        # The two servers publish the same teams under different names: Python's payload
+        # exposes the advice layer's `rivals`, the model dump exposes `league_teams`. A
+        # shape difference is not thirteen defects, so it is said and skipped.
+        print("    solo lo publica un lado; se compara en el volcado del modelo")
+        print(f"    diferencias: {bad}")
+        return bad
     for label, ids in (("faltan en Go", set(py_teams) - set(go_teams)),
                        ("sobran en Go", set(go_teams) - set(py_teams))):
         if ids:

@@ -4,7 +4,9 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log/slog"
 	"os"
@@ -19,7 +21,10 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/auth"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/engine"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/server"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
@@ -54,6 +59,8 @@ func main() {
 		err = cmdCache()
 	case "probe":
 		err = cmdProbe(rest[1:])
+	case "serve":
+		err = cmdServe(rest[1:])
 	case "model":
 		err = cmdModel(rest[1:])
 	case "wake":
@@ -81,6 +88,7 @@ uso: fantasy [-v|-q] <comando>
   auth status   estado de la sesion
   cache         tamano de la cache
   probe         las dos peticiones del detector de cambios, y su huella
+  serve         el motor: API JSON, SSE y refresco por vencimientos
   model --json  volcar el modelo, para compararlo con el de Python
   wake <p.json> <now> [tick] [last_full] [watched]
                 que haria el planificador con ese payload, para comparar
@@ -88,6 +96,92 @@ uso: fantasy [-v|-q] <comando>
   checks        que aceptaria y que rechazaria la guardia, caso por caso
   paths         donde vive cada cosa
 `))
+}
+
+// cmdServe runs the engine and the HTTP surface. Writes are off until step 8 of the port
+// has plan parity: a Go binary that can spend money before its plan has been compared
+// against Python's is exactly the thing the harnesses exist to prevent.
+func cmdServe(args []string) error {
+	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
+	host := flags.String("host", "0.0.0.0", "interfaz")
+	port := flags.Int("port", 8000, "puerto")
+	interval := flags.Duration("interval", 2*time.Minute, "cadencia base del sondeo")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+
+	leagueID, teamID, err := savedLeague()
+	if err != nil {
+		return err
+	}
+	client := api.New()
+
+	world := state.New(func() (*model.Universe, error) {
+		bridge, err := loadBridge()
+		if err != nil {
+			// The scrapers are Python's; without them the model loses the futbolfantasy
+			// half, and pretending otherwise would produce quietly wrong scores.
+			return nil, err
+		}
+		return model.Build(client, leagueID, teamID, bridge, loadState())
+	})
+
+	if err := world.Refresh("arranque"); err != nil {
+		return err
+	}
+
+	var probeParts map[string]string
+	engineRef := engine.New(engine.Deps{
+		Payload:  world.SchedulePayload,
+		LastFull: world.LastFull,
+		Watchers: world.Watchers,
+		Tick:     *interval,
+		Rebuild:  world.Refresh,
+		Invalidate: func(tags ...string) {
+			httpx.Invalidate(tags...)
+		},
+		Probe: func() (bool, []string, error) {
+			events, err := client.ActivityRaw(leagueID, 0, 0, true)
+			if err != nil {
+				return false, nil, err
+			}
+			listings, err := client.MarketRaw(leagueID, 0, true)
+			if err != nil {
+				return false, nil, err
+			}
+			parts := schedule.ProbeParts(events, listings)
+			var moved []string
+			for half, digest := range parts {
+				if probeParts[half] != digest {
+					moved = append(moved, half)
+				}
+			}
+			probeParts = parts
+			if contains(moved, "events") {
+				// Somebody changed hands: every squad is stale however recently it was
+				// read, and so are the standings and the cash.
+				httpx.Invalidate("squad", "money", "standing")
+			}
+			return len(moved) > 0, moved, nil
+		},
+	})
+	// Seed the probe from what the first rebuild already read, so the loop does not begin
+	// by asking the API to confirm data it is holding.
+	if events, err := client.ActivityRaw(leagueID, 0, time.Minute, false); err == nil {
+		if listings, err := client.MarketRaw(leagueID, time.Minute, false); err == nil {
+			probeParts = schedule.ProbeParts(events, listings)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go engineRef.Run(ctx)
+
+	world.OnFirstWatcher(engineRef.Nudge)
+	return server.New(world, server.Options{
+		Host: *host, Port: *port, AllowWrites: false,
+		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
+	}).ListenAndServe()
 }
 
 // cmdModel dumps the universe so tools/diff_model.py can compare it against Python's.

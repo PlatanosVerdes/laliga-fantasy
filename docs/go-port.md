@@ -50,7 +50,9 @@ keeps working throughout.
 | 4c | Cash reconstruction, activity, offers, favourites, raids | **harness green**: 52 fields, 82 events, 13 managers' cash to the euro |
 | 5 | Scheduler and the refresh cycle, on channels | **36 decisions identical** to Python across 9 scenarios × 4 cadences; 7 engine tests green under `-race` |
 | 6 | Writes with the two-step guard and the id semantics | **11 calls byte-identical, 15 validations identical**, 12 guard tests green; no live write yet |
-| 7 | HTTP server, SSE, the existing templates | page renders, SSE swaps, drag-and-drop still works |
+| 7a | The page's CSS and JS become files | **page byte-identical** once the clock decimals are masked |
+| 7b | HTTP server, JSON API, SSE | **/api/state identical live**: 729 players x 52 fields, 82 events, 13 managers' cash |
+| 7c | The HTML rendering | page renders from Go, SSE swaps, drag-and-drop still works |
 | 8 | Policies and the automation | plan parity on recorded payloads, then armed |
 
 ## The differential harness
@@ -108,6 +110,13 @@ about to expire, our own match under way, somebody else's, a finished one, a mat
 closing — each at four cadences including "the page is open" and "the periodic rebuild is
 overdue". Both sides take `now` as an argument, because a scheduler that can only be
 observed live cannot be compared.
+
+`tools/diff_api.py` compares the two servers *live*, on the same frozen cache: it starts
+from /healthz, lists which keys of /api/state each side publishes, and then reuses the model
+comparator on the rows — comparing them a second way would only mean two places to keep in
+step. What is still Python-only is printed rather than skipped: `budget`, `clauses`,
+`rivals`, `favourites`, `policies` and `policy_actions` all come from the advice and policy
+layers, which are steps 7c and 8.
 
 `tools/diff_writes.py` compares the writes without sending any: the eleven calls literally
 (method, path, body key by key) and the fifteen validation rows that decide whether an
