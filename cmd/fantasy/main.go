@@ -90,7 +90,7 @@ func cmdModel(args []string) error {
 	if err != nil {
 		return err
 	}
-	universe, err := model.Build(api.New(), leagueID, teamID, bridge)
+	universe, err := model.Build(api.New(), leagueID, teamID, bridge, loadState())
 	if err != nil {
 		return err
 	}
@@ -111,6 +111,32 @@ func cmdModel(args []string) error {
 // boundary: the futbolfantasy scrapers and the cross-source name matching stay in
 // Python, because they are regex over HTML that changes without notice and the most
 // fragile code in the project. What crosses is data, never parsing.
+// loadState reads the two files that hold what we chose rather than what the feed says.
+// A missing file is not an error: no stars and no instructions is a perfectly good state.
+func loadState() model.State {
+	state := model.State{Starred: map[string]bool{}, Raids: map[string]bool{}}
+
+	var favourites map[string]map[string]any
+	if raw, err := os.ReadFile(config.FavouritesFile); err == nil {
+		if json.Unmarshal(raw, &favourites) == nil {
+			for id := range favourites {
+				state.Starred[id] = true
+			}
+		}
+	}
+	var policies map[string]map[string]any
+	if raw, err := os.ReadFile(config.PolicyFile); err == nil {
+		if json.Unmarshal(raw, &policies) == nil {
+			for id, entry := range policies {
+				if raid, ok := entry["raid"].(bool); ok && raid {
+					state.Raids[id] = true
+				}
+			}
+		}
+	}
+	return state
+}
+
 func loadBridge() (*model.Bridge, error) {
 	command := exec.Command("python3", "fantasy.py", "bridge")
 	command.Stderr = os.Stderr

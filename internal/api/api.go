@@ -181,6 +181,17 @@ func (c *Client) ActivityRaw(leagueID string, index int, ttl time.Duration,
 	return events, err
 }
 
+// PlayerOffers are the offers received for one of our listed players.
+//
+// The only route that lists them is keyed by playerTeamId — the squad-slot id — because
+// /market/{id}/offer is POST-only and answers 405 to a GET.
+func (c *Client) PlayerOffers(leagueID, playerTeamID string, ttl time.Duration) ([]map[string]any, error) {
+	var offers []map[string]any
+	err := c.getList(fmt.Sprintf("%s/league/%s/playerTeam/%s/offer",
+		config.CMP, leagueID, playerTeamID), ttl, "offers", false, &offers)
+	return offers, err
+}
+
 func (c *Client) TeamSquad(leagueID, teamID string, ttl time.Duration) (map[string]any, error) {
 	var squad map[string]any
 	err := c.get(fmt.Sprintf("%s/leagues/%s/teams/%s", config.CMP, leagueID, teamID),

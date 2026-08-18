@@ -30,6 +30,11 @@ from typing import Any
 # Differ between two runs of the same code, so they can never be evidence of anything.
 CLOCK_DERIVED = {"clause_hours_left", "hours_left", "generated_at", "at"}
 
+# Added to league_teams by the advice layer (_rival_cash), not by the model, so their
+# absence on the Go side is the state of the port and not a defect. Listed rather than
+# ignored: an unexplained gap is how a port quietly loses a field.
+ADVICE_LAYER = {"cash_position", "is_me", "power", "power_note"}
+
 
 def load(path: str) -> dict[str, Any]:
     blob = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -106,7 +111,16 @@ def compare_lists(py: dict, go: dict, key: str, identity: str, tolerance: float,
             print(f"    {label}: {sorted(ids)[:6]}")
 
     bad = 0
-    for row_id in sorted(set(py_rows) & set(go_rows)):
+    shared_ids = sorted(set(py_rows) & set(go_rows))
+    if shared_ids:
+        # A key Go never emits is invisible when you only walk Go's keys, and that is
+        # exactly how a missing field hides: the dict compares unequal upstream while
+        # every field it does have matches.
+        absent = sorted(set(py_rows[shared_ids[0]]) - set(go_rows[shared_ids[0]]) - CLOCK_DERIVED)
+        if absent:
+            print(f"    claves que Go no emite: {', '.join(absent)}")
+            bad += len(absent)
+    for row_id in shared_ids:
         left, right = py_rows[row_id], go_rows[row_id]
         for field in sorted(set(right) - CLOCK_DERIVED):
             if field not in left:
@@ -114,6 +128,78 @@ def compare_lists(py: dict, go: dict, key: str, identity: str, tolerance: float,
             if not close_enough(left[field], right[field], tolerance):
                 if bad < limit:
                     print(f"    {row_id}.{field}: py={left[field]!r} go={right[field]!r}")
+                bad += 1
+    print(f"    diferencias: {bad}")
+    return bad
+
+
+def compare_cash(py: dict, go: dict, tolerance: float, limit: int) -> int:
+    """The cash model, per manager.
+
+    This is the subtlest code in the project: it anchors the whole league on one measured
+    figure and folds rewards into a base. A port that is quietly wrong here produces
+    plausible numbers, which is the worst failure mode, so every manager is compared and
+    not just ours.
+    """
+    bad = 0
+    print("\n  cash_model:")
+    py_model, go_model = py.get("cash_model") or {}, go.get("cash_model") or {}
+    for field in sorted(set(py_model) | set(go_model)):
+        left, right = py_model.get(field), go_model.get(field)
+        if close_enough(left, right, tolerance):
+            print(f"    ok {field}: {left!r}")
+        else:
+            print(f"    NO {field}: py={left!r} go={right!r}")
+            bad += 1
+
+    py_teams = {str(k): v for k, v in (py.get("league_teams") or {}).items()}
+    go_raw = go.get("league_teams") or {}
+    go_teams = ({str(k): v for k, v in go_raw.items()} if isinstance(go_raw, dict)
+                else {str(t["team_id"]): t for t in go_raw})
+    print(f"  league_teams: py={len(py_teams)} go={len(go_teams)}")
+    for label, ids in (("faltan en Go", set(py_teams) - set(go_teams)),
+                       ("sobran en Go", set(go_teams) - set(py_teams))):
+        if ids:
+            print(f"    {label}: {sorted(ids)}")
+            bad += len(ids)
+
+    for team_id in sorted(set(py_teams) & set(go_teams)):
+        left, right = py_teams[team_id], go_teams[team_id]
+        for field in sorted(set(left) & set(right)):
+            if not close_enough(left[field], right[field], tolerance):
+                if bad < limit:
+                    print(f"    {left.get('manager') or team_id}.{field}: "
+                          f"py={left[field]!r} go={right[field]!r}")
+                bad += 1
+    first = sorted(set(py_teams) & set(go_teams))[:1]
+    if first:
+        left, right = py_teams[first[0]], go_teams[first[0]]
+        absent = sorted(set(left) - set(right) - CLOCK_DERIVED)
+        pending = [field for field in absent if field in ADVICE_LAYER]
+        lost = [field for field in absent if field not in ADVICE_LAYER]
+        if pending:
+            print(f"    de la capa de consejo, aun sin portar: {', '.join(pending)}")
+        if lost:
+            print(f"    claves que Go no emite: {', '.join(lost)}")
+            bad += len(lost)
+    print(f"    diferencias: {bad}")
+    return bad
+
+
+def compare_activity(py: dict, go: dict, tolerance: float, limit: int) -> int:
+    """The transfer log, event by event. It is what the cash model is derived from, so a
+    difference here is a difference in everyone's money."""
+    py_events = py.get("activity") or []
+    go_events = go.get("activity") or []
+    print(f"\n  activity: py={len(py_events)} go={len(go_events)}")
+    bad = abs(len(py_events) - len(go_events))
+    fields = ("date", "type_id", "kind", "known", "user1", "user2", "buyer", "seller",
+              "actor", "player", "player_id", "amount")
+    for index, (left, right) in enumerate(zip(py_events, go_events)):
+        for field in fields:
+            if not close_enough(left.get(field), right.get(field), tolerance):
+                if bad < limit:
+                    print(f"    [{index}].{field}: py={left.get(field)!r} go={right.get(field)!r}")
                 bad += 1
     print(f"    diferencias: {bad}")
     return bad
@@ -140,8 +226,10 @@ def main() -> int:
 
     bad_market = compare_lists(py, go, "market", "market_id", args.tolerance, args.limit)
     bad_fixtures = compare_lists(py, go, "fixtures", "id", args.tolerance, args.limit)
+    bad_cash = compare_cash(py, go, args.tolerance, args.limit)
+    bad_activity = compare_activity(py, go, args.tolerance, args.limit)
 
-    total = bad_fields + bad_market + bad_fixtures
+    total = bad_fields + bad_market + bad_fixtures + bad_cash + bad_activity
     print(f"\n{'VERDE: sin diferencias' if total == 0 else f'ROJO: {total} diferencias'}")
     return 0 if total == 0 else 1
 

@@ -47,7 +47,7 @@ keeps working throughout.
 | 3 | API client and types for the fifteen endpoints in use | `fantasy-go probe` returns the same digest as the Python probe |
 | 4a | The model's structure: identity, ownership, market, fixtures | **harness green**: 729 players × 22 fields, 53 listings, 10 fixtures |
 | 4b | The scoring half: xPts, price prior, score, ranks | **harness green**: 729 players × 48 fields, identical to 6 decimals |
-| 4c | Cash reconstruction, offers, favourites, scheduled raids | harness green on the last 4 fields |
+| 4c | Cash reconstruction, activity, offers, favourites, raids | **harness green**: 52 fields, 82 events, 13 managers' cash to the euro |
 | 5 | Scheduler as goroutines + channels; deadlines, live matches | same wake decisions as Python for a recorded set of payloads |
 | 6 | Writes with the two-step guard and the id semantics | dry-run parity; no live write until the harness agrees |
 | 7 | HTTP server, SSE, the existing templates | page renders, SSE swaps, drag-and-drop still works |

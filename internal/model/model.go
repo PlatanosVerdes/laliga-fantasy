@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -85,6 +86,10 @@ type Player struct {
 	FFName           *string                `json:"ff_name"`
 	FFValue          *float64               `json:"ff_value"`
 	Absence          map[string]any         `json:"absence"`
+	Starred          bool                   `json:"starred"`
+	RaidScheduled    bool                   `json:"raid_scheduled"`
+	MarketEntry      *Listing               `json:"market"`
+	Offers           []map[string]any       `json:"offers"`
 	Score            float64                `json:"score"`
 	Rank             int                    `json:"rank"`
 	PositionRank     int                    `json:"position_rank"`
@@ -105,6 +110,10 @@ type Listing struct {
 	// Absent rather than false when the API does not say: the listing simply has no
 	// opinion, and flattening that to false would invent one.
 	DirectOffer *bool `json:"direct_offer"`
+	// There is no endpoint that lists your own bids (GET on .../bid is 405, POST-only),
+	// so the id has to come from whatever the market entry itself exposes once a bid
+	// exists. Looked up generically rather than guessed.
+	MyBidID *string `json:"my_bid_id"`
 }
 
 type Fixture struct {
@@ -130,6 +139,9 @@ type Universe struct {
 	CurrentWeight   float64            `json:"current_weight"`
 	TeamStrength    map[string]float64 `json:"team_strength"`
 	MatchedCount    int                `json:"matched_count"`
+	LeagueTeams     map[string]*LeagueTeam `json:"league_teams"`
+	Activity        []Event            `json:"activity"`
+	CashModel       CashModel          `json:"cash_model"`
 }
 
 // Positions as the API numbers them, with the names the report uses.
@@ -137,7 +149,16 @@ var positions = map[int]string{1: "POR", 2: "DEF", 3: "MED", 4: "DEL", 5: "ENT"}
 
 // Build assembles the structural universe. TTLs match the Python ones so a frozen cache
 // serves both sides identically.
-func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge) (*Universe, error) {
+// State is what lives in files rather than in the feed: the stars we set, the standing
+// instructions we armed. Passed in rather than read here so the model stays a pure
+// function of its inputs, which is what makes it comparable.
+type State struct {
+	Starred map[string]bool
+	Raids   map[string]bool
+}
+
+func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
+	state State) (*Universe, error) {
 	week, err := client.CurrentWeek(30 * time.Minute)
 	if err != nil {
 		return nil, fmt.Errorf("week: %w", err)
@@ -208,7 +229,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge) (*Univ
 
 	ownership := map[string]slot{}
 	if leagueID != "" {
-		ownership, err = loadOwnership(client, leagueID)
+		ownership, universe.LeagueTeams, err = loadOwnership(client, leagueID)
 		if err != nil {
 			return nil, fmt.Errorf("ownership: %w", err)
 		}
@@ -332,6 +353,9 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge) (*Univ
 		player.ProjectedPct = ProjectedPct(trend)
 		player.ProjectedGain = player.Value * player.ProjectedPct / 100.0
 
+		player.Starred = state.Starred[id]
+		player.RaidScheduled = state.Raids[id]
+
 		if owned, ok := ownership[id]; ok {
 			player.Owner = &owned.Owner
 			player.OwnerTeamID = &owned.TeamID
@@ -343,6 +367,53 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge) (*Univ
 			player.IsMine = myTeamID != "" && owned.TeamID == myTeamID
 		}
 		universe.Players = append(universe.Players, player)
+	}
+
+	// Listings and offers hang off the player, so they are attached after the rows exist.
+	listingByPlayer := map[string]*Listing{}
+	for index := range universe.Market {
+		listingByPlayer[universe.Market[index].PlayerID] = &universe.Market[index]
+	}
+	offersByPlayer := loadOffers(client, leagueID, universe.Market, ownership)
+	for index := range universe.Players {
+		id := universe.Players[index].ID
+		universe.Players[index].MarketEntry = listingByPlayer[id]
+		// Empty rather than absent: "no offers" is an answer, and the page iterates it.
+		universe.Players[index].Offers = offersByPlayer[id]
+		if universe.Players[index].Offers == nil {
+			universe.Players[index].Offers = []map[string]any{}
+		}
+	}
+
+	if leagueID != "" {
+		managers := map[string]string{}
+		for _, team := range universe.LeagueTeams {
+			if team.UserID == "" {
+				continue
+			}
+			if team.Manager != nil && *team.Manager != "" {
+				managers[team.UserID] = *team.Manager
+			} else if team.Name != nil {
+				managers[team.UserID] = *team.Name
+			}
+		}
+		names := make(map[string]string, len(universe.Players))
+		for _, player := range universe.Players {
+			names[player.ID] = player.Name
+		}
+		universe.Activity = loadActivity(client, leagueID, managers, names)
+
+		var myCash *float64
+		if myTeamID != "" {
+			if money, err := client.Money(myTeamID, time.Minute); err == nil {
+				cash := money.TeamMoney
+				myCash = &cash
+			} else {
+				slog.Warn("money unreachable", "reason", err.Error())
+			}
+		}
+		universe.CashModel = ReconstructCash(universe.Activity, universe.LeagueTeams,
+			myTeamID, myCash)
 	}
 
 	ApplyScores(universe.Players)
@@ -372,28 +443,29 @@ type slot struct {
 // loadOwnership walks every squad in the league. It is the only source for the clause,
 // the shield and the squad-slot id — and that slot id, not the player's own id, is what
 // the write endpoints want.
-func loadOwnership(client *api.Client, leagueID string) (map[string]slot, error) {
+func loadOwnership(client *api.Client, leagueID string) (map[string]slot,
+	map[string]*LeagueTeam, error) {
 	standings, err := client.Standings(leagueID, 30*time.Minute)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	now := time.Now()
 	ownership := map[string]slot{}
+	teams := map[string]*LeagueTeam{}
 
 	for _, entry := range standings {
-		teamID := text(nested(entry, "team", "id"))
-		if teamID == "" {
-			teamID = text(entry["id"])
-		}
+		row := normalizeStanding(entry)
+		teamID := row.TeamID
 		if teamID == "" {
 			continue
 		}
-		owner := text(nested(entry, "team", "manager", "managerName"))
-		if owner == "" {
-			owner = text(nested(entry, "team", "teamName"))
-		}
-		if owner == "" {
-			owner = teamID
+		// Python falls back manager -> teamName -> id, and the ownership rows carry
+		// whichever it found; the page shows it as the owner.
+		owner := teamID
+		if row.Manager != nil && *row.Manager != "" {
+			owner = *row.Manager
+		} else if row.Name != nil && *row.Name != "" {
+			owner = *row.Name
 		}
 
 		squad, err := client.TeamSquad(leagueID, teamID, 30*time.Minute)
@@ -401,6 +473,7 @@ func loadOwnership(client *api.Client, leagueID string) (map[string]slot, error)
 			slog.Warn("squad unreachable", "team", teamID, "reason", err.Error())
 			continue
 		}
+		squadValue, clauseTotal, count := 0.0, 0.0, 0
 		for _, raw := range squadPlayers(squad) {
 			id := text(nested(raw, "playerMaster", "id"))
 			if id == "" {
@@ -424,9 +497,153 @@ func loadOwnership(client *api.Client, leagueID string) (map[string]slot, error)
 				held.PlayerTeamID = &pt
 			}
 			ownership[id] = held
+			squadValue += number(nested(raw, "playerMaster", "marketValue"))
+			clauseTotal += number(raw["buyoutClause"])
+			count++
+		}
+
+		teams[teamID] = &LeagueTeam{
+			TeamID: teamID, UserID: row.UserID, Name: row.Name, Manager: row.Manager,
+			Points: row.Points, LivePoints: row.LivePoints, Position: row.Position,
+			ReportedValue: row.TeamValue, SquadValue: squadValue,
+			ClauseTotal: clauseTotal, Players: count, CashIsEstimate: true,
 		}
 	}
-	return ownership, nil
+	return ownership, teams, nil
+}
+
+// standing is the flattened standings row. The endpoint nests half of it under "team"
+// and half of it at the top level, and which half depends on the field.
+type standing struct {
+	TeamID     string
+	UserID     string
+	Name       *string
+	Manager    *string
+	Points     float64
+	LivePoints *float64
+	Position   *int
+	TeamValue  float64
+}
+
+func normalizeStanding(entry map[string]any) standing {
+	row := standing{
+		TeamID: fallback(text(entry["id"]), text(nested(entry, "team", "id"))),
+		UserID: fallback(text(entry["userId"]), text(nested(entry, "team", "manager", "id"))),
+	}
+	row.Name = optional(fallback(text(entry["name"]), text(nested(entry, "team", "name"))))
+	// `manager` is a string at the top level but an object under team.
+	if manager, ok := entry["manager"].(string); ok && manager != "" {
+		row.Manager = &manager
+	} else {
+		row.Manager = optional(text(nested(entry, "team", "manager", "managerName")))
+	}
+	for _, candidate := range []any{entry["points"], nested(entry, "team", "teamPoints"),
+		nested(entry, "team", "points")} {
+		if value := number(candidate); value != 0 {
+			row.Points = value
+			break
+		}
+	}
+	for _, candidate := range []any{entry["teamValue"], nested(entry, "team", "teamValue")} {
+		if value := number(candidate); value != 0 {
+			row.TeamValue = value
+			break
+		}
+	}
+	if live, ok := entry["livePoints"]; ok && live != nil {
+		value := number(live)
+		row.LivePoints = &value
+	}
+	if position, ok := entry["position"]; ok && position != nil {
+		value := int(number(position))
+		row.Position = &value
+	}
+	return row
+}
+
+// findBidID digs the id of our own bid out of the listing, trying the shapes the API has
+// been seen to use.
+func findBidID(entry map[string]any) *string {
+	for _, key := range []string{"bidId", "myBidId", "userBidId"} {
+		if id := text(entry[key]); id != "" && id != "0" {
+			return &id
+		}
+	}
+	for _, key := range []string{"bids", "myBids", "userBids", "bid"} {
+		switch value := entry[key].(type) {
+		case map[string]any:
+			if id := text(value["id"]); id != "" {
+				return &id
+			}
+		case []any:
+			for _, item := range value {
+				if row, ok := item.(map[string]any); ok {
+					if id := text(row["id"]); id != "" {
+						return &id
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// loadOffers asks only for our own listings: one request each, and there is no route that
+// lists them all.
+func loadOffers(client *api.Client, leagueID string, listings []Listing,
+	ownership map[string]slot) map[string][]map[string]any {
+	offers := map[string][]map[string]any{}
+	if leagueID == "" {
+		return offers
+	}
+	for _, listing := range listings {
+		if !listing.IsMine {
+			continue
+		}
+		held, ok := ownership[listing.PlayerID]
+		if !ok || held.PlayerTeamID == nil {
+			continue
+		}
+		received, err := client.PlayerOffers(leagueID, *held.PlayerTeamID, time.Minute)
+		if err != nil {
+			slog.Debug("offers unreachable", "player", listing.PlayerID, "reason", err.Error())
+			continue
+		}
+		pending := make([]map[string]any, 0, len(received))
+		for _, offer := range received {
+			status := text(offer["status"])
+			if status == "" || status == "pending" {
+				pending = append(pending, offer)
+			}
+		}
+		if len(pending) == 0 {
+			continue
+		}
+		// Best first: the plan only ever looks at the top one.
+		sort.SliceStable(pending, func(i, j int) bool {
+			return number(pending[i]["money"]) > number(pending[j]["money"])
+		})
+		offers[listing.PlayerID] = pending
+	}
+	return offers
+}
+
+// loadActivity walks the paged log until a page comes back empty, exactly as Python does:
+// the page size is not documented and the last page is how you learn there are no more.
+func loadActivity(client *api.Client, leagueID string, managers, names map[string]string) []Event {
+	var raw []map[string]any
+	for index := 0; index < 20; index++ {
+		page, err := client.ActivityRaw(leagueID, index, time.Minute, false)
+		if err != nil {
+			slog.Warn("activity unreachable", "index", index, "reason", err.Error())
+			break
+		}
+		if len(page) == 0 {
+			break
+		}
+		raw = append(raw, page...)
+	}
+	return NormalizeActivity(raw, managers, names)
 }
 
 func squadPlayers(squad map[string]any) []map[string]any {
@@ -466,6 +683,7 @@ func loadMarket(client *api.Client, leagueID, myTeamID string) ([]Listing, error
 			Offers:      intOrNil(entry["numberOfOffers"]),
 			IsMine:      myTeamID != "" && sellerTeamID == myTeamID,
 			DirectOffer: boolOrNil(entry["directOffer"]),
+			MyBidID:     findBidID(entry),
 		}
 		if expires := text(entry["expirationDate"]); expires != "" {
 			listing.Expires = &expires
