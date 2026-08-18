@@ -190,6 +190,14 @@ func (s *Server) asset(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "text/css; charset=utf-8")
 	case ".js":
 		writer.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	case ".png":
+		writer.Header().Set("Content-Type", "image/png")
+	case ".svg":
+		writer.Header().Set("Content-Type", "image/svg+xml")
+	case ".ico":
+		writer.Header().Set("Content-Type", "image/x-icon")
+	case ".html":
+		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	default:
 		writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	}
