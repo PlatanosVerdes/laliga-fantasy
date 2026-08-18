@@ -758,6 +758,10 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .drawer-stats dt{color:var(--muted);font-size:11px;text-transform:uppercase;
   letter-spacing:.05em}
 .drawer-stats dd{margin:0 0 6px;font-weight:600;font-variant-numeric:tabular-nums}
+.drawer-stats dd.tit-hi{color:var(--good)}
+.drawer-stats dd.tit-mid{color:var(--warning)}
+.drawer-stats dd.tit-lo{color:var(--serious)}
+.drawer-stats dd.tit-out{color:var(--critical)}
 .drawer-chart{margin:0 0 20px}
 .drawer-actions{display:flex;flex-direction:column;gap:8px}
 .drawer-actions button{font:inherit;font-size:13px;font-weight:600;padding:10px 13px;
@@ -869,12 +873,16 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   font-variant-numeric:tabular-nums}
 .wk-hi{background:#0ca30c}.wk-mid{background:#2a78d6}.wk-lo{background:#8a5a00}
 .wk-neg{background:#d03b3b}.wk-none{background:rgba(255,255,255,.18)}
-.tit{font-size:10px;font-weight:800;border-radius:4px;padding:1px 4px;
-  font-variant-numeric:tabular-nums}
-.tit-hi{background:#0ca30c;color:#fff}
-.tit-mid{background:#fab219;color:#3a2c00}
-.tit-lo{background:#ec835a;color:#2b1200}
-.tit-out{background:#d03b3b;color:#fff}
+/* Sin relleno: el relleno queda reservado a los puntos de cada jornada, para que un
+   80% no se lea como "80 puntos". */
+.tit{font-size:10px;font-weight:800;font-variant-numeric:tabular-nums}
+.tit-hi{color:#8ee6a8}
+.tit-mid{color:#ffd479}
+.tit-lo{color:#ffb98f}
+.tit-out{color:#ff9c92}
+/* La J solo cuando hay jornadas de verdad: "J sin jornadas" no se lee bien. */
+.slot-weeks .wk-label{font-size:9px;font-weight:700;align-self:center;margin-right:1px;
+  color:color-mix(in srgb,#fff 55%,transparent)}
 .slot-trend{font-size:10px;font-weight:700;font-variant-numeric:tabular-nums}
 .slot-trend.up{color:#8ee6a8}.slot-trend.down{color:#ffb1a8}
 .slot{position:relative}
@@ -1296,8 +1304,10 @@ function shirtHtml(player,line,index){
   if(!player) return `<div class="slot empty" data-line="${line}" data-index="${index}">`
     +`${LINE_LABEL[line]}<br>libre</div>`;
   const trend=player.projected_pct||0;
-  const weeks=(player.weeks||[]).slice(-5).map(weekChip).join('')
-    || '<span class="wk wk-none">sin jornadas</span>';
+  const played=(player.weeks||[]).slice(-5);
+  const weeks=played.length
+    ? '<span class="wk-label">J</span>'+played.map(weekChip).join('')
+    : '<span class="wk wk-none">sin jornadas</span>';
   return `<div class="slot${statusRing(player)}" draggable="true" data-line="${line}"
     data-index="${index}" data-player="${player.id}" data-pt="${player.player_team_id}"
     title="${player.name} · ${player.next_rival?('vs '+player.next_rival):''}">
@@ -1306,9 +1316,9 @@ function shirtHtml(player,line,index){
     <span class="slot-name">${player.name}</span>
     <span class="slot-weeks">${weeks}</span>
     <span class="slot-meta">
-      ${player.start_probability!=null?`<span class="tit ${titClass(player.start_probability)}"
-        >${player.start_probability}%</span>`:''}
       <span>${(player.xpts||0).toFixed(1)} xPts</span>
+      ${player.start_probability!=null?`<span class="tit ${titClass(player.start_probability)}"
+        >${player.start_probability}% tit</span>`:''}
       <span class="slot-trend ${trend>=0?'up':'down'}">${trend>=0?'▲':'▼'}${Math.abs(trend).toFixed(1)}%</span>
     </span>
   </div>`;
@@ -1563,12 +1573,17 @@ async function openDetail(playerId){
       <div><dt>Valor de mercado</dt><dd>${exact(p.value)}</dd></div>
       <div><dt>xPts por jornada</dt><dd>${(p.xpts||0).toFixed(2)}</dd></div>
       <div><dt>Puntos por millon</dt><dd>${(p.points_value||0).toFixed(3)}</dd></div>
+      <div><dt>Score</dt><dd>${(p.score||0)>=0?'+':''}${(p.score||0).toFixed(2)}
+        <span style="color:var(--muted);font-weight:400">· #${p.rank||'?'}</span></dd></div>
       <div><dt>Puntos 25/26</dt><dd>${p.last_season_points||0}</dd></div>
       <div><dt>Puntos temporada</dt><dd>${p.season_points||0}</dd></div>
-      <div><dt>Titularidad</dt><dd>${p.start_probability!=null?p.start_probability+'%':'—'}</dd></div>
+      <div><dt>Titularidad</dt><dd class="${p.start_probability!=null?titClass(p.start_probability):''}"
+        >${p.start_probability!=null?p.start_probability+'%':'—'}</dd></div>
       <div><dt>Proximo rival</dt><dd>${rival}</dd></div>
-      <div><dt>Valor 7d</dt><dd>${(p.projected_pct||0).toFixed(2)}%</dd></div>
-      <div><dt>Techo rentable</dt><dd>${p.ideal_bid?exact(p.ideal_bid):'sin margen'}</dd></div>
+      <div><dt>Valor 7d</dt><dd style="color:var(--${(p.projected_pct||0)>=0?'pole-pos':'pole-neg'})"
+        >${(p.projected_pct||0)>=0?'+':''}${(p.projected_pct||0).toFixed(2)}%</dd></div>
+      <div><dt>Techo rentable</dt><dd${p.ideal_bid?'':' style="color:var(--warning)"'}
+        >${p.ideal_bid?exact(p.ideal_bid):'sin margen'}</dd></div>
       <div><dt>Clausula</dt><dd>${p.clause?exact(p.clause):'—'}${p.clause_locked?' 🔒':''}</dd></div>
       ${l.market_id?`<div><dt>En mercado</dt><dd>${exact(l.min_bid)}</dd></div>`:''}
       ${l.kind==='libre'?`<div><dt>Pujas vigentes</dt><dd${l.bids?' style="color:var(--warning)"':''}>${l.bids||'ninguna'}</dd></div>`:''}
