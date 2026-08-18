@@ -202,6 +202,22 @@ func (c *Client) Leagues(ttl time.Duration) ([]map[string]any, error) {
 	return leagues, err
 }
 
+// RawList is for the endpoints the model reads generically, where naming every field
+// would be a liability: the player master alone has dozens and they change between
+// seasons.
+func (c *Client) RawList(path string, ttl time.Duration, tag string, target any) error {
+	return c.getList(path, ttl, tag, false, target)
+}
+
+// MarketRaw keeps the listings as maps, because the model reads nested seller and
+// playerMaster fields that this package deliberately does not model.
+func (c *Client) MarketRaw(leagueID string, ttl time.Duration, store bool) ([]map[string]any, error) {
+	var listings []map[string]any
+	err := c.getList(fmt.Sprintf("%s/league/%s/market", config.CMP, leagueID), ttl,
+		"market", store, &listings)
+	return listings, err
+}
+
 func (c *Client) Me(ttl time.Duration) (map[string]any, error) {
 	var me map[string]any
 	err := c.get("/v4/user/me", true, ttl, "me", false, &me)

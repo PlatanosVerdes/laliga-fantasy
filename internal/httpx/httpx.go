@@ -86,7 +86,22 @@ type Request struct {
 	Retries int
 }
 
-var client = &http.Client{}
+// Frozen is the differential harness's guarantee: TTLs are ignored and the network is
+// refused, so a missing entry fails loudly instead of being fetched — which would make
+// the two implementations read different bytes and compare nothing.
+var Frozen = os.Getenv("FANTASY_FREEZE") == "1" ||
+	strings.EqualFold(os.Getenv("FANTASY_FREEZE"), "true") ||
+	strings.EqualFold(os.Getenv("FANTASY_FREEZE"), "yes")
+
+// FrozenMiss is asked for something the frozen cache does not hold.
+type FrozenMiss struct {
+	URL string
+	Tag string
+}
+
+func (e *FrozenMiss) Error() string {
+	return "FANTASY_FREEZE: no hay nada en cache para " + e.Tag + " " + e.URL
+}
 
 func cachePath(rawURL, tag string) string {
 	sum := sha1.Sum([]byte(tag + "|" + rawURL))
@@ -94,12 +109,15 @@ func cachePath(rawURL, tag string) string {
 }
 
 func readCache(rawURL, tag string, ttl time.Duration) (string, bool) {
-	if ttl <= 0 {
+	if ttl <= 0 && !Frozen {
 		return "", false
 	}
 	path := cachePath(rawURL, tag)
 	info, err := os.Stat(path)
-	if err != nil || time.Since(info.ModTime()) > ttl {
+	if err != nil {
+		return "", false
+	}
+	if !Frozen && time.Since(info.ModTime()) > ttl {
 		return "", false
 	}
 	body, err := os.ReadFile(path)
@@ -169,6 +187,10 @@ func Fetch(request Request) (string, error) {
 		slog.Debug("http cache hit", "url", request.URL, "tag", request.Tag,
 			"bytes", len(body))
 		return body, nil
+	}
+
+	if Frozen {
+		return "", &FrozenMiss{URL: request.URL, Tag: request.Tag}
 	}
 
 	var lastErr error

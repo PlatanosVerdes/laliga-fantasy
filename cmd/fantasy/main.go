@@ -13,12 +13,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/auth"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 )
 
 func main() {
@@ -51,6 +51,8 @@ func main() {
 		err = cmdCache()
 	case "probe":
 		err = cmdProbe(rest[1:])
+	case "model":
+		err = cmdModel(rest[1:])
 	case "paths":
 		err = cmdPaths()
 	default:
@@ -70,8 +72,58 @@ uso: fantasy [-v|-q] <comando>
   auth status   estado de la sesion
   cache         tamano de la cache
   probe         las dos peticiones del detector de cambios, y su huella
+  model --json  volcar el modelo, para compararlo con el de Python
   paths         donde vive cada cosa
 `))
+}
+
+// cmdModel dumps the universe so tools/diff_model.py can compare it against Python's.
+// Deliberately only the ported half: claiming a field that is not built yet would make
+// the comparison green for the wrong reason.
+func cmdModel(args []string) error {
+	leagueID, teamID, err := savedLeague()
+	if err != nil {
+		return err
+	}
+	universe, err := model.Build(api.New(), leagueID, teamID)
+	if err != nil {
+		return err
+	}
+	blob, err := json.MarshalIndent(map[string]any{"universe": universe}, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(blob))
+	if !contains(args, "--json") {
+		fmt.Fprintf(os.Stderr, "  %d jugadores · %d anuncios · %d partidos · peticiones %+v\n",
+			len(universe.Players), len(universe.Market), len(universe.Fixtures),
+			httpx.Stats())
+	}
+	return nil
+}
+
+func contains(values []string, wanted string) bool {
+	for _, value := range values {
+		if value == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func savedLeague() (string, string, error) {
+	var settings struct {
+		LeagueID string `json:"league_id"`
+		TeamID   string `json:"team_id"`
+	}
+	raw, err := os.ReadFile(config.SettingsFile)
+	if err != nil {
+		return "", "", fmt.Errorf("no hay liga guardada: %w", err)
+	}
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		return "", "", err
+	}
+	return settings.LeagueID, settings.TeamID, nil
 }
 
 func cmdPaths() error {
@@ -233,4 +285,3 @@ func sha1Hex(text string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-var _ = time.Now

@@ -42,7 +42,8 @@ keeps working throughout.
 | 1 | Module skeleton, XDG config, cache with tags + stats | `fantasy-go cache` prints the same figures as `fantasy.py cache` |
 | 2 | Auth: bearer, expiry, refresh with rotation, env seeding | `fantasy-go auth status` matches `fantasy.py auth status` field for field |
 | 3 | API client and types for the fifteen endpoints in use | `fantasy-go probe` returns the same digest as the Python probe |
-| 4 | The model: universe, scores, cash reconstruction, price prior | **differential harness green** on the same cached inputs |
+| 4a | The model's structure: identity, ownership, market, fixtures | **harness green**: 729 players × 22 fields, 53 listings, 10 fixtures |
+| 4b | The scoring half: xPts, price prior, score, cash reconstruction | harness green on the remaining 30 fields |
 | 5 | Scheduler as goroutines + channels; deadlines, live matches | same wake decisions as Python for a recorded set of payloads |
 | 6 | Writes with the two-step guard and the id semantics | dry-run parity; no live write until the harness agrees |
 | 7 | HTTP server, SSE, the existing templates | page renders, SSE swaps, drag-and-drop still works |
@@ -57,11 +58,19 @@ Both implementations read the **same frozen cache directory** — the scrapes an
 responses already on disk — and write their model to JSON. A comparator walks both trees
 and reports every field that differs, with a tolerance for floats:
 
+```bash
+# One frozen snapshot: the cache both sides read, plus the session and settings.
+snap=/tmp/frozen
+mkdir -p $snap/cache && cp data/{tokens,settings}.json $snap/ && cp data/cache/*.cache $snap/cache/
+
+FANTASY_FREEZE=1 FANTASY_DATA_DIR=$snap python3 fantasy.py report --json --output $snap/report.html
+FANTASY_FREEZE=1 FANTASY_DATA_DIR=$snap fantasy-go model --json > /tmp/go.json
+python3 tools/diff_model.py $snap/report.json /tmp/go.json
 ```
-fantasy.py  model --json > /tmp/py.json      # existing --json output
-fantasy-go  model --json > /tmp/go.json
-python3 tools/diff_model.py /tmp/py.json /tmp/go.json --tolerance 1e-6
-```
+
+`FANTASY_FREEZE=1` is the guarantee: TTLs are ignored and the network is **refused**, so
+a cache miss fails loudly instead of being fetched — which would make the two runs read
+different bytes and compare nothing.
 
 Rules that keep it honest:
 
@@ -72,6 +81,11 @@ Rules that keep it honest:
   values.
 * **Floats need a tolerance, ordering does not.** Scores may differ in the last bits;
   rankings must not differ at all.
+* **Only fields Go actually builds are compared**, and the rest are listed as pending.
+  A comparison that quietly skips what is missing goes green for the wrong reason.
+* **Clock-derived fields are excluded by name.** `clause_hours_left` and `hours_left`
+  are counted from now, so they differ between two runs of the *same* implementation
+  seconds apart — verified, and they are the only 19 fields that do.
 * **A green run is a claim about those inputs only.** Several snapshots are kept — one
   mid-market, one during a live match, one with offers pending, one with a locked clause
   about to open — because the interesting bugs live in the states that are rare.

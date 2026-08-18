@@ -4,6 +4,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
+import os
 import time
 import urllib.error
 import urllib.parse
@@ -28,6 +29,15 @@ class RateLimited(Exception):
             self.retry_after = None
 
 
+class FrozenMiss(Exception):
+    """Asked for something the frozen cache does not hold."""
+
+    def __init__(self, url: str, tag: str):
+        super().__init__(f"FANTASY_FREEZE: no hay nada en cache para {tag} {url}")
+        self.url = url
+        self.tag = tag
+
+
 class HttpError(Exception):
     def __init__(self, status: int, url: str, body: str = ""):
         snippet = " ".join(body.split())[:200] if body.isprintable() or body == "" else ""
@@ -42,11 +52,19 @@ def _cache_path(url: str, tag: str) -> "Any":
     return CACHE_DIR / f"{tag}_{digest}.cache"
 
 
+# The differential harness runs both implementations against a frozen cache: TTLs are
+# ignored and the network is refused, so a missing entry fails loudly instead of being
+# fetched — which would make the two runs read different bytes and compare nothing.
+FROZEN = os.environ.get("FANTASY_FREEZE", "").lower() in ("1", "true", "yes")
+
+
 def _read_cache(url: str, tag: str, ttl: float):
-    if ttl <= 0:
+    if ttl <= 0 and not FROZEN:
         return None
     path = _cache_path(url, tag)
-    if not path.exists() or time.time() - path.stat().st_mtime > ttl:
+    if not path.exists():
+        return None
+    if not FROZEN and time.time() - path.stat().st_mtime > ttl:
         return None
     return path.read_text(encoding="utf-8", errors="replace")
 
@@ -108,6 +126,9 @@ def fetch(
         STATS["cache_hits"] += 1
         log.debug("http cache hit", extra={"url": url, "tag": tag, "bytes": len(cached)})
         return cached
+
+    if FROZEN:
+        raise FrozenMiss(url, tag)
 
     last_error: Exception | None = None
     for attempt in range(retries):
