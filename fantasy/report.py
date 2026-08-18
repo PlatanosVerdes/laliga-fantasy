@@ -2177,15 +2177,20 @@ def build(universe: dict[str, Any], advice: dict[str, Any] | None, *,
                 ("Accion", lambda r: r.get("action").replace("_", " "), "text"),
                 ("Importe", lambda r: r.get("amount"), "money"),
                 ("Precio minimo", lambda r: (entries.get(r["player_id"]) or {}).get("min_price"), "money"),
-                ("Acepto desde", lambda r: (entries.get(r["player_id"]) or {}).get("accept_above"), "money"),
+                ("Acepto desde", lambda r: (
+                    _fmt_money((entries.get(r["player_id"]) or {}).get("accept_above"))
+                    if (entries.get(r["player_id"]) or {}).get("accept_above")
+                    else "no vendo solo"), "text"),
                 ("Motivo", lambda r: r.get("why"), "text"),
                 ("Resultado", lambda r: r.get("result") or "pendiente", "text"),
             ]
             pending_actions = [a for a in plan if a["action"] != "ninguna"]
-            note = ("Instrucciones permanentes: mantener al jugador en el mercado y aceptar "
-                    "la mejor oferta a partir de un importe que fijas tu. "
-                    "Se configuran con <code>fantasy.py always add &lt;nombre&gt; --min N "
-                    "--accept N</code>.")
+            note = ("Instrucciones permanentes: mantener al jugador en el mercado, que es "
+                    "lo unico que hace el interruptor. <strong>Nunca vende solo</strong> "
+                    "mientras no le pongas un importe: el valor de mercado no sirve de "
+                    "umbral, porque las ofertas lo igualan constantemente. Para autorizar "
+                    "la venta automatica, <code>fantasy.py always add &lt;nombre&gt; "
+                    "--min N --accept N</code>.")
             if pending_actions:
                 note += (" <strong>" + str(len(pending_actions)) + " accion(es) en cola</strong>, "
                          "se ejecutan en el proximo refresco (salvo <code>--read-only</code>).")

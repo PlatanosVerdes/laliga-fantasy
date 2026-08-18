@@ -672,7 +672,8 @@ def cmd_always(args) -> int:
         heading("Siempre en mercado")
         print(table(["jugador", "precio minimo", "acepto por encima de"],
                     [[e.get("name") or e["id"], money(e.get("min_price")),
-                      money(e.get("accept_above"))] for e in entries.values()],
+                      money(e["accept_above"]) if e.get("accept_above")
+                      else "no vendo solo"] for e in entries.values()],
                     right={1, 2}))
         universe, advice, _ = _load(args)
         plan = policies.plan(universe["players"])
@@ -700,9 +701,12 @@ def cmd_always(args) -> int:
         return 0
     entry = policies.set_policy(player["id"], name=player["name"],
                                 min_price=args.min or int(player["value"]),
-                                accept_above=args.accept or int(player["value"]))
+                                accept_above=args.accept)
+    tail = (f"acepto ofertas desde {money(entry['accept_above'])}."
+            if entry.get("accept_above")
+            else "no lo vendo solo; con --accept <importe> defines a partir de cuanto.")
     print(paint(f"{player['name']}: siempre en mercado a {money(entry['min_price'])}, "
-                f"acepto ofertas desde {money(entry['accept_above'])}.", GREEN))
+                + tail, GREEN))
     return 0
 
 

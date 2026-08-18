@@ -6,9 +6,11 @@ players you name explicitly and never below a floor you set. They run whenever t
 server does — firing unattended is the whole point, since a clause opens when it
 opens — and `--no-auto` suspends them, `--read-only` stops everything.
 
-Nothing here decides on its own what a good price is: `min_price` and
-`accept_above` come from you. The default for both is the player's market value,
-which is the one number that is not an opinion.
+Nothing here decides on its own what a good price is, and nothing sells a player
+unless you named the number: `min_price` is only the price he is listed at, and
+without an explicit `accept_above` no offer is ever accepted automatically, however
+good it looks. Market value is not that number — offers land at or above it all the
+time, so defaulting to it would mean handing the player over on the first bid.
 """
 from __future__ import annotations
 
@@ -132,12 +134,14 @@ def plan(players: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
         value = float(player.get("value") or 0)
         floor = int(policy.get("min_price") or value)
-        threshold = int(policy.get("accept_above") or value)
+        # No threshold means no automatic sale, ever. Selling needs a number from you.
+        threshold = policy.get("accept_above")
+        threshold = int(threshold) if threshold else None
         listing = player.get("market") or {}
         offers = player.get("offers") or []
         best = offers[0] if offers else None
 
-        if best and float(best.get("money") or 0) >= threshold:
+        if threshold is not None and best and float(best.get("money") or 0) >= threshold:
             actions.append({
                 "player_id": str(player["id"]), "name": player["name"],
                 "action": "aceptar_oferta", "amount": int(best["money"]),
@@ -151,12 +155,13 @@ def plan(players: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "action": "poner_en_venta", "amount": price,
                 "why": f"no esta en el mercado; lo listo a {price:,}".replace(",", ".")})
         else:
+            why = (f"ya listado a {int(listing.get('min_bid') or 0):,}".replace(",", ".")
+                   + (f", mejor oferta {int(best['money']):,}".replace(",", ".")
+                      if best else ", sin ofertas"))
+            if threshold is None:
+                why += "; no vendo solo (sin umbral)"
             actions.append({"player_id": str(player["id"]), "name": player["name"],
-                            "action": "ninguna",
-                            "why": f"ya listado a {int(listing.get('min_bid') or 0):,}"
-                                   .replace(",", ".")
-                                   + (f", mejor oferta {int(best['money']):,}".replace(",", ".")
-                                      if best else ", sin ofertas")})
+                            "action": "ninguna", "why": why})
     return actions
 
 
