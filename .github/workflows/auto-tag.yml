@@ -38,11 +38,14 @@ jobs:
           for attempt in 1 2 3 4 5; do
             git fetch --tags --force --prune-tags --quiet
 
+            # The suffix is a dot, not a dash: rpi-services picks the newest tag with
+            # `sort -V`, and it reads v2026.08.18-9 as OLDER than v2026.08.18.1, so a dash
+            # would silently pin the deploy to yesterday's build.
             base="v$(date +%Y.%m.%d)"
             tag="$base"
             n=1
             while git rev-parse -q --verify "refs/tags/$tag" >/dev/null; do
-              tag="$base-$n"
+              tag="$base.$n"
               n=$((n + 1))
             done
 
