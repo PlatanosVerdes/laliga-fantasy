@@ -30,7 +30,7 @@ MODAL = '''<div class="modal" id="bid-modal" hidden role="dialog" aria-modal="tr
      aria-label="Confirmar operacion">
   <div class="modal-card">
     <h3><span class="bid-action">Pujar por</span> <span class="bid-who"></span></h3>
-    <div class="bid-step1">
+    <div id="bid-amount-step">
       <div class="bid-field">
         <label for="bid-amount">Importe de la puja</label>
         <input class="bid-amount" id="bid-amount" type="text" inputmode="numeric" autocomplete="off" spellcheck="false">
@@ -43,15 +43,15 @@ MODAL = '''<div class="modal" id="bid-modal" hidden role="dialog" aria-modal="tr
       </p>
       <p class="bid-warn" hidden></p>
     </div>
-    <div class="bid-step2" hidden>
+    <div id="bid-summary-step" hidden>
       <div class="bid-summary"></div>
     </div>
     <p class="bid-error"></p>
     <div class="modal-actions">
       <button class="bid-drop" type="button" hidden>Retirar mi puja</button>
       <button class="bid-cancel" type="button">Cancelar</button>
-      <button class="bid-next bid-step1 primary" type="button">Continuar</button>
-      <button class="bid-confirm bid-step2" type="button" hidden>Aceptar y ejecutar</button>
+      <button class="bid-next primary" type="button">Continuar</button>
+      <button class="bid-confirm" type="button" hidden>Aceptar y ejecutar</button>
     </div>
     <p class="modal-note">Se comprueba contra tu saldo antes de ejecutar.</p>
   </div>
@@ -1057,6 +1057,19 @@ const exact=(n)=> n==null ? '—' : Number(n).toLocaleString('es-ES')+' €';
 
 function closeModal(){ modal.hidden=true; pending=null; }
 
+// Un unico sitio decide que paso se ve: antes los botones compartian clase con los
+// bloques y querySelector solo alcanzaba al primero, asi que el contenido avanzaba
+// y los botones se quedaban en el paso uno.
+function showStep(step,{confirmLabel='Aceptar y ejecutar'}={}){
+  modal.querySelector('#bid-amount-step').hidden = step!==1;
+  modal.querySelector('#bid-summary-step').hidden = step!==2;
+  modal.querySelector('.bid-next').hidden = step!==1;
+  const confirm=modal.querySelector('.bid-confirm');
+  confirm.hidden = step!==2;
+  confirm.textContent = confirmLabel;
+  confirm.disabled = false;
+}
+
 function wireBids(root=document){
   root.querySelectorAll('button.bid').forEach(button=>{
     if(button.dataset.wired) return;
@@ -1081,8 +1094,7 @@ function openBid(data){
   const drop=modal.querySelector('.bid-drop');
   pending.bid_id=data.bid||null;
   drop.hidden=!pending.bid_id;
-  modal.querySelector('.bid-step2').hidden=true;
-  modal.querySelector('.bid-step1').hidden=false;
+  showStep(1);
   modal.querySelector('.bid-error').textContent='';
   checkAmount();
   input.focus();
@@ -1137,16 +1149,19 @@ if(modal){
       const data=await res.json();
       if(!res.ok) throw new Error(data.error||res.status);
       pending.token=data.token;
+      const op=pending.operation||'bid';
+      const movesCash=['bid','direct_offer','pay_clause','accept_offer'].includes(op);
       modal.querySelector('.bid-summary').innerHTML =
         `<dl class="bid-dl">
            <dt>Jugador</dt><dd>${data.player_name||pending.name}</dd>
-           <dt>Pujas</dt><dd><strong>${exact(data.amount)}</strong></dd>
+           <dt>${AMOUNT_LABEL[op]||'Importe'}</dt>
+             <dd><strong>${exact(data.amount)}</strong></dd>
            <dt>Saldo ahora</dt><dd>${exact(data.cash_before)}</dd>
-           <dt>Saldo si ganas</dt><dd><strong>${exact(data.cash_after)}</strong></dd>
+           ${movesCash?`<dt>${op==='accept_offer'?'Saldo despues':'Saldo si sale'}</dt>
+             <dd><strong>${exact(data.cash_after)}</strong></dd>`:''}
          </dl>` +
         (data.warnings||[]).map(w=>`<p class="bid-warn-line">⚠ ${w}</p>`).join('');
-      modal.querySelector('.bid-step1').hidden=true;
-      modal.querySelector('.bid-step2').hidden=false;
+      showStep(2,{confirmLabel:CONFIRM_LABEL[pending.operation]||'Aceptar y ejecutar'});
     }catch(err){
       modal.querySelector('.bid-error').textContent=err.message;
     }
@@ -1165,11 +1180,8 @@ if(modal){
       pending.token=data.token;
       modal.querySelector('.bid-summary').innerHTML =
         `<p>Vas a <strong>retirar tu puja</strong> por ${pending.name}.</p>`;
-      modal.querySelector('.bid-step1').hidden=true;
-      modal.querySelector('.bid-step2').hidden=false;
       modal.querySelector('.bid-drop').hidden=true;
-      modal.querySelector('.bid-confirm').textContent='Aceptar y retirar';
-      modal.querySelector('.bid-confirm').hidden=false;
+      showStep(2,{confirmLabel:'Aceptar y retirar'});
     }catch(err){ modal.querySelector('.bid-error').textContent=err.message; }
   });
 
@@ -1184,7 +1196,8 @@ if(modal){
       const data=await res.json();
       if(!res.ok) throw new Error(data.error||res.status);
       modal.querySelector('.bid-summary').innerHTML =
-        `<p class="bid-ok">Puja enviada${data.dry_run?' (simulacro)':''}.</p>`;
+        `<p class="bid-ok">${DONE_LABEL[pending&&pending.operation]||'Hecho'}${
+          data.dry_run?' (simulacro)':''}.</p>`;
       modal.querySelector('.bid-confirm').hidden=true;
       modal.querySelector('.bid-cancel').textContent='Cerrar';
     }catch(err){
@@ -1196,6 +1209,22 @@ if(modal){
 }
 
 // ---- operaciones genericas (aceptar/rechazar oferta, retirar) --------------
+// Cada operacion se llama por su nombre en el boton final y en el resumen: "Pujas" y
+// "Saldo si ganas" no significan nada cuando lo que haces es vender.
+const CONFIRM_LABEL={bid:'Aceptar y pujar',sell_to_market:'Aceptar y poner en venta',
+  accept_offer:'Aceptar la oferta',decline_offer:'Rechazar la oferta',
+  withdraw:'Aceptar y retirar',direct_offer:'Aceptar y ofertar',
+  pay_clause:'Aceptar y pagar la clausula',raise_clause:'Aceptar y subir',
+  cancel_bid:'Aceptar y retirar la puja'};
+const DONE_LABEL={bid:'Puja enviada',sell_to_market:'Puesto en venta',
+  accept_offer:'Oferta aceptada',decline_offer:'Oferta rechazada',
+  withdraw:'Retirado del mercado',direct_offer:'Oferta enviada',
+  pay_clause:'Clausula pagada',raise_clause:'Clausula subida',
+  cancel_bid:'Puja retirada'};
+const AMOUNT_LABEL={bid:'Pujas',sell_to_market:'Precio de venta',
+  accept_offer:'Cobras',direct_offer:'Ofreces',pay_clause:'Pagas',
+  raise_clause:'Subes la clausula'};
+
 const OP_LABELS={accept_offer:'Aceptar oferta por',decline_offer:'Rechazar oferta por',
                  withdraw:'Retirar del mercado a',sell_to_market:'Poner en venta a'};
 
@@ -1210,13 +1239,10 @@ function wireOps(root=document){
       modal.hidden=false;
       modal.querySelector('.bid-who').textContent=d.opName;
       modal.querySelector('.bid-action').textContent=OP_LABELS[d.op]||'Confirmar';
-      modal.querySelector('.bid-step1').hidden=true;
-      modal.querySelector('.bid-step2').hidden=false;
       modal.querySelector('.bid-drop').hidden=true;
       modal.querySelector('.bid-error').textContent='';
       modal.querySelector('.bid-summary').innerHTML='<p>Comprobando…</p>';
-      modal.querySelector('.bid-confirm').hidden=false;
-      modal.querySelector('.bid-confirm').textContent='Aceptar y ejecutar';
+      showStep(2,{confirmLabel:CONFIRM_LABEL[d.op]||'Aceptar y ejecutar'});
       try{
         const res=await fetch('/api/bid/prepare',{method:'POST',
           headers:{'Content-Type':'application/json'},
@@ -1674,11 +1700,8 @@ async function runAction(a,player){
     modal.querySelector('.bid-ideal').textContent=player.ideal_bid?exact(player.ideal_bid):'sin margen';
     modal.querySelector('.bid-value').textContent=exact(player.value);
     showRivals(+a.bids||0, a.expires);
-    modal.querySelector('.bid-step1').hidden=false;
-    modal.querySelector('.bid-step2').hidden=true;
     modal.querySelector('.bid-drop').hidden=true;
-    modal.querySelector('.bid-confirm').hidden=true;
-    modal.querySelector('.bid-next').hidden=false;
+    showStep(1);
     modal.querySelector('.bid-error').textContent='';
     checkAmount();
   }else{
