@@ -53,7 +53,7 @@ keeps working throughout.
 | 7a | The page's CSS and JS become files | **page byte-identical** once the clock decimals are masked |
 | 7b | HTTP server, JSON API, SSE | **/api/state identical live**: 729 players x 52 fields, 82 events, 13 managers' cash |
 | 7c | The HTML rendering: primitives first | **52 cells identical** |
-| 7d | The sections, one table at a time | **9 of ~14 byte-identical**, buttons included, plus every empty state |
+| 7d | The sections, one table at a time | **13 tables byte-identical**, buttons and verdicts included, plus every empty state |
 | 7e | The page shell, the pitch and the drawer | page renders from Go, SSE swaps, drag-and-drop still works |
 | 8 | Policies and the automation | plan parity on recorded payloads, then armed |
 

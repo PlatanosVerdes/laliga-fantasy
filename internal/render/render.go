@@ -663,6 +663,43 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		columns := PlayerColumns("", Column{"Motivos", field("reasons"), "list"})
 		return TableIn(columns, rows, "Sin datos", "ventas", false), nil
 
+	case "rivales":
+		// Who can buy today, which is a different table from who is winning: cash beats
+		// points when the question is whether somebody can pay your clause tonight.
+		columns := []Column{
+			{"#", field("cash_position"), "int"},
+			{"Manager", func(row map[string]any) any {
+				if manager := text(row["manager"]); manager != "" {
+					return manager
+				}
+				return row["name"]
+			}, "text"},
+			{"Poder de compra", whole, "power"},
+			{"Puntos", field("points"), "int"},
+			{"Jugadores", field("players"), "int"},
+			{"Valor plantilla", field("squad_value"), "money"},
+			{"Neto en fichajes", field("net_flow"), "money"},
+			{"Caja estimada", field("estimated_cash"), "money"},
+			{"Suma de cláusulas", field("clause_total"), "money"},
+		}
+		return TableIn(columns, rows, "Sin datos", "", false), nil
+
+	case "acciones":
+		// The one table that says what to do rather than what is true, so the verdict is
+		// the first column and the reason sits right next to the name.
+		columns := []Column{
+			{"Que hacer", field("verdict"), "verdict"},
+			{"★", whole, "star"},
+			{"Jugador", whole, "player"},
+			{"Motivo", field("why"), "text"},
+			{"Coste", field("entry_cost"), "money"},
+			{"Valor", field("value"), "money"},
+			{"xPts/j", field("xpts"), "num"},
+			{"Pts/M", field("points_value"), "mag"},
+			{"Valor 7d", field("projected_pct"), "pct"},
+		}
+		return TableIn(columns, rows, "Sin datos", "", false), nil
+
 	case "vencimientos":
 		// Yours, and the clock is the subject: when the lock falls, anyone with the cash
 		// can pay. So the countdown is the first column, not an afterthought.

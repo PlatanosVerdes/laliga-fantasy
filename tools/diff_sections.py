@@ -36,13 +36,20 @@ SECTIONS = [
     ("enventa", "asks", True),
     ("clausulas", "raids", False),
     ("ofertas", "offers", False),
+    ("vencimientos", "my_clauses_soon", False),
+    ("proximas", "upcoming_raids", False),
+    ("rivales", "rivals", False),
+    # No bucket of its own: the advice layer composes these rows, so the harness makes them.
+    ("acciones", "__sinteticas__", False),
 ]
 
 # The empty-state text is part of the output, so it belongs to the spec and not to a
 # default: "Sin exposicion relevante" is what the risk table says when there is none.
 EMPTY = {"riesgo": "Sin exposicion relevante",
          "enventa": "Nadie ha puesto a nadie en venta",
-         "clausulas": "Ninguna cláusula a tu alcance"}
+         "clausulas": "Ninguna cláusula a tu alcance",
+         "vencimientos": "Ninguna se desbloquea en los proximos 10 dias.",
+         "proximas": "Ninguna cláusula interesante se abre en los proximos 10 dias."}
 
 
 def columns_for(name: str):
@@ -91,6 +98,49 @@ def columns_for(name: str):
             ("xPts/j", lambda r: r["xpts"], "num"),
             ("", lambda r: r, "offer"),
         ]
+    if name in ("vencimientos", "proximas"):
+        columns = [
+            ("Se abre en", lambda r: r, "hours"),
+            ("Fecha", lambda r: str(r.get("unlock_at") or "")[:16].replace("T", " "), "text"),
+            ("Jugador", lambda r: r, "player"),
+            ("Valor", lambda r: r["value"], "money"),
+            ("Cláusula", lambda r: r.get("clause"), "money"),
+            ("xPts/j", lambda r: r["xpts"], "num"),
+            ("Score", lambda r: r["score"], "num"),
+        ]
+        if name == "vencimientos":
+            return columns
+        columns.insert(3, ("Dueño", lambda r: r.get("owner"), "text"))
+        columns.insert(0, ("¿Renta?", lambda r: r, "verdict_raid"))
+        columns.append(("x valor", lambda r: r.get("clause_premium"), "num"))
+        columns.append(("Pts/M pagando", lambda r: r.get("ppm_at_clause"), "mag"))
+        columns.append(("Techo futbolfantasy", lambda r: r.get("ideal_bid"), "ideal"))
+        columns.append(("Clausulazo", lambda r: r, "raid"))
+        return columns
+    if name == "rivales":
+        return [
+            ("#", lambda r: r.get("cash_position"), "int"),
+            ("Manager", lambda r: r.get("manager") or r.get("name"), "text"),
+            ("Poder de compra", lambda r: r, "power"),
+            ("Puntos", lambda r: r.get("points"), "int"),
+            ("Jugadores", lambda r: r.get("players"), "int"),
+            ("Valor plantilla", lambda r: r.get("squad_value"), "money"),
+            ("Neto en fichajes", lambda r: r.get("net_flow"), "money"),
+            ("Caja estimada", lambda r: r.get("estimated_cash"), "money"),
+            ("Suma de cláusulas", lambda r: r.get("clause_total"), "money"),
+        ]
+    if name == "acciones":
+        return [
+            ("Que hacer", lambda r: r["verdict"], "verdict"),
+            ("★", lambda r: r, "star"),
+            ("Jugador", lambda r: r, "player"),
+            ("Motivo", lambda r: r.get("why"), "text"),
+            ("Coste", lambda r: r.get("entry_cost"), "money"),
+            ("Valor", lambda r: r["value"], "money"),
+            ("xPts/j", lambda r: r["xpts"], "num"),
+            ("Pts/M", lambda r: r["points_value"], "mag"),
+            ("Valor 7d", lambda r: r.get("projected_pct"), "pct"),
+        ]
     if name == "riesgo":
         return [
             ("Jugador", lambda r: r, "player"),
@@ -117,6 +167,37 @@ def synthetic(name: str, advice: dict) -> list[dict]:
     if not base:
         return []
 
+    if name in ("vencimientos", "proximas"):
+        columns = [
+            ("Se abre en", lambda r: r, "hours"),
+            ("Fecha", lambda r: str(r.get("unlock_at") or "")[:16].replace("T", " "), "text"),
+            ("Jugador", lambda r: r, "player"),
+            ("Valor", lambda r: r["value"], "money"),
+            ("Cláusula", lambda r: r.get("clause"), "money"),
+            ("xPts/j", lambda r: r["xpts"], "num"),
+            ("Score", lambda r: r["score"], "num"),
+        ]
+        if name == "vencimientos":
+            return columns
+        columns.insert(3, ("Dueño", lambda r: r.get("owner"), "text"))
+        columns.insert(0, ("¿Renta?", lambda r: r, "verdict_raid"))
+        columns.append(("x valor", lambda r: r.get("clause_premium"), "num"))
+        columns.append(("Pts/M pagando", lambda r: r.get("ppm_at_clause"), "mag"))
+        columns.append(("Techo futbolfantasy", lambda r: r.get("ideal_bid"), "ideal"))
+        columns.append(("Clausulazo", lambda r: r, "raid"))
+        return columns
+    if name == "rivales":
+        return [
+            ("#", lambda r: r.get("cash_position"), "int"),
+            ("Manager", lambda r: r.get("manager") or r.get("name"), "text"),
+            ("Poder de compra", lambda r: r, "power"),
+            ("Puntos", lambda r: r.get("points"), "int"),
+            ("Jugadores", lambda r: r.get("players"), "int"),
+            ("Valor plantilla", lambda r: r.get("squad_value"), "money"),
+            ("Neto en fichajes", lambda r: r.get("net_flow"), "money"),
+            ("Caja estimada", lambda r: r.get("estimated_cash"), "money"),
+            ("Suma de cláusulas", lambda r: r.get("clause_total"), "money"),
+        ]
     if name == "riesgo":
         return [{**row,
                  "clause": (row.get("value") or 0) * 1.8,
@@ -124,6 +205,18 @@ def synthetic(name: str, advice: dict) -> list[dict]:
                  "threats": index,
                  "top_threat": ["La rataneta", None, "TheMessias"][index % 3]}
                 for index, row in enumerate(base)]
+
+    if name == "acciones":
+        # The composition — which player earns which verdict — belongs to the advice layer,
+        # which is not ported. What is under test here is the rendering, so one row per
+        # verdict exercises all five badges and the order they sort in.
+        verdicts = ["out", "buy", "clause", "protect", "sell"]
+        base5 = (advice.get("squad") or [])[:5]
+        return [{**row, "verdict": verdicts[index % len(verdicts)],
+                 "why": ["ya no juega", "renta a ese precio", "clausula abierta",
+                         "quedas expuesto", "score bajo; valor cayendo"][index % 5],
+                 "entry_cost": None if index % 2 else (row.get("value") or 0) * 1.1}
+                for index, row in enumerate(base5)]
 
     if name == "clausulas":
         # A rival's player with the clause open: not mine, owned, and one of them shielded,
