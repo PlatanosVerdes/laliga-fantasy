@@ -2,10 +2,9 @@
 
 Listings expire and get pulled; if you want somebody permanently on the market you
 have to relist him by hand every day. This is that chore, automated — but only for
-players you name explicitly and never below a floor you set — and only when the
-server was started with `--auto`. Without it the plan is computed and shown but
-nothing executes, because a robot spending your money while you are not watching is
-a different decision from clicking a button and confirming it twice.
+players you name explicitly and never below a floor you set. They run whenever the
+server does — firing unattended is the whole point, since a clause opens when it
+opens — and `--no-auto` suspends them, `--read-only` stops everything.
 
 Nothing here decides on its own what a good price is: `min_price` and
 `accept_above` come from you. The default for both is the player's market value,
