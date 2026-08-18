@@ -51,7 +51,7 @@ MODAL = '''<div class="modal" id="bid-modal" hidden role="dialog" aria-modal="tr
       <button class="bid-drop" type="button" hidden>Retirar mi puja</button>
       <button class="bid-cancel" type="button">Cancelar</button>
       <button class="bid-next primary" type="button">Continuar</button>
-      <button class="bid-confirm" type="button" hidden>Aceptar y ejecutar</button>
+      <button class="bid-confirm" type="button" hidden>Aceptar</button>
     </div>
     <p class="modal-note">Se comprueba contra tu saldo antes de ejecutar.</p>
   </div>
@@ -1162,7 +1162,7 @@ if(modal){
              <dd><strong>${exact(data.cash_after)}</strong></dd>`:''}
          </dl>` +
         (data.warnings||[]).map(w=>`<p class="bid-warn-line">⚠ ${w}</p>`).join('');
-      showStep(2,{confirmLabel:CONFIRM_LABEL[pending.operation]||'Aceptar y ejecutar'});
+      showStep(2,{confirmLabel:CONFIRM_LABEL[pending.operation]||'Aceptar'});
     }catch(err){
       modal.querySelector('.bid-error').textContent=err.message;
     }
@@ -1239,7 +1239,7 @@ function wireOps(root=document){
       modal.querySelector('.bid-drop').hidden=true;
       modal.querySelector('.bid-error').textContent='';
       modal.querySelector('.bid-summary').innerHTML='<p>Comprobando…</p>';
-      showStep(2,{confirmLabel:CONFIRM_LABEL[d.op]||'Aceptar y ejecutar'});
+      showStep(2,{confirmLabel:CONFIRM_LABEL[d.op]||'Aceptar'});
       try{
         const res=await fetch('/api/bid/prepare',{method:'POST',
           headers:{'Content-Type':'application/json'},
