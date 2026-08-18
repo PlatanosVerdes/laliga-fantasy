@@ -22,9 +22,12 @@ refresh loop awkward to write:
 
 The two things Python does better here stay:
 
-* **The futbolfantasy scrapers.** They are regex-and-heuristics over HTML that changes
-  without notice, and they are the most fragile code in the project. Rewriting them buys
-  nothing and risks the parsing that took the longest to get right.
+* **The futbolfantasy scrapers**, and with them the cross-source name matching. They are
+  regex-and-heuristics over HTML that changes without notice, and they are the most
+  fragile code in the project. Rewriting them buys nothing and risks the parsing that
+  took the longest to get right. `fantasy.py bridge` dumps everything derived from them,
+  already keyed by LaLiga player id, and Go runs it as a subprocess: what crosses the
+  boundary is data, never parsing.
 * **The report's CSS and JS.** 1,400 lines of it, already written, already validated.
   They move across as template files unchanged.
 
@@ -43,7 +46,8 @@ keeps working throughout.
 | 2 | Auth: bearer, expiry, refresh with rotation, env seeding | `fantasy-go auth status` matches `fantasy.py auth status` field for field |
 | 3 | API client and types for the fifteen endpoints in use | `fantasy-go probe` returns the same digest as the Python probe |
 | 4a | The model's structure: identity, ownership, market, fixtures | **harness green**: 729 players × 22 fields, 53 listings, 10 fixtures |
-| 4b | The scoring half: xPts, price prior, score, cash reconstruction | harness green on the remaining 30 fields |
+| 4b | The scoring half: xPts, price prior, score, ranks | **harness green**: 729 players × 48 fields, identical to 6 decimals |
+| 4c | Cash reconstruction, offers, favourites, scheduled raids | harness green on the last 4 fields |
 | 5 | Scheduler as goroutines + channels; deadlines, live matches | same wake decisions as Python for a recorded set of payloads |
 | 6 | Writes with the two-step guard and the id semantics | dry-run parity; no live write until the harness agrees |
 | 7 | HTTP server, SSE, the existing templates | page renders, SSE swaps, drag-and-drop still works |

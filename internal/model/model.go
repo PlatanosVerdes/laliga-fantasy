@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -59,6 +60,34 @@ type Player struct {
 	Shielded      bool     `json:"shielded"`
 	PlayerTeamID  *string  `json:"player_team_id"`
 	IsMine        bool     `json:"is_mine"`
+
+	// --- scoring half: everything below depends on the futbolfantasy bridge -------
+	BaseWeek         float64                `json:"base_week"`
+	PriorBased       bool                   `json:"prior_based"`
+	Confidence       float64                `json:"confidence"`
+	StartProbability *float64               `json:"start_probability"`
+	NextWeek         *int                   `json:"next_week"`
+	NextRival        *string                `json:"next_rival"`
+	NextHome         *bool                  `json:"next_home"`
+	FixtureFactor    float64                `json:"fixture_factor"`
+	XPts             float64                `json:"xpts"`
+	PointsValue      float64                `json:"points_value"`
+	ProjectedPct     float64                `json:"projected_pct"`
+	ProjectedGain    float64                `json:"projected_gain"`
+	TrendLabel       *string                `json:"trend_label"`
+	StreakDays       *int                   `json:"streak_days"`
+	StreakDir        *string                `json:"streak_dir"`
+	Acceleration     *float64               `json:"acceleration"`
+	Pct1d            *float64               `json:"pct_1d"`
+	Pct7d            *float64               `json:"pct_7d"`
+	Pct30d           *float64               `json:"pct_30d"`
+	FFID             *string                `json:"ff_id"`
+	FFName           *string                `json:"ff_name"`
+	FFValue          *float64               `json:"ff_value"`
+	Absence          map[string]any         `json:"absence"`
+	Score            float64                `json:"score"`
+	Rank             int                    `json:"rank"`
+	PositionRank     int                    `json:"position_rank"`
 }
 
 type Listing struct {
@@ -91,13 +120,16 @@ type Fixture struct {
 }
 
 type Universe struct {
-	Week            api.Week   `json:"week"`
-	Fixtures        []Fixture  `json:"fixtures"`
-	Players         []Player   `json:"players"`
-	Market          []Listing  `json:"market"`
-	MyTeamID        *string    `json:"my_team_id"`
-	OwnershipLoaded bool       `json:"ownership_loaded"`
-	CompletedWeeks  int        `json:"completed_weeks"`
+	Week            api.Week           `json:"week"`
+	Fixtures        []Fixture          `json:"fixtures"`
+	Players         []Player           `json:"players"`
+	Market          []Listing          `json:"market"`
+	MyTeamID        *string            `json:"my_team_id"`
+	OwnershipLoaded bool               `json:"ownership_loaded"`
+	CompletedWeeks  int                `json:"completed_weeks"`
+	CurrentWeight   float64            `json:"current_weight"`
+	TeamStrength    map[string]float64 `json:"team_strength"`
+	MatchedCount    int                `json:"matched_count"`
 }
 
 // Positions as the API numbers them, with the names the report uses.
@@ -105,7 +137,7 @@ var positions = map[int]string{1: "POR", 2: "DEF", 3: "MED", 4: "DEL", 5: "ENT"}
 
 // Build assembles the structural universe. TTLs match the Python ones so a frozen cache
 // serves both sides identically.
-func Build(client *api.Client, leagueID, myTeamID string) (*Universe, error) {
+func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge) (*Universe, error) {
 	week, err := client.CurrentWeek(30 * time.Minute)
 	if err != nil {
 		return nil, fmt.Errorf("week: %w", err)
@@ -126,13 +158,52 @@ func Build(client *api.Client, leagueID, myTeamID string) (*Universe, error) {
 		teamShort[team.ID] = team.ShortName
 	}
 
+	completedWeeks := max(0, week.WeekNumber-1)
+	// The season's own points only start to outweigh last season's after a couple of
+	// months; before that they are a handful of matches and mostly noise.
+	currentWeight := math.Min(1.0, float64(completedWeeks)/8.0)
+
 	universe := &Universe{
 		Week:           week,
 		Fixtures:       LoadFixtures(client, week, teams),
-		CompletedWeeks: max(0, week.WeekNumber-1),
+		CompletedWeeks: completedWeeks,
+		CurrentWeight:  currentWeight,
+	}
+	if bridge != nil {
+		universe.MatchedCount = bridge.MatchedCount
 	}
 	if myTeamID != "" {
 		universe.MyTeamID = &myTeamID
+	}
+
+	// Both need every player, so they are computed before the row loop.
+	rawPlayers := make([]Player, 0, len(raw))
+	for _, entry := range raw {
+		positionID := int(number(entry["positionId"]))
+		rawPlayers = append(rawPlayers, Player{
+			PositionID: positionID, TeamID: text(entry["teamId"]),
+			Value: number(entry["marketValue"]), LastSeason: number(entry["lastSeasonPoints"]),
+		})
+	}
+	strength := TeamStrength(rawPlayers)
+	curves := PricePrior(rawPlayers)
+	universe.TeamStrength = strength
+
+	// futbolfantasy names its teams differently, so the rival is resolved by normalized
+	// name. Key order and first-wins are matching.build_team_index's, not a detail: the
+	// feed carries 42 teams including historic ones, so a collision resolved the other
+	// way picks a different club and quietly changes that player's fixture factor.
+	teamByName := map[string]string{}
+	for _, team := range teams {
+		for _, candidate := range []string{team.Name, team.Slug, team.ShortName} {
+			key := normalizeTeam(candidate)
+			if key == "" {
+				continue
+			}
+			if _, taken := teamByName[key]; !taken {
+				teamByName[key] = team.ID
+			}
+		}
 	}
 
 	ownership := map[string]slot{}
@@ -183,6 +254,84 @@ func Build(client *api.Client, leagueID, myTeamID string) (*Universe, error) {
 			player.FullName = &full
 		}
 
+		// --- the scoring half ---------------------------------------------------
+		var trend *Trend
+		if bridge != nil {
+			if found, ok := bridge.Trends[id]; ok {
+				trend = &found
+			}
+			if absence, ok := bridge.Absences[id]; ok {
+				player.Absence = absence
+			}
+		}
+
+		player.PriorBased = player.LastSeason <= 0
+		perWeekLast := player.LastSeason / WeeksInSeason
+		if player.PriorBased {
+			perWeekLast = PriorFor(curves, positionID, player.Value)
+		}
+		perWeekNow := 0.0
+		if completedWeeks > 0 {
+			perWeekNow = player.SeasonPoints / float64(completedWeeks)
+		}
+		player.BaseWeek = currentWeight*perWeekNow + (1-currentWeight)*perWeekLast
+
+		availability := 1.0
+		if trend != nil && trend.StartProbability != nil {
+			player.StartProbability = trend.StartProbability
+			availability = (*trend.StartProbability / 100.0) / BaselineStartProbability
+			availability = math.Max(AvailabilityFloor, math.Min(AvailabilityCeiling, availability))
+		}
+
+		var rivalStrength *float64
+		if trend != nil && trend.NextRival != nil {
+			if rivalID, ok := teamByName[normalizeTeam(*trend.NextRival)]; ok {
+				if value, ok := strength[rivalID]; ok {
+					rivalStrength = &value
+				}
+			}
+		}
+		var home *bool
+		if trend != nil {
+			home = trend.NextHome
+			player.NextWeek, player.NextRival, player.NextHome = trend.NextWeek, trend.NextRival, trend.NextHome
+			player.TrendLabel, player.StreakDays, player.StreakDir = trend.TrendLabel, trend.StreakDays, trend.StreakDir
+			player.Acceleration = trend.Acceleration
+			player.Pct1d, player.Pct7d, player.Pct30d = trend.Pct1d, trend.Pct7d, trend.Pct30d
+			player.FFValue = trend.Value
+			if trend.FFID != "" {
+				id := trend.FFID
+				player.FFID = &id
+			}
+			if trend.FFName != "" {
+				name := trend.FFName
+				player.FFName = &name
+			}
+		}
+		player.FixtureFactor = FixtureFactor(rivalStrength, home)
+
+		// Unknown minutes and a price-derived baseline are both guesses; discount them
+		// so a fringe player with no data cannot outrank a known starter.
+		player.Confidence = 1.0
+		if player.StartProbability == nil {
+			player.Confidence *= NoTrendConfidence
+		}
+		if player.PriorBased {
+			player.Confidence *= PriorConfidence
+		}
+
+		if player.Available {
+			player.XPts = player.BaseWeek * availability * player.FixtureFactor * player.Confidence
+			if status == "doubtful" {
+				player.XPts *= DoubtfulXPts
+			}
+		}
+		if player.Value > 0 {
+			player.PointsValue = player.XPts / (player.Value / 1e6)
+		}
+		player.ProjectedPct = ProjectedPct(trend)
+		player.ProjectedGain = player.Value * player.ProjectedPct / 100.0
+
 		if owned, ok := ownership[id]; ok {
 			player.Owner = &owned.Owner
 			player.OwnerTeamID = &owned.TeamID
@@ -195,6 +344,8 @@ func Build(client *api.Client, leagueID, myTeamID string) (*Universe, error) {
 		}
 		universe.Players = append(universe.Players, player)
 	}
+
+	ApplyScores(universe.Players)
 
 	slog.Debug("universe built", "players", len(universe.Players),
 		"owned", len(ownership), "listings", len(universe.Market),

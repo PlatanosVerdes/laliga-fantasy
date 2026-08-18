@@ -208,26 +208,12 @@ def build_universe(
     # Why a player is out, in words: the API only gives the status code. futbolfantasy
     # writes full names ("Dani Vivian") where LaLiga writes nicknames ("Vivian"), so
     # index by both the whole name and the surname.
-    absences: dict[str, dict[str, Any]] = {}
     try:
-        for row in ff.absences():
-            key = matching.normalize(row["name"])
-            absences[key] = row
-            absences.setdefault(matching.surname(row["name"]), row)
-            if row.get("slug"):
-                absences.setdefault(row["slug"].replace("-", " "), row)
+        absence_rows = ff.absences()
     except Exception as exc:
+        absence_rows = []
         log.debug("absences unavailable", extra={"error_type": type(exc).__name__})
-
-    def absence_for(player: dict) -> dict[str, Any] | None:
-        for candidate in (player.get("name"), matching.player_label(player)):
-            if not candidate:
-                continue
-            found = (absences.get(matching.normalize(candidate))
-                     or absences.get(matching.surname(candidate)))
-            if found:
-                return found
-        return None
+    absence_for = absence_matcher(absence_rows)
 
     team_index = matching.build_team_index(teams)
     team_names = {str(t["id"]): t.get("name") for t in teams}
@@ -406,6 +392,66 @@ def build_universe(
 
 PROJECTION_DAMPING = 0.55
 PROJECTION_CAP = 12.0
+
+
+def absence_matcher(rows: list[dict[str, Any]]):
+    """Build the lookup that says which absence belongs to a given player.
+
+    The surname fallback exists because futbolfantasy writes full names where LaLiga
+    writes nicknames ("Dani Vivian" vs "Vivian"). Applied blindly it marks a healthy
+    player as injured whenever he shares a surname with somebody who is out: Pau Lopez
+    inherited Diego Lopez's injury, Joan Garcia inherited Kike Garcia's, 24 players in
+    all. So the fallback needs the surname to be unique among the absences *and* the
+    first names to be compatible.
+
+    One implementation, used by the model and by the Go bridge, so the two cannot drift.
+    """
+    exact: dict[str, dict[str, Any]] = {}
+    by_surname: dict[str, dict[str, Any]] = {}
+    counts: dict[str, int] = {}
+    for row in rows:
+        name = row.get("name") or ""
+        exact[matching.normalize(name)] = row
+        key = matching.surname(name)
+        by_surname.setdefault(key, row)
+        counts[key] = counts.get(key, 0) + 1
+        if row.get("slug"):
+            exact.setdefault(row["slug"].replace("-", " "), row)
+
+    def match(player: dict) -> dict[str, Any] | None:
+        for candidate in (player.get("name"), matching.player_label(player)):
+            if not candidate:
+                continue
+            found = exact.get(matching.normalize(candidate))
+            if found:
+                return found
+            key = matching.surname(candidate)
+            found = by_surname.get(key)
+            if not found or counts.get(key, 0) > 1:
+                continue
+            if _first_names_agree(candidate, found["name"]):
+                return found
+        return None
+
+    return match
+
+
+def _first_names_agree(short: str, full: str) -> bool:
+    """Whether two spellings of a name can be the same person.
+
+    True when the shorter one carries no first name to disagree with — a bare surname
+    ("Vivian") or initials ("F. Calero", "R.P. Bigas") — or when the first initials
+    match. False for "Pau Lopez" against "Diego Lopez", which is the whole point.
+    """
+    tokens = matching.normalize(short).split()
+    if len(tokens) < 2:
+        return True
+    first = tokens[0]
+    # An initial, however it was punctuated: "F.", "R.P.", "A".
+    if len(first) <= 2:
+        return True
+    other = matching.normalize(full).split()
+    return bool(other) and other[0][:1] == first[:1]
 
 
 def _projected_pct(trend: dict | None) -> float:

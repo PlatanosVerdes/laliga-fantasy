@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -85,7 +86,11 @@ func cmdModel(args []string) error {
 	if err != nil {
 		return err
 	}
-	universe, err := model.Build(api.New(), leagueID, teamID)
+	bridge, err := loadBridge()
+	if err != nil {
+		return err
+	}
+	universe, err := model.Build(api.New(), leagueID, teamID, bridge)
 	if err != nil {
 		return err
 	}
@@ -100,6 +105,26 @@ func cmdModel(args []string) error {
 			httpx.Stats())
 	}
 	return nil
+}
+
+// loadBridge runs the Python side and reads its JSON. That subprocess is the port's
+// boundary: the futbolfantasy scrapers and the cross-source name matching stay in
+// Python, because they are regex over HTML that changes without notice and the most
+// fragile code in the project. What crosses is data, never parsing.
+func loadBridge() (*model.Bridge, error) {
+	command := exec.Command("python3", "fantasy.py", "bridge")
+	command.Stderr = os.Stderr
+	blob, err := command.Output()
+	if err != nil {
+		return nil, fmt.Errorf("el puente de futbolfantasy ha fallado: %w", err)
+	}
+	var bridge model.Bridge
+	if err := json.Unmarshal(blob, &bridge); err != nil {
+		return nil, fmt.Errorf("el puente no ha devuelto JSON valido: %w", err)
+	}
+	slog.Debug("bridge loaded", "trends", len(bridge.Trends),
+		"absences", len(bridge.Absences))
+	return &bridge, nil
 }
 
 func contains(values []string, wanted string) bool {

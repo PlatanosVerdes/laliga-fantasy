@@ -780,6 +780,36 @@ def cmd_probe(args) -> int:
     return 0
 
 
+def cmd_bridge(args) -> int:
+    """Dump everything derived from futbolfantasy, keyed by LaLiga player id.
+
+    This is the boundary of the Go port. The scrapers are regex over HTML that changes
+    without notice and the name matching across the two sources is heuristic; both stay
+    here, and Go consumes the result. What crosses is data, not parsing.
+    """
+    from . import futbolfantasy as ff, matching
+
+    players = laliga.all_players()
+    teams = laliga.teams_master()
+    team_index = matching.build_team_index(teams)
+    market_rows = ff.market(ttl=getattr(args, "ff_ttl", 2 * 3600) if not args.fresh else 0)
+    matched, unmatched = matching.match_market(players, market_rows, team_index)
+
+    # The same matcher the model uses, so a fix in one cannot leave the other behind.
+    match_absence = analysis.absence_matcher(ff.absences())
+    absences = {str(p["id"]): found for p in players
+                if (found := match_absence(p)) is not None}
+
+    payload = {
+        "trends": matched,
+        "absences": absences,
+        "unmatched": unmatched,
+        "matched_count": len(matched),
+    }
+    print(json.dumps(payload, ensure_ascii=False, default=str))
+    return 0
+
+
 def cmd_detect(args) -> int:
     """The two cheap requests the refresh loop lives on, and their digest.
 
@@ -926,6 +956,10 @@ def build_parser() -> argparse.ArgumentParser:
     probe_parser.add_argument("what")
     probe_parser.add_argument("--chars", type=int, default=4000)
     probe_parser.set_defaults(func=cmd_probe)
+
+    bridge_parser = sub.add_parser("bridge", parents=[common],
+                                   help="volcar los datos de futbolfantasy ya emparejados")
+    bridge_parser.set_defaults(func=cmd_bridge)
 
     detect_parser = sub.add_parser("detect", parents=[common],
                                    help="lo que ve el detector de cambios ahora mismo")
