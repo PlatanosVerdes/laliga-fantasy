@@ -23,6 +23,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/engine"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/render"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/server"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
@@ -65,6 +66,8 @@ func main() {
 		err = cmdModel(rest[1:])
 	case "wake":
 		err = cmdWake(rest[1:])
+	case "cells":
+		err = cmdCells()
 	case "checks":
 		err = cmdChecks()
 	case "calls":
@@ -94,6 +97,7 @@ uso: fantasy [-v|-q] <comando>
                 que haria el planificador con ese payload, para comparar
   calls         la peticion que construiria cada operacion, sin enviarla
   checks        que aceptaria y que rechazaria la guardia, caso por caso
+  cells         como se formatea cada celda, para compararlo con Python
   paths         donde vive cada cosa
 `))
 }
@@ -406,6 +410,37 @@ var validationTable = []struct {
 	{"retirar del mercado", writes.ValidationCase{"withdraw",
 		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M"},
 		writes.Player{Name: "X"}, 50_000_000}},
+}
+
+// cellCases are the inputs both implementations are checked against. The edges are here on
+// purpose: 999_500 must read as millions rather than "1.000K", a negative must keep its
+// sign in front of the separators, and an absent value must be the em dash rather than a
+// zero.
+var cellCases = []struct {
+	Kind  string
+	Value any
+}{
+	{"money", nil}, {"money", 0}, {"money", 1}, {"money", 999.0}, {"money", 1000.0},
+	{"money", 999_499.0}, {"money", 999_500.0}, {"money", 1_000_000.0},
+	{"money", 9_867_495.0}, {"money", 130_960_400.0}, {"money", -2_500_000.0},
+	{"money", -999.0},
+	{"num", nil}, {"num", 0}, {"num", 2.4055}, {"num", -1.5}, {"num", 121.0},
+	{"int", nil}, {"int", 0}, {"int", 211.0}, {"int", -3.0},
+	{"pct", nil}, {"pct", 0}, {"pct", 5.83}, {"pct", -11.4}, {"pct", 12.0}, {"pct", -30.0},
+	{"mag", nil}, {"mag", 0}, {"mag", 0.244}, {"mag", 0.45}, {"mag", 1.7},
+	{"text", nil}, {"text", "Barcelona (casa)"}, {"text", "M. Dituro"},
+	{"text", "O'Neill & co"},
+	{"spark", []any{}}, {"spark", []any{1.0, 2.0, 3.0}},
+	{"spark", []any{9_000_000.0, 9_100_000.0, 8_900_000.0, 9_400_000.0, 9_867_495.0}},
+	{"spark", []any{5.0, 5.0, 5.0, 5.0, 5.0, 5.0}},
+}
+
+func cmdCells() error {
+	for _, row := range cellCases {
+		inner, sort := render.Cell(row.Value, row.Kind)
+		fmt.Printf("%s|%v|%s|%s\n", row.Kind, row.Value, sort, inner)
+	}
+	return nil
 }
 
 func cmdChecks() error {
