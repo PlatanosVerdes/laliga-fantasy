@@ -178,8 +178,13 @@ function showRivals(count, expires){
                             || pending.operation==='buy_offer' || !pending.operation);
   wrap.hidden = !isBid;
   if(!isBid) return;
-  node.textContent = count ? String(count) : 'ninguna';
-  node.className = 'bid-rivals'+(count?' rivals-on':'');
+  // Una de esas pujas puede ser la tuya, y contarla como rival es contar mal: se dice.
+  const mine = pending && pending.bid_id ? 1 : 0;
+  const others = Math.max(0, count - mine);
+  node.textContent = !count ? 'ninguna'
+    : mine ? (others ? `${count} · ${others} de rivales y la tuya` : 'solo la tuya')
+           : String(count);
+  node.className = 'bid-rivals'+(others?' rivals-on':'');
 }
 
 function checkAmount(){
