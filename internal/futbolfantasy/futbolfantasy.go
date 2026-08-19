@@ -320,6 +320,10 @@ var (
 	pointsCell   = regexp.MustCompile(`(?s)<td class="data points[^"]*">(.*?)</td>`)
 	pointsSpan   = regexp.MustCompile(`(?s)<span class="([^"]*)">\s*([-\d.,]*)\s*</span>`)
 	headingOne   = regexp.MustCompile(`(?s)<h1[^>]*>(.*?)</h1>`)
+	// "Titular J2 … 30%" on the player's own page. The market list carries the same number in a
+	// prob- class, but not for everybody: Berenguer was one of the few without it, and the page
+	// had it all along.
+	titularWidget = regexp.MustCompile(`(?s)Titular\s+J(\d+).{0,400}?>\s*(\d+)\s*%`)
 	roleAttr     = regexp.MustCompile(`data-posicion-laliga-fantasy="([^"]*)"`)
 	weekCell     = regexp.MustCompile(`jorn-td">\s*(\d+)`)
 	teamImage    = regexp.MustCompile(`<img class="img"[^>]*alt="([^"]+)"`)
@@ -438,6 +442,11 @@ func ParsePlayerPage(page string) map[string]any {
 	out := map[string]any{
 		"name": name, "matches": matches, "games_played": played,
 		"total_points": total, "avg_points": nil,
+		"start_probability": nil, "start_week": nil,
+	}
+	if found := titularWidget.FindStringSubmatch(page); found != nil {
+		out["start_week"] = intOf(found[1])
+		out["start_probability"] = intOf(found[2])
 	}
 	if played > 0 {
 		average := total / float64(played)
