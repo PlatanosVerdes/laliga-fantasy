@@ -35,6 +35,9 @@ type Document struct {
 	Policies map[string]map[string]any
 	// Swaps is the "this one out, this one in" plan, computed by the advice layer.
 	Swaps map[string]any
+	// MineByWeek is how many of my players each team had on a past matchday, keyed by week.
+	// Reconstructed outside, because that needs the transfer log and this package only draws.
+	MineByWeek map[int]map[string]int
 	// The league's house rules: the hold period, its exceptions, and the social pacts.
 	HoldDays       int
 	HoldExceptions string
@@ -691,7 +694,7 @@ func (d Document) scheduleSection(players []map[string]any) string {
 			mine[text(player["team_id"])]++
 		}
 	}
-	return Section("Calendario de partidos", MatchCalendar(fixtures, mine),
+	return Section("Calendario de partidos", MatchCalendar(fixtures, mine, d.MineByWeek),
 		"Las proximas jornadas, con los partidos de tus jugadores marcados. "+
 			"Una racha buena o mala se ve aqui antes que en el precio.",
 		fmt.Sprintf("%d jornadas", weeksIn(fixtures)), "partidos")

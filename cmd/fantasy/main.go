@@ -973,6 +973,65 @@ var cashOverride *float64
 // renderPage is the whole document from a built universe: the advice layer, the per-player
 // enrichment, the standing instructions and the renderer. Shared by `report` and the server,
 // so the page cannot differ between them.
+// mineByWeek is how many of my players each team had, per matchday already played. The API has no
+// history, so it comes from undoing the transfer log back to each kick-off: counting a fortnight
+// old fixture with today's squad says "3 de los tuyos juegan" about players who were not there.
+func mineByWeek(universe *model.Universe) map[int]map[string]int {
+	if universe == nil || universe.MyTeamID == nil {
+		return nil
+	}
+	userOfTeam := map[string]string{}
+	for teamID, team := range universe.LeagueTeams {
+		if team != nil && team.UserID != "" {
+			userOfTeam[teamID] = team.UserID
+		}
+	}
+	me := userOfTeam[*universe.MyTeamID]
+	if me == "" {
+		return nil
+	}
+
+	today := map[string]string{}
+	teamOf := map[string]string{}
+	for _, player := range universe.Players {
+		teamOf[player.ID] = player.TeamID
+		if player.OwnerTeamID == nil {
+			continue
+		}
+		if user := userOfTeam[*player.OwnerTeamID]; user != "" {
+			today[player.ID] = user
+		}
+	}
+
+	// The first kick-off of each matchday is the instant its squads counted.
+	kickoffs := map[int]time.Time{}
+	for _, fixture := range universe.Schedule {
+		when, err := time.Parse(time.RFC3339, fixture.Kickoff)
+		if err != nil {
+			continue
+		}
+		if seen, ok := kickoffs[fixture.Week]; !ok || when.Before(seen) {
+			kickoffs[fixture.Week] = when
+		}
+	}
+
+	now := time.Now()
+	out := map[int]map[string]int{}
+	for week, kickoff := range kickoffs {
+		if !kickoff.Before(now) {
+			continue // still to come: today's squad is the only truthful answer
+		}
+		counts := map[string]int{}
+		for playerID, user := range model.OwnershipAt(universe.Activity, today, kickoff) {
+			if user == me {
+				counts[teamOf[playerID]]++
+			}
+		}
+		out[week] = counts
+	}
+	return out
+}
+
 func renderPage(universe *model.Universe, client *api.Client, teamID, generated string) (string, error) {
 	cash := 0.0
 	if cashOverride != nil {
@@ -1052,6 +1111,7 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated 
 
 	document := render.Document{
 		Universe: generic, Advice: buckets, Generated: stamp, LeagueName: league,
+		MineByWeek: mineByWeek(universe),
 		// The plan reads the same buckets the tables do, so what it proposes and what they
 		// list can never disagree.
 		Swaps:          advice.Swaps(generic, buckets, cash),
