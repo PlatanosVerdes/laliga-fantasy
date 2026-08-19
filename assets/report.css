@@ -563,3 +563,12 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .chip-good{color:var(--pole-pos);background:color-mix(in srgb,var(--pole-pos) 16%,transparent)}
 .chip-warn{color:var(--warning);background:color-mix(in srgb,var(--warning) 16%,transparent)}
 .chip-bad{color:var(--critical);background:color-mix(in srgb,var(--critical) 16%,transparent)}
+
+/* Los partidos jugados se quedan, porque la racha se lee mejor entera, pero dan un paso atras:
+   el ojo tiene que caer en lo que falta por jugar. */
+.match-done{opacity:.42}
+.match-done .match-when{font-variant-numeric:tabular-nums;color:var(--ink-2)}
+/* Una jornada entera jugada apaga su cabecera; los partidos ya se apagan solos. */
+.jornada-done .j-head{opacity:.6}
+.j-done{margin-left:auto;font-size:10px;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--muted)}

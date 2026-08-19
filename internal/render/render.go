@@ -1137,6 +1137,11 @@ var weekdays = []string{"lun", "mar", "mie", "jue", "vie", "sab", "dom"}
 // A table sorts; a calendar answers a different question — *when does the league open up* —
 // and at the start of a season the answer is dramatic: everything on the same day. That is
 // worth seeing as a shape rather than reading as 28 rows.
+// finishedMatch is the API's matchState for a played match. Kept here rather than importing the
+// scheduler for one number: this package renders and depends on nothing of ours.
+// See schedule.FinishedMatch, which has to agree.
+const finishedMatch = 7
+
 var monthNames = []string{"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
 	"agosto", "septiembre", "octubre", "noviembre", "diciembre"}
 
@@ -1186,7 +1191,7 @@ func MatchCalendar(fixtures []map[string]any, mine map[string]int) string {
 			fmt.Fprintf(&out, `<div class="month"><h4>%s</h4>`, Esc(label))
 		}
 
-		yours := 0
+		yours, played := 0, 0
 		var matches strings.Builder
 		for _, fixture := range block.rows {
 			local, visitor := text(fixture["local_id"]), text(fixture["visitor_id"])
@@ -1196,9 +1201,23 @@ func MatchCalendar(fixtures []map[string]any, mine map[string]int) string {
 			if count > 0 {
 				classes += " match-mine"
 			}
+			// A played match is history: it stays, because the run of fixtures reads better
+			// whole, but it steps back so the eye lands on what is still to come.
+			done := int(number(fixture["state"])) == finishedMatch
+			if done {
+				classes += " match-done"
+				played++
+			}
 			kickoff, _ := time.Parse(time.RFC3339, text(fixture["kickoff"]))
 			stamp := fmt.Sprintf("%s %02d:%02d", dayNames[int(kickoff.Weekday())],
 				kickoff.Hour(), kickoff.Minute())
+			// Once it is played the hour stops mattering and the result starts: same slot,
+			// better answer.
+			if done {
+				if home, away := asFloat(fixture["local_score"]), asFloat(fixture["visitor_score"]); home != nil && away != nil {
+					stamp = fmt.Sprintf("%.0f - %.0f", *home, *away)
+				}
+			}
 			tag := ""
 			if count > 0 {
 				tag = fmt.Sprintf(`<span class="match-mine-tag">%d tuyo%s</span>`,
@@ -1215,9 +1234,16 @@ func MatchCalendar(fixtures []map[string]any, mine map[string]int) string {
 		if yours > 0 {
 			note = fmt.Sprintf(`<span class="j-mine">%d de los tuyos juegan</span>`, yours)
 		}
-		fmt.Fprintf(&out, `<div class="jornada"><div class="j-head"><span class="j-num">J%d</span>`+
+		// A whole matchday behind us dims with its matches; one still running does not, because
+		// the half that has not kicked off is the part being read.
+		wrap := "jornada"
+		if played == len(block.rows) {
+			wrap += " jornada-done"
+			note = `<span class="j-done">jugada</span>`
+		}
+		fmt.Fprintf(&out, `<div class="%s"><div class="j-head"><span class="j-num">J%d</span>`+
 			`<span class="j-when">desde %s %d %s</span>%s</div>%s</div>`,
-			block.week, dayNames[int(block.when.Weekday())], block.when.Day(),
+			wrap, block.week, dayNames[int(block.when.Weekday())], block.when.Day(),
 			monthNames[int(block.when.Month())-1][:3], note, matches.String())
 	}
 	if month != "" {
