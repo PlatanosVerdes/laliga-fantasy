@@ -41,6 +41,9 @@ func (s *Server) writeError(writer http.ResponseWriter, err error) {
 	if errors.Is(err, writes.ErrDisabled) {
 		status = http.StatusForbidden
 	}
+	// A refusal is the most informative thing the write path produces: it is the tool saying
+	// no to a person, and if it is wrong nobody finds out unless it is written down.
+	slog.Warn("write refused", "status", status, "reason", err.Error())
 	s.json(writer, status, map[string]any{"error": err.Error()})
 }
 
@@ -68,7 +71,8 @@ func (s *Server) favourite(writer http.ResponseWriter, request *http.Request) {
 		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
 	}
-	slog.Info("favourite toggled", "player_id", id, "starred", starred)
+	slog.Info("favourite toggled", "player_id", id, "player", text(body["name"]),
+		"starred", starred)
 	s.settle("favourite")
 	s.json(writer, http.StatusOK, map[string]any{"id": id, "starred": starred})
 }
@@ -100,6 +104,8 @@ func (s *Server) always(writer http.ResponseWriter, request *http.Request) {
 			s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 			return
 		}
+		slog.Info("instruction set", "player_id", id, "player", name,
+			"always_listed", true, "auto_sell", entry.AutoSell)
 		s.settle("always")
 		s.json(writer, http.StatusOK, map[string]any{"id": id, "always_listed": true,
 			"auto_sell": entry.AutoSell, "min_price": entry.MinPrice,
@@ -144,6 +150,9 @@ func (s *Server) always(writer http.ResponseWriter, request *http.Request) {
 			s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 			return
 		}
+		slog.Info("instruction amounts set", "player_id", id, "player", name,
+			"min_price", entry.MinPrice, "accept_above", entry.AcceptAbove,
+			"cleared", unset)
 		s.settle("always")
 		s.json(writer, http.StatusOK, map[string]any{"id": id, "always_listed": true,
 			"min_price": entry.MinPrice, "accept_above": entry.AcceptAbove})
@@ -168,6 +177,7 @@ func (s *Server) always(writer http.ResponseWriter, request *http.Request) {
 		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
 	}
+	slog.Info("instruction toggled", "player_id", id, "player", name, "always_listed", on)
 	s.settle("always")
 	s.json(writer, http.StatusOK, map[string]any{"id": id, "always_listed": on})
 }

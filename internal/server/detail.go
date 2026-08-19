@@ -5,6 +5,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -418,6 +419,8 @@ func (s *Server) saveLineup(writer http.ResponseWriter, request *http.Request) {
 		s.writeError(writer, err)
 		return
 	}
+	slog.Info("lineup saved", "formation", body["formation"],
+		"starters", 1+len(args.Defender)+len(args.Midfield)+len(args.Striker))
 	s.settle("save_lineup")
 	s.json(writer, http.StatusOK, map[string]any{"ok": true, "saved": result != nil,
 		"formation": body["formation"]})
