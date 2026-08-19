@@ -49,7 +49,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	// warns about every amount, however small.
 	if _, present := player["ideal_bid"]; !present {
 		if ffID := text(player["ff_id"]); ffID != "" {
-			if detail, err := futbolfantasy.PlayerDetail(ffID, 24*time.Hour); err == nil {
+			if detail, err := futbolfantasy.PlayerDetail(ffID, futbolfantasy.DetailTTL); err == nil {
 				player["ideal_bid"] = number(detail["ideal_bid"])
 			}
 		}
