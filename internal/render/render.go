@@ -537,12 +537,12 @@ func SwapPlan(plan map[string]any) string {
 			`<span class="plan-money">%s · %s</span></div>`+
 			`<div class="plan-mid"><span class="plan-arrow">→</span>`+
 			`<span class="plan-gain up">+%s xPts</span>`+
-			`<span class="plan-net %s">%s</span></div>`+
+			`<span class="plan-net %s">%s</span>%s</div>`+
 			`<div class="plan-side in">%s<span class="plan-why">%s titular · %s xPts</span>`+
 			`<span class="plan-money">cuesta %s</span></div></div>`,
 			planCard(leaving), Esc(text(move["why"])),
 			Esc(Money(asFloat(move["sale"]))), Esc(text(move["sale_note"])),
-			Num(gain, 2), netClass, Esc(netText),
+			Num(gain, 2), netClass, Esc(netText), orderNote(move),
 			planCard(arriving), starts(asFloat(arriving["start_probability"])),
 			Num(asFloat(arriving["xpts"]), 2),
 			Esc(Money(asFloat(move["cost"]))))
@@ -562,6 +562,17 @@ func starts(value *float64) string {
 		return "sin dato de"
 	}
 	return fmt.Sprintf("%.0f%%", *value)
+}
+
+// orderNote is the warning that a swap has a right order. It only appears where it matters: a
+// position you are already at the minimum in, where selling first leaves the eleven illegal
+// until the signing lands, and the signing might not land.
+func orderNote(move map[string]any) string {
+	note := text(move["order"])
+	if note == "" {
+		return ""
+	}
+	return `<span class="plan-order" title="` + Esc(note) + `">primero ficha</span>`
 }
 
 // planCard is one player inside the plan: crest, name and position, nothing else.
