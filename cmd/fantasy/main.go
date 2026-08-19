@@ -27,6 +27,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/outcomes"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/render"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
@@ -1130,6 +1131,27 @@ func untilNextInstant(rows []map[string]any,
 	return wait, why
 }
 
+// endingRows is how my bids and offers ended, as the generic rows the page reads. Read at render
+// time rather than kept in memory: it is a file precisely so that a restart does not lose it.
+func endingRows() []map[string]any {
+	saved := outcomes.Load()
+	if len(saved) == 0 {
+		return nil
+	}
+	if len(saved) > 12 {
+		saved = saved[:12]
+	}
+	blob, err := json.Marshal(saved)
+	if err != nil {
+		return nil
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(blob, &rows); err != nil {
+		return nil
+	}
+	return rows
+}
+
 // playerRows is the universe's players as the generic rows the policy engine reads.
 func playerRows(universe *model.Universe) []map[string]any {
 	blob, err := json.Marshal(universe.Players)
@@ -1282,7 +1304,7 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 
 	document := render.Document{
 		Universe: generic, Advice: buckets, Generated: stamp, LeagueName: league,
-		MineByWeek: mineByWeek(universe), Mode: mode,
+		MineByWeek: mineByWeek(universe), Mode: mode, Endings: endingRows(),
 		// The plan reads the same buckets the tables do, so what it proposes and what they
 		// list can never disagree.
 		Swaps:          advice.Swaps(generic, buckets, cash),

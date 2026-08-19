@@ -37,6 +37,8 @@ type Document struct {
 	Swaps map[string]any
 	// Mode is what the server running this page may do: auto, manual or solo lectura.
 	Mode string
+	// Endings is how my previous bids and offers finished, read from where they were saved.
+	Endings []map[string]any
 	// MineByWeek is how many of my players each team had on a past matchday, keyed by week.
 	// Reconstructed outside, because that needs the transfer log and this package only draws.
 	MineByWeek map[int]map[string]int
@@ -838,6 +840,17 @@ func (d Document) marketSections() []string {
 				"queda. Desde aqui se cambian o se retiran: hasta ahora habia que buscar al "+
 				"jugador en otra tabla para verlas.",
 			fmt.Sprintf("%d", len(sent)), "mispujas"))
+	}
+
+	// How the previous ones ended, which is the only place it is recorded: the API forgets a
+	// refused offer the moment it is refused.
+	if endings := d.Endings; len(endings) > 0 {
+		out = append(out, Section("Como acabaron", Endings(endings),
+			"Tus pujas y ofertas ya resueltas. <strong>Rechazada</strong> es que el dueño dijo "+
+				"no; <strong>perdida</strong> es que se lo quedo otro, y ahi el precio importa "+
+				"mas que el rival; <strong>caducada</strong> es que el anuncio cerro sin venta. "+
+				"Se guarda aqui porque el juego no lo recuerda.",
+			fmt.Sprintf("%d", len(endings)), "resueltas"))
 	}
 
 	if listings := rows(d.Advice["my_listings"]); len(listings) > 0 {

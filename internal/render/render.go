@@ -636,6 +636,49 @@ func modeChip(mode string) string {
 		`solo lectura nada">Mode: <b>%s</b></span>`, class, Esc(mode))
 }
 
+// outcomeStatus colours how a bid ended: a refusal is not a failure of the tool, and a lost
+// auction is information about the price rather than about the rival.
+var outcomeStatus = map[string]string{
+	"aceptada": "good", "rechazada": "warning", "perdida": "critical", "caducada": "neutral",
+}
+
+// Endings is what happened to the bids and offers that are no longer live.
+//
+// It is a table because the useful reading is comparative: what you offered, who said no, and what
+// it took to beat you when somebody did.
+func Endings(rows []map[string]any) string {
+	if len(rows) == 0 {
+		return `<p class="empty">Todavia no se ha resuelto ninguna.</p>`
+	}
+	var body strings.Builder
+	for _, ending := range rows {
+		when := text(ending["at"])
+		if len(when) > 16 {
+			when = strings.ReplaceAll(when[:16], "T", " ")
+		}
+		outcome := text(ending["outcome"])
+		status := outcomeStatus[outcome]
+		if status == "" {
+			status = "neutral"
+		}
+		tail := ""
+		if who := text(ending["who"]); who != "" && outcome == "rechazada" {
+			tail = " · lo dijo " + Esc(who)
+		}
+		if owner := text(ending["new_owner"]); owner != "" {
+			tail = " · se lo quedo " + Esc(owner)
+		}
+		fmt.Fprintf(&body, `<div class="ending"><span class="ending-when">%s</span>`+
+			`<span class="pill-%s">%s</span>`+
+			`<span class="ending-body">%s <span class="ending-kind">%s de</span> `+
+			`<strong>%s</strong>%s</span></div>`,
+			Esc(when), status, Esc(outcome), PlayerLink(text(ending["player"]),
+				text(ending["player_id"])), Esc(text(ending["kind"])),
+			Esc(Money(asFloat(ending["amount"]))), tail)
+	}
+	return `<div class="endings">` + body.String() + `</div>`
+}
+
 // Feed is the league's movements: who signed and sold, and for how much.
 //
 // Lineup changes are the bulk of the log and say nothing about the market, so they are

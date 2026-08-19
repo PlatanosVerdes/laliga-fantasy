@@ -1277,7 +1277,7 @@ const TABS=[
   {id:'decidir', label:'Decidir', sections:['plan','acciones']},
   {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
   // Lo que esta en marcha, en su propio sitio: lo que has puesto tu y lo que te han puesto a ti.
-  {id:'misofertas', label:'Mis ofertas', sections:['mispujas','ofertas']},
+  {id:'misofertas', label:'Mis ofertas', sections:['mispujas','ofertas','resueltas']},
   {id:'clausulas', label:'Cláusulas', sections:['programados','calendario','vencimientos','oportunidades','riesgo','clausulas']},
   {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
   {id:'partidos', label:'Partidos', sections:['partidos']},

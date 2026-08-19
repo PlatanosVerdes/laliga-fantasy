@@ -14,6 +14,7 @@ import (
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/outcomes"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 )
@@ -67,6 +68,9 @@ type State struct {
 	// Which league moves have already been written to the log, so a rebuild does not repeat
 	// them. Nil until the first pass, which only learns.
 	seenMoves   map[string]bool
+	// What I had pending on the previous pass, to be able to tell how each one ended. Nil until
+	// the first pass, which only learns.
+	minePending map[string]outcomes.Pending
 	generatedAt time.Time
 	lastFull    time.Time
 	lastError   string
@@ -284,6 +288,7 @@ func (s *State) RefreshWith(cause string, force bool) error {
 	s.mu.Unlock()
 
 	s.logMoves(universe)
+	s.trackMine(universe)
 
 	// One line per rebuild with what the world now holds: the shape of this line over a day
 	// is the only way to tell "quiet league" from "the scrape is silently failing".
@@ -380,6 +385,83 @@ func (s *State) logMoves(universe *model.Universe) {
 			fields = append(fields, "value_then", int64(*event.ValueThen))
 		}
 		slog.Info("league move", fields...)
+	}
+}
+
+// trackMine notices how my bids and offers ended.
+//
+// Nothing else can: the API drops a refused offer without a word, so the ending only exists as the
+// difference between two passes. It is written to a file because it is the kind of thing you want
+// to read tomorrow -- who said no, to how much -- and by tomorrow the API remembers nothing.
+func (s *State) trackMine(universe *model.Universe) {
+	if universe == nil {
+		return
+	}
+
+	current := map[string]outcomes.Pending{}
+	listed := map[string]bool{}
+	owner := map[string]string{}
+	mine := map[string]bool{}
+	for _, player := range universe.Players {
+		if player.OwnerTeamID != nil && player.Owner != nil {
+			owner[player.ID] = *player.Owner
+		}
+		mine[player.ID] = player.IsMine
+		listing := player.MarketEntry
+		if listing == nil {
+			continue
+		}
+		listed[player.ID] = true
+		if listing.MyBidID == nil || *listing.MyBidID == "" {
+			continue
+		}
+		kind := "oferta"
+		if listing.Kind == "libre" {
+			kind = "puja"
+		}
+		seller := ""
+		if listing.Seller != nil {
+			seller = *listing.Seller
+		}
+		amount := 0.0
+		if listing.MyBid != nil {
+			amount = *listing.MyBid
+		}
+		current[player.ID] = outcomes.Pending{PlayerID: player.ID, Player: player.Name,
+			Amount: amount, Kind: kind, Seller: seller}
+	}
+
+	s.mu.Lock()
+	previous := s.minePending
+	s.minePending = current
+	s.mu.Unlock()
+	if previous == nil {
+		// First pass only learns, like the league log: a restart must not invent endings for
+		// everything that was pending before it started.
+		return
+	}
+
+	now := time.Now()
+	var endings []outcomes.Ending
+	for playerID, before := range previous {
+		_, still := current[playerID]
+		ending := outcomes.Classify(before, outcomes.Now{
+			StillPending: still, Listed: listed[playerID], MineNow: mine[playerID],
+			Owner: owner[playerID],
+		}, now)
+		if ending == nil {
+			continue
+		}
+		endings = append(endings, *ending)
+		slog.Info("offer ended", "outcome", ending.Outcome, "kind", ending.Kind,
+			"player", ending.Player, "amount", int64(ending.Amount), "who", ending.Who,
+			"new_owner", ending.NewOwner)
+	}
+	if len(endings) == 0 {
+		return
+	}
+	if err := outcomes.Append(endings...); err != nil {
+		slog.Error("could not save how the offers ended", "reason", err.Error())
 	}
 }
 

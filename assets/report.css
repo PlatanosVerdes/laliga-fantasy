@@ -641,3 +641,12 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
   color:var(--muted);cursor:pointer}
 .mini-benched .chip-face,.mini-benched .crest{width:16px;height:16px}
 .mini-pitch.is-squad{opacity:.9}
+
+/* Como acabo cada puja: la fecha, el veredicto y quien lo dijo. */
+.endings{display:flex;flex-direction:column;gap:4px}
+.ending{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;
+  background:color-mix(in srgb,var(--mid) 45%,transparent);font-size:13px}
+.ending-when{color:var(--muted);font-size:11px;min-width:104px;
+  font-variant-numeric:tabular-nums}
+.ending-kind{color:var(--muted);font-weight:400}
+.ending-body{min-width:0}
