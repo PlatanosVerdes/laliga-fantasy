@@ -279,11 +279,20 @@ func cmdServe(args []string) error {
 		if money, err := client.Money(team, time.Minute); err == nil {
 			cash = money.TeamMoney
 		}
-		// The lock state has to be judged against now, not against the last rebuild. The engine
-		// wakes two seconds before a clause opens; if the plan is read with the numbers from the
-		// previous cycle it still says "esperando" and the raid is lost by the width of a
-		// rebuild. Recomputing one clock-derived field is what makes waking early worth it.
 		rows := playerRows(universe)
+
+		// Waking early is only useful if the payment lands just *after* the unlock. The engine
+		// wakes two seconds before, when the clause is still locked and the API would refuse it,
+		// so the wait is spent here: sleep out the last seconds and fire on the other side of the
+		// instant. Bounded, because sleeping inside the cycle is only defensible for seconds.
+		if wait := untilNextRaid(rows, armed); wait > 0 {
+			slog.Info("waiting for a clause to open", "seconds", wait.Seconds())
+			time.Sleep(wait)
+		}
+
+		// The lock state has to be judged against now, not against the last rebuild: read with
+		// the numbers from the previous cycle the plan would still say "esperando" and the raid
+		// would be lost by the width of a rebuild.
 		now := time.Now()
 		for _, row := range rows {
 			until := text(row["clause_locked_until"])
@@ -1061,6 +1070,44 @@ var cashOverride *float64
 // renderPage is the whole document from a built universe: the advice layer, the per-player
 // enrichment, the standing instructions and the renderer. Shared by `report` and the server,
 // so the page cannot differ between them.
+// RaidGrace is how long after a clause opens the payment is attempted, and how far ahead of one
+// the cycle is willing to wait. Both are small on purpose: a clause raid is decided in the first
+// second, and a cycle that sleeps longer than this is a cycle doing nothing useful.
+const (
+	RaidGrace = 300 * time.Millisecond
+	RaidWait  = 15 * time.Second
+)
+
+// untilNextRaid is how long to wait for the next armed clause to open, or zero when there is
+// nothing worth waiting for. Only clauses about to open count: waiting for one that opens tomorrow
+// would stop the loop.
+func untilNextRaid(rows []map[string]any, armed map[string]policies.Policy) time.Duration {
+	now := time.Now()
+	wait := time.Duration(0)
+	for _, row := range rows {
+		policy, ok := armed[text(row["id"])]
+		if !ok || !policy.Raid {
+			continue
+		}
+		until := text(row["clause_locked_until"])
+		if until == "" {
+			continue
+		}
+		when, err := time.Parse(time.RFC3339, until)
+		if err != nil {
+			continue
+		}
+		left := when.Sub(now) + RaidGrace
+		if left <= 0 || left > RaidWait {
+			continue
+		}
+		if wait == 0 || left < wait {
+			wait = left
+		}
+	}
+	return wait
+}
+
 // playerRows is the universe's players as the generic rows the policy engine reads.
 func playerRows(universe *model.Universe) []map[string]any {
 	blob, err := json.Marshal(universe.Players)
