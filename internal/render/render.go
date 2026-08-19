@@ -612,6 +612,73 @@ func HouseRules(holdDays int, exceptions string, notes []string) string {
 	return out.String()
 }
 
+// LoanOffers renders the loan offers received.
+//
+// Cards rather than a table, and the terms printed as whatever the payload actually carries:
+// this is a feature the game added days ago and nobody in the league has used yet, so the shape
+// of a loan is not known. Inventing columns for it would be inventing the feature; printing what
+// arrives is how the columns get chosen later, from a real one.
+func LoanOffers(offers []map[string]any) string {
+	if len(offers) == 0 {
+		return `<p class="empty">Nadie te ha pedido un jugador en cesion.</p>`
+	}
+	var out strings.Builder
+	out.WriteString(`<div class="loans">`)
+	for _, offer := range offers {
+		made, _ := Ago(text(offer["loan_made"]))
+		fmt.Fprintf(&out, `<div class="loan"><div class="loan-head">%s`+
+			`<span class="loan-from">%s</span><span class="loan-when">%s</span></div>`,
+			planCard(offer), Esc(text(offer["loan_from"])), made)
+
+		// The terms, spelled out from the payload. Money and dates are recognised; anything
+		// else is shown by its own name so a new field is visible the day it appears.
+		terms := mapOf(offer["loan_terms"])
+		keys := make([]string, 0, len(terms))
+		for key := range terms {
+			switch key {
+			case "id", "status", "from", "from_team_id", "buyerTeam", "createdAt", "updatedAt":
+				continue
+			}
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		out.WriteString(`<dl class="loan-terms">`)
+		for _, key := range keys {
+			fmt.Fprintf(&out, `<div><dt>%s</dt><dd>%s</dd></div>`,
+				Esc(key), Esc(termValue(terms[key])))
+		}
+		out.WriteString(`</dl></div>`)
+	}
+	out.WriteString(`</div>`)
+	return out.String()
+}
+
+// termValue prints a term the way a person reads it: money as money, a date as a date, the rest
+// as it came.
+func termValue(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return "—"
+	case bool:
+		if typed {
+			return "si"
+		}
+		return "no"
+	case float64:
+		if typed >= 1000 {
+			amount := typed
+			return Money(&amount)
+		}
+		return PyFloat(typed)
+	case string:
+		if len(typed) >= 16 && typed[4] == '-' && typed[10] == 'T' {
+			return strings.ReplaceAll(typed[:16], "T", " ")
+		}
+		return typed
+	}
+	return fmt.Sprint(value)
+}
+
 // Feed is the league's movements: who signed and sold, and for how much.
 //
 // Lineup changes are the bulk of the log and say nothing about the market, so they are
@@ -811,8 +878,13 @@ func BidButton(row map[string]any) string {
 	if marketID == "" {
 		return Missing
 	}
+	// A rival's sale takes an offer, the game's own market takes a bid. The button carries the
+	// operation because the two look identical and the API answers 404 to the wrong one.
+	operation, label := "bid", "Pujar"
+	if text(listing["kind"]) == "venta" {
+		operation, label = "buy_offer", "Ofertar"
+	}
 	bid := ""
-	label := "Pujar"
 	if existing := text(listing["my_bid_id"]); existing != "" {
 		bid = ` data-bid="` + Esc(existing) + `"`
 		// The amount is the point: "mi puja" told you nothing you could act on.
@@ -822,8 +894,9 @@ func BidButton(row map[string]any) string {
 		}
 	}
 	return fmt.Sprintf(`<button class="bid" type="button" data-market="%s" `+
+		`data-operation="%s" `+
 		`data-player="%s" data-name="%s" data-min="%d" data-ideal="%d" data-value="%d"%s>%s</button>`,
-		Esc(marketID), Esc(text(row["id"])), Esc(text(row["name"])),
+		Esc(marketID), Esc(operation), Esc(text(row["id"])), Esc(text(row["name"])),
 		int64(number(listing["min_bid"])), int64(number(row["ideal_bid"])),
 		int64(number(row["value"])), bid, label)
 }
