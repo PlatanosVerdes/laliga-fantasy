@@ -1605,7 +1605,8 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		// The plan, not the state: what the standing instructions would do on the next
 		// cycle, with the two numbers that decide it beside each row.
 		columns := []Column{
-			{"Jugador", field("name"), "text"},
+			{"", whole, "always_edit"},
+			{"Jugador", whole, "named"},
 			{"Accion", func(row map[string]any) any {
 				return strings.ReplaceAll(text(row["action"]), "_", " ")
 			}, "text"},
@@ -1912,6 +1913,23 @@ func CellIn(value any, kind string, section string) (string, string) {
 			id = text(row["id"])
 		}
 		return PlayerLink(name, id), name
+
+	case "always_edit":
+		// The instruction was editable only from the player's card, which you had to know to
+		// look for. Same two things the card offers: open it to set the amounts, or take the
+		// instruction off.
+		row, _ := value.(map[string]any)
+		id := text(row["player_id"])
+		if id == "" {
+			id = text(row["id"])
+		}
+		if id == "" {
+			return Missing, ""
+		}
+		return fmt.Sprintf(`<button class="raid-btn" type="button" data-detail="%s">Editar`+
+			`</button> <button class="op danger" data-op="drop_always" data-op-player="%s" `+
+			`data-op-name="%s" type="button">Quitar</button>`,
+			Esc(id), Esc(id), Esc(text(row["name"]))), ""
 
 	case "raid_edit":
 		// A scheduled raid could be armed and then neither changed nor called off, which is the
