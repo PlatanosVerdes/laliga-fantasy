@@ -441,6 +441,12 @@ func check(name string, args Args, who Player, cash *int64) ([]string, error) {
 		if args.Amount <= 0 {
 			return nil, errors.New("la oferta tiene que ser un importe positivo")
 		}
+		// The API refuses a second one with "Team has pending offer in this player", and it is
+		// right: there is no route to change an offer, only to withdraw it.
+		if who.MyBidID != "" {
+			return nil, fmt.Errorf("ya tienes una oferta de %s por el: retirala primero, que "+
+				"cambiarla no se puede", money(who.MyBid))
+		}
 		if cash != nil && args.Amount > *cash {
 			return nil, fmt.Errorf("no te llega: tienes %s", money(*cash))
 		}

@@ -264,6 +264,15 @@ func bidActions(listing map[string]any, suggested float64) []map[string]any {
 	// The game's own market is bid on; a rival's sale is offered for. Sending a bid for the
 	// second answers 404 and reads like a bug in the tool.
 	if text(listing["kind"]) == "venta" {
+		// One offer at a time: the API refuses a second and there is no route to change one, so
+		// the only honest button is to take it back.
+		if existing := text(listing["my_bid_id"]); existing != "" {
+			amount := int64(number(listing["my_bid"]))
+			return []map[string]any{{"op": "cancel_offer",
+				"label": fmt.Sprintf("Retirar tu oferta de %s", thousands(amount)),
+				"kind": "confirm", "danger": true, "market_id": marketID, "offer_id": existing,
+				"note": "No se puede cambiar una oferta: se retira y se hace otra."}}
+		}
 		return []map[string]any{{"op": "buy_offer", "label": "Ofertar por su venta",
 			"kind": "amount", "market_id": marketID, "suggested": int64(suggested),
 			"min": minBid, "note": "Le llega como oferta de compra y decide el."}}
