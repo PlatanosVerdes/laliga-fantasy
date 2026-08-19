@@ -232,13 +232,15 @@ func (s *State) Refresh(cause string) error {
 // /refresh is a person pressing a button and expecting the page to react: staying silent
 // because the fingerprint matched would look like the button is broken.
 func (s *State) RefreshWith(cause string, force bool) error {
+	started := time.Now()
 	before := s.Snapshot()
 	universe, err := s.builder()
 	if err != nil {
 		s.mu.Lock()
 		s.lastError = err.Error()
 		s.mu.Unlock()
-		slog.Error("refresh failed", "cause", cause, "reason", err.Error())
+		slog.Error("refresh failed", "cause", cause, "reason", err.Error(),
+			"ms", time.Since(started).Milliseconds())
 		return err
 	}
 
@@ -256,6 +258,13 @@ func (s *State) RefreshWith(cause string, force bool) error {
 	}
 	version := s.version
 	s.mu.Unlock()
+
+	// One line per rebuild with what the world now holds: the shape of this line over a day
+	// is the only way to tell "quiet league" from "the scrape is silently failing".
+	slog.Info("world rebuilt", "cause", cause, "version", version, "changed", changed,
+		"ms", time.Since(started).Milliseconds(),
+		"players", len(universe.Players), "market", len(universe.Market),
+		"matched", universe.MatchedCount, "activity", len(universe.Activity))
 
 	after := s.Snapshot()
 	if diff := Difference(before, after, Discrete); len(diff) > 0 {

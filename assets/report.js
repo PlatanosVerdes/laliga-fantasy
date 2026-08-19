@@ -631,6 +631,17 @@ const drawer=document.getElementById('drawer');
 
 function closeDrawer(){ if(drawer) drawer.hidden=true; }
 
+// El primer valor lo escribe el navegador y tick() lo mantiene cada segundo: la cuenta atras
+// de una clausula es justo el dato que caduca mientras lo miras.
+function leftUntil(stamp){
+  const left=new Date(stamp).getTime()-Date.now();
+  if(isNaN(left)) return '—';
+  if(left<=0) return 'ya';
+  const h=Math.floor(left/3600000), m=Math.floor(left%3600000/60000);
+  return h>=24 ? Math.floor(h/24)+'d '+(h%24)+'h' : h>0 ? h+'h '+String(m).padStart(2,'0')+'m'
+                                                        : m+'m';
+}
+
 // Una curva sin cifras solo dice "sube" o "baja". Con el cursor encima dice cuanto y que dia,
 // que es la pregunta que se hace mirandola.
 let chartDays=[];
@@ -738,6 +749,11 @@ async function openDetail(playerId){
       <div><dt>Techo rentable</dt><dd${p.ideal_bid?'':' style="color:var(--warning)"'}
         >${p.ideal_bid?exact(p.ideal_bid):'sin margen'}</dd></div>
       <div><dt>Clausula</dt><dd>${p.clause?exact(p.clause):'—'}${p.clause_locked?' 🔒':''}</dd></div>
+      ${p.clause_locked&&p.clause_locked_until?`<div><dt>${p.is_mine?'Blindada hasta':'Se libera en'}</dt>
+        <dd><span data-deadline="${p.clause_locked_until}">${leftUntil(p.clause_locked_until)}</span>
+        <span style="color:var(--muted);font-weight:400"> · ${String(p.clause_locked_until).slice(0,10)}</span></dd></div>`:''}
+      ${!p.clause_locked&&p.clause&&!p.is_mine?`<div><dt>Clausula</dt><dd
+        style="color:var(--pole-pos)">pagable ya</dd></div>`:''}
       ${l.market_id?`<div><dt>En mercado</dt><dd>${exact(l.min_bid)}</dd></div>`:''}
       ${l.kind==='libre'?`<div><dt>Pujas vigentes</dt><dd${l.bids?' style="color:var(--warning)"':''}>${l.bids||'ninguna'}</dd></div>`:''}
       ${l.expires?`<div><dt>Cierra</dt><dd>${String(l.expires).slice(11,16)}</dd></div>`:''}

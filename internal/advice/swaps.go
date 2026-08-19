@@ -2,6 +2,7 @@ package advice
 
 import (
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 )
@@ -175,6 +176,11 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 				positionWord[positionID], counts[positionID], minimum))
 		}
 	}
+	slog.Info("plan ready", "moves", len(moves), "xpts_before", before,
+		"xpts_after", math.Round(after*100)/100,
+		"cash_before", int64(cash-committed), "cash_after", int64(free),
+		"committed", int64(committed))
+
 	return Row{
 		"moves": moves, "cash_before": cash - committed, "cash_after": free,
 		"committed": committed,

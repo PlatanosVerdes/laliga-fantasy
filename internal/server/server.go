@@ -94,12 +94,60 @@ func (s *Server) ListenAndServe() error {
 	return server.ListenAndServe()
 }
 
+// counted remembers the status a handler wrote, which is the only part of an answer worth
+// logging: a 200 and a 403 on the same path are different events.
+type counted struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (c *counted) WriteHeader(status int) {
+	c.status = status
+	c.ResponseWriter.WriteHeader(status)
+}
+
+func (c *counted) Write(body []byte) (int, error) {
+	if c.status == 0 {
+		c.status = http.StatusOK
+	}
+	written, err := c.ResponseWriter.Write(body)
+	c.bytes += written
+	return written, err
+}
+
+// Flush keeps SSE working: without it the wrapper hides the flusher the stream needs.
+func (c *counted) Flush() {
+	if flusher, ok := c.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
 func logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		started := time.Now()
-		next.ServeHTTP(writer, request)
-		slog.Debug("http request", "method", request.Method, "path", request.URL.Path,
-			"ms", time.Since(started).Milliseconds())
+		wrapped := &counted{ResponseWriter: writer}
+		next.ServeHTTP(wrapped, request)
+		if wrapped.status == 0 {
+			wrapped.status = http.StatusOK
+		}
+		elapsed := time.Since(started).Milliseconds()
+
+		// Anything that changes something, anything that failed, and the page itself get an
+		// info line. Assets and polling do not: a log that records every GET buries the one
+		// line that mattered.
+		mutating := request.Method != http.MethodGet && request.Method != http.MethodHead
+		interesting := mutating || wrapped.status >= 400 || request.URL.Path == "/"
+		level := slog.LevelDebug
+		if interesting {
+			level = slog.LevelInfo
+		}
+		if wrapped.status >= 500 {
+			level = slog.LevelError
+		}
+		slog.Log(request.Context(), level, "http", "method", request.Method,
+			"path", request.URL.Path, "status", wrapped.status, "ms", elapsed,
+			"bytes", wrapped.bytes)
 	})
 }
 
@@ -137,9 +185,18 @@ func (s *Server) refresh(writer http.ResponseWriter, _ *http.Request) {
 		s.json(writer, http.StatusNotImplemented, map[string]any{"error": "sin refresco"})
 		return
 	}
+	started := time.Now()
 	err := s.opts.Refresh("manual", true)
+	health := s.state.Health()
+	if err != nil {
+		slog.Error("manual refresh failed", "reason", err.Error(),
+			"ms", time.Since(started).Milliseconds())
+	} else {
+		slog.Info("manual refresh", "version", health.Version,
+			"ms", time.Since(started).Milliseconds())
+	}
 	s.json(writer, http.StatusOK, map[string]any{"refreshed": err == nil,
-		"version": s.state.Health().Version})
+		"version": health.Version})
 }
 
 // events is the push channel. A browser gets told when the version moves and when an
@@ -216,6 +273,7 @@ func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 	// No session: ask for one from the page itself rather than expecting somebody to ssh in
 	// and drop a tokens.json next to the binary.
 	if !HasSession() {
+		slog.Warn("no session: serving the login page instead of the report")
 		s.setup(writer, request)
 		return
 	}
