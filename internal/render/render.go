@@ -430,6 +430,8 @@ func RankOf(value float64, others []float64) (string, float64, string) {
 const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
 	`<button class="tab" role="tab" data-tab="decidir" aria-selected="false" type="button">Decidir</button>` +
 	`<button class="tab" role="tab" data-tab="mercado" aria-selected="false" type="button">Mercado</button>` +
+	`<button class="tab" role="tab" data-tab="misofertas" aria-selected="false" type="button">`+
+	`Mis ofertas</button>`+
 	`<button class="tab" role="tab" data-tab="clausulas" aria-selected="false" type="button">Cláusulas</button>` +
 	`<button class="tab" role="tab" data-tab="plantilla" aria-selected="false" type="button">Plantilla</button>` +
 	`<button class="tab" role="tab" data-tab="partidos" aria-selected="false" type="button">Partidos<`+
