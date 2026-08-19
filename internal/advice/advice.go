@@ -233,35 +233,51 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 	byNumber(exposure, "risk")
 	byNumber(myListings, "entry_cost")
 
+	// One row per offer, not per player. Two people bidding for the same player are two
+	// different decisions, and collapsing them into "the best one" hid both who was asking
+	// and when: the daily automatic bid and a rival's real offer looked identical.
 	offers := []Row{}
 	for _, player := range mine {
 		received := rowsOf(player["offers"])
 		if len(received) == 0 {
 			continue
 		}
-		best := received[0]
-		amount := number(best["money"])
 		value := number(player["value"])
 		if value == 0 {
 			value = 1
 		}
 		listing := mapOf(player["market"])
 		ask := number(listing["min_bid"])
-		var vsAsk any
-		if ask != 0 {
-			vsAsk = amount / ask
+		for _, offer := range received {
+			amount := number(offer["money"])
+			var vsAsk any
+			if ask != 0 {
+				vsAsk = amount / ask
+			}
+			who := text(offer["from"])
+			if who == "" {
+				who = "el mercado"
+			}
+			offers = append(offers, merge(player, Row{
+				"offer_id": text(offer["id"]), "offer_amount": amount,
+				"offer_expires": offer["expirationDate"], "offer_made": offer["createdAt"],
+				"offer_from": who, "offer_from_market": truthy(offer["from_market"]),
+				"offer_count": len(received),
+				"market_id":   listing["market_id"], "ask": ask,
+				"vs_value": amount / value, "vs_ask": vsAsk,
+				// Worth taking when they pay over the market value, or over what you are asking.
+				"worth_taking": amount >= value || (ask != 0 && amount >= ask),
+			}))
 		}
-		offers = append(offers, merge(player, Row{
-			"offer_id": text(best["id"]), "offer_amount": amount,
-			"offer_expires": best["expirationDate"], "offer_count": len(received),
-			"market_id": listing["market_id"], "ask": ask,
-			"vs_value": amount / value, "vs_ask": vsAsk,
-			// Worth taking when they pay over the market value, or over what you are asking.
-			"worth_taking": amount >= value || (ask != 0 && amount >= ask),
-		}))
 	}
 	sort.SliceStable(offers, func(i, j int) bool {
-		return number(offers[i]["vs_value"]) > number(offers[j]["vs_value"])
+		// People before the machine at equal money: a rival's offer expires on its own clock
+		// and will not come back tomorrow.
+		left, right := offers[i], offers[j]
+		if truthy(left["offer_from_market"]) != truthy(right["offer_from_market"]) {
+			return !truthy(left["offer_from_market"])
+		}
+		return number(left["vs_value"]) > number(right["vs_value"])
 	})
 
 	// The reference for "is this clause worth paying" is your own squad: do these euros buy

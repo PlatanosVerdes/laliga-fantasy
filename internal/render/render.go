@@ -847,9 +847,39 @@ func OfferButtons(row map[string]any) string {
 		`data-op-name="%s" data-op-amount="%d"`,
 		Esc(text(row["market_id"])), Esc(text(row["offer_id"])), Esc(text(row["id"])),
 		Esc(text(row["name"])), int64(number(row["offer_amount"])))
-	return fmt.Sprintf(`<button class="op bid" data-op="accept_offer" %s type="button">Aceptar`+
+	// The button says whose money it is: two offers for the same player differ only in that.
+	label := "Aceptar"
+	if who := text(row["offer_from"]); who != "" && !truthy(row["offer_from_market"]) {
+		label = "Aceptar de " + Esc(who)
+	}
+	return fmt.Sprintf(`<button class="op bid" data-op="accept_offer" %s type="button">%s`+
 		`</button> <button class="op danger" data-op="decline_offer" %s `+
-		`type="button">Rechazar</button>`, common, common)
+		`type="button">Rechazar</button>`, common, label, common)
+}
+
+// Ago is how long ago something happened, in the words a person would use.
+func Ago(stamp string) (string, string) {
+	if stamp == "" {
+		return Missing, "0"
+	}
+	when, err := time.Parse(time.RFC3339, stamp)
+	if err != nil {
+		return Esc(stamp), stamp
+	}
+	elapsed := time.Since(when)
+	label := ""
+	switch hours := int(elapsed.Hours()); {
+	case elapsed < time.Minute:
+		label = "ahora mismo"
+	case elapsed < time.Hour:
+		label = fmt.Sprintf("hace %dm", int(elapsed.Minutes()))
+	case hours < 24:
+		label = fmt.Sprintf("hace %dh", hours)
+	default:
+		label = fmt.Sprintf("hace %dd", hours/24)
+	}
+	// Sorted by the instant, not by the words, so "hace 2d" and "hace 10h" order correctly.
+	return Esc(label), fmt.Sprintf("%d", when.Unix())
 }
 
 // LeftUntil is the first render of a countdown: how long from now to the instant, in the same
@@ -1346,13 +1376,16 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 			true), nil
 
 	case "misventas":
-		// Yours, so no star and no "mio": what matters is what you are asking against what
-		// he is worth.
+		// Yours, so no star and no "mio": what matters is what you are asking, what he is
+		// worth, and whether anybody has actually put money on the table.
 		columns := []Column{
 			{"Jugador", whole, "player"},
-			{"Valor", field("value"), "money"},
 			{"Pides", field("entry_cost"), "money"},
+			{"Valor", field("value"), "money"},
 			{"Sobre valor", field("ask_ratio"), "ratio"},
+			{"Ofertas", whole, "offer_tally"},
+			{"Mejor", whole, "best_offer"},
+			{"Cierra", whole, "listing_until"},
 			{"xPts/j", field("xpts"), "num"},
 			{"Valor 7d", field("projected_pct"), "pct"},
 		}
@@ -1469,24 +1502,19 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		return TableIn(columns, rows, "Ninguna cláusula a tu alcance", "", false), nil
 
 	case "ofertas":
-		// Yours by definition, so no star: what matters is what they pay against what he
-		// is worth, and when the offer dies.
+		// One row per offer, and the first thing it says is who: a rival's offer and the
+		// game's daily automatic bid are the same money and completely different news.
 		columns := []Column{
+			{"", whole, "offer"},
+			{"Quien", whole, "offer_from"},
 			{"Jugador", whole, "player"},
+			{"Te ofrecen", field("offer_amount"), "money"},
 			{"Valor", field("value"), "money"},
 			{"Pides", field("ask"), "money"},
-			{"Te ofrecen", field("offer_amount"), "money"},
 			{"Sobre su valor", field("vs_value"), "ratio_sell"},
-			{"Ofertas", field("offer_count"), "int"},
-			{"Caduca", func(row map[string]any) any {
-				stamp := text(row["offer_expires"])
-				if len(stamp) > 16 {
-					stamp = stamp[:16]
-				}
-				return strings.ReplaceAll(stamp, "T", " ")
-			}, "text"},
+			{"Ofrecida", whole, "since"},
+			{"Caduca", whole, "until"},
 			{"xPts/j", field("xpts"), "num"},
-			{"", whole, "offer"},
 		}
 		return TableIn(columns, rows, "Sin datos", "ofertas", false), nil
 
@@ -1627,6 +1655,96 @@ func CellIn(value any, kind string, section string) (string, string) {
 	case "offer":
 		row, _ := value.(map[string]any)
 		return OfferButtons(row), sortKey(asFloat(row["offer_amount"]))
+	case "offer_tally":
+		// People and machine counted apart: five automatic bids are not five interested
+		// managers, and a listing with one real offer is the one worth looking at.
+		row, _ := value.(map[string]any)
+		people, machine := 0, 0
+		for _, offer := range rows(row["offers"]) {
+			if truthy(offer["from_market"]) {
+				machine++
+			} else {
+				people++
+			}
+		}
+		if people == 0 && machine == 0 {
+			return `<span class="muted">nadie</span>`, "0"
+		}
+		parts := []string{}
+		if people > 0 {
+			parts = append(parts, fmt.Sprintf(`<b>%d</b> de rivales`, people))
+		}
+		if machine > 0 {
+			parts = append(parts,
+				fmt.Sprintf(`<span class="from-market">%d del mercado</span>`, machine))
+		}
+		// Real offers dominate the sort: that is the column's whole purpose.
+		return strings.Join(parts, " · "), fmt.Sprintf("%03d%03d", people, machine)
+
+	case "best_offer":
+		row, _ := value.(map[string]any)
+		var best map[string]any
+		for _, offer := range rows(row["offers"]) {
+			if best == nil || number(offer["money"]) > number(best["money"]) {
+				best = offer
+			}
+		}
+		if best == nil {
+			return Missing, "0"
+		}
+		amount := asFloat(best["money"])
+		who := text(best["from"])
+		if who == "" {
+			who = "el mercado"
+		}
+		class := "from-rival"
+		if truthy(best["from_market"]) {
+			class = "from-market"
+		}
+		return Esc(Money(amount)) + ` <span class="` + class + `">· ` + Esc(who) + `</span>`,
+			sortKey(amount)
+
+	case "listing_until":
+		row, _ := value.(map[string]any)
+		listing := mapOf(row["market"])
+		stamp := text(listing["expires"])
+		if stamp == "" {
+			return Missing, "0"
+		}
+		when, err := time.Parse(time.RFC3339, stamp)
+		if err != nil {
+			return Esc(stamp), stamp
+		}
+		return `<span data-deadline="` + Esc(stamp) + `">` + Esc(LeftUntil(stamp)) + `</span>`,
+			fmt.Sprintf("%d", when.Unix())
+
+	case "offer_from":
+		// The machine's bid is named as such and greyed: it arrives every day whatever you
+		// do, so it should never look like somebody made a decision about your player.
+		row, _ := value.(map[string]any)
+		who := text(row["offer_from"])
+		if truthy(row["offer_from_market"]) {
+			return `<span class="from-market" title="Oferta automatica del juego: llega cada ` +
+				`dia y caduca al cerrar el mercado">` + Esc(who) + `</span>`, "zzz " + who
+		}
+		return `<span class="from-rival">` + Esc(who) + `</span>`, who
+	case "since":
+		// How long the offer has been sitting there: an offer from ten minutes ago and one
+		// about to expire read the same as a date and completely differently as an age.
+		row, _ := value.(map[string]any)
+		return Ago(text(row["offer_made"]))
+	case "until":
+		row, _ := value.(map[string]any)
+		stamp := text(row["offer_expires"])
+		if stamp == "" {
+			return Missing, "0"
+		}
+		when, err := time.Parse(time.RFC3339, stamp)
+		if err != nil {
+			return Esc(stamp), stamp
+		}
+		return `<span data-deadline="` + Esc(stamp) + `">` + Esc(LeftUntil(stamp)) + `</span>`,
+			fmt.Sprintf("%d", when.Unix())
 	case "hours":
 		row, _ := value.(map[string]any)
 		hours := asFloat(row["hours_left"])

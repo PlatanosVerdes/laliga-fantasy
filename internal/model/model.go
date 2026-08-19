@@ -762,9 +762,24 @@ func loadOffers(client *api.Client, leagueID string, listings []Listing,
 		pending := make([]map[string]any, 0, len(received))
 		for _, offer := range received {
 			status := text(offer["status"])
-			if status == "" || status == "pending" {
-				pending = append(pending, offer)
+			if status != "" && status != "pending" {
+				continue
 			}
+			// Who and when, lifted out of the payload's corners. An offer with no buyerTeam is
+			// the game's own daily bid, not a person: telling the two apart is the difference
+			// between "somebody wants him" and "the market always offers this".
+			offer["from_market"] = truthy(offer["isFromMarket"]) ||
+				nested(offer, "buyerTeam") == nil
+			if manager := text(nested(offer, "buyerTeam", "manager", "managerName")); manager != "" {
+				offer["from"] = manager
+			}
+			if teamID := text(nested(offer, "buyerTeam", "id")); teamID != "" {
+				offer["from_team_id"] = teamID
+			}
+			if worth := number(nested(offer, "buyerTeam", "teamValue")); worth != 0 {
+				offer["from_team_value"] = worth
+			}
+			pending = append(pending, offer)
 		}
 		if len(pending) == 0 {
 			continue
