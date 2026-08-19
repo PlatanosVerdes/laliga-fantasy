@@ -664,23 +664,33 @@ func Feed(events []map[string]any) string {
 // FeedRow is one movement. The amount alone does not say whether it was a steal or a panic
 // buy, so the player's value on that same day travels with it.
 func FeedRow(event map[string]any) string {
-	player, buyer, seller := text(event["player"]), text(event["buyer"]), text(event["seller"])
+	player := text(event["player"])
+	// The feed names people by user id, so the link needs the map. Whoever paid is user1 and
+	// whoever received is user2, which loadActivity already resolved into buyer and seller.
+	buyer := ManagerLink(text(event["buyer"]), ManagerTeams[buyerUser(event)])
+	seller := ManagerLink(text(event["seller"]), ManagerTeams[sellerUser(event)])
+	if text(event["buyer"]) == "" {
+		buyer = ""
+	}
+	if text(event["seller"]) == "" {
+		seller = ""
+	}
 	var body string
 	switch {
 	case player != "" && buyer != "" && seller != "":
-		body = fmt.Sprintf(`<strong>%s</strong>: %s &rarr; %s`, Esc(player), Esc(seller), Esc(buyer))
+		body = fmt.Sprintf(`<strong>%s</strong>: %s &rarr; %s`, Esc(player), seller, buyer)
 	case player != "" && buyer != "":
-		body = fmt.Sprintf(`<strong>%s</strong> &rarr; %s`, Esc(player), Esc(buyer))
+		body = fmt.Sprintf(`<strong>%s</strong> &rarr; %s`, Esc(player), buyer)
 	case player != "" && seller != "":
-		body = fmt.Sprintf(`<strong>%s</strong>, vendido por %s`, Esc(player), Esc(seller))
+		body = fmt.Sprintf(`<strong>%s</strong>, vendido por %s`, Esc(player), seller)
 	case player != "":
 		body = fmt.Sprintf(`<strong>%s</strong>`, Esc(player))
 	default:
 		// Nobody named: dump what came, so an event shape we do not know yet is visible
 		// rather than an empty row.
-		fallback := buyer
+		fallback := text(event["buyer"])
 		if fallback == "" {
-			fallback = seller
+			fallback = text(event["seller"])
 		}
 		if fallback == "" {
 			blob, _ := json.Marshal(event["raw"])
@@ -788,6 +798,55 @@ func RaidVerdict(row map[string]any) string {
 	}
 	return fmt.Sprintf(`<span class="pill-%s">%s</span>`, status, Esc(verdict)) + note
 }
+
+// ManagerLink is a manager's name, clickable when we know which team is his. One place decides
+// it, because the name shows up in seven tables and the feed and they all want the same thing.
+func ManagerLink(name, teamID string) string {
+	if name == "" {
+		return Missing
+	}
+	if teamID == "" {
+		return Esc(name)
+	}
+	return fmt.Sprintf(`<button class="p-name" type="button" data-manager="%s">%s</button>`,
+		Esc(teamID), Esc(name))
+}
+
+// buyerUser and sellerUser read the two sides of an event. cash == -1 means user1 paid, which
+// loadActivity already used to fill buyer and seller, so the mapping has to match it.
+func buyerUser(event map[string]any) string {
+	if text(event["buyer"]) == "" {
+		return ""
+	}
+	if pays(event) {
+		return text(event["user1"])
+	}
+	return text(event["user2"])
+}
+
+func sellerUser(event map[string]any) string {
+	if text(event["seller"]) == "" {
+		return ""
+	}
+	if pays(event) {
+		return text(event["user2"])
+	}
+	return text(event["user1"])
+}
+
+// pays is whether user1 is the one who paid: types 1 (traspaso) and 31 (compra).
+func pays(event map[string]any) bool {
+	switch int(number(event["type_id"])) {
+	case 1, 31:
+		return true
+	}
+	return false
+}
+
+// ManagerTeams maps a manager's user id to his team id, which is what the feed carries and what
+// the panel needs. Filled by the caller for the same reason as Crests: this package does not
+// fetch, and the feed's events name people by user.
+var ManagerTeams = map[string]string{}
 
 // PowerBadge is who can actually buy right now. Named, not just coloured.
 func PowerBadge(row map[string]any) string {
@@ -1523,7 +1582,7 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 	case "proximas":
 		// The other side of the same clock. "¿Renta?" goes first because the useful
 		// question is not when it opens but whether it is worth paying.
-		columns := insert(clauseColumns(), 3, Column{"Dueño", field("owner"), "text"})
+		columns := insert(clauseColumns(), 3, Column{"Dueño", whole, "owner"})
 		columns = insert(columns, 0, Column{"¿Renta?", whole, "verdict_raid"})
 		columns = append(columns,
 			Column{"x valor", field("clause_premium"), "num"},
@@ -1537,14 +1596,14 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		// What rivals are asking, next to what the player is worth: this is where the
 		// fantasy prices show up, so the ratio sits right after the price.
 		columns := insert(PlayerColumns("Pide"), 2,
-			Column{"Vende", field("seller"), "text"})
+			Column{"Vende", whole, "seller"})
 		columns = insert(columns, 5, Column{"Sobre valor", field("ask_ratio"), "ratio"})
 		columns = insert(columns, 0, Column{"", whole, "bid"})
 		return TableIn(columns, rows, "Nadie ha puesto a nadie en venta", "", true), nil
 
 	case "clausulas":
 		columns := insert(PlayerColumns("Cláusula"), 1,
-			Column{"Dueño", field("owner"), "text"})
+			Column{"Dueño", whole, "owner"})
 		columns = insert(columns, 4, Column{"x valor", field("clause_premium"), "num"})
 		columns = insert(columns, 0, Column{"Clausulazo", whole, "raid"})
 		return TableIn(columns, rows, "Ninguna cláusula a tu alcance", "", false), nil
@@ -1774,12 +1833,20 @@ func CellIn(value any, kind string, section string) (string, string) {
 		if name == "" {
 			name = text(row["name"])
 		}
-		teamID := text(row["team_id"])
-		if teamID == "" {
-			return Esc(name), name
+		return ManagerLink(name, text(row["team_id"])), name
+	case "seller":
+		// Who is selling him, and with one click what else he has: the same question the
+		// buying-power table answers, asked from the row where it comes up.
+		row, _ := value.(map[string]any)
+		listing := mapOf(row["market"])
+		name := text(row["seller"])
+		if name == "" {
+			name = text(listing["seller"])
 		}
-		return fmt.Sprintf(`<button class="p-name" type="button" data-manager="%s">%s</button>`,
-			Esc(teamID), Esc(name)), name
+		return ManagerLink(name, text(listing["seller_team_id"])), name
+	case "owner":
+		row, _ := value.(map[string]any)
+		return ManagerLink(text(row["owner"]), text(row["owner_team_id"])), text(row["owner"])
 
 	case "offer_from":
 		// The machine's bid is named as such and greyed: it arrives every day whatever you
@@ -1789,6 +1856,10 @@ func CellIn(value any, kind string, section string) (string, string) {
 		if truthy(row["offer_from_market"]) {
 			return `<span class="from-market" title="Oferta automatica del juego: llega cada ` +
 				`dia y caduca al cerrar el mercado">` + Esc(who) + `</span>`, "zzz " + who
+		}
+		// A person who offers is a person you can look up; the machine is not.
+		if teamID := text(row["offer_from_team_id"]); teamID != "" {
+			return `<span class="from-rival">` + ManagerLink(who, teamID) + `</span>`, who
 		}
 		return `<span class="from-rival">` + Esc(who) + `</span>`, who
 	case "since":

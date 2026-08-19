@@ -262,6 +262,7 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 				"offer_id": text(offer["id"]), "offer_amount": amount,
 				"offer_expires": offer["expirationDate"], "offer_made": offer["createdAt"],
 				"offer_from": who, "offer_from_market": truthy(offer["from_market"]),
+				"offer_from_team_id": text(offer["from_team_id"]),
 				"offer_count": len(received),
 				"market_id":   listing["market_id"], "ask": ask,
 				"vs_value": amount / value, "vs_ask": vsAsk,
