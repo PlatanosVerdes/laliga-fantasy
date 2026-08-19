@@ -852,7 +852,7 @@ func OfferButtons(row map[string]any) string {
 	if who := text(row["offer_from"]); who != "" && !truthy(row["offer_from_market"]) {
 		label = "Aceptar de " + Esc(who)
 	}
-	return fmt.Sprintf(`<button class="op bid" data-op="accept_offer" %s type="button">%s`+
+	return fmt.Sprintf(`<button class="op op-primary" data-op="accept_offer" %s type="button">%s`+
 		`</button> <button class="op danger" data-op="decline_offer" %s `+
 		`type="button">Rechazar</button>`, common, label, common)
 }

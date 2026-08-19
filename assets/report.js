@@ -132,7 +132,10 @@ function showStep(step,{confirmLabel='Aceptar'}={}){
 }
 
 function wireBids(root=document){
-  root.querySelectorAll('button.bid').forEach(button=>{
+  // :not([data-op]) porque el boton de aceptar una oferta lleva la clase .bid solo por el
+  // color, y se estaba quedando con este manejador: al pulsar Aceptar se abria el dialogo de
+  // pujar, con importe minimo NaN. El color no puede decidir que hace un boton.
+  root.querySelectorAll('button.bid:not([data-op])').forEach(button=>{
     if(button.dataset.wired) return;
     button.dataset.wired='1';
     button.addEventListener('click',()=>openBid(button.dataset));

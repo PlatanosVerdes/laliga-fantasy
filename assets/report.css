@@ -180,10 +180,12 @@ th.right{text-align:right}
   min-width:78px}
 .feed-then{font-size:11px;color:var(--muted);flex:0 0 auto;white-space:nowrap}
 .feed-then b{color:var(--ink-2);font-variant-numeric:tabular-nums}
-button.bid{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
+/* .op-primary se ve como una puja pero no lo es: el manejador de pujas engancha por .bid, y
+   un boton no puede heredar comportamiento del color. */
+button.bid,button.op-primary{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
   letter-spacing:.05em;color:#fff;background:var(--accent);border:none;border-radius:6px;
   padding:4px 10px;cursor:pointer}
-button.bid:hover{filter:brightness(1.08)}
+button.bid:hover,button.op-primary:hover{filter:brightness(1.08)}
 button.raid-btn{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
   letter-spacing:.05em;color:var(--warning);background:transparent;border-radius:6px;
   border:1px solid color-mix(in srgb,var(--warning) 50%,transparent);padding:3px 9px;
