@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/favourites"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
@@ -73,6 +74,16 @@ func (s *Server) favourite(writer http.ResponseWriter, request *http.Request) {
 	}
 	slog.Info("favourite toggled", "player_id", id, "player", text(body["name"]),
 		"starred", starred)
+	// The star is ours, not the API's: it can be true on the page before any rebuild.
+	s.state.Patch("favourite", func(universe *model.Universe) bool {
+		for index := range universe.Players {
+			if universe.Players[index].ID == id {
+				universe.Players[index].Starred = starred
+				return true
+			}
+		}
+		return false
+	})
 	s.settle("favourite")
 	s.json(writer, http.StatusOK, map[string]any{"id": id, "starred": starred})
 }
@@ -268,8 +279,63 @@ func (s *Server) confirm(writer http.ResponseWriter, request *http.Request) {
 	if cause == "" {
 		cause = "write"
 	}
+	// Say what just happened before going to ask: the rebuild takes about five seconds against
+	// the API and the person is looking at the screen waiting for the one thing they did.
+	s.applied(cause, body)
 	s.settle(cause)
 	s.json(writer, http.StatusOK, result)
+}
+
+// applied patches the world with what an operation obviously did, so the page shows it now
+// rather than in five seconds. Only the effects that are certain without asking the API: an
+// offer that is gone is gone, a bid that changed is that amount. Everything else waits for the
+// rebuild, which is the authority.
+func (s *Server) applied(operation string, body map[string]any) {
+	offerID := text(body["offer_id"])
+	marketID := text(body["market_id"])
+	amount, _ := amountOf(body["amount"])
+
+	s.state.Patch(operation, func(universe *model.Universe) bool {
+		changed := false
+		for index := range universe.Players {
+			player := &universe.Players[index]
+			switch operation {
+			case "accept_offer", "decline_offer":
+				if offerID == "" {
+					continue
+				}
+				kept := player.Offers[:0]
+				for _, offer := range player.Offers {
+					if text(offer["id"]) == offerID {
+						changed = true
+						continue
+					}
+					kept = append(kept, offer)
+				}
+				player.Offers = kept
+
+			case "withdraw":
+				if listing := player.MarketEntry; listing != nil && listing.MarketID == marketID {
+					player.MarketEntry = nil
+					changed = true
+				}
+
+			case "modify_bid":
+				if listing := player.MarketEntry; listing != nil && listing.MarketID == marketID {
+					value := amount
+					listing.MyBid = &value
+					changed = true
+				}
+
+			case "cancel_bid":
+				if listing := player.MarketEntry; listing != nil && listing.MarketID == marketID {
+					listing.MyBidID, listing.MyBid, listing.MyBidStatus = nil, nil, nil
+					changed = true
+				}
+			}
+		}
+		return changed
+	})
 }
 
 // playerFor is the context the confirmation dialog quotes: what he is worth, what the listing

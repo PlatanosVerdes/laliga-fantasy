@@ -382,7 +382,7 @@ func (s *Server) fragments(writer http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	s.json(writer, http.StatusOK, map[string]any{"version": s.state.Health().Version,
-		"sections": Sections(s.opts.Page())})
+		"sections": Sections(s.render())})
 }
 
 // budget is the cash the actions are judged against. Read from the API rather than the built
