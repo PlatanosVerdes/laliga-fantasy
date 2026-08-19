@@ -790,14 +790,41 @@ function chipFace(p){
 
 // El campo en pequeño: las mismas cuatro lineas del once, de delantera a porteria, porque una
 // plantilla se reconoce por su forma antes que por sus nombres.
-function miniPitch(squad){
-  const lines=byLine(squad).slice().reverse();
-  if(!lines.length) return '<p class="empty">Sin jugadores.</p>';
-  return `<div class="mini-pitch">${lines.map(line=>`
-    <div class="mini-line">${line.players.map(p=>
-      `<button class="mini-slot${p.played?'':' mini-out'}" type="button" data-detail="${p.id}"
-         title="${p.name} · ${p.team_short||''} · ${line.label}${p.played?'':' · no jugaba esa jornada'}">
-         ${chipFace(p)}<span class="mini-name">${p.name}</span></button>`).join('')}</div>`).join('')}</div>`;
+function miniPitch(m){
+  // El once que alineo, no la plantilla: un campo con dos porteros no es un campo. Cuando la
+  // alineacion de esa jornada no esta disponible se dice y se cae a la plantilla agrupada.
+  const fielded=m.lineup;
+  if(!fielded){
+    const lines=byLine(m.squad).slice().reverse();
+    if(!lines.length) return '<p class="empty">Sin jugadores.</p>';
+    return `<p class="drawer-note">No tengo la alineacion de esa jornada; esto es la plantilla
+      que tenia.</p>` + `<div class="mini-pitch is-squad">${lines.map(line=>`
+      <div class="mini-line">${line.players.map(p=>slotChip(p,line.label)).join('')}</div>`)
+      .join('')}</div>`;
+  }
+  const order=['striker','midfield','defender','goalkeeper'];
+  const label={goalkeeper:'POR',defender:'DEF',midfield:'MED',striker:'DEL'};
+  return `<div class="mini-pitch">${order.map(line=>{
+    const players=fielded[line]||[];
+    if(!players.length) return '';
+    return `<div class="mini-line">${players.map(p=>slotChip(p,label[line],true)).join('')}</div>`;
+  }).join('')}</div>` + benchStrip(m.bench);
+}
+
+function slotChip(p,line,fielded){
+  const points = fielded && p.points!=null ? `<span class="mini-points">${p.points}</span>` : '';
+  const dim = (!fielded && !p.played) ? ' mini-out' : '';
+  return `<button class="mini-slot${dim}" type="button" data-detail="${p.id}"
+    title="${p.name} · ${p.team_short||''} · ${line}${(!fielded&&!p.played)?' · no jugaba esa jornada':''}">
+    ${chipFace(p)}<span class="mini-name">${p.name}</span>${points}</button>`;
+}
+
+// El banquillo de esa jornada: lo que tenia y no puso, que es la otra mitad de la decision.
+function benchStrip(bench){
+  if(!bench || !bench.length) return '';
+  return `<div class="mini-bench"><span class="mini-bench-label">banquillo</span>${
+    bench.map(p=>`<button class="mini-benched" type="button" data-detail="${p.id}"
+      title="${p.name} · ${p.team_short||''}">${chipFace(p)}${p.name}</button>`).join('')}</div>`;
 }
 
 // Que tenia cada uno en una jornada. La API no guarda historia: esto sale de deshacer el log de
@@ -823,9 +850,11 @@ async function openMatchday(week){
       <div class="md-manager${m.is_me?' md-mine':''}">
         <div class="md-head">
           <button class="p-name" type="button" data-manager="${m.team_id}">${m.manager}</button>
-          <span class="md-count">${m.playing} de ${m.players} jugaron</span>
+          <span class="md-count">${m.lineup
+            ? (m.formation||[]).join('-')+(m.week_points!=null?` · ${Math.round(m.week_points)} pts`:'')
+            : `${m.playing} de ${m.players} jugaron`}</span>
         </div>
-        ${miniPitch(m.squad)}
+        ${miniPitch(m)}
       </div>`).join('')}
     <p class="drawer-note">Reconstruido del log de traspasos: la API solo dice quien tiene a quien
       ahora. Los jugadores en gris no jugaban esa jornada.</p>`;

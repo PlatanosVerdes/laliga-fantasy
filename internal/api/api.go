@@ -255,6 +255,18 @@ func (c *Client) Lineup(teamID string, ttl time.Duration) (map[string]any, error
 	return payload, err
 }
 
+// TeamLineupWeek is the eleven a team fielded on a matchday — anybody's team, not just ours.
+//
+// The plain /lineup route answers 403 for a rival, but this one answers for everybody, which is
+// what makes a past matchday readable: ownership says who they had, this says who they played.
+func (c *Client) TeamLineupWeek(teamID string, week int,
+	ttl time.Duration) (map[string]any, error) {
+	var payload map[string]any
+	err := c.get(fmt.Sprintf("%s/teams/%s/lineup/week/%d", config.CMP, teamID, week),
+		true, ttl, "lineup", false, &payload)
+	return payload, err
+}
+
 // Formations lists the shapes the account may use; the premium ones need the paid tier.
 func (c *Client) Formations(premium bool, ttl time.Duration) ([]string, error) {
 	option := "free"
