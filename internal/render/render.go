@@ -686,7 +686,12 @@ func Feed(events []map[string]any) string {
 // FeedRow is one movement. The amount alone does not say whether it was a steal or a panic
 // buy, so the player's value on that same day travels with it.
 func FeedRow(event map[string]any) string {
-	player := text(event["player"])
+	// The player is a link too: a move reads "quien y por cuanto", and the next question is
+	// always what that player is worth now.
+	player := PlayerLink(text(event["player"]), text(event["player_id"]))
+	if text(event["player"]) == "" {
+		player = ""
+	}
 	// The feed names people by user id, so the link needs the map. Whoever paid is user1 and
 	// whoever received is user2, which loadActivity already resolved into buyer and seller.
 	buyer := ManagerLink(text(event["buyer"]), ManagerTeams[buyerUser(event)])
@@ -700,13 +705,13 @@ func FeedRow(event map[string]any) string {
 	var body string
 	switch {
 	case player != "" && buyer != "" && seller != "":
-		body = fmt.Sprintf(`<strong>%s</strong>: %s &rarr; %s`, Esc(player), seller, buyer)
+		body = fmt.Sprintf(`<strong>%s</strong>: %s &rarr; %s`, player, seller, buyer)
 	case player != "" && buyer != "":
-		body = fmt.Sprintf(`<strong>%s</strong> &rarr; %s`, Esc(player), buyer)
+		body = fmt.Sprintf(`<strong>%s</strong> &rarr; %s`, player, buyer)
 	case player != "" && seller != "":
-		body = fmt.Sprintf(`<strong>%s</strong>, vendido por %s`, Esc(player), seller)
+		body = fmt.Sprintf(`<strong>%s</strong>, vendido por %s`, player, seller)
 	case player != "":
-		body = fmt.Sprintf(`<strong>%s</strong>`, Esc(player))
+		body = fmt.Sprintf(`<strong>%s</strong>`, player)
 	default:
 		// Nobody named: dump what came, so an event shape we do not know yet is visible
 		// rather than an empty row.
@@ -821,6 +826,20 @@ func RaidVerdict(row map[string]any) string {
 	return fmt.Sprintf(`<span class="pill-%s">%s</span>`, status, Esc(verdict)) + note
 }
 
+// PlayerLink is a player's name, clickable when we know his id. Same idea as ManagerLink and for
+// the same reason: the name shows up in the feed and in tables that are not player tables, and in
+// all of them the next question is "who is he".
+func PlayerLink(name, playerID string) string {
+	if name == "" {
+		return Missing
+	}
+	if playerID == "" {
+		return Esc(name)
+	}
+	return fmt.Sprintf(`<button class="p-name" type="button" data-detail="%s">%s</button>`,
+		Esc(playerID), Esc(name))
+}
+
 // ManagerLink is a manager's name, clickable when we know which team is his. One place decides
 // it, because the name shows up in seven tables and the feed and they all want the same thing.
 func ManagerLink(name, teamID string) string {
@@ -900,6 +919,16 @@ func BidButton(row map[string]any) string {
 	}
 	bid := ""
 	if existing := text(listing["my_bid_id"]); existing != "" {
+		// On a rival's sale there is no "change the offer" route, only withdraw: so the row says
+		// what you have on it and offers to take it back, and offering again is one more click.
+		if operation == "buy_offer" {
+			amount := asFloat(listing["my_bid"])
+			return fmt.Sprintf(`<span class="mine-bid">Ofreciste %s</span> `+
+				`<button class="op danger" data-op="cancel_offer" data-op-market="%s" `+
+				`data-op-offer="%s" data-op-player="%s" data-op-name="%s" type="button">`+
+				`Retirar</button>`, Esc(Money(amount)), Esc(marketID), Esc(existing),
+				Esc(text(row["id"])), Esc(text(row["name"])))
+		}
 		bid = ` data-bid="` + Esc(existing) + `"`
 		// The amount is the point: "mi puja" told you nothing you could act on.
 		label = "Tu puja"
@@ -1528,6 +1557,24 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		return TableIn(columns, rows, "El mercado libre esta vacio ahora mismo", "mercado",
 			true), nil
 
+	case "mispujas":
+		// Money already committed: what it is on, how much, what they ask, and how long is left.
+		// The buttons are the point -- until now the only way to change a bid was to find the
+		// player in another table.
+		columns := []Column{
+			{"", whole, "bid"},
+			{"Jugador", whole, "player"},
+			{"Tu importe", field("my_bid"), "money"},
+			{"Piden", field("asking"), "money"},
+			{"Sobre lo que piden", field("over_asking"), "ratio"},
+			{"Que es", field("bid_kind"), "text"},
+			{"Cierra", whole, "closes"},
+			{"xPts/j", field("xpts"), "num"},
+			{"Valor 7d", field("projected_pct"), "pct"},
+		}
+		return TableIn(columns, rows, "No tienes ninguna puja ni oferta puesta", "mispujas",
+			false), nil
+
 	case "misventas":
 		// Yours, so no star and no "mio": what matters is what you are asking, what he is
 		// worth, and whether anybody has actually put money on the table.
@@ -1581,8 +1628,9 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 
 	case "programados":
 		columns := []Column{
-			{"Jugador", field("name"), "text"},
-			{"Dueño", field("owner"), "text"},
+			{"", whole, "raid_edit"},
+			{"Jugador", whole, "named"},
+			{"Dueño", whole, "owner"},
 			{"Cláusula", field("clause"), "money"},
 			{"Mi limite", field("max_pay"), "money"},
 			{"Estado", func(row map[string]any) any {
@@ -1851,6 +1899,45 @@ func CellIn(value any, kind string, section string) (string, string) {
 		}
 		return Esc(Money(amount)) + ` <span class="` + class + `">· ` + Esc(who) + `</span>`,
 			sortKey(amount)
+
+	case "named":
+		// A player named in a table that is not a player table: the feed, the scheduled raids.
+		row, _ := value.(map[string]any)
+		name := text(row["name"])
+		id := text(row["player_id"])
+		if id == "" {
+			id = text(row["id"])
+		}
+		return PlayerLink(name, id), name
+
+	case "raid_edit":
+		// A scheduled raid could be armed and then neither changed nor called off, which is the
+		// one thing you want to do when the clause moves or you change your mind.
+		row, _ := value.(map[string]any)
+		id := text(row["player_id"])
+		if id == "" {
+			return Missing, ""
+		}
+		limit := int64(number(row["max_pay"]))
+		common := fmt.Sprintf(`data-op-player="%s" data-op-name="%s"`, Esc(id),
+			Esc(text(row["name"])))
+		return fmt.Sprintf(`<button class="raid-btn" type="button" data-raid="%s" `+
+			`data-name="%s" data-clause="%d" data-max="%d">Cambiar</button> `+
+			`<button class="op danger" data-op="cancel_raid" %s type="button">Cancelar</button>`,
+			Esc(id), Esc(text(row["name"])), int64(number(row["clause"])), limit, common), ""
+
+	case "closes":
+		row, _ := value.(map[string]any)
+		stamp := text(row["closes"])
+		if stamp == "" {
+			return Missing, "0"
+		}
+		when, err := time.Parse(time.RFC3339, stamp)
+		if err != nil {
+			return Esc(stamp), stamp
+		}
+		return `<span data-deadline="` + Esc(stamp) + `">` + Esc(LeftUntil(stamp)) + `</span>`,
+			fmt.Sprintf("%d", when.Unix())
 
 	case "listing_until":
 		row, _ := value.(map[string]any)

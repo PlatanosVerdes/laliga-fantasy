@@ -115,6 +115,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/favourite", s.favourite)
 	mux.HandleFunc("/api/always", s.always)
 	mux.HandleFunc("/api/raid", s.raid)
+	mux.HandleFunc("/api/raid/cancel", s.cancelRaid)
 	mux.HandleFunc("/api/bid/prepare", s.prepare)
 	mux.HandleFunc("/api/bid/confirm", s.confirm)
 	mux.HandleFunc("/refresh", s.refresh)

@@ -289,14 +289,16 @@ const DONE_LABEL={bid:'Puja enviada',sell_to_market:'Puesto en venta',
   accept_offer:'Oferta aceptada',decline_offer:'Oferta rechazada',
   withdraw:'Retirado del mercado',direct_offer:'Oferta enviada',
   pay_clause:'Clausula pagada',raise_clause:'Clausula subida',
-  cancel_bid:'Puja retirada',modify_bid:'Puja cambiada',buy_offer:'Oferta enviada'};
+  cancel_bid:'Puja retirada',modify_bid:'Puja cambiada',buy_offer:'Oferta enviada',
+  cancel_offer:'Oferta retirada'};
 const AMOUNT_LABEL={bid:'Pujas',modify_bid:'Nueva puja',buy_offer:'Ofreces',
   sell_to_market:'Precio de venta',
   accept_offer:'Cobras',direct_offer:'Ofreces',pay_clause:'Pagas',
   raise_clause:'Subes la clausula'};
 
 const OP_LABELS={accept_offer:'Aceptar oferta por',decline_offer:'Rechazar oferta por',
-                 withdraw:'Retirar del mercado a',sell_to_market:'Poner en venta a'};
+                 withdraw:'Retirar del mercado a',sell_to_market:'Poner en venta a',
+                 cancel_offer:'Retirar tu oferta por',cancel_raid:'Cancelar el clausulazo de'};
 
 function wireOps(root=document){
   root.querySelectorAll('button.op').forEach(button=>{
@@ -304,6 +306,20 @@ function wireOps(root=document){
     button.dataset.wired='1';
     button.addEventListener('click', async ()=>{
       const d=button.dataset;
+      // Cancelar un clausulazo no es una operacion contra LaLiga: es borrar una instruccion
+      // nuestra, asi que no pasa por la confirmacion de dos pasos, que existe para el dinero.
+      if(d.op==='cancel_raid'){
+        if(!confirm('Cancelar el clausulazo programado de '+d.opName+'?')) return;
+        try{
+          const res=await fetch('/api/raid/cancel',{method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({id:d.opPlayer,name:d.opName})});
+          if(!res.ok) throw new Error((await res.json()).error||res.status);
+          button.closest('tr')?.classList.add('row-gone');
+          button.disabled=true; button.textContent='cancelado';
+        }catch(err){ alert('No he podido cancelarlo: '+err.message); }
+        return;
+      }
       pending={operation:d.op, market_id:d.opMarket, offer_id:d.opOffer,
                player_id:d.opPlayer, name:d.opName, amount:+d.opAmount||null};
       modal.hidden=false;
@@ -1199,7 +1215,7 @@ if(drawer){
 // ---- pestañas: una vista a la vez ------------------------------------------
 const TABS=[
   {id:'decidir', label:'Decidir', sections:['plan','acciones','ofertas']},
-  {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
+  {id:'mercado', label:'Mercado', sections:['fichajes','mispujas','enventa','misventas','siempre','seguimiento']},
   {id:'clausulas', label:'Cláusulas', sections:['programados','calendario','vencimientos','oportunidades','riesgo','clausulas']},
   {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
   {id:'partidos', label:'Partidos', sections:['partidos']},

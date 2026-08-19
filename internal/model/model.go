@@ -694,7 +694,9 @@ func findBidID(entry map[string]any) *string {
 			return &id
 		}
 	}
-	for _, key := range []string{"bids", "myBids", "userBids", "bid"} {
+	// `offer` covers what I sent on a rival's sale: same idea as a bid, different word, and the
+	// payload uses whichever the listing type calls for.
+	for _, key := range []string{"bids", "myBids", "userBids", "bid", "offer", "myOffer"} {
 		switch value := entry[key].(type) {
 		case map[string]any:
 			if id := text(value["id"]); id != "" {
@@ -716,8 +718,8 @@ func findBidID(entry map[string]any) *string {
 // findBidAmount and findBidStatus read the same `bid` object findBidID found: the market list
 // carries our own bid inline, which is the only place it is exposed at all.
 func findBidAmount(entry map[string]any) *float64 {
-	bid, ok := entry["bid"].(map[string]any)
-	if !ok {
+	bid := myBid(entry)
+	if bid == nil {
 		return nil
 	}
 	if amount, present := bid["money"]; present && amount != nil {
@@ -728,12 +730,22 @@ func findBidAmount(entry map[string]any) *float64 {
 }
 
 func findBidStatus(entry map[string]any) *string {
-	bid, ok := entry["bid"].(map[string]any)
-	if !ok {
+	bid := myBid(entry)
+	if bid == nil {
 		return nil
 	}
 	if status := text(bid["status"]); status != "" {
 		return &status
+	}
+	return nil
+}
+
+// myBid is the object the listing uses for what I put on it, under either name.
+func myBid(entry map[string]any) map[string]any {
+	for _, key := range []string{"bid", "offer", "myOffer"} {
+		if row, ok := entry[key].(map[string]any); ok {
+			return row
+		}
 	}
 	return nil
 }

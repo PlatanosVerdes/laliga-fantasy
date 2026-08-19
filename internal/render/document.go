@@ -828,6 +828,15 @@ func (d Document) marketSections() []string {
 			"valor real. Aqui es donde aparecen los precios de fantasia.",
 		fmt.Sprintf("%d", len(asks)), "enventa"))
 
+	if sent := rows(d.Advice["my_bids"]); len(sent) > 0 {
+		table, _ = SectionTable("mispujas", sent)
+		out = append(out, Section("Lo que tienes puesto", table,
+			"Tus pujas y ofertas vivas, con lo que has ofrecido, lo que piden y cuanto les "+
+				"queda. Desde aqui se cambian o se retiran: hasta ahora habia que buscar al "+
+				"jugador en otra tabla para verlas.",
+			fmt.Sprintf("%d", len(sent)), "mispujas"))
+	}
+
 	if listings := rows(d.Advice["my_listings"]); len(listings) > 0 {
 		var under []string
 		for _, row := range listings {

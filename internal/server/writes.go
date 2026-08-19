@@ -194,6 +194,47 @@ func (s *Server) always(writer http.ResponseWriter, request *http.Request) {
 
 // raid arms a clause payment for the moment the shield drops, capped at what you said you
 // would pay. Storing the cap is the point: the price can move between arming and firing.
+// cancelRaid calls off a scheduled clause payment. It keeps whatever else the instruction says:
+// somebody can have a player both always-listed and raid-armed, and calling off the raid is not
+// calling off the rest.
+func (s *Server) cancelRaid(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		s.json(writer, http.StatusMethodNotAllowed, map[string]any{"error": "solo POST"})
+		return
+	}
+	body := s.body(request)
+	id := text(body["id"])
+	if id == "" {
+		s.json(writer, http.StatusBadRequest, map[string]any{"error": "falta el id"})
+		return
+	}
+	armed, err := policies.Load()
+	if err != nil {
+		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	entry, exists := armed[id]
+	if !exists || !entry.Raid {
+		s.json(writer, http.StatusOK, map[string]any{"id": id, "raid": false})
+		return
+	}
+
+	// Nothing else armed on him means the whole entry goes, so the file does not fill up with
+	// instructions that say nothing.
+	if !entry.AlwaysList && entry.MinPrice == nil && entry.AcceptAbove == nil && !entry.AutoSell {
+		err = policies.Remove(id)
+	} else {
+		_, err = policies.Set(id, func(policy *policies.Policy) { policy.Raid = false }, "max_pay")
+	}
+	if err != nil {
+		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	slog.Info("raid cancelled", "player_id", id, "player", text(body["name"]))
+	s.settle("raid")
+	s.json(writer, http.StatusOK, map[string]any{"id": id, "raid": false})
+}
+
 func (s *Server) raid(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
 		s.json(writer, http.StatusMethodNotAllowed, map[string]any{"error": "solo POST"})
