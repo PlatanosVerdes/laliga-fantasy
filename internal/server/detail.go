@@ -12,6 +12,7 @@ import (
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
@@ -51,6 +52,25 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 		if ffID := text(player["ff_id"]); ffID != "" {
 			if detail, err := futbolfantasy.PlayerDetail(ffID, futbolfantasy.DetailTTL); err == nil {
 				player["ideal_bid"] = number(detail["ideal_bid"])
+			}
+		}
+	}
+
+	// The starting probability comes from the market list, and that list simply omits it for some
+	// players -- Berenguer was one, and his own page said 30% all along. Read there when it is
+	// missing: one request, cached, and only for the player being looked at, because doing it for
+	// everybody would be a page fetch per player on every rebuild.
+	if player["start_probability"] == nil {
+		if name := fallback(text(player["ff_name"]), text(player["name"])); name != "" {
+			if page, err := futbolfantasy.PlayerPage(matching.SlugifyFF(name),
+				futbolfantasy.DetailTTL); err == nil {
+				if chance := page["start_probability"]; chance != nil {
+					player["start_probability"] = number(chance)
+					player["start_probability_source"] = "ficha"
+					if week := page["start_week"]; week != nil {
+						player["start_week"] = number(week)
+					}
+				}
 			}
 		}
 	}

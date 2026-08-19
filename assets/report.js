@@ -878,7 +878,10 @@ async function openDetail(playerId){
       <div><dt>Puntos 25/26</dt><dd>${p.last_season_points||0}</dd></div>
       <div><dt>Puntos temporada</dt><dd>${p.season_points||0}</dd></div>
       <div><dt>Titularidad</dt><dd class="${p.start_probability!=null?titClass(p.start_probability):''}"
-        >${p.start_probability!=null?p.start_probability+'%':'—'}</dd></div>
+        >${p.start_probability!=null?p.start_probability+'%':'—'}${
+          p.start_probability_source==='ficha'
+            ? `<span style="color:var(--muted);font-weight:400"> · J${p.start_week||''} en su ficha</span>`
+            : ''}</dd></div>
       <div><dt>Proximo rival</dt><dd>${rival}</dd></div>
       <div><dt>Valor 7d</dt><dd style="color:var(--${(p.projected_pct||0)>=0?'pole-pos':'pole-neg'})"
         >${(p.projected_pct||0)>=0?'+':''}${(p.projected_pct||0).toFixed(2)}%</dd></div>

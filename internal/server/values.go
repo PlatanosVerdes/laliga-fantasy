@@ -54,6 +54,20 @@ func number(value any) float64 {
 		return *typed
 	case int:
 		return float64(typed)
+	// The scrapers return *int for a parsed integer, and reading one as zero is a silent
+	// wrong answer: it turned Berenguer's 30% into 0%.
+	case *int:
+		if typed == nil {
+			return 0
+		}
+		return float64(*typed)
+	case int64:
+		return float64(typed)
+	case *int64:
+		if typed == nil {
+			return 0
+		}
+		return float64(*typed)
 	}
 	return 0
 }
