@@ -720,6 +720,28 @@ func (d Document) rulesSection() string {
 			"estan aqui para consultarlas.", count, "normas")
 }
 
+// managerTeams is the user-id to team-id map the feed needs to make its names clickable. Built
+// from the standings, which is the only place both ids appear together.
+func fallbackText(value, other string) string {
+	if value != "" {
+		return value
+	}
+	return other
+}
+
+func (d Document) managerTeams() map[string]string {
+	out := map[string]string{}
+	// league_teams is a map keyed by team id, not a list, so it is walked as one.
+	teams, _ := d.Universe["league_teams"].(map[string]any)
+	for teamID, entry := range teams {
+		team := mapOf(entry)
+		if user := text(team["user_id"]); user != "" {
+			out[user] = fallbackText(text(team["team_id"]), teamID)
+		}
+	}
+	return out
+}
+
 func (d Document) feedSection() string {
 	events := rows(d.Universe["activity"])
 	if len(events) == 0 {
@@ -734,6 +756,7 @@ func (d Document) feedSection() string {
 			moves++
 		}
 	}
+	ManagerTeams = d.managerTeams()
 	return Section("Movimientos de la liga", Feed(events),
 		"Quien ha fichado y vendido, y por cuanto. Las operaciones grandes "+
 			"cuentan quien se esta quedando sin caja.",
