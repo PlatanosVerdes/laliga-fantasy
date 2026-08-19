@@ -306,6 +306,66 @@ func (d Document) actionsSection() string {
 
 // actionRows composes the one table that says what to do. This is advice-layer judgement,
 // not rendering, and it is here because the table is meaningless without it.
+// AdequateReplacement is how much of the leaving player's output a stand-in has to keep to
+// count as a replacement rather than a hole.
+const AdequateReplacement = 0.85
+
+// replacementFor is who could take his place: same position, affordable with what the sale
+// brings in, and never above futbolfantasy's ceiling when it publishes one.
+//
+// The cheapest one that keeps the position standing, not the best one on the market: ranking by
+// points alone answered "spend 36.85M to gain 0.25 xPts", which is a true sentence and terrible
+// advice. When nobody clears the bar the best available is returned anyway, marked, because
+// "there is no replacement" is a worse answer than "this is what there is and it costs you
+// three points" — the eleven has to be legal either way.
+func (d Document) replacementFor(leaving map[string]any, spendable float64) map[string]any {
+	positionID := int(number(leaving["position_id"]))
+	bar := number(leaving["xpts"]) * AdequateReplacement
+
+	var adequate, fallback map[string]any
+	for _, bucket := range []string{"bids_now", "asks"} {
+		for _, candidate := range rows(d.Advice[bucket]) {
+			if int(number(candidate["position_id"])) != positionID {
+				continue
+			}
+			if truthy(candidate["sale_locked"]) || number(candidate["xpts"]) <= 0 {
+				continue
+			}
+			cost := number(candidate["entry_cost"])
+			if cost == 0 {
+				cost = number(candidate["value"])
+			}
+			// A forced replacement is not a bargain hunt: no published ceiling is allowed
+			// here, but paying over a published one is still refused.
+			ceiling := number(candidate["ideal_bid"])
+			if cost == 0 || cost > spendable || (ceiling > 0 && cost > ceiling) {
+				continue
+			}
+			row := merge(candidate, map[string]any{"cost": cost})
+
+			if number(row["xpts"]) >= bar {
+				// Cheapest of the ones that hold the position.
+				if adequate == nil || cost < number(adequate["cost"]) {
+					adequate = row
+				}
+				continue
+			}
+			// Otherwise the least bad: most points per million, since none of them is enough.
+			if fallback == nil ||
+				number(row["xpts"])/cost > number(fallback["xpts"])/number(fallback["cost"]) {
+				fallback = row
+			}
+		}
+	}
+	if adequate != nil {
+		return merge(adequate, map[string]any{"adequate": true})
+	}
+	if fallback != nil {
+		return merge(fallback, map[string]any{"adequate": false})
+	}
+	return nil
+}
+
 func (d Document) actionRows() []map[string]any {
 	var out []map[string]any
 
@@ -453,25 +513,49 @@ func (d Document) actionRows() []map[string]any {
 			why += " · ofrecida " + left
 		}
 
-		// Selling him has to be possible: the league's hold rule and the squad minimum both
-		// turn a good price into a decision you cannot take.
-		blocked := ""
+		// Selling him has to be possible. Two different things can stop it, and only one of
+		// them is final: the league's hold rule is a no, while being the last one in his
+		// position is a no *until you sign somebody*, which is an instruction rather than a
+		// refusal.
+		blocked, verdict := "", "cash"
 		if truthy(offer["sale_locked"]) {
 			until := text(offer["hold_until"])
 			if len(until) > 10 {
 				until = until[:10]
 			}
 			blocked = "no puedes venderlo hasta el " + until + " (norma de la liga)"
+			verdict = "cash_blocked"
 		} else if room := policies.SquadRoom(squad, int(number(offer["position_id"]))); room <= 0 {
-			blocked = "es el ultimo que te queda en su posicion"
+			spare := number(offer["offer_amount"]) + number(d.Advice["budget"])
+			position := strings.ToLower(positionNames[text(offer["position_id"])])
+			if stand := d.replacementFor(offer, spare); stand != nil {
+				gap := number(stand["xpts"]) - number(offer["xpts"])
+				if truthy(stand["adequate"]) {
+					// The net is the number that decides: the offer pays for part of the
+					// replacement, and sometimes for all of it.
+					net := number(stand["cost"]) - number(offer["offer_amount"])
+					effect := fmt.Sprintf("te cuesta %s neto", Money(&net))
+					if net <= 0 {
+						gained := -net
+						effect = fmt.Sprintf("y encima ganas %s", Money(&gained))
+					}
+					why += fmt.Sprintf(" · es el ultimo %s que te queda: fichas antes a %s por "+
+						"%s (%+.2f xPts, %s) y entonces puedes venderlo", position,
+						text(stand["name"]), Money(asFloat(stand["cost"])), gap, effect)
+				} else {
+					// Legal but worse: say the price in points so the trade is judged, not sold.
+					why += fmt.Sprintf(" · es el ultimo %s que te queda y el unico repuesto a "+
+						"tiro es %s por %s, con %+.2f xPts: probablemente no compense",
+						position, text(stand["name"]), Money(asFloat(stand["cost"])), gap)
+					verdict = "cash_blocked"
+				}
+			} else {
+				blocked = "es el ultimo " + position + " que te queda y no hay repuesto a tiro"
+				verdict = "cash_blocked"
+			}
 		}
 		if blocked != "" {
 			why += " · pero " + blocked
-		}
-
-		verdict := "cash"
-		if blocked != "" {
-			verdict = "cash_blocked"
 		}
 		out = append(out, merge(offer, map[string]any{
 			"verdict": verdict, "entry_cost": offer["offer_amount"], "why": why}))
