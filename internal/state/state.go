@@ -14,6 +14,7 @@ import (
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 )
 
@@ -133,6 +134,19 @@ func (s *State) SchedulePayload() schedule.Payload {
 			Kickoff: fixture.Kickoff, State: fixture.State, LocalID: fixture.LocalID,
 			VisitorID: fixture.VisitorID, Local: fixture.Local, Visitor: fixture.Visitor})
 	}
+	// The armed instructions, because a clause unlock is only a deadline for a player somebody
+	// is waiting for. Without this the payload arrived with no policies, the unlock never became
+	// a deadline, and the engine slept through the one instant a clause raid can be won.
+	if armed, err := policies.Load(); err == nil {
+		payload.Policies = make(map[string]schedule.Policy, len(armed))
+		for id, policy := range armed {
+			// Only Raid matters here: it is what turns a clause unlock into a deadline.
+			payload.Policies[id] = schedule.Policy{Raid: policy.Raid}
+		}
+	} else {
+		slog.Warn("policies unreadable for the scheduler", "reason", err.Error())
+	}
+
 	for _, player := range universe.Players {
 		row := schedule.Player{ID: player.ID, Name: player.Name, TeamID: player.TeamID,
 			IsMine: player.IsMine, ClauseUntil: player.ClauseUntil}
