@@ -240,6 +240,10 @@ type Player struct {
 	// Exceptions the league agreed, in its own words, so the refusal says where to go next.
 	HoldExceptions string
 	Available      bool
+	// Whether the seller takes direct offers. Absent when the listing does not say, and only
+	// an explicit no is treated as one.
+	DirectOffer *bool
+	Owner       string
 }
 
 // Summary is what a person is asked to confirm.
@@ -417,6 +421,14 @@ func check(name string, args Args, who Player, cash *int64) ([]string, error) {
 	case "direct_offer", "pay_clause":
 		if args.Amount <= 0 {
 			return nil, errors.New("el importe tiene que ser positivo")
+		}
+		if name == "direct_offer" && who.DirectOffer != nil && !*who.DirectOffer {
+			owner := who.Owner
+			if owner == "" {
+				owner = "su dueno"
+			}
+			return nil, fmt.Errorf("%s no acepta ofertas directas por el: solo se puede pujar "+
+				"por su venta", owner)
 		}
 		if cash != nil && args.Amount > *cash {
 			return nil, fmt.Errorf("no te llega: tienes %s", money(*cash))

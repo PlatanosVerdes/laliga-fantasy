@@ -206,9 +206,17 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 			if suggested == 0 {
 				suggested = number(player["value"])
 			}
-			actions = append(actions,
-				map[string]any{"op": "direct_offer", "label": "Ofrecer a " + owner,
-					"kind": "amount", "market_id": marketID, "suggested": int64(suggested)})
+			// A direct offer needs the seller to accept them. The listing says so, and when it
+			// says no the API answers a bare 403: offering the button anyway was offering an
+			// operation that cannot work.
+			if accepts, said := listing["direct_offer"].(bool); said && !accepts {
+				actions = append(actions, map[string]any{"op": "note", "kind": "note",
+					"label": owner + " no acepta ofertas directas: por el solo se puede pujar"})
+			} else {
+				actions = append(actions,
+					map[string]any{"op": "direct_offer", "label": "Ofrecer a " + owner,
+						"kind": "amount", "market_id": marketID, "suggested": int64(suggested)})
+			}
 			actions = append(actions, bidActions(listing, number(listing["min_bid"]))...)
 		} else {
 			actions = append(actions, map[string]any{"op": "note", "kind": "note",

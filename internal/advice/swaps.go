@@ -152,6 +152,16 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 				best, bestScore = in, score
 			}
 		}
+		if len(candidates) > 0 && slog.Default().Enabled(nil, slog.LevelDebug) {
+			for _, in := range candidates {
+				if int(number(in["position_id"])) != positionID {
+					continue
+				}
+				slog.Debug("swap candidate", "out", text(out["name"]), "in", text(in["name"]),
+					"cost", int64(number(in["cost"])), "ceiling", int64(number(in["ideal_bid"])),
+					"xpts", number(in["xpts"]))
+			}
+		}
 		if best != nil {
 			in := best
 			gain := number(in["xpts"]) - number(out["xpts"])
