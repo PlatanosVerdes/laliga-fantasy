@@ -303,7 +303,8 @@ const AMOUNT_LABEL={bid:'Pujas',modify_bid:'Nueva puja',buy_offer:'Ofreces',
 
 const OP_LABELS={accept_offer:'Aceptar oferta por',decline_offer:'Rechazar oferta por',
                  withdraw:'Retirar del mercado a',sell_to_market:'Poner en venta a',
-                 cancel_offer:'Retirar tu oferta por',cancel_raid:'Cancelar el clausulazo de'};
+                 cancel_offer:'Retirar tu oferta por',cancel_raid:'Cancelar el clausulazo de',
+                 drop_always:'Quitar de siempre-en-mercado a'};
 
 function wireOps(root=document){
   root.querySelectorAll('button.op').forEach(button=>{
@@ -313,6 +314,26 @@ function wireOps(root=document){
       const d=button.dataset;
       // Cancelar un clausulazo no es una operacion contra LaLiga: es borrar una instruccion
       // nuestra, asi que no pasa por la confirmacion de dos pasos, que existe para el dinero.
+      // Quitar una instruccion permanente tampoco gasta: deja de hacerlo.
+      if(d.op==='drop_always'){
+        if(!confirm('Quitar '+d.opName+' de siempre-en-mercado?')) return;
+        try{
+          const res=await fetch('/api/always',{method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({id:d.opPlayer,name:d.opName})});
+          const data=await res.json();
+          if(!res.ok) throw new Error(data.error||res.status);
+          if(data.always_listed){
+            // El toggle lo habria vuelto a poner: lo dejamos como estaba y lo decimos.
+            await fetch('/api/always',{method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({id:d.opPlayer,name:d.opName})});
+            throw new Error('no estaba armado');
+          }
+          button.closest('tr')?.classList.add('row-gone');
+          button.disabled=true; button.textContent='quitado';
+        }catch(err){ alert('No he podido quitarlo: '+err.message); }
+        return;
+      }
       if(d.op==='cancel_raid'){
         if(!confirm('Cancelar el clausulazo programado de '+d.opName+'?')) return;
         try{
@@ -767,6 +788,18 @@ function chipFace(p){
     : `<span class="crest crest-${p.team_id}"></span>`;
 }
 
+// El campo en pequeño: las mismas cuatro lineas del once, de delantera a porteria, porque una
+// plantilla se reconoce por su forma antes que por sus nombres.
+function miniPitch(squad){
+  const lines=byLine(squad).slice().reverse();
+  if(!lines.length) return '<p class="empty">Sin jugadores.</p>';
+  return `<div class="mini-pitch">${lines.map(line=>`
+    <div class="mini-line">${line.players.map(p=>
+      `<button class="mini-slot${p.played?'':' mini-out'}" type="button" data-detail="${p.id}"
+         title="${p.name} · ${p.team_short||''} · ${line.label}${p.played?'':' · no jugaba esa jornada'}">
+         ${chipFace(p)}<span class="mini-name">${p.name}</span></button>`).join('')}</div>`).join('')}</div>`;
+}
+
 // Que tenia cada uno en una jornada. La API no guarda historia: esto sale de deshacer el log de
 // traspasos hasta el primer saque, asi que lo que se ve es lo que habia, no lo que hay.
 async function openMatchday(week){
@@ -792,14 +825,7 @@ async function openMatchday(week){
           <button class="p-name" type="button" data-manager="${m.team_id}">${m.manager}</button>
           <span class="md-count">${m.playing} de ${m.players} jugaron</span>
         </div>
-        ${byLine(m.squad).map(line=>`
-          <div class="md-line">
-            <span class="md-line-label pos pos-${line.label.toLowerCase()}">${line.label}</span>
-            <div class="md-players">${line.players.map(p=>
-              `<button class="md-player${p.played?'':' md-out'}" type="button" data-detail="${p.id}"
-                 title="${p.name} · ${p.team_short||''}${p.played?'':' · no jugaba esa jornada'}">
-                 ${chipFace(p)}${p.name}</button>`).join('')}</div>
-          </div>`).join('')}
+        ${miniPitch(m.squad)}
       </div>`).join('')}
     <p class="drawer-note">Reconstruido del log de traspasos: la API solo dice quien tiene a quien
       ahora. Los jugadores en gris no jugaban esa jornada.</p>`;

@@ -611,3 +611,21 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 /* Una fila que acaba de dejar de existir: se apaga hasta el siguiente repintado. */
 .row-gone{opacity:.4}
 .mine-bid{font-size:11px;color:var(--accent);white-space:nowrap}
+
+/* El campo en pequeño de una jornada pasada: la misma forma que el once, a un tercio de tamaño.
+   Una plantilla se reconoce por su forma antes que por sus nombres. */
+.mini-pitch{display:flex;flex-direction:column;justify-content:space-between;gap:6px;
+  padding:10px 8px;border-radius:10px;
+  background:repeating-linear-gradient(180deg,
+    color-mix(in srgb,var(--pitch-green) 96%,#000) 0 22px,
+    color-mix(in srgb,var(--pitch-green) 88%,#000) 22px 44px);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,#fff 18%,transparent)}
+.mini-line{display:flex;flex-wrap:wrap;justify-content:center;gap:5px}
+.mini-slot{display:inline-flex;flex-direction:column;align-items:center;gap:2px;
+  font:inherit;font-size:10px;line-height:1.2;color:#fff;cursor:pointer;
+  background:color-mix(in srgb,#000 34%,transparent);border:0;border-radius:8px;
+  padding:4px 6px;max-width:88px}
+.mini-slot:hover{background:color-mix(in srgb,#000 20%,transparent)}
+.mini-slot .chip-face,.mini-slot .crest{width:22px;height:22px}
+.mini-name{max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini-out{opacity:.4}

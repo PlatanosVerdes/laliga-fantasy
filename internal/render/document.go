@@ -603,9 +603,12 @@ func (d Document) planSection() string {
 	if len(d.Plan) == 0 {
 		return ""
 	}
+	// Only what will actually run counts as queued. An "avisar" is the plan saying it will not
+	// act, and calling it a queued action was the page contradicting itself two lines later.
 	pending := 0
 	for _, action := range d.Plan {
-		if text(action["action"]) != "ninguna" {
+		switch text(action["action"]) {
+		case "poner_en_venta", "aceptar_oferta":
 			pending++
 		}
 	}
@@ -617,7 +620,7 @@ func (d Document) planSection() string {
 		"buena solo <strong>avisa</strong> y decides tu."
 	if pending > 0 {
 		note += fmt.Sprintf(" <strong>%d accion(es) en cola</strong>, "+
-			"se ejecutan en el proximo refresco (salvo <code>--read-only</code>).", pending)
+			"se ejecutan en el proximo ciclo si el servidor esta en modo auto.", pending)
 	}
 	table, _ := SectionTable("siempre", d.withPolicies(d.Plan))
 	return Section("Siempre en mercado", table, note,
