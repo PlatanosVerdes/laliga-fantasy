@@ -440,7 +440,8 @@ const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
 // Header is the title, when it was generated, the widgets and the tabs. The live dot starts
 // off: a static file is honest about not being live, and the script turns it on when the
 // push channel connects.
-func Header(generated, leagueName string, week int, kpis []string, withTabs bool) string {
+func Header(generated, leagueName string, week int, kpis []string, withTabs bool,
+	mode string) string {
 	league := ""
 	if leagueName != "" {
 		league = ` · liga <strong>` + Esc(leagueName) + `</strong>`
@@ -454,6 +455,9 @@ func Header(generated, leagueName string, week int, kpis []string, withTabs bool
 		fmt.Sprintf(` · jornada %d</p>`, week) +
 		`<span class="live"><span id="live-dot" class="live-off"></span>` +
 		`<span id="live-stamp">estatico</span></span>` +
+		// What this server may do, next to when it last looked: both answer "can I trust what I
+		// am seeing to be acted on".
+		modeChip(mode) +
 		`</header>` +
 		`<div class="kpis">` + strings.Join(kpis, "") + `</div>` + tabs
 }
@@ -610,6 +614,24 @@ func HouseRules(holdDays int, exceptions string, notes []string) string {
 	}
 	out.WriteString(`</ul>`)
 	return out.String()
+}
+
+// modeChip is the one-word answer to what the server may do. Coloured by how much it can act,
+// because "solo lectura" and "auto" are opposite ends of the same question.
+func modeChip(mode string) string {
+	if mode == "" {
+		return ""
+	}
+	class := "mode-manual"
+	switch mode {
+	case "auto":
+		class = "mode-auto"
+	case "solo lectura", "informe":
+		class = "mode-read"
+	}
+	return fmt.Sprintf(`<span class="mode %s" title="Que puede hacer este servidor: `+
+		`auto ejecuta las instrucciones permanentes, manual solo lo que pulses, `+
+		`solo lectura nada">Mode: <b>%s</b></span>`, class, Esc(mode))
 }
 
 // Feed is the league's movements: who signed and sold, and for how much.

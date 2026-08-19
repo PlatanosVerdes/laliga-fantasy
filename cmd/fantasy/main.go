@@ -257,13 +257,68 @@ func cmdServe(args []string) error {
 		return int64(money.TeamMoney), nil
 	}
 
+	// Automatic execution of the standing instructions. Off in read-only and with --no-auto; on
+	// otherwise, because an instruction exists precisely to fire while nobody is watching.
+	automate := func(cause string) {
+		if !allowWrites || *noAuto {
+			return
+		}
+		universe := world.Universe()
+		if universe == nil {
+			return
+		}
+		armed, err := policies.Load()
+		if err != nil || len(armed) == 0 {
+			return
+		}
+		league, team, err := ensureLeague()
+		if err != nil {
+			return
+		}
+		cash := 0.0
+		if money, err := client.Money(team, time.Minute); err == nil {
+			cash = money.TeamMoney
+		}
+		rows := playerRows(universe)
+		done := policies.Enforce(policies.Plan(rows, armed), policies.RaidPlan(rows, armed, cash),
+			func(operation string, action policies.Row) error {
+				args := writes.Args{LeagueID: league, TeamID: team,
+					Amount:   int64(number(action["amount"])),
+					MarketID: text(action["market_id"]), OfferID: text(action["offer_id"]),
+					PlayerID: text(action["player_id"]),
+					// A sale and a clause are addressed by squad slot, not by player.
+					PlayerTeamID: text(action["player_team_id"]),
+				}
+				who := writes.Player{Name: text(action["name"]), Available: true,
+					Value: number(action["value"]), Clause: int64(number(action["clause"]))}
+				_, err := guard.Automatic(operation, args, who, allowWrites)
+				return err
+			})
+		if len(done) == 0 {
+			return
+		}
+		for _, action := range done {
+			slog.Info("automatic action", "detail", policies.Describe(action), "cause", cause)
+		}
+		// The world moved because we moved it: rebuild so the page tells the truth.
+		if err := world.RefreshWith("automatico", true); err != nil {
+			slog.Error("rebuild after automatic actions failed", "reason", err.Error())
+		}
+	}
+
 	var probeParts map[string]string
 	engineRef := engine.New(engine.Deps{
 		Payload:  world.SchedulePayload,
 		LastFull: world.LastFull,
 		Watchers: world.Watchers,
 		Tick:     tick,
-		Rebuild:  world.Refresh,
+		Rebuild: func(cause string) error {
+			if err := world.Refresh(cause); err != nil {
+				return err
+			}
+			automate(cause)
+			return nil
+		},
 		Invalidate: func(tags ...string) {
 			httpx.Invalidate(tags...)
 		},
@@ -334,9 +389,19 @@ func cmdServe(args []string) error {
 		fmt.Println("--read-only: no se ejecutara ninguna escritura.")
 	}
 
+	// Three modes, and the page says which one it is running in: what it may do is not something
+	// to guess from whether a button works.
+	mode := "auto"
+	if !allowWrites {
+		mode = "solo lectura"
+	} else if *noAuto {
+		mode = "manual"
+	}
+	fmt.Printf("Modo: %s\n", mode)
+
 	league, team, _ := currentLeague(&mu, &leagueID, &teamID)
 	return server.New(world, server.Options{
-		Host: *host, Port: *port, AllowWrites: allowWrites,
+		Host: *host, Port: *port, AllowWrites: allowWrites, Mode: mode,
 		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
 		Client: client, Guard: guard, LeagueID: league, MyTeamID: team,
 		HoldExceptions: rules.For(league).HoldExceptions,
@@ -359,7 +424,7 @@ func cmdServe(args []string) error {
 			if err != nil {
 				return ""
 			}
-			page, err := renderPage(universe, client, team, "")
+			page, err := renderPage(universe, client, team, "", mode)
 			if err != nil {
 				slog.Error("render failed", "reason", err.Error())
 				return "<title>Error</title><p>No he podido construir la pagina.</p>"
@@ -956,7 +1021,8 @@ func cmdReport(args []string) error {
 		cashOverride = budget
 	}
 
-	page, err := renderPage(universe, client, teamID, *generated)
+	// A file written by `report` acts on nothing, whatever the server would do.
+	page, err := renderPage(universe, client, teamID, *generated, "informe")
 	if err != nil {
 		return err
 	}
@@ -973,6 +1039,19 @@ var cashOverride *float64
 // renderPage is the whole document from a built universe: the advice layer, the per-player
 // enrichment, the standing instructions and the renderer. Shared by `report` and the server,
 // so the page cannot differ between them.
+// playerRows is the universe's players as the generic rows the policy engine reads.
+func playerRows(universe *model.Universe) []map[string]any {
+	blob, err := json.Marshal(universe.Players)
+	if err != nil {
+		return nil
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(blob, &rows); err != nil {
+		return nil
+	}
+	return rows
+}
+
 // mineByWeek is how many of my players each team had, per matchday already played. The API has no
 // history, so it comes from undoing the transfer log back to each kick-off: counting a fortnight
 // old fixture with today's squad says "3 de los tuyos juegan" about players who were not there.
@@ -1032,7 +1111,8 @@ func mineByWeek(universe *model.Universe) map[int]map[string]int {
 	return out
 }
 
-func renderPage(universe *model.Universe, client *api.Client, teamID, generated string) (string, error) {
+func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
+	mode string) (string, error) {
 	cash := 0.0
 	if cashOverride != nil {
 		cash = *cashOverride
@@ -1111,7 +1191,7 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated 
 
 	document := render.Document{
 		Universe: generic, Advice: buckets, Generated: stamp, LeagueName: league,
-		MineByWeek: mineByWeek(universe),
+		MineByWeek: mineByWeek(universe), Mode: mode,
 		// The plan reads the same buckets the tables do, so what it proposes and what they
 		// list can never disagree.
 		Swaps:          advice.Swaps(generic, buckets, cash),
@@ -1265,8 +1345,8 @@ func cmdShell(args []string) error {
 
 	case "cabecera":
 		fmt.Println(render.Header("18/08/2026 16:20", "Liga Fantasy Comité 2026-", 1,
-			[]string{`<div class="kpi">uno</div>`, `<div class="kpi">dos</div>`}, true))
-		fmt.Println(render.Header("18/08/2026 16:20", "", 3, nil, false))
+			[]string{`<div class="kpi">uno</div>`, `<div class="kpi">dos</div>`}, true, "auto"))
+		fmt.Println(render.Header("18/08/2026 16:20", "", 3, nil, false, ""))
 
 	default:
 		return fmt.Errorf("caso desconocido: %s", args[0])

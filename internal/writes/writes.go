@@ -547,6 +547,49 @@ func newToken() string {
 	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
+// Automatic performs an operation the standing instructions authorised in advance.
+//
+// It skips the token, not the validation. The two-step guard exists so that a person confirms
+// what a click is about to spend; here the confirmation happened earlier and in writing, when the
+// instruction was armed with its limit — the whole reason to arm one is that clauses open and
+// offers expire while nobody is looking. Everything else still applies: the same check, the same
+// cash reading, the same cache invalidation, and a louder log because nobody watched.
+func (g *Guard) Automatic(name string, args Args, who Player, allowWrites bool) (any, error) {
+	if !allowWrites {
+		return nil, ErrDisabled
+	}
+	spec, ok := Operations[name]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrUnknown, name)
+	}
+
+	var cash *int64
+	if g.Cash != nil && args.TeamID != "" {
+		if balance, err := g.Cash(args.TeamID); err == nil {
+			cash = &balance
+		}
+	}
+	warnings, err := check(name, args, who, cash)
+	if err != nil {
+		return nil, err
+	}
+
+	call, err := Build(name, args)
+	if err != nil {
+		return nil, err
+	}
+	slog.Info("automatic write", "operation", name, "amount", args.Amount, "player", who.Name,
+		"warnings", warnings, "method", call.Method, "path", call.Path)
+	answer, err := Send(call)
+	if err != nil {
+		return nil, fmt.Errorf("la API ha rechazado la operacion: %w", err)
+	}
+	dropped := httpx.Invalidate(spec.Effects...)
+	slog.Info("automatic write done", "operation", name, "amount", args.Amount,
+		"player", who.Name, "cache_dropped", dropped)
+	return answer, nil
+}
+
 // Do runs an operation in one step, for the ones that move no money: a lineup change is
 // undone by another lineup change, so making a person confirm it twice buys nothing. Anything
 // with an amount still goes through Prepare and Confirm.

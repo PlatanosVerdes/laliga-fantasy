@@ -27,7 +27,10 @@ type Options struct {
 	Host        string
 	Port        int
 	AllowWrites bool
-	Assets      string
+	// Mode is what this server may do, in one word: auto, manual or solo lectura. Shown on the
+	// page and answered by /api/state, because "can it act by itself" is the first question.
+	Mode   string
+	Assets string
 	// Nudge lets a request tighten the refresh cadence (a browser connecting, a write
 	// landing) without the server knowing what the engine is.
 	Nudge func(string)
@@ -211,6 +214,7 @@ func (s *Server) payload(writer http.ResponseWriter, _ *http.Request) {
 	// The page reads this to decide whether to offer an operation at all, so it travels
 	// with the world rather than being asked for separately.
 	payload["writes_enabled"] = s.opts.AllowWrites
+	payload["mode"] = s.opts.Mode
 	s.json(writer, http.StatusOK, payload)
 }
 

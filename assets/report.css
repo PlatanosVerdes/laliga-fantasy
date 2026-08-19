@@ -590,3 +590,11 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .md-player:hover{border-color:var(--accent)}
 .md-player .crest{width:14px;height:14px}
 .md-out{opacity:.45}
+
+/* El modo: lo primero que hay que saber es si esto puede actuar solo. */
+.mode{margin-left:10px;font-size:11px;padding:2px 8px;border-radius:5px;background:var(--mid);
+  color:var(--muted);cursor:help}
+.mode b{font-weight:700}
+.mode-auto{color:var(--pole-pos);background:color-mix(in srgb,var(--pole-pos) 14%,transparent)}
+.mode-manual{color:var(--warning);background:color-mix(in srgb,var(--warning) 14%,transparent)}
+.mode-read{color:var(--muted)}

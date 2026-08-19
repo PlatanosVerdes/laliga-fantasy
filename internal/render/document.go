@@ -35,6 +35,8 @@ type Document struct {
 	Policies map[string]map[string]any
 	// Swaps is the "this one out, this one in" plan, computed by the advice layer.
 	Swaps map[string]any
+	// Mode is what the server running this page may do: auto, manual or solo lectura.
+	Mode string
 	// MineByWeek is how many of my players each team had on a past matchday, keyed by week.
 	// Reconstructed outside, because that needs the transfer log and this package only draws.
 	MineByWeek map[int]map[string]int
@@ -96,7 +98,7 @@ func (d Document) HTML() string {
 
 	kpis := d.widgets(week, players)
 	header := Header(d.Generated, d.LeagueName, int(number(week["weekNumber"])), kpis,
-		hasAdvice)
+		hasAdvice, d.Mode)
 	footer := Footer(number(universe["current_weight"]))
 
 	body := strings.Join(filterEmpty(sections), "")

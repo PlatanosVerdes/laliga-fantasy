@@ -636,6 +636,9 @@ async function savePitch(){
 
 // ---- cajon de jugador: un nombre, todas sus acciones ----------------------
 const drawer=document.getElementById('drawer');
+// El modo lo pinta el servidor en la cabecera: leerlo de ahi evita una peticion y evita que el
+// aviso prometa algo que este servidor no hace.
+const MODE=(document.querySelector('.mode b')||{}).textContent||'manual';
 
 function closeDrawer(){ if(drawer) drawer.hidden=true; }
 
@@ -1124,7 +1127,8 @@ async function scheduleRaid(dataset){
     body:JSON.stringify({id:dataset.raid,name:dataset.raidName,max_pay})});
   if(!res.ok){ alert('No se ha podido programar.'); return; }
   alert(dataset.raidName+': programado con limite '+max_pay.toLocaleString('es-ES')+' €.\n'
-    +'Se ejecutara solo si el servidor corre con --auto.');
+    +(MODE==='auto' ? 'Se ejecutara solo, sin preguntar, en cuanto se cumpla.'
+                    : 'Este servidor esta en modo '+MODE+': lo vera pero no lo ejecutara.'));
   swap();
 }
 
