@@ -373,6 +373,10 @@ func (s *Server) playerFor(id string) writes.Player {
 			if listing.MyBid != nil {
 				who.MyBid = int64(*listing.MyBid)
 			}
+			who.DirectOffer = listing.DirectOffer
+		}
+		if player.Owner != nil {
+			who.Owner = *player.Owner
 		}
 		// The profitable ceiling is futbolfantasy's, and it lives on their player page rather
 		// than in the model, so it is read here. Cached for a day: without it every bid was
