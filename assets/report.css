@@ -598,3 +598,12 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .mode-auto{color:var(--pole-pos);background:color-mix(in srgb,var(--pole-pos) 14%,transparent)}
 .mode-manual{color:var(--warning);background:color-mix(in srgb,var(--warning) 14%,transparent)}
 .mode-read{color:var(--muted)}
+
+/* Una plantilla se lee por lineas, como un campo: portero, defensa, medio, delantera. */
+.md-line,.squad-line{display:grid;grid-template-columns:38px 1fr;gap:8px;align-items:start;
+  margin-top:6px}
+.md-line-label,.squad-line-label{justify-self:start;font-size:10px;padding:2px 5px}
+.md-player .chip-face,.squad-who .chip-face{width:18px;height:18px;border-radius:50%;
+  object-fit:cover;object-position:top center;flex:0 0 auto;
+  background:color-mix(in srgb,#fff 8%,transparent)}
+.squad-who .chip-face{width:22px;height:22px}
