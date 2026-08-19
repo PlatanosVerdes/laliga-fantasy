@@ -1208,7 +1208,11 @@ var dayNames = []string{"dom", "lun", "mar", "mie", "jue", "vie", "sab"}
 
 // MatchCalendar is the fixture list ahead, grouped by month and matchday. Your own teams are
 // marked, because the only reason to read a fixture list here is to see who your players face.
-func MatchCalendar(fixtures []map[string]any, mine map[string]int) string {
+// MatchCalendar draws the fixtures ahead and behind. `mine` is how many of yours each team has
+// today; `mineByWeek` is the same thing as it was on a past matchday, because a squad two weeks
+// old is not this one and counting yesterday's fixtures with today's players is a lie.
+func MatchCalendar(fixtures []map[string]any, mine map[string]int,
+	mineByWeek map[int]map[string]int) string {
 	if len(fixtures) == 0 {
 		return `<p class="empty">Sin calendario disponible.</p>`
 	}
@@ -1251,10 +1255,16 @@ func MatchCalendar(fixtures []map[string]any, mine map[string]int) string {
 		}
 
 		yours, played := 0, 0
+		// The squad that counted for this matchday: reconstructed for the ones already played,
+		// today's for the ones still to come.
+		counts := mine
+		if past, ok := mineByWeek[block.week]; ok {
+			counts = past
+		}
 		var matches strings.Builder
 		for _, fixture := range block.rows {
 			local, visitor := text(fixture["local_id"]), text(fixture["visitor_id"])
-			count := mine[local] + mine[visitor]
+			count := counts[local] + counts[visitor]
 			yours += count
 			classes := "match"
 			if count > 0 {
@@ -1291,8 +1301,15 @@ func MatchCalendar(fixtures []map[string]any, mine map[string]int) string {
 
 		note := ""
 		if yours > 0 {
-			note = fmt.Sprintf(`<span class="j-mine">%d de los tuyos juegan</span>`, yours)
+			verb := "juegan"
+			if _, past := mineByWeek[block.week]; past {
+				verb = "jugaron"
+			}
+			note = fmt.Sprintf(`<span class="j-mine">%d de los tuyos %s</span>`, yours, verb)
 		}
+		// Every matchday can be opened to see what everybody had when the ball rolled.
+		note += fmt.Sprintf(`<button class="j-squads" type="button" data-matchday="%d" `+
+			`title="Que plantilla tenia cada uno en esta jornada">plantillas</button>`, block.week)
 		// A whole matchday behind us dims with its matches; one still running does not, because
 		// the half that has not kicked off is the part being read.
 		wrap := "jornada"

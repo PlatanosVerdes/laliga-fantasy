@@ -724,6 +724,49 @@ function wireChart(root){
   });
 }
 
+// Que tenia cada uno en una jornada. La API no guarda historia: esto sale de deshacer el log de
+// traspasos hasta el primer saque, asi que lo que se ve es lo que habia, no lo que hay.
+async function openMatchday(week){
+  if(!drawer) return;
+  drawer.hidden=false;
+  const body=drawer.querySelector('.drawer-body');
+  body.innerHTML='<p class="empty">Reconstruyendo…</p>';
+  let d;
+  try{
+    const res=await fetch('/api/matchday/'+week);
+    if(!res.ok) throw new Error(res.status);
+    d=await res.json();
+  }catch(e){
+    body.innerHTML='<p class="empty">No he podido reconstruir esa jornada.</p>';
+    return;
+  }
+  body.innerHTML=`
+    <div class="drawer-head"><h3>Jornada ${d.week}</h3></div>
+    <p class="sub">plantillas a ${String(d.kickoff).slice(0,10)} · ${String(d.kickoff).slice(11,16)}</p>
+    ${(d.managers||[]).map(m=>`
+      <div class="md-manager${m.is_me?' md-mine':''}">
+        <div class="md-head">
+          <button class="p-name" type="button" data-manager="${m.team_id}">${m.manager}</button>
+          <span class="md-count">${m.playing} de ${m.players} jugaron</span>
+        </div>
+        <div class="md-players">${(m.squad||[]).map(p=>
+          `<button class="md-player${p.played?'':' md-out'}" type="button" data-detail="${p.id}"
+             title="${p.name} · ${p.team_short||''}${p.played?'':' · no jugaba esa jornada'}">
+             <span class="crest crest-${p.team_id}"></span>${p.name}</button>`).join('')}</div>
+      </div>`).join('')}
+    <p class="drawer-note">Reconstruido del log de traspasos: la API solo dice quien tiene a quien
+      ahora. Los jugadores en gris no jugaban esa jornada.</p>`;
+  wireDetails(body); wireManagers(body);
+}
+
+function wireMatchdays(root=document){
+  root.querySelectorAll('button[data-matchday]').forEach(button=>{
+    if(button.dataset.wired) return;
+    button.dataset.wired='1';
+    button.addEventListener('click',()=>openMatchday(button.dataset.matchday));
+  });
+}
+
 function wireManagers(root=document){
   root.querySelectorAll('button[data-manager]').forEach(button=>{
     if(button.dataset.wired) return;
@@ -1201,7 +1244,7 @@ async function swap(){
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });
   wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids();
-  wireManagers(); tick();
+  wireManagers(); wireMatchdays(); tick();
   showTab(document.querySelector('.tab.on')?.dataset.tab||'decidir',
           {updateHash:false});
   const stamp=document.getElementById('live-stamp');
@@ -1265,7 +1308,7 @@ function connect(){
 }
 
 wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids();
-wireManagers();
+wireManagers(); wireMatchdays();
 wireTabs(); tick();
 if(window.EventSource && location.protocol.startsWith('http')) connect();
 
