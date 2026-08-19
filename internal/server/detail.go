@@ -211,7 +211,8 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 			// operation that cannot work.
 			if accepts, said := listing["direct_offer"].(bool); said && !accepts {
 				actions = append(actions, map[string]any{"op": "note", "kind": "note",
-					"label": owner + " no acepta ofertas directas: por el solo se puede pujar"})
+					"label": owner + " no acepta ofertas directas: solo por lo que tenga " +
+						"puesto en venta"})
 			} else {
 				actions = append(actions,
 					map[string]any{"op": "direct_offer", "label": "Ofrecer a " + owner,
@@ -240,6 +241,13 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 func bidActions(listing map[string]any, suggested float64) []map[string]any {
 	marketID := text(listing["market_id"])
 	minBid := int64(number(listing["min_bid"]))
+	// The game's own market is bid on; a rival's sale is offered for. Sending a bid for the
+	// second answers 404 and reads like a bug in the tool.
+	if text(listing["kind"]) == "venta" {
+		return []map[string]any{{"op": "buy_offer", "label": "Ofertar por su venta",
+			"kind": "amount", "market_id": marketID, "suggested": int64(suggested),
+			"min": minBid, "note": "Le llega como oferta de compra y decide el."}}
+	}
 	if bidID := text(listing["my_bid_id"]); bidID != "" {
 		mine := int64(number(listing["my_bid"]))
 		if suggested <= float64(mine) {

@@ -77,6 +77,15 @@ var Operations = map[string]operation{
 			map[string]any{"money": a.Amount}}
 	}, []string{"market", "money"}},
 
+	// A rival's sale is not bid on, it is offered for: POST .../market/{id}/bid answers 404 for
+	// a marketPlayerTeam entry, because the bid handler only knows the game's own listings.
+	// Same route family as accepting one, which is .../offer/{id}/accept.
+	"buy_offer": {"oferta de compra", func(a Args) Call {
+		return Call{http.MethodPost,
+			fmt.Sprintf("%s/league/%s/market/%s/offer", config.CMP, a.LeagueID, a.MarketID),
+			map[string]any{"money": a.Amount}}
+	}, []string{"market", "money"}},
+
 	"modify_bid": {"modificar puja", func(a Args) Call {
 		return Call{http.MethodPut,
 			fmt.Sprintf("%s/league/%s/market/%s/bid/%s", config.CMP, a.LeagueID, a.MarketID, a.BidID),
@@ -418,6 +427,23 @@ func check(name string, args Args, who Player, cash *int64) ([]string, error) {
 				"te pagan mas de lo que futbolfantasy considera rentable: buena venta")
 		}
 
+	case "buy_offer":
+		if args.Amount <= 0 {
+			return nil, errors.New("la oferta tiene que ser un importe positivo")
+		}
+		if cash != nil && args.Amount > *cash {
+			return nil, fmt.Errorf("no te llega: tienes %s", money(*cash))
+		}
+		if who.MinBid > 0 && args.Amount < who.MinBid {
+			warnings = append(warnings, fmt.Sprintf("piden %s: por debajo puede que ni la miren",
+				money(who.MinBid)))
+		}
+		if who.IdealBid > 0 && args.Amount > who.IdealBid {
+			warnings = append(warnings,
+				fmt.Sprintf("por encima de la puja maxima rentable de futbolfantasy (%s)",
+					money(who.IdealBid)))
+		}
+
 	case "direct_offer", "pay_clause":
 		if args.Amount <= 0 {
 			return nil, errors.New("el importe tiene que ser positivo")
@@ -490,7 +516,7 @@ func after(cash *int64, amount int64, name string) *int64 {
 		return cash
 	}
 	switch name {
-	case "bid", "modify_bid", "direct_offer", "pay_clause":
+	case "bid", "modify_bid", "buy_offer", "direct_offer", "pay_clause":
 		left := *cash - amount
 		return &left
 	case "accept_offer":

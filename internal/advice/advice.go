@@ -270,6 +270,23 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 			}))
 		}
 	}
+	// Loan offers are their own thing: somebody wants him for a while, not for good. Kept apart
+	// from sale offers because accepting one is not selling and the numbers are not comparable.
+	loans := []Row{}
+	for _, player := range mine {
+		for _, loan := range rowsOf(player["loan_offers"]) {
+			who := text(loan["from"])
+			if who == "" {
+				who = "un rival"
+			}
+			loans = append(loans, merge(player, Row{
+				"loan_id": text(loan["id"]), "loan_from": who,
+				"loan_made": loan["createdAt"], "loan_expires": loan["expirationDate"],
+				"loan_terms": loan,
+			}))
+		}
+	}
+
 	sort.SliceStable(offers, func(i, j int) bool {
 		// People before the machine at equal money: a rival's offer expires on its own clock
 		// and will not come back tomorrow.
@@ -389,7 +406,8 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 		"squad": squad, "shape": shapeOut,
 		"bids_now": head(bidsNow, limit), "asks": head(asks, limit),
 		"watchlist": head(watchlist, limit), "my_listings": myListings,
-		"offers": offers, "raids": head(raids, limit), "sells": head(sells, limit),
+		"offers": offers, "loan_offers": loans,
+		"raids": head(raids, limit), "sells": head(sells, limit),
 		"exposure": head(exposure, limit), "rivals": rivalTeams,
 		"cash_model": universe["cash_model"], "free_agent_count": len(freeAgents),
 		"clauses_locked": len(locked), "clauses_unlock_from": unlockFrom,

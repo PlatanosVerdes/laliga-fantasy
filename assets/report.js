@@ -145,11 +145,15 @@ function wireBids(root=document){
 function openBid(data){
   // Con una puja puesta la operacion es cambiarla: la API rechaza una segunda con un 400.
   const existing=data.bid||null;
+  // La operacion la manda el boton: por el mercado libre se puja y por la venta de un rival se
+  // oferta, y la API contesta 404 a la equivocada.
+  const operation=existing?'modify_bid':(data.operation||'bid');
   pending={market_id:data.market, player_id:data.player, name:data.name,
            min_bid:+data.min, ideal:+data.ideal||0, value:+data.value,
-           bid_id:existing, operation:existing?'modify_bid':'bid'};
+           bid_id:existing, operation};
   modal.hidden=false;
-  modal.querySelector('.bid-action').textContent=existing?'Cambiar tu puja por':'Pujar por';
+  modal.querySelector('.bid-action').textContent =
+    existing ? 'Cambiar tu puja por' : (operation==='buy_offer' ? 'Ofertar por' : 'Pujar por');
   modal.querySelector('.bid-who').textContent=data.name;
   const suggested = pending.ideal && pending.ideal>=pending.min_bid ? pending.ideal : pending.min_bid;
   const input=modal.querySelector('.bid-amount');
@@ -171,7 +175,7 @@ function showRivals(count, expires){
   const node=modal.querySelector('.bid-rivals');
   if(!wrap) return;
   const isBid = pending && (pending.operation==='bid' || pending.operation==='modify_bid'
-                            || !pending.operation);
+                            || pending.operation==='buy_offer' || !pending.operation);
   wrap.hidden = !isBid;
   if(!isBid) return;
   node.textContent = count ? String(count) : 'ninguna';
@@ -218,7 +222,7 @@ if(modal){
       if(!res.ok) throw new Error(data.error||res.status);
       pending.token=data.token;
       const op=pending.operation||'bid';
-      const movesCash=['bid','modify_bid','direct_offer','pay_clause',
+      const movesCash=['bid','modify_bid','buy_offer','direct_offer','pay_clause',
                        'accept_offer'].includes(op);
       modal.querySelector('.bid-summary').innerHTML =
         `<dl class="bid-dl">
@@ -285,8 +289,9 @@ const DONE_LABEL={bid:'Puja enviada',sell_to_market:'Puesto en venta',
   accept_offer:'Oferta aceptada',decline_offer:'Oferta rechazada',
   withdraw:'Retirado del mercado',direct_offer:'Oferta enviada',
   pay_clause:'Clausula pagada',raise_clause:'Clausula subida',
-  cancel_bid:'Puja retirada',modify_bid:'Puja cambiada'};
-const AMOUNT_LABEL={bid:'Pujas',modify_bid:'Nueva puja',sell_to_market:'Precio de venta',
+  cancel_bid:'Puja retirada',modify_bid:'Puja cambiada',buy_offer:'Oferta enviada'};
+const AMOUNT_LABEL={bid:'Pujas',modify_bid:'Nueva puja',buy_offer:'Ofreces',
+  sell_to_market:'Precio de venta',
   accept_offer:'Cobras',direct_offer:'Ofreces',pay_clause:'Pagas',
   raise_clause:'Subes la clausula'};
 
@@ -1042,7 +1047,7 @@ if(drawer){
 // ---- pestañas: una vista a la vez ------------------------------------------
 const TABS=[
   {id:'decidir', label:'Decidir', sections:['plan','acciones','ofertas']},
-  {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
+  {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','cesiones','siempre','seguimiento']},
   {id:'clausulas', label:'Cláusulas', sections:['programados','calendario','vencimientos','oportunidades','riesgo','clausulas']},
   {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
   {id:'partidos', label:'Partidos', sections:['partidos']},
