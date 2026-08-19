@@ -7,12 +7,14 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 )
 
@@ -98,6 +100,15 @@ func (s *Server) matchday(writer http.ResponseWriter, request *http.Request) {
 		})
 	}
 
+	// A past matchday is about who *played*, not who was owned. The eleven is only knowable from
+	// the week-scoped lineup route, so it is read per manager — on demand, because this panel is
+	// opened by hand and nobody needs thirteen extra requests on every rebuild.
+	lineupTTL := 24 * time.Hour
+	if week >= universe.Week.WeekNumber {
+		// The current one can still change.
+		lineupTTL = time.Minute
+	}
+
 	managers := make([]map[string]any, 0, len(squads))
 	for user, squad := range squads {
 		sort.SliceStable(squad, func(one, two int) bool {
@@ -109,12 +120,39 @@ func (s *Server) matchday(writer http.ResponseWriter, request *http.Request) {
 				playing++
 			}
 		}
-		managers = append(managers, map[string]any{
+		entry := map[string]any{
 			"user_id": user, "team_id": teamOfUser[user],
 			"manager": fallback(nameOfUser[user], user),
 			"is_me":   universe.MyTeamID != nil && teamOfUser[user] == *universe.MyTeamID,
 			"players": len(squad), "playing": playing, "squad": squad,
-		})
+		}
+		if s.opts.Client != nil {
+			if fielded, formation, points, err := s.lineupOf(teamOfUser[user], week,
+				lineupTTL); err == nil && len(fielded) > 0 {
+				entry["lineup"] = fielded
+				entry["formation"] = formation
+				entry["week_points"] = points
+				// Who was owned but not played: the bench, which is the other half of the
+				// decision.
+				onPitch := map[string]bool{}
+				for _, line := range fielded {
+					for _, player := range line {
+						onPitch[text(player["id"])] = true
+					}
+				}
+				bench := []map[string]any{}
+				for _, player := range squad {
+					if !onPitch[text(player["id"])] {
+						bench = append(bench, player)
+					}
+				}
+				entry["bench"] = bench
+			} else if err != nil {
+				slog.Debug("lineup unavailable", "team", teamOfUser[user], "week", week,
+					"reason", err.Error())
+			}
+		}
+		managers = append(managers, entry)
 	}
 	// Mine first, then by how many of theirs played: that is the comparison being made.
 	sort.SliceStable(managers, func(one, two int) bool {
@@ -128,6 +166,54 @@ func (s *Server) matchday(writer http.ResponseWriter, request *http.Request) {
 		"week": week, "kickoff": kickoff.Format(time.RFC3339),
 		"reconstructed": true, "managers": managers,
 	})
+}
+
+// lineupOf is the eleven a team fielded that week, by line, plus its shape and what it scored.
+func (s *Server) lineupOf(teamID string, week int,
+	ttl time.Duration) (map[string][]map[string]any, []int, float64, error) {
+	if teamID == "" {
+		return nil, nil, 0, nil
+	}
+	payload, err := s.opts.Client.TeamLineupWeek(teamID, week, ttl)
+	if err != nil {
+		return nil, nil, 0, err
+	}
+	formation := mapOf(payload["formation"])
+	known := map[string]map[string]any{}
+	for _, row := range s.rows() {
+		known[text(row["id"])] = row
+	}
+
+	out := map[string][]map[string]any{}
+	for _, line := range api.LineupLines {
+		for _, slot := range listOf(formation[line]) {
+			master := mapOf(slot["playerMaster"])
+			id := text(master["id"])
+			extra := known[id]
+			out[line] = append(out[line], map[string]any{
+				"id": id, "name": fallback(text(master["nickname"]), text(master["name"])),
+				"position_id": int(number(master["positionId"])),
+				"team_id":     text(master["teamId"]),
+				"image":       text(nested(master, "images", "transparent", "256x256")),
+				"points":      number(master["points"]),
+				"team_short":  text(extra["team_short"]),
+			})
+		}
+	}
+
+	shape := []int{}
+	for _, value := range listAny(formation["tacticalFormation"]) {
+		shape = append(shape, int(number(value)))
+	}
+	return out, shape, number(payload["points"]), nil
+}
+
+// listAny reads a JSON array of anything, which is what a formation is.
+func listAny(value any) []any {
+	if list, ok := value.([]any); ok {
+		return list
+	}
+	return nil
 }
 
 func playerOf(universe *model.Universe, id string) *model.Player {
