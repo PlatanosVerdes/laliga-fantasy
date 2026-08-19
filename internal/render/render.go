@@ -1472,12 +1472,7 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		// points when the question is whether somebody can pay your clause tonight.
 		columns := []Column{
 			{"#", field("cash_position"), "int"},
-			{"Manager", func(row map[string]any) any {
-				if manager := text(row["manager"]); manager != "" {
-					return manager
-				}
-				return row["name"]
-			}, "text"},
+			{"Manager", whole, "manager"},
 			{"Poder de compra", whole, "power"},
 			{"Puntos", field("points"), "int"},
 			{"Jugadores", field("players"), "int"},
@@ -1744,6 +1739,21 @@ func CellIn(value any, kind string, section string) (string, string) {
 		}
 		return `<span data-deadline="` + Esc(stamp) + `">` + Esc(LeftUntil(stamp)) + `</span>`,
 			fmt.Sprintf("%d", when.Unix())
+
+	case "manager":
+		// The name opens his squad: this table says how much he can spend, and the obvious next
+		// question is what he already has.
+		row, _ := value.(map[string]any)
+		name := text(row["manager"])
+		if name == "" {
+			name = text(row["name"])
+		}
+		teamID := text(row["team_id"])
+		if teamID == "" {
+			return Esc(name), name
+		}
+		return fmt.Sprintf(`<button class="p-name" type="button" data-manager="%s">%s</button>`,
+			Esc(teamID), Esc(name)), name
 
 	case "offer_from":
 		// The machine's bid is named as such and greyed: it arrives every day whatever you
