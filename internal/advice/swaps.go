@@ -36,10 +36,16 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 		return Row{}
 	}
 
-	// What each of mine would fetch: an offer already on the table beats an estimate.
+	// What each of mine would fetch: an offer already on the table beats an estimate, and the
+	// best one of several is the one that matters. Keyed by player, and the offers bucket now
+	// carries one row per offer, so the best has to be picked rather than assumed.
 	offerFor := map[string]Row{}
 	for _, offer := range rowsOf(buckets["offers"]) {
-		offerFor[text(offer["id"])] = offer
+		id := text(offer["id"])
+		if previous, seen := offerFor[id]; !seen ||
+			number(offer["offer_amount"]) > number(previous["offer_amount"]) {
+			offerFor[id] = offer
+		}
 	}
 
 	counts := map[int]int{}
@@ -79,7 +85,7 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 	// Sell side, worst first: an unavailable player is dead weight however much he cost.
 	sellable := append([]Row{}, squad...)
 	sort.SliceStable(sellable, func(one, two int) bool {
-		return exitScore(sellable[one]) < exitScore(sellable[two])
+		return exitScore(sellable[one], offerFor) < exitScore(sellable[two], offerFor)
 	})
 
 	for _, out := range sellable {
@@ -92,17 +98,22 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 			continue
 		}
 		positionID := int(number(out["position_id"]))
-		// Selling a player you are already at the minimum for is only allowed when somebody
-		// replaces him in the same move, which is exactly what this is.
-		if counts[positionID] <= minPerPosition[positionID] && !forced(out) {
-			continue
-		}
+		// Being at the minimum in his position does not forbid the swap: one out and one in of
+		// the same position leaves the count where it was. What it forbids is doing it in the
+		// wrong order, so the move says so instead of being dropped. This guard used to skip
+		// them outright, which hid every replacement for the positions where you most need
+		// one -- exactly the case worth being told about.
+		tight := counts[positionID] <= minPerPosition[positionID]
 		sale := number(out["value"])
 		how := "vendiendolo a su valor"
 		if offer, ok := offerFor[text(out["id"])]; ok {
 			if amount := number(offer["offer_amount"]); amount > 0 {
 				sale = amount
-				how = "aceptando la oferta que ya tienes"
+				who := text(offer["offer_from"])
+				if who == "" {
+					who = "el mercado"
+				}
+				how = fmt.Sprintf("aceptando los %.2fM que ofrece %s", amount/1e6, who)
 			}
 		}
 
@@ -147,11 +158,17 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 			net := number(in["cost"]) - sale
 			taken[text(in["id"])] = true
 			free -= net
+			order := ""
+			if tight {
+				order = "ficha primero y vende despues: es el " + positionWord[positionID] +
+					" justo y no puedes quedarte sin el"
+			}
 			moves = append(moves, Row{
 				"out": out, "in": in, "sale": sale, "sale_note": how,
 				"cost": number(in["cost"]), "net": net, "gain": gain,
 				"why":      reason(out),
 				"position": positionWord[positionID],
+				"order":    order,
 				"cash_after": free,
 			})
 		}
@@ -189,10 +206,21 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 	}
 }
 
-// exitScore ranks who should leave first: unavailable before merely inefficient.
-func exitScore(player Row) float64 {
+// exitScore ranks who should leave first: whoever cannot score, then whoever somebody is
+// overpaying for, then the merely inefficient.
+//
+// The middle tier is the one that was missing. Being paid above market value is a reason to
+// sell that has nothing to do with the player being bad, and the plan only looked at
+// efficiency, so a good offer for a decent player never became a move.
+func exitScore(player Row, offers map[string]Row) float64 {
 	if forced(player) {
 		return -1000
+	}
+	if offer, ok := offers[text(player["id"])]; ok {
+		if over := number(offer["vs_value"]); over > 1 {
+			// Ordered among themselves by how much over value they are paying.
+			return -500 + (1 / over)
+		}
 	}
 	value := number(player["value"])
 	if value == 0 {
