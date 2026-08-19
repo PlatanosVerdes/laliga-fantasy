@@ -816,16 +816,6 @@ func (d Document) marketSections() []string {
 		out = append(out, Section("Mis ventas en curso", table, note, "", "misventas"))
 	}
 
-	// Only when there is something: an empty section for a feature nobody has used is noise on
-	// every other page load.
-	if loans := rows(d.Advice["loan_offers"]); len(loans) > 0 {
-		out = append(out, Section("Cesiones que te piden", LoanOffers(loans),
-			"La cesion es nueva en el juego: alguien quiere a tu jugador un tiempo, no para "+
-				"siempre. Se ensenan las condiciones tal y como llegan, porque todavia no he "+
-				"visto ninguna de verdad y no quiero inventarme columnas.",
-			fmt.Sprintf("%d", len(loans)), "cesiones"))
-	}
-
 	if watchlist := rows(d.Advice["watchlist"]); len(watchlist) > 0 {
 		table, _ = SectionTable("seguimiento", watchlist)
 		out = append(out, Section("Seguimiento · libres sin listar", table,

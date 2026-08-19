@@ -192,17 +192,6 @@ func (c *Client) PlayerOffers(leagueID, playerTeamID string, ttl time.Duration) 
 	return offers, err
 }
 
-// PlayerLoans are the loan offers received for one of your players. Same shape of route as the
-// sale offers — keyed by squad-slot id, not player id — because it is the same idea with
-// different terms.
-func (c *Client) PlayerLoans(leagueID, playerTeamID string,
-	ttl time.Duration) ([]map[string]any, error) {
-	var loans []map[string]any
-	err := c.getList(fmt.Sprintf("%s/league/%s/playerTeam/%s/loan",
-		config.CMP, leagueID, playerTeamID), ttl, "loans", false, &loans)
-	return loans, err
-}
-
 // PlayerMarketValue is the daily value series for one player.
 func (c *Client) PlayerMarketValue(playerID string, ttl time.Duration) ([]map[string]any, error) {
 	var series []map[string]any
