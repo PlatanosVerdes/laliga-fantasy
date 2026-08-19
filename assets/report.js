@@ -724,6 +724,75 @@ function wireChart(root){
   });
 }
 
+function wireManagers(root=document){
+  root.querySelectorAll('button[data-manager]').forEach(button=>{
+    if(button.dataset.wired) return;
+    button.dataset.wired='1';
+    button.addEventListener('click',(e)=>{ e.stopPropagation(); openManager(button.dataset.manager); });
+  });
+}
+
+// La plantilla de un rival. Sale del mundo que ya tenemos, asi que no cuesta ninguna peticion a
+// LaLiga: solo habia que poder preguntarlo.
+async function openManager(teamId){
+  if(!drawer) return;
+  drawer.hidden=false;
+  const body=drawer.querySelector('.drawer-body');
+  body.innerHTML='<p class="empty">Cargando…</p>';
+  let d;
+  try{
+    const res=await fetch('/api/manager/'+teamId);
+    if(!res.ok) throw new Error(res.status);
+    d=await res.json();
+  }catch(e){
+    body.innerHTML='<p class="empty">No he podido leer esa plantilla.</p>';
+    return;
+  }
+  const pos=d.position?`${d.position}º`:'—';
+  body.innerHTML=`
+    <div class="drawer-head"><h3>${d.manager}</h3></div>
+    <p class="sub">${d.team_name||''} · ${pos} con ${Math.round(d.points)} puntos</p>
+    <dl class="drawer-stats">
+      <div><dt>Caja estimada</dt><dd>${exact(Math.round(d.estimated_cash))}</dd></div>
+      <div><dt>Valor de plantilla</dt><dd>${exact(Math.round(d.squad_value))}</dd></div>
+      <div><dt>Suma de clausulas</dt><dd>${exact(Math.round(d.clause_total))}</dd></div>
+      <div><dt>xPts de la plantilla</dt><dd>${(d.xpts_total||0).toFixed(1)}</dd></div>
+      <div><dt>Jugadores</dt><dd>${d.players}${d.listed?` · ${d.listed} en venta`:''}</dd></div>
+      <div><dt>Clausulas bloqueadas</dt><dd>${d.clauses_locked} de ${d.players}</dd></div>
+    </dl>
+    <div class="squad-list">${(d.squad||[]).map(managerRow).join('')}</div>
+    <p class="drawer-note">La caja es una estimacion reconstruida del log de traspasos, no un dato
+      que publique el juego. Pulsa un jugador para su ficha.</p>`;
+  wireDetails(body);
+  tick();
+}
+
+// Una fila por jugador: lo que decide si se le puede llegar y por cuanto.
+function managerRow(p){
+  const listing=p.market||{};
+  const chips=[];
+  if(listing.market_id) chips.push(`<span class="chip">en venta ${fmt(listing.min_bid)}</span>`);
+  if(p.shielded) chips.push('<span class="chip chip-warn">blindado</span>');
+  else if(p.clause_locked&&p.clause_locked_until)
+    chips.push(`<span class="chip chip-warn">clausula en <span data-deadline="${p.clause_locked_until}">…</span></span>`);
+  else if(p.clause) chips.push('<span class="chip chip-good">clausula pagable</span>');
+  if(p.sale_locked) chips.push('<span class="chip chip-warn">🔒 recien fichado</span>');
+  if(!p.available) chips.push('<span class="chip chip-bad">no puntua</span>');
+  return `<div class="squad-row">
+    <span class="squad-who">
+      <span class="crest crest-${p.team_id}"></span>
+      <button class="p-name" type="button" data-detail="${p.id}">${p.name}</button>
+      <span class="pos pos-${String(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
+    </span>
+    <span class="squad-nums">
+      <b>${fmt(p.value)}</b>
+      <span title="Clausula">${p.clause?fmt(p.clause):'—'}</span>
+      <span title="xPts por jornada">${(p.xpts||0).toFixed(1)}</span>
+    </span>
+    <span class="squad-chips">${chips.join('')}</span>
+  </div>`;
+}
+
 async function openDetail(playerId){
   if(!drawer) return;
   drawer.hidden=false;
@@ -743,7 +812,12 @@ async function openDetail(playerId){
   // 🏠 en casa, ✈️ fuera: dos palabras repetidas en cada fila se leen como ruido.
   const where=(home)=>home?'<span title="en casa">🏠</span>':'<span title="fuera">✈️</span>';
   const rival=p.next_rival?`${p.next_rival} ${where(p.next_home)}`:'—';
-  const owner=p.is_mine?'tu':(p.owner||'libre');
+  // El dueño es un enlace: lo que tiene el rival decide si su clausula se paga y si su oferta
+  // interesa, y hasta ahora era un nombre y nada mas.
+  const owner=p.is_mine ? 'tu'
+    : (p.owner && p.owner_team_id
+        ? `<button class="p-name" type="button" data-manager="${p.owner_team_id}">${p.owner}</button>`
+        : (p.owner||'libre'));
   // La foto identifica antes que el nombre; si no hay, queda el escudo del equipo.
   const face=p.image
     ? `<img class="drawer-face" src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
@@ -798,6 +872,7 @@ async function openDetail(playerId){
     button.addEventListener('click',()=>runAction(JSON.parse(button.dataset.action),p)));
   wireAlways(body,p);
   wireChart(body);
+  wireManagers(body);
 }
 
 // El pie del panel dice en palabras que va a pasar: cambiar de "no vende solo" a
@@ -1125,7 +1200,8 @@ async function swap(){
     const node=document.getElementById(id);
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });
-  wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids(); tick();
+  wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids();
+  wireManagers(); tick();
   showTab(document.querySelector('.tab.on')?.dataset.tab||'decidir',
           {updateHash:false});
   const stamp=document.getElementById('live-stamp');
@@ -1189,6 +1265,7 @@ function connect(){
 }
 
 wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids();
+wireManagers();
 wireTabs(); tick();
 if(window.EventSource && location.protocol.startsWith('http')) connect();
 
