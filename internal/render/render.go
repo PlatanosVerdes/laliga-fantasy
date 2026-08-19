@@ -273,9 +273,12 @@ func PlayerCell(row map[string]any, section string) string {
 		if len(until) > 10 {
 			until = until[:10]
 		}
+		// A padlock rather than two words: it repeats on many rows and the words were louder
+		// than the fact. The title still says it in full, and the yellow underline is what
+		// tells this lock apart from the clause one.
 		flags = append(flags, fmt.Sprintf(
-			`<span class="flag-warning" title="Norma de la liga: recien fichado, `+
-				`no se puede vender hasta el %s">no vendible</span>`, Esc(until)))
+			`<span class="flag-hold" title="Norma de la liga: recien fichado, `+
+				`no se puede vender hasta el %s">🔒</span>`, Esc(until)))
 	}
 
 	// The three-letter team only earns its space when there is no crest: with one, it is the
@@ -717,6 +720,10 @@ func FeedRow(event map[string]any) string {
 var Verdicts = map[string]struct{ Label, Icon, Status string }{
 	"buy":     {"Fichar", "▲", "good"},
 	"bidding": {"Pujado", "●", "neutral"},
+	// Money offered for one of yours: good news when you can take it, and worth saying
+	// out loud when you cannot, because the reason is a rule and not a price.
+	"cash":         {"Cobrar", "€", "good"},
+	"cash_blocked": {"No puedes", "€", "neutral"},
 	"clause":  {"Clausulazo", "◆", "good"},
 	"protect": {"Subir clausula", "!", "warning"},
 	"sell":    {"Vender", "▼", "serious"},
@@ -725,7 +732,10 @@ var Verdicts = map[string]struct{ Label, Icon, Status string }{
 
 // VerdictOrder is the sort order, worst first, so a table sorted by the column reads as a
 // severity list rather than alphabetically.
-var VerdictOrder = []string{"out", "buy", "bidding", "clause", "protect", "sell"}
+// Offers first after the emergencies: they are the only rows with somebody else's money on a
+// clock, and the clock runs whether or not the page was open.
+var VerdictOrder = []string{"out", "cash", "buy", "bidding", "clause", "protect", "sell",
+	"cash_blocked"}
 
 var powerStatus = map[string]string{"holgado": "good", "normal": "neutral", "justo": "critical"}
 
