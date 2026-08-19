@@ -133,13 +133,31 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 		}
 		for _, offer := range offers {
 			amount := int64(number(offer["money"]))
+			// Whose money, and since when: two offers for the same player differ in nothing
+			// else, and the automatic one arrives every day whatever you do.
+			who := text(offer["from"])
+			if who == "" {
+				who = "el mercado"
+			}
+			label := fmt.Sprintf("Aceptar %s de %s", thousands(amount), who)
+			note := ""
+			if made := text(offer["createdAt"]); made != "" {
+				note = "ofrecida " + made[:16]
+			}
+			if expires := text(offer["expirationDate"]); expires != "" {
+				if note != "" {
+					note += " · "
+				}
+				note += "caduca " + expires[:16]
+			}
 			actions = append(actions,
-				map[string]any{"op": "accept_offer", "label": "Aceptar " + thousands(amount),
-					"kind": "confirm", "offer_id": text(offer["id"]),
-					"market_id": listing["market_id"], "amount": amount},
-				map[string]any{"op": "decline_offer", "label": "Rechazar", "kind": "confirm",
-					"danger": true, "offer_id": text(offer["id"]),
-					"market_id": listing["market_id"]})
+				map[string]any{"op": "accept_offer", "label": label, "kind": "confirm",
+					"offer_id": text(offer["id"]), "market_id": listing["market_id"],
+					"amount": amount, "note": note,
+					"from": who, "from_market": truthy(offer["from_market"])},
+				map[string]any{"op": "decline_offer",
+					"label": "Rechazar la de " + who, "kind": "confirm", "danger": true,
+					"offer_id": text(offer["id"]), "market_id": listing["market_id"]})
 		}
 		actions = append(actions, map[string]any{"op": "raise_clause",
 			"label": "Subir clausula", "kind": "amount",
