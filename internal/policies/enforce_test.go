@@ -88,3 +88,38 @@ func TestEnforceRecordsFailuresAndCarriesOn(t *testing.T) {
 		t.Error("Describe deberia explicar el fallo")
 	}
 }
+
+// A raid with no written cap must never pay: the page always demands an amount, a hand-edited file
+// does not, and "pay whatever it costs" is not something anybody authorised.
+func TestRaidPlanRefusesWithoutACap(t *testing.T) {
+	players := []Row{{
+		"id": "1", "name": "Youssef", "owner": "LamineTheTuareg", "clause": 1_000_000.0,
+		"is_mine": false, "clause_locked": false,
+	}}
+
+	without := RaidPlan(players, map[string]Policy{"1": {Raid: true}}, 90_000_000)
+	if len(without) != 1 || text(without[0]["action"]) != "sin_limite" {
+		t.Fatalf("sin limite deberia negarse, dijo %v", without)
+	}
+
+	cap := 1_200_000.0
+	with := RaidPlan(players, map[string]Policy{"1": {Raid: true, MaxPay: &cap}}, 90_000_000)
+	if len(with) != 1 || text(with[0]["action"]) != "pagar_clausula" {
+		t.Fatalf("con limite por encima deberia pagar, dijo %v", with)
+	}
+	if amount := number(with[0]["amount"]); amount != 1_000_000 {
+		t.Errorf("pagaria %v, la clausula es 1.000.000", amount)
+	}
+
+	low := 900_000.0
+	under := RaidPlan(players, map[string]Policy{"1": {Raid: true, MaxPay: &low}}, 90_000_000)
+	if text(under[0]["action"]) != "cancelada" {
+		t.Errorf("con la clausula por encima del limite deberia cancelarse, dijo %v",
+			text(under[0]["action"]))
+	}
+
+	broke := RaidPlan(players, map[string]Policy{"1": {Raid: true, MaxPay: &cap}}, 500_000)
+	if text(broke[0]["action"]) != "sin_saldo" {
+		t.Errorf("sin saldo deberia decirlo, dijo %v", text(broke[0]["action"]))
+	}
+}

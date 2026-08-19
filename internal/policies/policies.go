@@ -245,6 +245,13 @@ func RaidPlan(players []Row, policies map[string]Policy, cash float64) []Row {
 			"owner_team_id": player["owner_team_id"]}
 
 		switch {
+		// No cap, no automatic payment. The page always demands an amount when arming a raid, but
+		// a policies.json edited by hand does not, and "pay whatever it costs" is not something
+		// anybody authorised: without this the ceiling of zero skipped its own check and the only
+		// remaining limit was the balance.
+		case ceiling == 0:
+			actions = append(actions, merge(row, Row{"action": "sin_limite",
+				"why": "no tiene pago maximo: no pago solo sin un limite escrito"}))
 		case truthy(player["is_mine"]):
 			actions = append(actions, merge(row, Row{"action": "ninguna", "why": "ya es tuyo"}))
 		case text(player["owner"]) == "":
