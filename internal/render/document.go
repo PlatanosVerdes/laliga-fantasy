@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 )
 
 // Document assembles the whole page: the order of the sections, their titles, their notes
@@ -328,6 +329,11 @@ func (d Document) actionRows() []map[string]any {
 		if !truthy(player["affordable"]) {
 			continue
 		}
+		// His owner cannot sell him yet, so recommending the signing is recommending something
+		// the league does not allow. He still shows in the market tables, with the padlock.
+		if truthy(player["sale_locked"]) {
+			continue
+		}
 		ideal := asFloat(player["ideal_bid"])
 		_, hasVerdict := player["ideal_bid"]
 		cost := number(player["entry_cost"])
@@ -427,6 +433,48 @@ func (d Document) actionRows() []map[string]any {
 			"verdict": "protect", "entry_cost": player["clause"],
 			"why": fmt.Sprintf("su cláusula se desbloquea en %.0fh: quedas expuesto",
 				number(player["hours_left"]))}))
+	}
+
+	// Money already on the table is the most decidable thing on the page and it was only in its
+	// own section: an offer expires whether or not you looked at the right tab.
+	squad := rows(d.Advice["squad"])
+	for _, offer := range rows(d.Advice["offers"]) {
+		if !truthy(offer["worth_taking"]) {
+			continue
+		}
+		who := text(offer["offer_from"])
+		if who == "" {
+			who = "el mercado"
+		}
+		amount := asFloat(offer["offer_amount"])
+		why := fmt.Sprintf("%s paga %s (%.2fx su valor)", who, Money(amount),
+			number(offer["vs_value"]))
+		if left, _ := Ago(text(offer["offer_made"])); left != Missing {
+			why += " · ofrecida " + left
+		}
+
+		// Selling him has to be possible: the league's hold rule and the squad minimum both
+		// turn a good price into a decision you cannot take.
+		blocked := ""
+		if truthy(offer["sale_locked"]) {
+			until := text(offer["hold_until"])
+			if len(until) > 10 {
+				until = until[:10]
+			}
+			blocked = "no puedes venderlo hasta el " + until + " (norma de la liga)"
+		} else if room := policies.SquadRoom(squad, int(number(offer["position_id"]))); room <= 0 {
+			blocked = "es el ultimo que te queda en su posicion"
+		}
+		if blocked != "" {
+			why += " · pero " + blocked
+		}
+
+		verdict := "cash"
+		if blocked != "" {
+			verdict = "cash_blocked"
+		}
+		out = append(out, merge(offer, map[string]any{
+			"verdict": verdict, "entry_cost": offer["offer_amount"], "why": why}))
 	}
 
 	for index, player := range rows(d.Advice["sells"]) {
