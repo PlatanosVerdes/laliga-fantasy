@@ -4,6 +4,7 @@
 package state
 
 import (
+	"fmt"
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
@@ -57,6 +58,11 @@ type State struct {
 	mu          sync.RWMutex
 	universe    *model.Universe
 	version     int
+	// revision moves on every rebuild and every in-place patch, unlike version, which only
+	// moves when the world actually looks different. It is what the page cache keys on: a
+	// rebuild that changed nothing still has to produce the same page, and a patch that
+	// changed one offer has to produce a different one.
+	revision    uint64
 	generatedAt time.Time
 	lastFull    time.Time
 	lastError   string
@@ -246,6 +252,7 @@ func (s *State) RefreshWith(cause string, force bool) error {
 
 	print := fingerprint(universe)
 	s.mu.Lock()
+	s.revision++
 	changed := force || print != s.fingerprint
 	s.universe = universe
 	s.generatedAt = time.Now()
@@ -294,6 +301,44 @@ func keys(changed map[string]Change) []string {
 }
 
 // --- push -------------------------------------------------------------------
+
+// RenderKey identifies the current contents of the world. Two calls with the same key must
+// render the same page, which is what makes caching it safe.
+func (s *State) RenderKey() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return fmt.Sprintf("%d.%d", s.version, s.revision)
+}
+
+// Patch changes the world in place and tells everybody at once.
+//
+// It exists because a full rebuild takes about five seconds against the API, and after a write
+// the person is looking at the screen waiting for the one thing they just did. The write path
+// knows exactly what changed — this offer is gone, that bid is now this much — so it says so
+// immediately and lets the rebuild confirm it afterwards. The apply function returns whether
+// it changed anything, so a patch that matched nothing does not fake an update.
+func (s *State) Patch(cause string, apply func(*model.Universe) bool) bool {
+	s.mu.Lock()
+	if s.universe == nil {
+		s.mu.Unlock()
+		return false
+	}
+	changed := apply(s.universe)
+	if changed {
+		s.revision++
+		s.version++
+	}
+	version := s.version
+	s.mu.Unlock()
+
+	if !changed {
+		return false
+	}
+	slog.Info("world patched", "cause", cause, "version", version)
+	s.publish(map[string]any{"type": "state", "version": version,
+		"generated_at": time.Now().UTC().Format(time.RFC3339)})
+	return true
+}
 
 func (s *State) Subscribe() chan []byte {
 	channel := make(chan []byte, 8)

@@ -636,6 +636,17 @@ function closeDrawer(){ if(drawer) drawer.hidden=true; }
 
 // El primer valor lo escribe el navegador y tick() lo mantiene cada segundo: la cuenta atras
 // de una clausula es justo el dato que caduca mientras lo miras.
+// Cuanto lleva algo hecho, en las mismas unidades que la cuenta atras: un fichaje de hace tres
+// dias y uno de hace tres horas son decisiones distintas.
+function since(stamp){
+  const gone=Date.now()-new Date(stamp).getTime();
+  if(isNaN(gone)||gone<0) return '—';
+  const h=Math.floor(gone/3600000), m=Math.floor(gone%3600000/60000);
+  return h>=24 ? 'hace '+Math.floor(h/24)+'d '+(h%24)+'h'
+       : h>0   ? 'hace '+h+'h '+String(m).padStart(2,'0')+'m'
+               : 'hace '+m+'m';
+}
+
 function leftUntil(stamp){
   const left=new Date(stamp).getTime()-Date.now();
   if(isNaN(left)) return '—';
@@ -757,6 +768,11 @@ async function openDetail(playerId){
         <span style="color:var(--muted);font-weight:400"> · ${String(p.clause_locked_until).slice(0,10)}</span></dd></div>`:''}
       ${!p.clause_locked&&p.clause&&!p.is_mine?`<div><dt>Clausula</dt><dd
         style="color:var(--pole-pos)">pagable ya</dd></div>`:''}
+      ${p.bought_at?`<div><dt>Fichado</dt><dd>${since(p.bought_at)}
+        <span style="color:var(--muted);font-weight:400"> · ${String(p.bought_at).slice(0,10)}</span></dd></div>`:''}
+      ${p.sale_locked&&p.hold_until?`<div><dt>${p.is_mine?'Puedes venderlo en':'Puede venderlo en'}</dt>
+        <dd style="color:var(--warning)"><span data-deadline="${p.hold_until}">${leftUntil(p.hold_until)}</span>
+        <span style="color:var(--muted);font-weight:400"> · norma de la liga</span></dd></div>`:''}
       ${l.market_id?`<div><dt>En mercado</dt><dd>${exact(l.min_bid)}</dd></div>`:''}
       ${l.kind==='libre'?`<div><dt>Pujas vigentes</dt><dd${l.bids?' style="color:var(--warning)"':''}>${l.bids||'ninguna'}</dd></div>`:''}
       ${l.expires?`<div><dt>Cierra</dt><dd>${String(l.expires).slice(11,16)}</dd></div>`:''}

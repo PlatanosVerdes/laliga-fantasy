@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
@@ -55,6 +56,37 @@ type Options struct {
 type Server struct {
 	state *state.State
 	opts  Options
+	// The rendered page, keyed by what the world holds. Rendering it costs seconds — the
+	// advice layer, the futbolfantasy details, the whole document — and every repaint was
+	// paying that again for a page that had not changed. One entry: the only page worth
+	// keeping is the current one.
+	pageMu  sync.Mutex
+	pageKey string
+	page    string
+}
+
+// render returns the current page, rendering it only when the world has moved since the last
+// time. Guarded rather than sharded: two requests arriving together should wait for one render,
+// not run two.
+func (s *Server) render() string {
+	if s.opts.Page == nil {
+		return ""
+	}
+	key := s.state.RenderKey()
+	s.pageMu.Lock()
+	defer s.pageMu.Unlock()
+	if key == s.pageKey && s.page != "" {
+		return s.page
+	}
+	started := time.Now()
+	page := s.opts.Page()
+	if page == "" {
+		return ""
+	}
+	s.pageKey, s.page = key, page
+	slog.Info("page rendered", "key", key, "bytes", len(page),
+		"ms", time.Since(started).Milliseconds())
+	return page
 }
 
 func New(world *state.State, opts Options) *Server {
@@ -283,5 +315,5 @@ func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 		fmt.Fprint(writer, "<title>Generando</title><p>Generando el primer informe…</p>")
 		return
 	}
-	fmt.Fprint(writer, s.opts.Page())
+	fmt.Fprint(writer, s.render())
 }
