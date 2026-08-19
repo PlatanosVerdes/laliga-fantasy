@@ -13,6 +13,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/cli"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
@@ -60,7 +61,7 @@ func loadWorld(limit int, enrich bool) (*world, error) {
 	}
 	buckets := advice.Recommend(generic, cash, 0, limit)
 	if enrich {
-		advice.EnrichBuckets(buckets, limit, 24*time.Hour)
+		advice.EnrichBuckets(buckets, limit, futbolfantasy.DetailTTL)
 	}
 
 	league := ""

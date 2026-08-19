@@ -994,7 +994,7 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated 
 	buckets := advice.Recommend(generic, cash, 0, 15)
 	// The per-player pages, once each: this is what fills the profitable ceiling and the
 	// value history the page draws.
-	advice.EnrichBuckets(buckets, 15, 24*time.Hour)
+	advice.EnrichBuckets(buckets, 15, futbolfantasy.DetailTTL)
 
 	armed, err := policies.Load()
 	if err != nil {

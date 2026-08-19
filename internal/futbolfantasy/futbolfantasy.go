@@ -289,6 +289,19 @@ func ParseDetail(page string) map[string]any {
 	}
 }
 
+// DetailTTL is how long a player's futbolfantasy page is trusted.
+//
+// It used to be a day, which was fine while the profitable ceiling was one more column. It is
+// not fine now that the ceiling decides who the plan proposes and what the guard warns about:
+// futbolfantasy recomputes it when a price moves, prices move every night at the market close,
+// and a number that decides cannot be a day old. It cost a real confusion — the plan kept
+// proposing a defender whose ceiling had already been withdrawn.
+//
+// Four hours: the evening recomputation is picked up the same night, and the scraping stays
+// about a sixth of what a two-hour TTL would cost, which matters because their rate limit is
+// real and the code has to stop for a whole cycle when it is hit.
+const DetailTTL = 4 * time.Hour
+
 func PlayerDetail(ffID string, ttl time.Duration) (map[string]any, error) {
 	page, err := fetch(strings.ReplaceAll(config.FFDetailURL, "{ff_id}", ffID), ttl, "ff_detail")
 	if err != nil {
