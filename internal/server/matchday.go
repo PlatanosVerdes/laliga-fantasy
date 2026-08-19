@@ -92,7 +92,7 @@ func (s *Server) matchday(writer http.ResponseWriter, request *http.Request) {
 		squads[user] = append(squads[user], map[string]any{
 			"id": player.ID, "name": player.Name, "position": player.Position,
 			"position_id": player.PositionID, "team_id": player.TeamID,
-			"team_short": player.TeamShort, "value": player.Value,
+			"team_short": player.TeamShort, "value": player.Value, "image": player.Image,
 			"xpts": player.XPts, "played": teamsPlaying[player.TeamID],
 			"season_points": player.SeasonPoints,
 		})

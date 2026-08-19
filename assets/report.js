@@ -727,6 +727,25 @@ function wireChart(root){
   });
 }
 
+// Las cuatro lineas de un equipo, en el orden en que se lee un campo: de atras hacia adelante.
+const LINES=[{id:1,label:'POR'},{id:2,label:'DEF'},{id:3,label:'MED'},{id:4,label:'DEL'}];
+
+// Una plantilla se lee por lineas, no como una lista: agrupada asi se ve de un vistazo si a
+// alguien le falta un defensa o le sobran delanteros.
+function byLine(squad){
+  return LINES.map(line=>({
+    ...line,
+    players:(squad||[]).filter(p=>Number(p.position_id)===line.id)
+  })).filter(line=>line.players.length);
+}
+
+// La cara del jugador en pequeño, con el escudo detras si no hay foto.
+function chipFace(p){
+  return p.image
+    ? `<img class="chip-face" src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
+    : `<span class="crest crest-${p.team_id}"></span>`;
+}
+
 // Que tenia cada uno en una jornada. La API no guarda historia: esto sale de deshacer el log de
 // traspasos hasta el primer saque, asi que lo que se ve es lo que habia, no lo que hay.
 async function openMatchday(week){
@@ -752,10 +771,14 @@ async function openMatchday(week){
           <button class="p-name" type="button" data-manager="${m.team_id}">${m.manager}</button>
           <span class="md-count">${m.playing} de ${m.players} jugaron</span>
         </div>
-        <div class="md-players">${(m.squad||[]).map(p=>
-          `<button class="md-player${p.played?'':' md-out'}" type="button" data-detail="${p.id}"
-             title="${p.name} · ${p.team_short||''}${p.played?'':' · no jugaba esa jornada'}">
-             <span class="crest crest-${p.team_id}"></span>${p.name}</button>`).join('')}</div>
+        ${byLine(m.squad).map(line=>`
+          <div class="md-line">
+            <span class="md-line-label pos pos-${line.label.toLowerCase()}">${line.label}</span>
+            <div class="md-players">${line.players.map(p=>
+              `<button class="md-player${p.played?'':' md-out'}" type="button" data-detail="${p.id}"
+                 title="${p.name} · ${p.team_short||''}${p.played?'':' · no jugaba esa jornada'}">
+                 ${chipFace(p)}${p.name}</button>`).join('')}</div>
+          </div>`).join('')}
       </div>`).join('')}
     <p class="drawer-note">Reconstruido del log de traspasos: la API solo dice quien tiene a quien
       ahora. Los jugadores en gris no jugaban esa jornada.</p>`;
@@ -806,7 +829,11 @@ async function openManager(teamId){
       <div><dt>Jugadores</dt><dd>${d.players}${d.listed?` · ${d.listed} en venta`:''}</dd></div>
       <div><dt>Clausulas bloqueadas</dt><dd>${d.clauses_locked} de ${d.players}</dd></div>
     </dl>
-    <div class="squad-list">${(d.squad||[]).map(managerRow).join('')}</div>
+    ${byLine(d.squad).map(line=>`
+      <div class="squad-line">
+        <span class="squad-line-label pos pos-${line.label.toLowerCase()}">${line.label}</span>
+        <div class="squad-list">${line.players.map(managerRow).join('')}</div>
+      </div>`).join('')}
     <p class="drawer-note">La caja es una estimacion reconstruida del log de traspasos, no un dato
       que publique el juego. Pulsa un jugador para su ficha.</p>`;
   wireDetails(body);
@@ -826,7 +853,7 @@ function managerRow(p){
   if(!p.available) chips.push('<span class="chip chip-bad">no puntua</span>');
   return `<div class="squad-row">
     <span class="squad-who">
-      <span class="crest crest-${p.team_id}"></span>
+      ${chipFace(p)}
       <button class="p-name" type="button" data-detail="${p.id}">${p.name}</button>
       <span class="pos pos-${String(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
     </span>
