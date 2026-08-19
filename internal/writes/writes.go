@@ -391,8 +391,9 @@ func (g *Guard) Confirm(token string, allowWrites, dryRun bool) (map[string]any,
 		return nil, fmt.Errorf("la API ha rechazado la operacion: %w", err)
 	}
 	dropped := httpx.Invalidate(Operations[entry.name].Effects...)
-	slog.Info("write done", "operation", entry.name, "amount", entry.args.Amount,
-		"cache_dropped", dropped)
+	slog.Info("write done", "operation", entry.name, "player", entry.summary.PlayerName,
+		"amount", entry.args.Amount, "method", call.Method, "path", call.Path,
+		"cash_before", entry.summary.CashBefore, "cache_dropped", dropped)
 	return map[string]any{"ok": true, "operation": entry.name, "summary": entry.summary,
 		"response": answer}, nil
 }

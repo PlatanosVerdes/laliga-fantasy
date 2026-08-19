@@ -64,6 +64,9 @@ type State struct {
 	// rebuild that changed nothing still has to produce the same page, and a patch that
 	// changed one offer has to produce a different one.
 	revision    uint64
+	// Which league moves have already been written to the log, so a rebuild does not repeat
+	// them. Nil until the first pass, which only learns.
+	seenMoves   map[string]bool
 	generatedAt time.Time
 	lastFull    time.Time
 	lastError   string
@@ -280,6 +283,8 @@ func (s *State) RefreshWith(cause string, force bool) error {
 	version := s.version
 	s.mu.Unlock()
 
+	s.logMoves(universe)
+
 	// One line per rebuild with what the world now holds: the shape of this line over a day
 	// is the only way to tell "quiet league" from "the scrape is silently failing".
 	slog.Info("world rebuilt", "cause", cause, "version", version, "changed", changed,
@@ -315,6 +320,82 @@ func keys(changed map[string]Change) []string {
 }
 
 // --- push -------------------------------------------------------------------
+
+// logMoves writes one line per transfer nobody here made.
+//
+// The feed on the page answers "what happened" while you are looking at it; this answers it while
+// you are not. A rival paying twenty-eight million for a striker is the most consequential thing
+// that can happen to your plans, and until now it left no trace anywhere outside the page.
+//
+// Seen ids are remembered so a rebuild does not repeat the whole log, and bounded so a long season
+// does not grow the set forever: the log is read newest first, so forgetting the oldest ids can
+// only cost a duplicate line for something that happened weeks ago.
+func (s *State) logMoves(universe *model.Universe) {
+	if universe == nil {
+		return
+	}
+	s.mu.Lock()
+	if s.seenMoves == nil {
+		s.seenMoves = map[string]bool{}
+		// The first pass only learns: logging the whole history on every restart would bury the
+		// thing this exists for.
+		for _, event := range universe.Activity {
+			s.seenMoves[moveKey(event)] = true
+		}
+		s.mu.Unlock()
+		return
+	}
+	fresh := make([]model.Event, 0, 4)
+	for _, event := range universe.Activity {
+		key := moveKey(event)
+		if s.seenMoves[key] {
+			continue
+		}
+		s.seenMoves[key] = true
+		fresh = append(fresh, event)
+	}
+	if len(s.seenMoves) > 2000 {
+		s.seenMoves = map[string]bool{}
+		for _, event := range universe.Activity {
+			s.seenMoves[moveKey(event)] = true
+		}
+	}
+	s.mu.Unlock()
+
+	for _, event := range fresh {
+		fields := []any{"kind", event.Kind, "at", event.Date, "actor", event.Actor}
+		if event.Player != nil {
+			fields = append(fields, "player", *event.Player)
+		}
+		if event.Buyer != nil {
+			fields = append(fields, "buyer", *event.Buyer)
+		}
+		if event.Seller != nil {
+			fields = append(fields, "seller", *event.Seller)
+		}
+		if event.Amount != nil {
+			fields = append(fields, "amount", int64(*event.Amount))
+		}
+		if event.ValueThen != nil {
+			fields = append(fields, "value_then", int64(*event.ValueThen))
+		}
+		slog.Info("league move", fields...)
+	}
+}
+
+// moveKey identifies an event. The log has no id of its own for every type, so the key is what
+// makes two lines the same line.
+func moveKey(event model.Event) string {
+	player := ""
+	if event.PlayerID != nil {
+		player = *event.PlayerID
+	}
+	amount := ""
+	if event.Amount != nil {
+		amount = fmt.Sprintf("%.0f", *event.Amount)
+	}
+	return fmt.Sprintf("%s|%d|%s|%s|%s", event.Date, event.TypeID, event.User1, player, amount)
+}
 
 // RenderKey identifies the current contents of the world. Two calls with the same key must
 // render the same page, which is what makes caching it safe.
