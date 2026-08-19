@@ -844,13 +844,17 @@ func (d Document) marketSections() []string {
 
 	// How the previous ones ended, which is the only place it is recorded: the API forgets a
 	// refused offer the moment it is refused.
-	if endings := d.Endings; len(endings) > 0 {
-		out = append(out, Section("Como acabaron", Endings(endings),
+	//
+	// Drawn even when empty, unlike the other optional sections: a section that only exists once
+	// it has content cannot be found by somebody looking for where it will appear, and this one
+	// fills days after it is switched on.
+	if d.Mode != "informe" || len(d.Endings) > 0 {
+		out = append(out, Section("Como acabaron", Endings(d.Endings),
 			"Tus pujas y ofertas ya resueltas. <strong>Rechazada</strong> es que el dueño dijo "+
 				"no; <strong>perdida</strong> es que se lo quedo otro, y ahi el precio importa "+
 				"mas que el rival; <strong>caducada</strong> es que el anuncio cerro sin venta. "+
 				"Se guarda aqui porque el juego no lo recuerda.",
-			fmt.Sprintf("%d", len(endings)), "resueltas"))
+			fmt.Sprintf("%d", len(d.Endings)), "resueltas"))
 	}
 
 	if listings := rows(d.Advice["my_listings"]); len(listings) > 0 {
