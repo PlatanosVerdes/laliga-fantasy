@@ -1207,6 +1207,8 @@ func whole(row map[string]any) any { return row }
 var raidPlanStatus = map[string]string{
 	"pagar_clausula": "good", "esperando": "neutral", "cancelada": "warning",
 	"bloqueada": "critical", "sin_saldo": "warning", "ninguna": "neutral",
+	// No written cap means no automatic payment, and that is a state worth seeing.
+	"sin_limite": "critical",
 }
 
 var months = []string{"", "ene", "feb", "mar", "abr", "may", "jun",

@@ -285,8 +285,8 @@ func cmdServe(args []string) error {
 		// wakes two seconds before, when the clause is still locked and the API would refuse it,
 		// so the wait is spent here: sleep out the last seconds and fire on the other side of the
 		// instant. Bounded, because sleeping inside the cycle is only defensible for seconds.
-		if wait := untilNextRaid(rows, armed); wait > 0 {
-			slog.Info("waiting for a clause to open", "seconds", wait.Seconds())
+		if wait, why := untilNextInstant(rows, armed); wait > 0 {
+			slog.Info("waiting for the instant", "seconds", wait.Seconds(), "why", why)
 			time.Sleep(wait)
 		}
 
@@ -295,17 +295,26 @@ func cmdServe(args []string) error {
 		// would be lost by the width of a rebuild.
 		now := time.Now()
 		for _, row := range rows {
-			until := text(row["clause_locked_until"])
-			if until == "" {
+			if until := text(row["clause_locked_until"]); until != "" {
+				if when, err := time.Parse(time.RFC3339, until); err == nil {
+					hours := when.Sub(now).Hours()
+					row["clause_hours_left"] = hours
+					row["clause_locked"] = hours > 0
+				}
+			}
+			// An expired listing is no listing, whatever the last rebuild recorded. Without this
+			// a player under "siempre en mercado" sat unlisted until some later cycle noticed,
+			// which is the same mistake as the clause: acting on a stale clock.
+			listing := mapFrom(row["market"])
+			if listing == nil {
 				continue
 			}
-			when, err := time.Parse(time.RFC3339, until)
-			if err != nil {
-				continue
+			if expires := text(listing["expires"]); expires != "" {
+				if when, err := time.Parse(time.RFC3339, expires); err == nil &&
+					now.After(when.Add(RaidGrace)) {
+					row["market"] = nil
+				}
 			}
-			hours := when.Sub(now).Hours()
-			row["clause_hours_left"] = hours
-			row["clause_locked"] = hours > 0
 		}
 
 		done := policies.Enforce(policies.Plan(rows, armed), policies.RaidPlan(rows, armed, cash),
@@ -1078,34 +1087,47 @@ const (
 	RaidWait  = 15 * time.Second
 )
 
-// untilNextRaid is how long to wait for the next armed clause to open, or zero when there is
-// nothing worth waiting for. Only clauses about to open count: waiting for one that opens tomorrow
-// would stop the loop.
-func untilNextRaid(rows []map[string]any, armed map[string]policies.Policy) time.Duration {
+// untilNextInstant is how long to wait for the next instant an instruction is waiting on, and
+// what it is. Two of them exist: a clause opening, which is a race, and one of my own listings
+// expiring, which is when a "siempre en mercado" player has to be listed again.
+//
+// Only instants about to happen count. Waiting for one that opens tomorrow would stop the loop.
+func untilNextInstant(rows []map[string]any,
+	armed map[string]policies.Policy) (time.Duration, string) {
 	now := time.Now()
-	wait := time.Duration(0)
-	for _, row := range rows {
-		policy, ok := armed[text(row["id"])]
-		if !ok || !policy.Raid {
-			continue
+	wait, why := time.Duration(0), ""
+	consider := func(stamp, reason string) {
+		if stamp == "" {
+			return
 		}
-		until := text(row["clause_locked_until"])
-		if until == "" {
-			continue
-		}
-		when, err := time.Parse(time.RFC3339, until)
+		when, err := time.Parse(time.RFC3339, stamp)
 		if err != nil {
-			continue
+			return
 		}
 		left := when.Sub(now) + RaidGrace
 		if left <= 0 || left > RaidWait {
-			continue
+			return
 		}
 		if wait == 0 || left < wait {
-			wait = left
+			wait, why = left, reason
 		}
 	}
-	return wait
+
+	for _, row := range rows {
+		policy, ok := armed[text(row["id"])]
+		if !ok {
+			continue
+		}
+		if policy.Raid {
+			consider(text(row["clause_locked_until"]),
+				"se abre la clausula de "+text(row["name"]))
+		}
+		if policy.AlwaysList {
+			consider(text(mapFrom(row["market"])["expires"]),
+				"vence el anuncio de "+text(row["name"]))
+		}
+	}
+	return wait, why
 }
 
 // playerRows is the universe's players as the generic rows the policy engine reads.
