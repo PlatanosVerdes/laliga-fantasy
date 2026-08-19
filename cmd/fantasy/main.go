@@ -279,7 +279,26 @@ func cmdServe(args []string) error {
 		if money, err := client.Money(team, time.Minute); err == nil {
 			cash = money.TeamMoney
 		}
+		// The lock state has to be judged against now, not against the last rebuild. The engine
+		// wakes two seconds before a clause opens; if the plan is read with the numbers from the
+		// previous cycle it still says "esperando" and the raid is lost by the width of a
+		// rebuild. Recomputing one clock-derived field is what makes waking early worth it.
 		rows := playerRows(universe)
+		now := time.Now()
+		for _, row := range rows {
+			until := text(row["clause_locked_until"])
+			if until == "" {
+				continue
+			}
+			when, err := time.Parse(time.RFC3339, until)
+			if err != nil {
+				continue
+			}
+			hours := when.Sub(now).Hours()
+			row["clause_hours_left"] = hours
+			row["clause_locked"] = hours > 0
+		}
+
 		done := policies.Enforce(policies.Plan(rows, armed), policies.RaidPlan(rows, armed, cash),
 			func(operation string, action policies.Row) error {
 				args := writes.Args{LeagueID: league, TeamID: team,
@@ -313,10 +332,13 @@ func cmdServe(args []string) error {
 		Watchers: world.Watchers,
 		Tick:     tick,
 		Rebuild: func(cause string) error {
+			// Act first, rebuild after. A clause raid is a race decided in seconds, and a full
+			// rebuild takes several: the instructions already know the amount and the limit from
+			// the previous cycle, and the lock is judged against the clock.
+			automate(cause)
 			if err := world.Refresh(cause); err != nil {
 				return err
 			}
-			automate(cause)
 			return nil
 		},
 		Invalidate: func(tags ...string) {
