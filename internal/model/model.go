@@ -100,9 +100,6 @@ type Player struct {
 	RaidScheduled    bool                   `json:"raid_scheduled"`
 	MarketEntry      *Listing               `json:"market"`
 	Offers           []map[string]any       `json:"offers"`
-	// Loan offers, a separate thing the game added: somebody wants him for a while rather
-	// than for good. Read from its own route and kept raw, because the terms are theirs.
-	LoanOffers       []map[string]any       `json:"loan_offers"`
 	Score            float64                `json:"score"`
 	Rank             int                    `json:"rank"`
 	PositionRank     int                    `json:"position_rank"`
@@ -482,7 +479,6 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		listingByPlayer[universe.Market[index].PlayerID] = &universe.Market[index]
 	}
 	offersByPlayer := loadOffers(client, leagueID, universe.Market, ownership)
-	loansByPlayer := loadLoans(client, leagueID, ownership, myTeamID)
 	for index := range universe.Players {
 		id := universe.Players[index].ID
 		universe.Players[index].MarketEntry = listingByPlayer[id]
@@ -490,10 +486,6 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		universe.Players[index].Offers = offersByPlayer[id]
 		if universe.Players[index].Offers == nil {
 			universe.Players[index].Offers = []map[string]any{}
-		}
-		universe.Players[index].LoanOffers = loansByPlayer[id]
-		if universe.Players[index].LoanOffers == nil {
-			universe.Players[index].LoanOffers = []map[string]any{}
 		}
 	}
 
@@ -744,48 +736,6 @@ func findBidStatus(entry map[string]any) *string {
 		return &status
 	}
 	return nil
-}
-
-// loadLoans reads the loan offers received, for every player of ours rather than only the listed
-// ones: a loan is asked of the player, not of a listing, and there is no way to know it arrived
-// other than looking. One request each, cached, and the whole thing is skipped when the league
-// has never seen a loan — which is most leagues, most of the time.
-func loadLoans(client *api.Client, leagueID string, ownership map[string]slot,
-	myTeamID string) map[string][]map[string]any {
-	loans := map[string][]map[string]any{}
-	if leagueID == "" || myTeamID == "" {
-		return loans
-	}
-	for playerID, held := range ownership {
-		if held.TeamID != myTeamID || held.PlayerTeamID == nil {
-			continue
-		}
-		received, err := client.PlayerLoans(leagueID, *held.PlayerTeamID, 2*time.Minute)
-		if err != nil {
-			slog.Debug("loans unreachable", "player", playerID, "reason", err.Error())
-			continue
-		}
-		pending := make([]map[string]any, 0, len(received))
-		for _, loan := range received {
-			status := text(loan["status"])
-			if status != "" && status != "pending" {
-				continue
-			}
-			// Same shape of question as a sale offer: who is asking and since when.
-			if manager := text(nested(loan, "buyerTeam", "manager", "managerName")); manager != "" {
-				loan["from"] = manager
-			}
-			if teamID := text(nested(loan, "buyerTeam", "id")); teamID != "" {
-				loan["from_team_id"] = teamID
-			}
-			pending = append(pending, loan)
-		}
-		if len(pending) > 0 {
-			loans[playerID] = pending
-			slog.Info("loan offers received", "player_id", playerID, "count", len(pending))
-		}
-	}
-	return loans
 }
 
 // loadOffers asks only for our own listings: one request each, and there is no route that

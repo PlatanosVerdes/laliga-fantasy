@@ -70,6 +70,16 @@ and still useful on their own: `model --json`, `advise-json`, `plan`, `match`, `
 `cells`, `section`, `shell`, `page`, `calls`, `checks`, `wake` and `probe`. With
 `FANTASY_FREEZE=1` they read from cache and refuse the network.
 
+## Loans (premium, so not built)
+
+The game added loan offers, and the routes were mapped by probing before finding out the feature
+is premium — so nothing reads them. Kept here rather than in dead code, because reading them cost
+twelve API calls on every rebuild for something the account cannot use:
+
+* `POST   .../league/{league}/loan` — make a loan offer (body unknown, never sent)
+* `GET    .../league/{league}/playerTeam/{playerTeamId}/loan` — the ones received, `[]` today
+* `.../league/{league}/loan/{id}/accept | reject | cancel` — exist under other verbs
+
 ## What is missing
 
 * **Writes not yet exercised live**: `modify_bid`, `cancel_bid`, `accept_offer`,
