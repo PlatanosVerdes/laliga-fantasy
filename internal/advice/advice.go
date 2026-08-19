@@ -271,6 +271,31 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 			}))
 		}
 	}
+	// What I have on the table right now. It was visible only by finding the player in the market
+	// table, which is the wrong way round: money committed is a list of its own, and an offer sent
+	// to a rival had nowhere at all to be seen.
+	sent := []Row{}
+	for _, player := range rowsOf(universe["players"]) {
+		listing := mapOf(player["market"])
+		if text(listing["my_bid_id"]) == "" {
+			continue
+		}
+		kind := "mercado libre"
+		if text(listing["kind"]) == "venta" {
+			kind = "se lo compras a " + text(listing["seller"])
+		}
+		sent = append(sent, merge(player, Row{
+			"my_bid": number(listing["my_bid"]), "my_bid_id": text(listing["my_bid_id"]),
+			"my_bid_status": text(listing["my_bid_status"]),
+			"market_id": text(listing["market_id"]), "asking": number(listing["min_bid"]),
+			"closes": listing["expires"], "bid_kind": kind,
+			"over_asking": overAsking(number(listing["my_bid"]), number(listing["min_bid"])),
+		}))
+	}
+	sort.SliceStable(sent, func(i, j int) bool {
+		return number(sent[i]["my_bid"]) > number(sent[j]["my_bid"])
+	})
+
 	sort.SliceStable(offers, func(i, j int) bool {
 		// People before the machine at equal money: a rival's offer expires on its own clock
 		// and will not come back tomorrow.
@@ -390,7 +415,8 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 		"squad": squad, "shape": shapeOut,
 		"bids_now": head(bidsNow, limit), "asks": head(asks, limit),
 		"watchlist": head(watchlist, limit), "my_listings": myListings,
-		"offers": offers, "raids": head(raids, limit), "sells": head(sells, limit),
+		"offers": offers, "my_bids": sent,
+		"raids": head(raids, limit), "sells": head(sells, limit),
 		"exposure": head(exposure, limit), "rivals": rivalTeams,
 		"cash_model": universe["cash_model"], "free_agent_count": len(freeAgents),
 		"clauses_locked": len(locked), "clauses_unlock_from": unlockFrom,
@@ -422,6 +448,15 @@ func RaidVerdict(ppmAtClause, benchmark float64, affordable bool, xpts float64) 
 		return "caro"
 	}
 	return "" // ranked afterwards, once the whole candidate set is known
+}
+
+// overAsking is how far above the asking price a bid of mine is, or nil when there is nothing to
+// compare it with.
+func overAsking(mine, asking float64) any {
+	if mine == 0 || asking == 0 {
+		return nil
+	}
+	return mine / asking
 }
 
 // RivalCash is the rivals sorted by spending power, and it puts your own row in the ranking:

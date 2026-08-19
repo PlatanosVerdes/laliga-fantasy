@@ -92,6 +92,16 @@ var Operations = map[string]operation{
 			map[string]any{"money": a.Amount}}
 	}, []string{"market", "money"}},
 
+	// Withdrawing an offer sent to a rival. Same shape as cancelling a bid, which is the only
+	// evidence available: the route answers 405 to a GET, so it exists, and the bid version is
+	// DELETE .../cancel. If the verb is wrong the API says so and the message now travels.
+	"cancel_offer": {"retirar la oferta", func(a Args) Call {
+		return Call{http.MethodDelete,
+			fmt.Sprintf("%s/league/%s/market/%s/offer/%s/cancel", config.CMP, a.LeagueID,
+				a.MarketID, a.OfferID),
+			nil}
+	}, []string{"market", "money"}},
+
 	"cancel_bid": {"cancelar puja", func(a Args) Call {
 		return Call{http.MethodDelete,
 			fmt.Sprintf("%s/league/%s/market/%s/bid/%s/cancel", config.CMP, a.LeagueID, a.MarketID, a.BidID),
