@@ -1089,7 +1089,11 @@ func (d Document) rivalSections(players []map[string]any) []string {
 		return number(ordered[one]["points"]) > number(ordered[two]["points"])
 	})
 
-	out := make([]string, 0, len(ordered))
+	// One rival at a time: twelve squads stacked is a lot of scrolling to answer a question
+	// about one manager. The picker is the tab's own header, so it never scrolls away with the
+	// squad it governs.
+	options := make([]string, 0, len(ordered))
+	out := make([]string, 0, len(ordered)+1)
 	for _, team := range ordered {
 		teamID := text(team["team_id"])
 		squad := squads[teamID]
@@ -1155,9 +1159,26 @@ func (d Document) rivalSections(players []map[string]any) []string {
 		if position := number(team["position"]); position > 0 {
 			badge = fmt.Sprintf("%.0fº · %d jugadores", position, len(squad))
 		}
+		label := manager
+		if position := number(team["position"]); position > 0 {
+			label = fmt.Sprintf("%.0fº · %s", position, manager)
+		}
+		options = append(options, fmt.Sprintf(
+			`<option value="rival-%s">%s · %d jugadores</option>`,
+			Esc(teamID), Esc(label), len(squad)))
 		out = append(out, SectionIn("rivales", manager, table, note, badge, "rival-"+teamID))
 	}
-	return out
+
+	picker := `<div class="filters rival-pick"><label>Equipo<select id="rival-pick">` +
+		strings.Join(options, "") +
+		`<option value="all">todos a la vez</option></select></label></div>`
+	head := SectionIn("rivales", "Plantillas rivales", picker,
+		"La plantilla entera de cada rival, uno a la vez. <strong>Frente a lo tuyo</strong> "+
+			"compara cada jugador con tu mejor jugador de esa misma posicion, que es lo que "+
+			"decide si merece la pena ir a por el, y <strong>Se puede</strong> dice si su "+
+			"clausula esta pagable hoy. El <strong>+</strong> mete al jugador en el comparador.",
+		fmt.Sprintf("%d rivales", len(ordered)), "rivalpick")
+	return append([]string{head}, out...)
 }
 
 func (d Document) rankingSections(players []map[string]any) []string {

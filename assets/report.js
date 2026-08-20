@@ -1319,6 +1319,39 @@ function wireDetails(root=document){
   });
 }
 
+// ---- tooltip propio: el title nativo tarda casi un segundo -------------------
+// Estos son datos que se leen de paso (un candado, un escudo, un "est."), y un segundo de
+// espera es justo lo que hace que no se lean. Flotante y pegado al body, no un ::after, que
+// dentro de una tabla con scroll se recortaria.
+let tipBox=null;
+function showTip(target){
+  const message=target.dataset.tip;
+  if(!message) return;
+  if(!tipBox){
+    tipBox=document.createElement('div');
+    tipBox.className='tip-float';
+    document.body.appendChild(tipBox);
+  }
+  tipBox.textContent=message;
+  tipBox.hidden=false;
+  const anchor=target.getBoundingClientRect(), own=tipBox.getBoundingClientRect();
+  const left=Math.max(8,Math.min(anchor.left+anchor.width/2-own.width/2,
+    window.innerWidth-own.width-8));
+  let top=anchor.top-own.height-8;
+  if(top<8) top=anchor.bottom+8;
+  tipBox.style.left=left+'px';
+  tipBox.style.top=top+'px';
+}
+const hideTip=()=>{ if(tipBox) tipBox.hidden=true; };
+document.addEventListener('mouseover',(event)=>{
+  const target=event.target.closest('[data-tip]');
+  if(target) showTip(target); else hideTip();
+});
+document.addEventListener('mouseout',(event)=>{
+  if(event.target.closest&&event.target.closest('[data-tip]')) hideTip();
+});
+window.addEventListener('scroll',hideTip,{passive:true});
+
 // ---- comparador: un fichaje es siempre "en vez de quien" --------------------
 // La bandeja vive en localStorage porque el panel se recambia solo en vivo, y perder la
 // comparacion a medias por un refresco haria que no se usase.
@@ -1725,8 +1758,36 @@ function resolveTarget(hash){
   return owner ? {tab:owner.id, section:id} : null;
 }
 
+// Una plantilla rival a la vez: doce apiladas son mucho scroll para una pregunta sobre uno.
+const RIVAL_KEY='fantasy:rival';
+function applyRivalPick(){
+  const sections=[...document.querySelectorAll('section[data-tab="rivales"][id^="rival-"]')];
+  if(!sections.length) return;
+  // Fuera de su pestaña manda showTab: aqui no se puede volver a ensenar nada.
+  const active=document.querySelector('.tab.on');
+  if(!active||active.dataset.tab!=='rivales') return;
+  const ids=sections.map(s=>s.id);
+  let choice=null;
+  try{ choice=localStorage.getItem(RIVAL_KEY); }catch(e){}
+  if(choice!=='all'&&!ids.includes(choice)) choice=ids[0];
+  sections.forEach(s=>{ s.hidden = choice!=='all'&&s.id!==choice; });
+  const select=document.getElementById('rival-pick');
+  if(select&&select.value!==choice) select.value=choice;
+}
+
+document.addEventListener('change',(event)=>{
+  const select=event.target.closest&&event.target.closest('#rival-pick');
+  if(!select) return;
+  try{ localStorage.setItem(RIVAL_KEY,select.value); }catch(e){}
+  applyRivalPick();
+});
+
 function showTab(id,{section=null,updateHash=true}={}){
   const tab=TABS.find(t=>t.id===id)||TABS[0];
+  // Un enlace a un rival concreto manda sobre lo elegido en el desplegable.
+  if(section&&section.startsWith('rival-')){
+    try{ localStorage.setItem(RIVAL_KEY,section); }catch(e){}
+  }
   document.querySelectorAll('section[id]').forEach(s=>{
     // Una seccion puede decir ella misma a que pestaña va: las que nacen en tiempo de
     // ejecucion (una por rival) no pueden estar en una lista escrita aqui.
@@ -1744,6 +1805,7 @@ function showTab(id,{section=null,updateHash=true}={}){
     // disparar hashchange sobre nosotros mismos.
     history.replaceState(null,'','#'+(section||tab.id));
   }
+  applyRivalPick();
   if(tab.sections.includes('once') && !pitchState) loadPitch();
   if(section){
     const node=document.getElementById(section);

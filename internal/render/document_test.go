@@ -41,14 +41,23 @@ func universeWithRivals() Document {
 func TestRivalSectionsOnePerRival(t *testing.T) {
 	document := universeWithRivals()
 	sections := document.rivalSections(rows(document.Universe["players"]))
-	if len(sections) != 2 {
-		t.Fatalf("dos rivales con jugadores, salieron %d secciones", len(sections))
+	// El selector primero, y una seccion por rival detras.
+	if len(sections) != 3 {
+		t.Fatalf("selector y dos rivales, salieron %d secciones", len(sections))
+	}
+	if !strings.Contains(sections[0], `id="rivalpick"`) ||
+		!strings.Contains(sections[0], `<select id="rival-pick">`) {
+		t.Fatalf("la primera tiene que ser el desplegable: %.140s", sections[0])
 	}
 	// Ordered by league position, so second in the table comes first.
-	if !strings.Contains(sections[0], `id="rival-300"`) {
-		t.Errorf("el segundo de la liga deberia ir primero: %.120s", sections[0])
+	if !strings.Contains(sections[1], `id="rival-300"`) {
+		t.Errorf("el segundo de la liga deberia ir primero: %.120s", sections[1])
 	}
-	for _, section := range sections {
+	// Y el desplegable los ofrece en el mismo orden.
+	if strings.Index(sections[0], "rival-300") > strings.Index(sections[0], "rival-200") {
+		t.Error("las opciones tienen que ir en orden de clasificacion")
+	}
+	for _, section := range sections[1:] {
 		if !strings.Contains(section, `data-tab="rivales"`) {
 			t.Error("una seccion que no dice su pestaña queda invisible")
 		}
