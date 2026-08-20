@@ -1224,6 +1224,17 @@ type Column struct {
 // Section wraps a rendered body with its heading, an optional count badge and an optional
 // note. The body arrives already rendered, so which section a row belongs to has to be
 // passed down to the table rather than read back out here.
+// SectionIn is Section for a section that declares which tab it belongs to. The static list in
+// the script cannot name a section that only exists at runtime -- one per rival, by team id --
+// so those say it themselves and the script reads it off the DOM.
+func SectionIn(tab, title, body, note, badge, anchor string) string {
+	built := Section(title, body, note, badge, anchor)
+	if tab == "" {
+		return built
+	}
+	return strings.Replace(built, "<section", `<section data-tab="`+Esc(tab)+`"`, 1)
+}
+
 func Section(title, body, note, badge, anchor string) string {
 	badgeHTML := ""
 	if badge != "" {
@@ -1781,33 +1792,6 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 			{"xPts/j", field("xpts"), "num"},
 		}
 		return TableIn(columns, rows, "Sin datos", "ofertas", false), nil
-
-	case "quientiene":
-		// A census of everybody else's players is only useful if each row says what it would
-		// take to get him and what he would replace, so those are the two ends of the table.
-		columns := []Column{
-			{"", whole, "cmp"},
-			{"Jugador", whole, "player"},
-			{"Dueño", whole, "owner"},
-			{"Frente a lo tuyo", whole, "vs_mine"},
-			{"Cláusula", field("clause"), "money"},
-			{"Se puede", whole, "clause_when"},
-			{"x valor", field("clause_x"), "num"},
-			{"Valor", field("value"), "money"},
-			{"En venta", field("asking"), "money"},
-			{"xPts/j", field("xpts"), "num"},
-			{"Pts/M", field("points_value"), "mag"},
-			{"Titular", field("start_probability"), "starts"},
-			{"Proximo rival", func(row map[string]any) any {
-				rival := text(row["next_rival"])
-				if rival == "" {
-					return nil
-				}
-				return rival + " " + Where(truthy(row["next_home"]))
-			}, "text"},
-		}
-		return TableIn(columns, rows, "Los rivales no tienen a nadie todavia", "quientiene",
-			true), nil
 
 	case "riesgo":
 		// Not "who is good" but "who can be taken from you today", which is why the count

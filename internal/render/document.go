@@ -1002,25 +1002,25 @@ func (d Document) clauseSections() []string {
 			note += fmt.Sprintf("Sin saldo propio que leer, asumo %s de "+
 				"caja inicial para todos.", Money(asFloat(model["base"])))
 		}
-		// The squads come first in the tab, so the table is built before it and appended after.
-		if held := d.heldSection(rows(d.Universe["players"])); held != "" {
-			out = append(out, held)
-		}
 		table, _ = SectionTable("rivales", rivals)
 		out = append(out, Section("Poder de compra de la liga", table, note, "", "rivales"))
-		return out
 	}
-	if held := d.heldSection(rows(d.Universe["players"])); held != "" {
-		out = append(out, held)
-	}
+	// One section per rival, after the table that compares them all.
+	out = append(out, d.rivalSections(rows(d.Universe["players"]))...)
 	return out
 }
 
-// heldSection is every rival squad, whole, in one table. It was answerable all along and
-// simply had nowhere to be asked: the rival tables only ever showed what somebody had put on
-// the market or whose clause was about to open, never the squads themselves.
-func (d Document) heldSection(players []map[string]any) string {
-	// Your best in each position, which is the bar every rival's player is read against.
+// rivalSections is one section per rival, each with his squad whole. Grouped by manager and
+// not by player on purpose: "what does this one have" is how a league is actually read, and a
+// single 158-row table answered a different question.
+func (d Document) rivalSections(players []map[string]any) []string {
+	teams := mapOf(d.Universe["league_teams"])
+	if teams == nil {
+		return nil
+	}
+	myTeamID := text(d.Universe["my_team_id"])
+
+	// Your best in each position: the bar every rival's player is read against.
 	best := map[string]map[string]any{}
 	for _, player := range players {
 		if !truthy(player["is_mine"]) {
@@ -1033,10 +1033,10 @@ func (d Document) heldSection(players []map[string]any) string {
 		}
 	}
 
-	held := make([]map[string]any, 0, 160)
-	owners := map[string]bool{}
+	squads := map[string][]map[string]any{}
 	for _, player := range players {
-		if truthy(player["is_mine"]) || text(player["owner_team_id"]) == "" {
+		owner := text(player["owner_team_id"])
+		if owner == "" || owner == myTeamID || truthy(player["is_mine"]) {
 			continue
 		}
 		row := make(map[string]any, len(player)+4)
@@ -1059,29 +1059,98 @@ func (d Document) heldSection(players []map[string]any) string {
 			row["vs_mine"] = number(player["xpts"]) - number(mine["xpts"])
 			row["vs_who"] = mine["name"]
 		}
-		owners[text(player["owner_team_id"])] = true
-		held = append(held, row)
+		squads[owner] = append(squads[owner], row)
 	}
-	if len(held) == 0 {
-		return ""
+	if len(squads) == 0 {
+		return nil
 	}
-	// Best first: this is read looking for who to go after, not to audit a census.
-	sort.SliceStable(held, func(one, two int) bool {
-		return number(held[one]["xpts"]) > number(held[two]["xpts"])
+
+	// Ordered by the table, so the section order is the one the league is already read in.
+	ordered := make([]map[string]any, 0, len(teams))
+	for _, value := range teams {
+		team := mapOf(value)
+		if team == nil || text(team["team_id"]) == myTeamID {
+			continue
+		}
+		if len(squads[text(team["team_id"])]) == 0 {
+			continue
+		}
+		ordered = append(ordered, team)
+	}
+	sort.SliceStable(ordered, func(one, two int) bool {
+		first, second := number(ordered[one]["position"]), number(ordered[two]["position"])
+		if first != second && first > 0 && second > 0 {
+			return first < second
+		}
+		return number(ordered[one]["points"]) > number(ordered[two]["points"])
 	})
 
-	table, err := SectionTable("quientiene", held)
-	if err != nil {
-		return ""
+	out := make([]string, 0, len(ordered))
+	for _, team := range ordered {
+		teamID := text(team["team_id"])
+		squad := squads[teamID]
+		// Read like a squad: keeper, defence, midfield, attack, and the best of each line first.
+		sort.SliceStable(squad, func(one, two int) bool {
+			first, second := number(squad[one]["position_id"]), number(squad[two]["position_id"])
+			if first != second {
+				return first < second
+			}
+			return number(squad[one]["xpts"]) > number(squad[two]["xpts"])
+		})
+
+		table, err := SectionTable("rivalsquad", squad)
+		if err != nil {
+			continue
+		}
+		manager := text(team["manager"])
+		if manager == "" {
+			manager = text(team["name"])
+		}
+		if manager == "" {
+			manager = teamID
+		}
+		upgrades, payable, listed, value, points := 0, 0, 0, 0.0, 0.0
+		for _, player := range squad {
+			if number(player["vs_mine"]) > 0 {
+				upgrades++
+			}
+			if !truthy(player["clause_locked"]) && !truthy(player["shielded"]) &&
+				number(player["clause"]) > 0 {
+				payable++
+			}
+			if number(player["asking"]) > 0 {
+				listed++
+			}
+			value += number(player["value"])
+			points += number(player["xpts"])
+		}
+
+		note := fmt.Sprintf("%.0f puntos · caja estimada <strong>%s</strong> · "+
+			"plantilla %s · %.1f xPts por jornada.", number(team["points"]),
+			Esc(Money(asFloat(team["estimated_cash"]))), Esc(Money(&value)), points)
+		switch {
+		case upgrades == 0:
+			note += " No tiene a nadie que mejore lo que tienes en su posicion."
+		case upgrades == 1:
+			note += " <strong>Uno</strong> de los suyos mejora al tuyo de su posicion."
+		default:
+			note += fmt.Sprintf(" <strong>%d</strong> de los suyos mejoran al tuyo de su "+
+				"posicion.", upgrades)
+		}
+		if payable > 0 {
+			note += fmt.Sprintf(" %d con la clausula pagable ya.", payable)
+		}
+		if listed > 0 {
+			note += fmt.Sprintf(" %d puestos en venta.", listed)
+		}
+
+		badge := fmt.Sprintf("%d jugadores", len(squad))
+		if position := number(team["position"]); position > 0 {
+			badge = fmt.Sprintf("%.0fº · %d jugadores", position, len(squad))
+		}
+		out = append(out, SectionIn("rivales", manager, table, note, badge, "rival-"+teamID))
 	}
-	note := "Todos los jugadores que tienen los demas, ordenados por lo que rinden. " +
-		"<strong>Frente a lo tuyo</strong> compara con tu mejor jugador de esa misma " +
-		"posicion, que es lo que decide si merece la pena ir a por el. <strong>Se puede</strong> " +
-		"dice si su clausula esta pagable hoy, cuanto le queda o si esta blindado. " +
-		"El buscador tambien encuentra por manager, y el <strong>+</strong> mete al jugador " +
-		"en el comparador."
-	return Section("Plantillas rivales", Filters+table, note,
-		fmt.Sprintf("%d jugadores de %d rivales", len(held), len(owners)), "quientiene")
+	return out
 }
 
 func (d Document) rankingSections(players []map[string]any) []string {
