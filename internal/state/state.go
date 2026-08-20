@@ -56,6 +56,10 @@ var Discrete = []string{"cash", "squad", "listed", "offers", "points", "absences
 
 type State struct {
 	builder Builder
+	// warm re-renders the page before anybody is told there is something new. A patch or a
+	// rebuild invalidates the page cache, and rendering it costs about four seconds on the Pi:
+	// paying that in the browser is what made a write feel slow.
+	warm func()
 
 	mu          sync.RWMutex
 	universe    *model.Universe
@@ -305,12 +309,12 @@ func (s *State) RefreshWith(cause string, force bool) error {
 		s.lastEffect = effect
 		s.mu.Unlock()
 		slog.Info("world moved", "cause", cause, "changed", keys(diff))
-		s.publish(map[string]any{"type": "effect", "version": version,
+		s.announce(map[string]any{"type": "effect", "version": version,
 			"operation": effect.Operation, "at": effect.At, "changed": effect.Changed})
 	}
 
 	if changed {
-		s.publish(map[string]any{"type": "state", "version": version,
+		s.announce(map[string]any{"type": "state", "version": version,
 			"generated_at": s.generatedAt.UTC().Format(time.RFC3339)})
 	}
 	return nil
@@ -512,9 +516,26 @@ func (s *State) Patch(cause string, apply func(*model.Universe) bool) bool {
 		return false
 	}
 	slog.Info("world patched", "cause", cause, "version", version)
-	s.publish(map[string]any{"type": "state", "version": version,
+	s.announce(map[string]any{"type": "state", "version": version,
 		"generated_at": time.Now().UTC().Format(time.RFC3339)})
 	return true
+}
+
+// SetWarm hands over the page render. Optional: without it everything still works, only the
+// first request after a change pays for the render.
+func (s *State) SetWarm(warm func()) { s.warm = warm }
+
+// announce warms the page and only then says there is something new, so the browser's refresh
+// lands on a cache that is already built.
+func (s *State) announce(message map[string]any) {
+	if s.warm == nil {
+		s.publish(message)
+		return
+	}
+	go func() {
+		s.warm()
+		s.publish(message)
+	}()
 }
 
 func (s *State) Subscribe() chan []byte {

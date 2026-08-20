@@ -441,7 +441,7 @@ func cmdServe(args []string) error {
 	fmt.Printf("Modo: %s\n", mode)
 
 	league, team, _ := currentLeague(&mu, &leagueID, &teamID)
-	return server.New(world, server.Options{
+	panel := server.New(world, server.Options{
 		Host: *host, Port: *port, AllowWrites: allowWrites, Mode: mode,
 		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
 		Client: client, Guard: guard, LeagueID: league, MyTeamID: team,
@@ -472,7 +472,11 @@ func cmdServe(args []string) error {
 			}
 			return page
 		},
-	}).ListenAndServe()
+	})
+	// Nobody is told about a change until the page for it exists: rendering costs about four
+	// seconds here, and the browser was the one paying for it after every write.
+	world.SetWarm(panel.Warm)
+	return panel.ListenAndServe()
 }
 
 // currentLeague reads the ids the server was started with, if they are already known. The
