@@ -958,7 +958,78 @@ func (d Document) clauseSections() []string {
 		table, _ = SectionTable("rivales", rivals)
 		out = append(out, Section("Poder de compra de la liga", table, note, "", "rivales"))
 	}
+	if held := d.heldSection(rows(d.Universe["players"])); held != "" {
+		out = append(out, held)
+	}
 	return out
+}
+
+// heldSection is every player the others own, in one table. It was answerable all along and
+// simply had nowhere to be asked: the rival tables only ever showed what somebody had put on
+// the market or whose clause was about to open, never the squads themselves.
+func (d Document) heldSection(players []map[string]any) string {
+	// Your best in each position, which is the bar every rival's player is read against.
+	best := map[string]map[string]any{}
+	for _, player := range players {
+		if !truthy(player["is_mine"]) {
+			continue
+		}
+		position := text(player["position"])
+		if current, seen := best[position]; !seen ||
+			number(player["xpts"]) > number(current["xpts"]) {
+			best[position] = player
+		}
+	}
+
+	held := make([]map[string]any, 0, 160)
+	owners := map[string]bool{}
+	for _, player := range players {
+		if truthy(player["is_mine"]) || text(player["owner_team_id"]) == "" {
+			continue
+		}
+		row := make(map[string]any, len(player)+4)
+		for key, value := range player {
+			row[key] = value
+		}
+		if value := number(player["value"]); value > 0 {
+			if clause := number(player["clause"]); clause > 0 {
+				row["clause_x"] = clause / value
+			}
+		}
+		// What he is listed at, if he is: a player already on sale is reachable without
+		// paying his clause, and that changes the answer completely.
+		if listing := mapOf(player["market"]); listing != nil {
+			if asking := number(listing["min_bid"]); asking > 0 {
+				row["asking"] = asking
+			}
+		}
+		if mine := best[text(player["position"])]; mine != nil {
+			row["vs_mine"] = number(player["xpts"]) - number(mine["xpts"])
+			row["vs_who"] = mine["name"]
+		}
+		owners[text(player["owner_team_id"])] = true
+		held = append(held, row)
+	}
+	if len(held) == 0 {
+		return ""
+	}
+	// Best first: this is read looking for who to go after, not to audit a census.
+	sort.SliceStable(held, func(one, two int) bool {
+		return number(held[one]["xpts"]) > number(held[two]["xpts"])
+	})
+
+	table, err := SectionTable("quientiene", held)
+	if err != nil {
+		return ""
+	}
+	note := "Todos los jugadores que tienen los demas, ordenados por lo que rinden. " +
+		"<strong>Frente a lo tuyo</strong> compara con tu mejor jugador de esa misma " +
+		"posicion, que es lo que decide si merece la pena ir a por el. <strong>Se puede</strong> " +
+		"dice si su clausula esta pagable hoy, cuanto le queda o si esta blindado. " +
+		"El buscador tambien encuentra por manager, y el <strong>+</strong> mete al jugador " +
+		"en el comparador."
+	return Section("Quién tiene qué", Filters+table, note,
+		fmt.Sprintf("%d jugadores de %d rivales", len(held), len(owners)), "quientiene")
 }
 
 func (d Document) rankingSections(players []map[string]any) []string {
