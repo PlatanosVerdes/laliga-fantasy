@@ -1775,6 +1775,18 @@ async function swap(){
   if(!res.ok) return;
   const data=await res.json();
   if(data.version===currentVersion) return;
+  // Una seccion que no existe todavia en esta pestaña no puede aparecer sola: el navegador
+  // tiene el HTML de antes (no hay donde meterla) y el JS de antes (no sabe a que pestaña va),
+  // asi que hasta ahora se ignoraba en silencio y no se veia hasta recargar a mano.
+  const missing=Object.keys(data.sections)
+    .filter(id=>!CLIENT_OWNED.has(id)&&!document.getElementById(id));
+  if(missing.length){
+    // Salvo en mitad de una operacion: recargar con el dialogo abierto se lo llevaria por
+    // delante. Se reintenta en el siguiente aviso, y la version no se toca hasta entonces.
+    if((drawer&&!drawer.hidden)||(modal&&!modal.hidden)) return;
+    location.reload();
+    return;
+  }
   currentVersion=data.version;
   Object.entries(data.sections).forEach(([id,inner])=>{
     if(CLIENT_OWNED.has(id)) return;
