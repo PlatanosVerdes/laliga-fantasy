@@ -1793,6 +1793,30 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		}
 		return TableIn(columns, rows, "Sin datos", "ofertas", false), nil
 
+	case "rivalsquad":
+		// Inside a rival's own section the owner column would repeat his name on every row.
+		columns := []Column{
+			{"", whole, "cmp"},
+			{"Jugador", whole, "player"},
+			{"Frente a lo tuyo", whole, "vs_mine"},
+			{"Cláusula", field("clause"), "money"},
+			{"Se puede", whole, "clause_when"},
+			{"x valor", field("clause_x"), "num"},
+			{"Valor", field("value"), "money"},
+			{"En venta", field("asking"), "money"},
+			{"xPts/j", field("xpts"), "num"},
+			{"Pts/M", field("points_value"), "mag"},
+			{"Titular", field("start_probability"), "starts"},
+			{"Proximo rival", func(row map[string]any) any {
+				rival := text(row["next_rival"])
+				if rival == "" {
+					return nil
+				}
+				return rival + " " + Where(truthy(row["next_home"]))
+			}, "text"},
+		}
+		return TableIn(columns, rows, "Sin jugadores", "", false), nil
+
 	case "riesgo":
 		// Not "who is good" but "who can be taken from you today", which is why the count
 		// of rivals who could pay is a column of its own.
