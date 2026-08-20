@@ -16,10 +16,18 @@ type activitySpec struct {
 
 var activityTypes = map[int]activitySpec{
 	1:  {"traspaso", -1, +1},
+	6:  {"recompensa", 0, 0},
 	9:  {"se une a la liga", 0, 0},
 	31: {"compra", -1, 0},
 	33: {"venta", +1, 0},
 }
+
+// RewardType is the matchday prize: "en la jornada 1, TheMessias ha ganado 4.800.000". It is
+// cash in, and a big one -- 1 to 4.8 M per manager on matchday 1 -- but it is not a transfer,
+// so it is counted on its own rather than through activityTypes. That keeps "neto en fichajes"
+// meaning what it says, and stops the league's cash from being wrong by the difference between
+// what each manager scored.
+const RewardType = 6
 
 // Every manager starts on the same cash; the daily reward is the only drip that cannot
 // be reconstructed from the log. Both are fallbacks only: when the session can read its
@@ -67,6 +75,7 @@ type LeagueTeam struct {
 	ClauseTotal   float64  `json:"clause_total"`
 	Players       int      `json:"players"`
 	NetFlow       float64  `json:"net_flow"`
+	Rewards       float64  `json:"rewards"`
 	EstimatedCash float64  `json:"estimated_cash"`
 	CashIsEstimate bool    `json:"cash_is_estimate"`
 }
@@ -79,6 +88,7 @@ type CashModel struct {
 	ImpliedRewards  *float64 `json:"implied_rewards"`
 	Uncertainty     float64  `json:"uncertainty"`
 	EventsWithCash  int      `json:"events_with_cash"`
+	PrizesCounted   int      `json:"prizes_counted"`
 }
 
 // NormalizeActivity flattens the league log into one shape, resolving ids to names.
@@ -119,7 +129,10 @@ func NormalizeActivity(events []map[string]any, managers map[string]string,
 				row.Player = &name
 			}
 		}
-		if pays {
+		if typeID == RewardType {
+			// Nobody sold anything: el premio lo cobra user1 y no hay otra parte.
+			row.Buyer = optional(managers[user1])
+		} else if pays {
 			row.Buyer = optional(managers[user1])
 			if user2 != "" {
 				row.Seller = optional(managers[user2])
@@ -151,8 +164,15 @@ func NormalizeActivity(events []map[string]any, managers map[string]string,
 func ReconstructCash(events []Event, teams map[string]*LeagueTeam, myTeamID string,
 	myRealCash *float64) CashModel {
 	net := map[string]float64{}
+	rewards := map[string]float64{}
+	prizes := 0
 	for _, event := range events {
 		if event.Amount == nil || *event.Amount == 0 {
+			continue
+		}
+		if event.TypeID == RewardType {
+			rewards[event.User1] += *event.Amount
+			prizes++
 			continue
 		}
 		spec, known := activityTypes[event.TypeID]
@@ -170,6 +190,7 @@ func ReconstructCash(events []Event, teams map[string]*LeagueTeam, myTeamID stri
 	for _, team := range teams {
 		if team.UserID != "" {
 			team.NetFlow = net[team.UserID]
+			team.Rewards = rewards[team.UserID]
 		}
 	}
 
@@ -177,12 +198,14 @@ func ReconstructCash(events []Event, teams map[string]*LeagueTeam, myTeamID stri
 	anchored := false
 	mine := teams[myTeamID]
 	if mine != nil && myRealCash != nil {
-		base = *myRealCash - mine.NetFlow
+		// The anchor has to take the prizes out too, or my own prize would be baked into the
+		// base and handed to everybody as if they had scored the same as me.
+		base = *myRealCash - mine.NetFlow - mine.Rewards
 		anchored = true
 	}
 
 	for _, team := range teams {
-		team.EstimatedCash = math.Max(0, base+team.NetFlow)
+		team.EstimatedCash = math.Max(0, base+team.NetFlow+team.Rewards)
 		team.CashIsEstimate = true
 	}
 	if mine != nil && myRealCash != nil {
@@ -190,7 +213,8 @@ func ReconstructCash(events []Event, teams map[string]*LeagueTeam, myTeamID stri
 		mine.CashIsEstimate = false
 	}
 
-	model := CashModel{Base: base, Anchored: anchored, Uncertainty: DailyReward * 10}
+	model := CashModel{Base: base, Anchored: anchored, Uncertainty: DailyReward * 10,
+		PrizesCounted: prizes}
 	if anchored {
 		implied := base - InitialCash
 		model.ImpliedRewards = &implied
@@ -204,7 +228,7 @@ func ReconstructCash(events []Event, teams map[string]*LeagueTeam, myTeamID stri
 		}
 	}
 	slog.Info("cash reconstructed", "base", math.Round(base), "anchored", anchored,
-		"teams", len(teams))
+		"teams", len(teams), "prizes", prizes)
 	return model
 }
 

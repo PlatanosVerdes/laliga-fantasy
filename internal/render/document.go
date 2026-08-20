@@ -701,10 +701,41 @@ func (d Document) scheduleSection(players []map[string]any) string {
 			mine[text(player["team_id"])]++
 		}
 	}
-	return Section("Calendario de partidos", MatchCalendar(fixtures, mine, d.MineByWeek),
-		"Las proximas jornadas, con los partidos de tus jugadores marcados. "+
-			"Una racha buena o mala se ve aqui antes que en el precio.",
-		fmt.Sprintf("%d jornadas", weeksIn(fixtures)), "partidos")
+	// Played matchdays go after the pending ones, and among themselves the other way round:
+	// what is coming is a decision, what happened is history and reads newest first.
+	week := int(number(mapOf(d.Universe["week"])["weekNumber"]))
+	upcoming := make([]map[string]any, 0, len(fixtures))
+	played := make([]map[string]any, 0, len(fixtures))
+	for _, fixture := range fixtures {
+		if int(number(fixture["week"])) < week {
+			played = append(played, fixture)
+			continue
+		}
+		upcoming = append(upcoming, fixture)
+	}
+	sort.SliceStable(played, func(one, two int) bool {
+		first, second := int(number(played[one]["week"])), int(number(played[two]["week"]))
+		if first != second {
+			return first > second
+		}
+		return text(played[one]["kickoff"]) < text(played[two]["kickoff"])
+	})
+
+	body := MatchCalendar(upcoming, mine, d.MineByWeek)
+	note := "Las proximas jornadas, con los partidos de tus jugadores marcados. " +
+		"Una racha buena o mala se ve aqui antes que en el precio."
+	if len(played) > 0 {
+		body += `<h3 class="kpi-label" style="margin-top:26px">Jornadas jugadas</h3>` +
+			MatchCalendar(played, mine, d.MineByWeek)
+		note += " Debajo, las jornadas ya jugadas con su resultado, de la mas reciente " +
+			"hacia atras: los jugadores marcados son los que tenias <strong>entonces</strong>, " +
+			"no los de ahora."
+	}
+	badge := fmt.Sprintf("%d jornadas", weeksIn(upcoming))
+	if jugadas := weeksIn(played); jugadas > 0 {
+		badge = fmt.Sprintf("%d por jugar · %d jugadas", weeksIn(upcoming), jugadas)
+	}
+	return Section("Calendario de partidos", body, note, badge, "partidos")
 }
 
 func weeksIn(fixtures []map[string]any) int {
@@ -947,9 +978,17 @@ func (d Document) clauseSections() []string {
 			"<strong>caja = base + ventas &minus; compras</strong>. "
 		if truthy(model["anchored"]) {
 			note += fmt.Sprintf("La base (%s) esta medida sobre tu propio saldo "+
-				"real, asi que absorbe la caja inicial y tus recompensas de una vez. "+
-				"El error que queda es solo la diferencia de recompensas diarias entre "+
-				"managers, como maximo %s.", Money(asFloat(model["base"])),
+				"real, asi que absorbe la caja inicial de una vez. ",
+				Money(asFloat(model["base"])))
+			// The matchday prize is the one drip that is not a transfer and is big enough to
+			// change who can pay a clause tonight, so say out loud that it is counted.
+			if prizes := number(model["prizes_counted"]); prizes > 0 {
+				note += fmt.Sprintf("Los <strong>premios de jornada</strong> se cuentan uno "+
+					"a uno (%.0f cobros hasta ahora): van en su propia columna y no en el "+
+					"neto de fichajes, porque no son fichajes. ", prizes)
+			}
+			note += fmt.Sprintf("El error que queda es solo la diferencia de recompensas "+
+				"diarias entre managers, como maximo %s.",
 				Money(asFloat(model["uncertainty"])))
 		} else {
 			note += fmt.Sprintf("Sin saldo propio que leer, asumo %s de "+

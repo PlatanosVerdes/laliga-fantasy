@@ -701,6 +701,11 @@ func Feed(events []map[string]any) string {
 
 	withAmount := make([]map[string]any, 0, len(moves))
 	for _, event := range moves {
+		// El premio de jornada no es una operacion: 4,8 M de recompensa arriba de la lista
+		// taparia el fichaje del que va la seccion.
+		if text(event["kind"]) == "recompensa" {
+			continue
+		}
 		if amount := asFloat(event["amount"]); amount != nil && *amount != 0 {
 			withAmount = append(withAmount, event)
 		}
@@ -753,6 +758,14 @@ func FeedRow(event map[string]any) string {
 	}
 	var body string
 	switch {
+	case text(event["kind"]) == "recompensa" && buyer != "":
+		week := ""
+		if raw := mapOf(event["raw"]); raw != nil {
+			if matchday := number(raw["weekNumber"]); matchday > 0 {
+				week = fmt.Sprintf(" por la jornada %.0f", matchday)
+			}
+		}
+		body = buyer + `<span class="feed-then">cobra` + Esc(week) + `</span>`
 	case player != "" && buyer != "" && seller != "":
 		body = fmt.Sprintf(`<strong>%s</strong>: %s &rarr; %s`, player, seller, buyer)
 	case player != "" && buyer != "":
@@ -1705,6 +1718,7 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 			{"Jugadores", field("players"), "int"},
 			{"Valor plantilla", field("squad_value"), "money"},
 			{"Neto en fichajes", field("net_flow"), "money"},
+			{"Premios", field("rewards"), "money"},
 			{"Caja estimada", field("estimated_cash"), "money"},
 			{"Suma de cláusulas", field("clause_total"), "money"},
 		}
