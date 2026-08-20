@@ -701,39 +701,36 @@ func (d Document) scheduleSection(players []map[string]any) string {
 			mine[text(player["team_id"])]++
 		}
 	}
-	// Played matchdays go after the pending ones, and among themselves the other way round:
-	// what is coming is a decision, what happened is history and reads newest first.
-	week := int(number(mapOf(d.Universe["week"])["weekNumber"]))
+	// Split by match, not by matchday: a LaLiga matchday runs from Friday to Thursday, so
+	// jornada 1 can be half history and half decision at the same time -- and the half still
+	// to come is exactly what matters. Pending above, played below, newest first.
 	upcoming := make([]map[string]any, 0, len(fixtures))
 	played := make([]map[string]any, 0, len(fixtures))
 	for _, fixture := range fixtures {
-		if int(number(fixture["week"])) < week {
+		if int(number(fixture["state"])) == FinishedMatch {
 			played = append(played, fixture)
 			continue
 		}
 		upcoming = append(upcoming, fixture)
 	}
 	sort.SliceStable(played, func(one, two int) bool {
-		first, second := int(number(played[one]["week"])), int(number(played[two]["week"]))
-		if first != second {
-			return first > second
-		}
-		return text(played[one]["kickoff"]) < text(played[two]["kickoff"])
+		return text(played[one]["kickoff"]) > text(played[two]["kickoff"])
 	})
 
 	body := MatchCalendar(upcoming, mine, d.MineByWeek)
 	note := "Las proximas jornadas, con los partidos de tus jugadores marcados. " +
 		"Una racha buena o mala se ve aqui antes que en el precio."
 	if len(played) > 0 {
-		body += `<h3 class="kpi-label" style="margin-top:26px">Jornadas jugadas</h3>` +
+		body += `<h3 class="kpi-label" style="margin-top:26px">Partidos jugados</h3>` +
 			MatchCalendar(played, mine, d.MineByWeek)
-		note += " Debajo, las jornadas ya jugadas con su resultado, de la mas reciente " +
-			"hacia atras: los jugadores marcados son los que tenias <strong>entonces</strong>, " +
-			"no los de ahora."
+		note += " Debajo, los partidos ya jugados con su resultado, del mas reciente hacia " +
+			"atras: los jugadores marcados ahi son los que tenias <strong>entonces</strong>, " +
+			"no los de ahora. Una jornada puede estar en los dos sitios, porque va de viernes " +
+			"a jueves."
 	}
-	badge := fmt.Sprintf("%d jornadas", weeksIn(upcoming))
-	if jugadas := weeksIn(played); jugadas > 0 {
-		badge = fmt.Sprintf("%d por jugar · %d jugadas", weeksIn(upcoming), jugadas)
+	badge := fmt.Sprintf("%d jornadas", weeksIn(fixtures))
+	if len(played) > 0 {
+		badge = fmt.Sprintf("%d por jugar · %d jugados", len(upcoming), len(played))
 	}
 	return Section("Calendario de partidos", body, note, badge, "partidos")
 }

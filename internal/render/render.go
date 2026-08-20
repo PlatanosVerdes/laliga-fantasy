@@ -1314,10 +1314,10 @@ var weekdays = []string{"lun", "mar", "mie", "jue", "vie", "sab", "dom"}
 // A table sorts; a calendar answers a different question — *when does the league open up* —
 // and at the start of a season the answer is dramatic: everything on the same day. That is
 // worth seeing as a shape rather than reading as 28 rows.
-// finishedMatch is the API's matchState for a played match. Kept here rather than importing the
+// FinishedMatch is the API's matchState for a played match. Kept here rather than importing the
 // scheduler for one number: this package renders and depends on nothing of ours.
 // See schedule.FinishedMatch, which has to agree.
-const finishedMatch = 7
+const FinishedMatch = 7
 
 var monthNames = []string{"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
 	"agosto", "septiembre", "octubre", "noviembre", "diciembre"}
@@ -1390,7 +1390,7 @@ func MatchCalendar(fixtures []map[string]any, mine map[string]int,
 			}
 			// A played match is history: it stays, because the run of fixtures reads better
 			// whole, but it steps back so the eye lands on what is still to come.
-			done := int(number(fixture["state"])) == finishedMatch
+			done := int(number(fixture["state"])) == FinishedMatch
 			if done {
 				classes += " match-done"
 				played++
