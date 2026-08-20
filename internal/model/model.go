@@ -896,8 +896,15 @@ func LoadSchedule(client *api.Client, week api.Week, teams []api.Team) []Fixture
 	}
 
 	out := []Fixture{}
-	for number := week.WeekNumber; number < week.WeekNumber+UpcomingWeeks; number++ {
-		matches, err := client.Calendar(number, 24*time.Hour)
+	// From matchday one, not from today: what already happened is what tells you whether a run
+	// was easy or brutal, and the page could only ever show what was still to come. A played
+	// matchday never changes, so it is cached for a week instead of a day.
+	for number := 1; number < week.WeekNumber+UpcomingWeeks; number++ {
+		ttl := 24 * time.Hour
+		if number < week.WeekNumber {
+			ttl = 7 * 24 * time.Hour
+		}
+		matches, err := client.Calendar(number, ttl)
 		if err != nil {
 			slog.Debug("calendar unavailable", "week", number, "reason", err.Error())
 			continue
@@ -917,7 +924,7 @@ func LoadSchedule(client *api.Client, week api.Week, teams []api.Team) []Fixture
 		}
 	}
 	sort.SliceStable(out, func(one, two int) bool { return out[one].Kickoff < out[two].Kickoff })
-	slog.Info("schedule loaded", "matches", len(out), "from", week.WeekNumber)
+	slog.Info("schedule loaded", "matches", len(out), "through", week.WeekNumber+UpcomingWeeks-1)
 	return out
 }
 
