@@ -701,36 +701,47 @@ func (d Document) scheduleSection(players []map[string]any) string {
 			mine[text(player["team_id"])]++
 		}
 	}
-	// Split by match, not by matchday: a LaLiga matchday runs from Friday to Thursday, so
-	// jornada 1 can be half history and half decision at the same time -- and the half still
-	// to come is exactly what matters. Pending above, played below, newest first.
+	// Whole matchdays only go downstairs. A LaLiga matchday runs Friday to Thursday, so one
+	// can be half played -- and while a single match of it is still to come, the matchday is
+	// a decision, not history: it stays upstairs with the played ones dimmed inside it.
+	pending := map[int]bool{}
+	for _, fixture := range fixtures {
+		if int(number(fixture["state"])) != FinishedMatch {
+			pending[int(number(fixture["week"]))] = true
+		}
+	}
 	upcoming := make([]map[string]any, 0, len(fixtures))
 	played := make([]map[string]any, 0, len(fixtures))
 	for _, fixture := range fixtures {
-		if int(number(fixture["state"])) == FinishedMatch {
-			played = append(played, fixture)
+		if pending[int(number(fixture["week"]))] {
+			upcoming = append(upcoming, fixture)
 			continue
 		}
-		upcoming = append(upcoming, fixture)
+		played = append(played, fixture)
 	}
+	// Finished matchdays newest first, and inside each one the matches in order.
 	sort.SliceStable(played, func(one, two int) bool {
-		return text(played[one]["kickoff"]) > text(played[two]["kickoff"])
+		first, second := int(number(played[one]["week"])), int(number(played[two]["week"]))
+		if first != second {
+			return first > second
+		}
+		return text(played[one]["kickoff"]) < text(played[two]["kickoff"])
 	})
 
 	body := MatchCalendar(upcoming, mine, d.MineByWeek)
 	note := "Las proximas jornadas, con los partidos de tus jugadores marcados. " +
 		"Una racha buena o mala se ve aqui antes que en el precio."
 	if len(played) > 0 {
-		body += `<h3 class="kpi-label" style="margin-top:26px">Partidos jugados</h3>` +
+		body += `<h3 class="kpi-label" style="margin-top:26px">Jornadas terminadas</h3>` +
 			MatchCalendar(played, mine, d.MineByWeek)
-		note += " Debajo, los partidos ya jugados con su resultado, del mas reciente hacia " +
-			"atras: los jugadores marcados ahi son los que tenias <strong>entonces</strong>, " +
-			"no los de ahora. Una jornada puede estar en los dos sitios, porque va de viernes " +
-			"a jueves."
+		note += " Debajo, las jornadas <strong>terminadas</strong> con sus resultados, de la " +
+			"mas reciente hacia atras, y con los jugadores que tenias <strong>entonces</strong>. " +
+			"Mientras a una jornada le quede un solo partido sigue arriba: los que ya se " +
+			"jugaron salen apagados con su resultado."
 	}
 	badge := fmt.Sprintf("%d jornadas", weeksIn(fixtures))
-	if len(played) > 0 {
-		badge = fmt.Sprintf("%d por jugar · %d jugados", len(upcoming), len(played))
+	if terminadas := weeksIn(played); terminadas > 0 {
+		badge = fmt.Sprintf("%d en juego · %d terminadas", weeksIn(upcoming), terminadas)
 	}
 	return Section("Calendario de partidos", body, note, badge, "partidos")
 }
@@ -991,8 +1002,13 @@ func (d Document) clauseSections() []string {
 			note += fmt.Sprintf("Sin saldo propio que leer, asumo %s de "+
 				"caja inicial para todos.", Money(asFloat(model["base"])))
 		}
+		// The squads come first in the tab, so the table is built before it and appended after.
+		if held := d.heldSection(rows(d.Universe["players"])); held != "" {
+			out = append(out, held)
+		}
 		table, _ = SectionTable("rivales", rivals)
 		out = append(out, Section("Poder de compra de la liga", table, note, "", "rivales"))
+		return out
 	}
 	if held := d.heldSection(rows(d.Universe["players"])); held != "" {
 		out = append(out, held)
