@@ -964,7 +964,7 @@ func (d Document) clauseSections() []string {
 	return out
 }
 
-// heldSection is every player the others own, in one table. It was answerable all along and
+// heldSection is every rival squad, whole, in one table. It was answerable all along and
 // simply had nowhere to be asked: the rival tables only ever showed what somebody had put on
 // the market or whose clause was about to open, never the squads themselves.
 func (d Document) heldSection(players []map[string]any) string {
@@ -1028,7 +1028,7 @@ func (d Document) heldSection(players []map[string]any) string {
 		"dice si su clausula esta pagable hoy, cuanto le queda o si esta blindado. " +
 		"El buscador tambien encuentra por manager, y el <strong>+</strong> mete al jugador " +
 		"en el comparador."
-	return Section("Quién tiene qué", Filters+table, note,
+	return Section("Plantillas rivales", Filters+table, note,
 		fmt.Sprintf("%d jugadores de %d rivales", len(held), len(owners)), "quientiene")
 }
 
