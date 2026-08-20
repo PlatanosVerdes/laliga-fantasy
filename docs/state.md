@@ -15,8 +15,10 @@ auth, because the network is the door. The homepage card sits under *Services* w
 
 **The comparator** answers the question the player card never did: not "how good is he" but
 "instead of whom". A `+` on the card and on every squad row fills a tray at the bottom of the
-page (kept in `localStorage`, so the live re-render cannot wipe it); `Comparar` lays them out in
-one table, and `+ mis MED` pulls in your own players of that line, best score first. With one
+page (kept in `localStorage`, so the live re-render cannot wipe it); the tray also has a search
+box, because adding a player should not mean finding him in a table first (`?q=` searches the
+same world, accent-insensitive, prefix matches first). `Comparar` lays them out in one table, and
+`+ mis MED` pulls in your own players of that line, best score first. With one
 outsider against your own, a verdict line says whether he improves your best in that position,
 only your worst, or none of them, and what the difference costs. `GET /api/compare?ids=…`
 (`internal/server/compare.go`) builds it from the world already in memory, so it costs no LaLiga
