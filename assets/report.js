@@ -977,11 +977,11 @@ async function openDetail(playerId){
     ? `<img class="drawer-face" src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
     : `<span class="drawer-face crest crest-${p.team_id}"></span>`;
   body.innerHTML=`
-    <div class="drawer-head">${face}<h3>${p.name}</h3>
-      <button class="cmp-add" type="button" data-cmp="${p.id}" data-cmp-name="${p.name}"
-        data-cmp-pos="${p.position||''}">+</button></div>
+    <div class="drawer-head">${face}<h3>${p.name}</h3></div>
     <p class="sub"><span class="pos pos-${(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
-      ${p.team||''} · ${owner}${p.starred?' · ★':''}</p>
+      ${p.team||''} · ${owner}${p.starred?' · ★':''}
+      <button class="cmp-add" type="button" data-cmp="${p.id}" data-cmp-name="${p.name}"
+        data-cmp-pos="${p.position||''}">+ comparar</button></p>
     <dl class="drawer-stats">
       <div><dt>Valor de mercado</dt><dd>${exact(p.value)}</dd></div>
       <div><dt>xPts por jornada</dt><dd>${(p.xpts||0).toFixed(2)}</dd></div>
@@ -1298,18 +1298,87 @@ function trayBox(){
   if(box) return box;
   box=document.createElement('div');
   box.id='cmp-tray'; box.className='cmp-tray'; box.hidden=true;
-  box.innerHTML=`<div class="cmp-chips"></div>
+  box.innerHTML=`<div class="cmp-find-wrap">
+      <input class="cmp-find" type="search" autocomplete="off" spellcheck="false"
+        placeholder="buscar jugador…" aria-label="Buscar jugador para comparar">
+      <div class="cmp-results" hidden></div>
+    </div>
+    <div class="cmp-chips"></div>
     <span class="cmp-msg"></span>
     <div class="cmp-acts">
       <button type="button" class="cmp-mine"></button>
       <button type="button" class="cmp-go primary"></button>
-      <button type="button" class="cmp-clear" title="Vaciar el comparador">&times;</button>
+      <button type="button" class="cmp-clear">Vaciar</button>
     </div>`;
   document.body.appendChild(box);
   box.querySelector('.cmp-go').addEventListener('click',openCompare);
   box.querySelector('.cmp-mine').addEventListener('click',addMine);
-  box.querySelector('.cmp-clear').addEventListener('click',()=>{ tray=[]; cmpSave(); drawTray(); });
+  box.querySelector('.cmp-clear').addEventListener('click',()=>{
+    // Vaciar con la tabla delante deja una comparacion de nadie, asi que se cierra con ella;
+    // si lo que hay abierto es una ficha, no se toca.
+    const comparing=drawer&&!drawer.hidden&&drawer.querySelector('.cmp-wrap');
+    tray=[]; cmpSave(); drawTray();
+    if(comparing) closeDrawer();
+  });
+  wireFind(box);
   return box;
+}
+
+// El buscador de la bandeja. Sale de la misma peticion que el comparador, asi que no hace
+// falta ningun indice nuevo: el mundo entero ya esta en memoria en el servidor.
+function wireFind(box){
+  const input=box.querySelector('.cmp-find'), list=box.querySelector('.cmp-results');
+  let timer=null, found=[];
+  const hide=()=>{ list.hidden=true; list.innerHTML=''; found=[]; };
+  const paint=()=>{
+    if(!found.length){ hide(); return; }
+    list.innerHTML=found.map((p,i)=>`
+      <button class="cmp-hit${i===0?' first':''}" type="button" data-cmp="${p.id}"
+        data-cmp-name="${p.name}" data-cmp-pos="${p.position||''}">
+        <span class="cmp-hit-who">
+          ${p.image
+            ? `<img src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
+            : `<span class="crest crest-${p.team_id}"></span>`}
+          <b>${p.name}</b>
+          <span class="pos pos-${String(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
+        </span>
+        <span class="cmp-hit-num">${p.team_short||''} · ${p.is_mine?'tuyo':(p.owner||'libre')}
+          <b>${fmt(p.value)}</b></span>
+      </button>`).join('');
+    list.hidden=false;
+  };
+  const run=async()=>{
+    const query=input.value.trim();
+    if(query.length<2){ hide(); return; }
+    try{
+      const res=await fetch('/api/compare?q='+encodeURIComponent(query));
+      if(!res.ok) throw new Error(res.status);
+      const data=await res.json();
+      found=(data.matches||[]).filter(p=>!cmpHas(p.id));
+      if(!found.length){
+        list.innerHTML='<p class="cmp-none">Nadie con ese nombre</p>';
+        list.hidden=false;
+        return;
+      }
+      paint();
+    }catch(e){ hide(); }
+  };
+  input.addEventListener('input',()=>{ clearTimeout(timer); timer=setTimeout(run,180); });
+  input.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape'){ input.value=''; hide(); input.blur(); }
+    // Enter añade el primero: teclear tres letras y pulsar Enter es el camino corto.
+    if(event.key==='Enter'&&found.length){
+      event.preventDefault();
+      const first=found[0];
+      cmpAdd(first.id,first.name,first.position);
+      input.value=''; hide();
+    }
+  });
+  // Al añadir desde la lista, el hueco se cierra solo: el click lo recoge el documento.
+  list.addEventListener('click',()=>{ input.value=''; setTimeout(hide,0); });
+  document.addEventListener('click',(event)=>{
+    if(!box.contains(event.target)) hide();
+  });
 }
 
 function trayMsg(text){
@@ -1346,9 +1415,9 @@ function drawTray(){
   wireDetails(box);
   // El boton de la ficha tiene que decir en que estado esta: "+" invita, "✓" recuerda.
   document.querySelectorAll('button[data-cmp]').forEach(button=>{
-    const on=cmpHas(button.dataset.cmp);
+    const on=cmpHas(button.dataset.cmp), short=button.classList.contains('small');
     button.classList.toggle('on',on);
-    button.textContent=on?'✓':'+';
+    button.textContent=on?(short?'✓':'✓ comparando'):(short?'+':'+ comparar');
     button.title=on?'Quitar del comparador':'Añadir al comparador';
   });
 }
@@ -1429,15 +1498,17 @@ function cmpVerdict(list){
   const money=(a,b)=>{
     const diff=(a.value||0)-(b.value||0);
     return diff===0?'y cuesta lo mismo'
-      : `y cuesta ${exact(Math.abs(Math.round(diff)))} ${diff>0?'mas':'menos'}`;
+      : `y cuesta ${fmt(Math.abs(Math.round(diff)))} ${diff>0?'mas':'menos'}`;
   };
+  // Mejorar a uno sancionado no es merito: decirlo evita leer el veredicto al reves.
+  const why=(p)=> p.available===false?' (que ahora no puntua)':'';
   let verdict;
   if(gap(him,best)>0){
     verdict = `<b>${him.name}</b> mejora a tu mejor ${line}: <b>+${gap(him,best).toFixed(2)}
       xPts</b> sobre ${best.name} ${money(him,best)}.`;
   }else if(gap(him,worst)>0){
     verdict = `<b>${him.name}</b> no llega a ${best.name}, pero si mejora a
-      <b>${worst.name}</b> (+${gap(him,worst).toFixed(2)} xPts ${money(him,worst)}).`;
+      <b>${worst.name}</b>${why(worst)}: +${gap(him,worst).toFixed(2)} xPts ${money(him,worst)}.`;
   }else{
     verdict = `<b>${him.name}</b> no mejora a ninguno de tus ${line}:
       ${worst.name} ya le saca ${Math.abs(gap(him,worst)).toFixed(2)} xPts.`;
@@ -1478,7 +1549,7 @@ async function openCompare(){
       </span>
       <span class="cmp-sub"><span class="pos pos-${String(p.position||'').toLowerCase().slice(0,3)}"
         >${p.position}</span> ${p.team_short||p.team||''} ·
-        ${p.is_mine?'tu':(p.owner&&p.owner_team_id
+        ${p.is_mine?'tuyo':(p.owner&&p.owner_team_id
           ? `<button class="p-name" type="button" data-manager="${p.owner_team_id}">${p.owner}</button>`
           : (p.owner||'libre'))}</span>
     </div></th>`).join('');
@@ -1507,7 +1578,9 @@ async function openCompare(){
     <div class="cmp-wrap"><table class="cmp">
       <thead><tr><th></th>${head}</tr></thead>
       <tbody>${rows}
-        <tr><td>Estado</td>${list.map(p=>`<td class="cmp-state">${cmpChips(p)}</td>`).join('')}</tr>
+        <tr><td>Estado</td>${list.map(p=>
+          `<td><span class="cmp-state">${cmpChips(p)||'<span class="cmp-quiet">sin nada</span>'}</span></td>`
+          ).join('')}</tr>
       </tbody>
     </table></div>
     <p class="drawer-note">Valor y clausula en negrita marcan el mas barato, no el mejor.

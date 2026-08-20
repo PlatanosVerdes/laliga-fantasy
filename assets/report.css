@@ -652,48 +652,82 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .ending-body{min-width:0}
 
 /* ---- comparador ---------------------------------------------------------- */
-.cmp-add{font:inherit;font-size:15px;font-weight:700;line-height:1;width:26px;height:26px;
-  flex:0 0 auto;margin-left:auto;border:1px solid var(--line);border-radius:50%;
-  background:var(--surface);color:var(--ink-2);cursor:pointer}
+/* El de la ficha lleva texto (hay sitio y dice que hace); el de las plantillas es un circulo
+   porque va uno por fila. */
+.cmp-add{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+  padding:3px 9px;border:1px solid var(--line);border-radius:20px;background:var(--surface);
+  color:var(--ink-2);cursor:pointer;white-space:nowrap;flex:0 0 auto}
 .cmp-add:hover{border-color:var(--baseline);color:var(--ink)}
-.cmp-add.on{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good);
+.cmp-add.on{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good);
   border-color:transparent}
-.cmp-add.small{width:19px;height:19px;font-size:12px;margin-left:2px}
-.cmp-tray{position:fixed;left:0;right:0;bottom:0;z-index:70;display:flex;align-items:center;
-  gap:10px;flex-wrap:wrap;padding:8px 14px;background:var(--surface);
-  border-top:1px solid var(--line);box-shadow:0 -6px 24px rgba(0,0,0,.14)}
+.cmp-add.small{width:19px;height:19px;padding:0;border-radius:50%;font-size:12px;
+  letter-spacing:0;margin-left:2px;line-height:1}
+
+/* Una barra flotante, no un pie pegado a los bordes: tapa menos y se lee como algo aparte. */
+.cmp-tray{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:70;
+  width:max-content;max-width:calc(100% - 28px);display:flex;align-items:center;gap:10px;
+  flex-wrap:wrap;padding:9px 12px;background:var(--surface);border:1px solid var(--line);
+  border-radius:14px;box-shadow:0 10px 34px rgba(0,0,0,.28)}
 .cmp-tray[hidden]{display:none}
-.cmp-chips{display:flex;gap:6px;flex-wrap:wrap;flex:1 1 auto;min-width:0}
+.cmp-find-wrap{position:relative;flex:0 0 auto}
+.cmp-find{font:inherit;font-size:13px;width:170px;padding:6px 10px;border-radius:9px;
+  border:1px solid var(--line);background:var(--plane);color:var(--ink)}
+.cmp-find:focus{outline:none;border-color:var(--accent)}
+.cmp-results{position:absolute;bottom:calc(100% + 8px);left:0;width:330px;max-height:320px;
+  overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  box-shadow:0 12px 32px rgba(0,0,0,.32);padding:5px;display:flex;flex-direction:column;gap:2px}
+.cmp-results[hidden]{display:none}
+.cmp-hit{font:inherit;font-size:12.5px;display:flex;align-items:center;justify-content:space-between;
+  gap:10px;padding:6px 8px;border:none;border-radius:8px;background:none;color:var(--ink);
+  cursor:pointer;text-align:left;width:100%}
+.cmp-hit:hover,.cmp-hit.first{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.cmp-hit-who{display:inline-flex;align-items:center;gap:6px;min-width:0}
+.cmp-hit-who img,.cmp-hit-who .crest{width:20px;height:20px;border-radius:50%;object-fit:cover;
+  flex:0 0 auto}
+.cmp-hit-num{color:var(--muted);font-size:11px;white-space:nowrap}
+.cmp-none{margin:0;padding:8px;font-size:12px;color:var(--muted)}
+.cmp-chips{display:flex;gap:6px;flex-wrap:wrap;min-width:0}
 .cmp-chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;background:var(--mid);
   border-radius:20px;padding:3px 6px 3px 8px}
 .cmp-x{font:inherit;font-size:14px;line-height:1;background:none;border:none;color:var(--muted);
   cursor:pointer;padding:0 2px}
 .cmp-x:hover{color:var(--critical)}
 .cmp-msg{font-size:12px;color:var(--warning)}
-.cmp-acts{display:flex;gap:6px;align-items:center;flex:0 0 auto}
-.cmp-acts button{font:inherit;font-size:12px;font-weight:600;padding:7px 11px;border-radius:8px;
-  border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.cmp-acts{display:flex;gap:6px;align-items:center;flex:0 0 auto;margin-left:auto}
+.cmp-acts button{font:inherit;font-size:12px;font-weight:600;padding:7px 11px;border-radius:9px;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;
+  white-space:nowrap}
 .cmp-acts button:hover{border-color:var(--baseline)}
 .cmp-acts button.primary{background:var(--accent);color:#fff;border-color:transparent}
+.cmp-acts button.cmp-clear{color:var(--muted)}
+.cmp-acts button.cmp-clear:hover{color:var(--critical)}
 .cmp-acts button[disabled]{opacity:.45;cursor:not-allowed}
-/* La bandeja no puede tapar ni la ultima fila de la tabla ni el ultimo boton de la ficha. */
-body.tray-on{padding-bottom:62px}
-body.tray-on .drawer-panel{padding-bottom:76px}
-.drawer-panel.wide{width:min(960px,100%)}
+body.tray-on .drawer-panel{padding-bottom:84px}
+
+/* La tabla: el th global de la pagina es de tabla ordenable (mayusculas, sticky, cursor de
+   mano) y aqui es una cabecera de jugador, asi que se deshace. */
+.drawer-panel.wide{width:min(980px,100%)}
 .cmp-wrap{overflow-x:auto;margin:0 0 14px}
 table.cmp{border-collapse:collapse;width:100%;font-size:13px}
-table.cmp th,table.cmp td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:right;
+table.cmp th{position:static;cursor:default;text-transform:none;letter-spacing:0;
+  font-size:13px;color:var(--ink);font-weight:600;background:none;border-bottom:1px solid var(--line);
+  text-align:right;vertical-align:bottom;padding:0 9px 10px}
+table.cmp td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:right;
   font-variant-numeric:tabular-nums;white-space:nowrap}
 table.cmp th:first-child,table.cmp td:first-child{text-align:left;color:var(--muted);
-  font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:600}
-table.cmp thead th{text-align:left;vertical-align:bottom;padding-bottom:10px}
+  font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;
+  position:sticky;left:0;background:var(--surface)}
 table.cmp td.cmp-best{color:var(--good);font-weight:700}
 table.cmp td.cmp-cheap{font-weight:700}
-table.cmp td.cmp-state{white-space:normal;text-align:left;max-width:170px}
-.cmp-who{display:flex;flex-direction:column;gap:3px;max-width:170px;white-space:normal}
+.cmp-who{display:flex;flex-direction:column;align-items:flex-end;gap:3px;white-space:normal;
+  text-align:right}
 .cmp-who img,.cmp-who .crest{width:28px;height:28px;border-radius:50%;object-fit:cover}
 .cmp-name{display:inline-flex;align-items:center;gap:2px}
 .cmp-sub{font-size:11px;color:var(--muted);font-weight:400;display:inline-flex;
-  align-items:center;gap:5px;flex-wrap:wrap}
+  align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end;text-transform:none}
+/* Un chip por linea: en fila se cortan a mitad de palabra. */
+.cmp-state{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.cmp-state .chip{white-space:nowrap}
+.cmp-quiet{color:var(--muted);font-size:11px}
 .cmp-verdict{font-size:13px;line-height:1.45;margin:0 0 14px;padding:9px 11px;border-radius:9px;
   border:1px solid var(--line);background:color-mix(in srgb,var(--accent) 8%,transparent)}

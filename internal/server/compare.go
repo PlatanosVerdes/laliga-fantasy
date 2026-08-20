@@ -12,10 +12,14 @@ import (
 	"sync"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 )
 
 // A table nobody can read at a glance compares nothing.
 const compareMax = 8
+
+// Enough to choose from without turning the tray into a list to scroll.
+const searchMax = 12
 
 func (s *Server) compare(writer http.ResponseWriter, request *http.Request) {
 	if s.state.Universe() == nil {
@@ -70,7 +74,62 @@ func (s *Server) compare(writer http.ResponseWriter, request *http.Request) {
 	}
 	wait.Wait()
 
-	s.json(writer, http.StatusOK, map[string]any{"players": players, "mine": mine})
+	s.json(writer, http.StatusOK, map[string]any{"players": players, "mine": mine,
+		"matches": search(rows, request.URL.Query().Get("q"))})
+}
+
+// search feeds the tray's box: adding a player should not mean hunting for him in a table
+// first. Accent-insensitive, and whoever starts with what you typed goes first, because that
+// is what you meant when you typed three letters.
+func search(rows []map[string]any, query string) []map[string]any {
+	needle := matching.Normalize(query)
+	if len(needle) < 2 {
+		return []map[string]any{}
+	}
+	type hit struct {
+		row  map[string]any
+		tier int
+	}
+	hits := make([]hit, 0, 32)
+	for _, row := range rows {
+		name := matching.Normalize(text(row["name"]))
+		if name == "" {
+			continue
+		}
+		tier := -1
+		switch {
+		case strings.HasPrefix(name, needle):
+			tier = 0
+		case strings.Contains(" "+name, " "+needle):
+			tier = 1
+		case strings.Contains(name, needle):
+			tier = 2
+		}
+		if tier < 0 {
+			continue
+		}
+		hits = append(hits, hit{row, tier})
+	}
+	sort.SliceStable(hits, func(one, two int) bool {
+		if hits[one].tier != hits[two].tier {
+			return hits[one].tier < hits[two].tier
+		}
+		return number(hits[one].row["score"]) > number(hits[two].row["score"])
+	})
+	if len(hits) > searchMax {
+		hits = hits[:searchMax]
+	}
+	out := make([]map[string]any, 0, len(hits))
+	for _, found := range hits {
+		out = append(out, map[string]any{
+			"id": found.row["id"], "name": found.row["name"],
+			"position": found.row["position"], "team_short": found.row["team_short"],
+			"team_id": found.row["team_id"], "image": found.row["image"],
+			"value": found.row["value"], "xpts": found.row["xpts"],
+			"is_mine": found.row["is_mine"], "owner": found.row["owner"],
+		})
+	}
+	return out
 }
 
 // compareRow keeps the same field names the tables and the drawer use, so one number cannot
