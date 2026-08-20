@@ -741,7 +741,11 @@ func (d Document) scheduleSection(players []map[string]any) string {
 	}
 	badge := fmt.Sprintf("%d jornadas", weeksIn(fixtures))
 	if terminadas := weeksIn(played); terminadas > 0 {
-		badge = fmt.Sprintf("%d en juego · %d terminadas", weeksIn(upcoming), terminadas)
+		word := "terminadas"
+		if terminadas == 1 {
+			word = "terminada"
+		}
+		badge = fmt.Sprintf("%d en juego · %d %s", weeksIn(upcoming), terminadas, word)
 	}
 	return Section("Calendario de partidos", body, note, badge, "partidos")
 }
@@ -1140,7 +1144,10 @@ func (d Document) rivalSections(players []map[string]any) []string {
 		if payable > 0 {
 			note += fmt.Sprintf(" %d con la clausula pagable ya.", payable)
 		}
-		if listed > 0 {
+		switch {
+		case listed == 1:
+			note += " Uno puesto en venta."
+		case listed > 1:
 			note += fmt.Sprintf(" %d puestos en venta.", listed)
 		}
 
