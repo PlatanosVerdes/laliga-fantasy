@@ -1169,7 +1169,7 @@ func (d Document) rivalSections(players []map[string]any) []string {
 		out = append(out, SectionIn("rivales", manager, table, note, badge, "rival-"+teamID))
 	}
 
-	picker := `<div class="filters rival-pick"><label>Equipo<select id="rival-pick">` +
+	picker := `<div class="pick-bar"><label>Equipo<select id="rival-pick">` +
 		strings.Join(options, "") +
 		`<option value="all">todos a la vez</option></select></label></div>`
 	head := SectionIn("rivales", "Plantillas rivales", picker,

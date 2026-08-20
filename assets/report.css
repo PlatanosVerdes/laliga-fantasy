@@ -760,6 +760,12 @@ td .muted,span.muted{color:var(--muted)}
 .tip-float[hidden]{display:none}
 [data-tip]{cursor:help}
 
-/* El desplegable de rivales es la cabecera de su pestaña, no un filtro mas. */
-.rival-pick{margin-bottom:0}
-.rival-pick select{min-width:230px}
+/* El desplegable de rivales es la cabecera de su pestaña, no una barra de filtros: comparte
+   pinta pero no controles, y llevar su clase hacia que wireFilters petase con la pagina viva. */
+.pick-bar{display:flex;align-items:center;gap:10px;margin:0 0 4px}
+.pick-bar label{display:inline-flex;align-items:center;gap:7px;font-size:11px;
+  text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.pick-bar select{font:inherit;font-size:13px;text-transform:none;letter-spacing:0;
+  color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:9px;
+  padding:7px 10px;min-width:240px;cursor:pointer}
+.pick-bar select:focus{outline:none;border-color:var(--accent)}

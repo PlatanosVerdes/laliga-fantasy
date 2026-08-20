@@ -1229,10 +1229,13 @@ type Column struct {
 // so those say it themselves and the script reads it off the DOM.
 func SectionIn(tab, title, body, note, badge, anchor string) string {
 	built := Section(title, body, note, badge, anchor)
-	if tab == "" {
+	if tab == "" || anchor == "" {
 		return built
 	}
-	return strings.Replace(built, "<section", `<section data-tab="`+Esc(tab)+`"`, 1)
+	// After the id, never before it: the server's section splitter matches `<section id="`,
+	// and a section it cannot see is a section the live refresh silently stops updating.
+	ident := ` id="` + Esc(anchor) + `"`
+	return strings.Replace(built, ident, ident+` data-tab="`+Esc(tab)+`"`, 1)
 }
 
 func Section(title, body, note, badge, anchor string) string {

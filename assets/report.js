@@ -48,6 +48,10 @@ function wireFilters(root=document){
     bar.dataset.wired='1';
     const pos=bar.querySelector('.f-pos'), price=bar.querySelector('.f-price'),
           text=bar.querySelector('.f-text'), reset=bar.querySelector('.f-reset');
+    // Sin sus controles no es una barra de filtros: una excepcion aqui se lleva por delante
+    // el resto del arranque (el resto de cables y la conexion en vivo), y la pagina entera
+    // se queda muerta sin poder pulsar nada.
+    if(!pos||!price||!text||!reset) return;
     pos.value=filterState.pos; price.value=filterState.price; text.value=filterState.text;
     const sync=()=>{ filterState.pos=pos.value; filterState.price=price.value;
                      filterState.text=text.value; applyFilters(); };

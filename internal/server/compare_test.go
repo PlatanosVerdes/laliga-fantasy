@@ -48,3 +48,22 @@ func TestSearchCapsResults(t *testing.T) {
 		t.Errorf("la lista tiene que caber en la bandeja: %d", len(found))
 	}
 }
+
+// A section the splitter cannot see is a section the live refresh silently stops updating, so
+// the shapes the renderer actually emits are pinned here.
+func TestSectionsFindsIdsWithAttributesAndDashes(t *testing.T) {
+	page := `<section id="plan">uno</section>` +
+		`<section id="rival-38126770" data-tab="rivales">dos</section>` +
+		`<section id="rivalpick" data-tab="rivales">tres</section>`
+	found := Sections(page)
+	for id, want := range map[string]string{
+		"plan": "uno", "rival-38126770": "dos", "rivalpick": "tres",
+	} {
+		if found[id] != want {
+			t.Errorf("%s: %q, esperaba %q", id, found[id], want)
+		}
+	}
+	if len(found) != 3 {
+		t.Errorf("tres secciones, salieron %d: %v", len(found), found)
+	}
+}
