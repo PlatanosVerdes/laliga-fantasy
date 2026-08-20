@@ -528,7 +528,9 @@ func (s *State) SetWarm(warm func()) { s.warm = warm }
 // announce warms the page and only then says there is something new, so the browser's refresh
 // lands on a cache that is already built.
 func (s *State) announce(message map[string]any) {
-	if s.warm == nil {
+	// Warming is for whoever is watching. With nobody connected, publishing goes nowhere and
+	// rendering would be four seconds of a Raspberry's CPU spent on a page no one asked for.
+	if s.warm == nil || !s.watched() {
 		s.publish(message)
 		return
 	}
@@ -536,6 +538,12 @@ func (s *State) announce(message map[string]any) {
 		s.warm()
 		s.publish(message)
 	}()
+}
+
+func (s *State) watched() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.subs) > 0
 }
 
 func (s *State) Subscribe() chan []byte {
