@@ -460,6 +460,10 @@ func Header(generated, leagueName string, week int, kpis []string, withTabs bool
 		// What this server may do, next to when it last looked: both answer "can I trust what I
 		// am seeing to be acted on".
 		modeChip(mode) +
+		// The comparator has no table of its own to live in, so its way in is here: a
+		// signing is decided against what you already have, from wherever you are looking.
+		`<button class="head-btn" id="open-compare" type="button" ` +
+		`title="Comparar jugadores entre ellos y con tu plantilla">Comparador</button>` +
 		`</header>` +
 		`<div class="kpis">` + strings.Join(kpis, "") + `</div>` + tabs
 }

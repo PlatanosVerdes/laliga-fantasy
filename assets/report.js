@@ -273,17 +273,55 @@ if(modal){
         body:JSON.stringify({token:pending.token})});
       const data=await res.json();
       if(!res.ok) throw new Error(data.error||res.status);
+      const done=DONE_LABEL[pending&&pending.operation]||'Hecho';
       modal.querySelector('.bid-summary').innerHTML =
-        `<p class="bid-ok">${DONE_LABEL[pending&&pending.operation]||'Hecho'}${
-          data.dry_run?' (simulacro)':''}.</p>`;
+        `<p class="bid-ok">${done}${data.dry_run?' (simulacro)':''}.</p>`;
       modal.querySelector('.bid-confirm').hidden=true;
       modal.querySelector('.bid-cancel').textContent='Cerrar';
+      // El servidor ya lo ha hecho: la fila se va y el aviso sale ahora, sin esperar a que
+      // se reconstruya el mundo. Cuando llegue el refresco, la tabla ya coincide.
+      // En simulacro no se ha movido nada: el resumen se queda para poder leerlo.
+      if(!data.dry_run){ settled(pending,done); closeModal(); }
     }catch(err){
       modal.querySelector('.bid-error').textContent=err.message;
     }finally{
       button.disabled=false; button.textContent='Aceptar';
     }
   });
+}
+
+// Operaciones que terminan con la fila: la oferta aceptada o rechazada ya no existe, la puja
+// retirada tampoco. Poner en venta o pujar no borran nada, asi que ahi solo sale el aviso.
+const OP_ENDS_ROW=new Set(['accept_offer','decline_offer','withdraw','cancel_bid',
+                           'cancel_offer','pay_clause']);
+
+function settled(op,label){
+  if(!op) return;
+  if(OP_ENDS_ROW.has(op.operation)){
+    // La fila se busca por lo que la identifica, de lo mas concreto a lo menos: una oferta
+    // concreta, si no la entrada de mercado, si no el jugador.
+    const key=op.offer_id?`[data-op-offer="${op.offer_id}"]`
+      :(op.market_id?`[data-op-market="${op.market_id}"]`
+      :(op.player_id?`[data-op-player="${op.player_id}"]`:''));
+    if(key) document.querySelectorAll('button.op'+key).forEach(button=>{
+      const row=button.closest('tr');
+      if(row) row.classList.add('row-gone');
+      button.disabled=true;
+    });
+  }
+  flash(label,op.name);
+}
+
+// El mismo aviso que manda el servidor cuando algo se mueve, pero dicho aqui y al instante.
+function flash(title,detail){
+  const box=document.createElement('div');
+  box.className='effect';
+  box.innerHTML=`<button class="effect-close" aria-label="Cerrar">×</button>`
+    +`<h4>${title}</h4>`+(detail?`<p class="effect-line">${detail}</p>`:'');
+  document.body.appendChild(box);
+  box.querySelector('.effect-close').addEventListener('click',()=>box.remove());
+  requestAnimationFrame(()=>box.classList.add('in'));
+  setTimeout(()=>{box.classList.remove('in');setTimeout(()=>box.remove(),400);},7000);
 }
 
 // ---- operaciones genericas (aceptar/rechazar oferta, retirar) --------------
@@ -682,7 +720,14 @@ const drawer=document.getElementById('drawer');
 // aviso prometa algo que este servidor no hace.
 const MODE=(document.querySelector('.mode b')||{}).textContent||'manual';
 
-function closeDrawer(){ if(!drawer) return; drawer.hidden=true; panelWide(false); }
+function closeDrawer(){
+  if(!drawer) return;
+  // Cerrar el comparador es haber terminado de comparar: la barra de abajo se va con el.
+  const wasComparing=!!drawer.querySelector('.cmp-view');
+  drawer.hidden=true;
+  panelWide(false);
+  if(wasComparing&&typeof drawTray==='function'){ tray=[]; cmpSave(); drawTray(); }
+}
 
 // El primer valor lo escribe el navegador y tick() lo mantiene cada segundo: la cuenta atras
 // de una clausula es justo el dato que caduca mientras lo miras.
@@ -1291,7 +1336,17 @@ function cmpAdd(id,name,pos){
   cmpSave(); drawTray();
   return true;
 }
-function cmpDrop(id){ tray=tray.filter(p=>p.id!==String(id)); cmpSave(); drawTray(); }
+function cmpDrop(id){
+  tray=tray.filter(p=>p.id!==String(id));
+  cmpSave(); drawTray();
+  // Quitar a uno con la tabla delante tiene que quitarlo de la tabla, no solo de la barra.
+  if(comparing()){
+    if(tray.length) openCompare();
+    else closeDrawer();
+  }
+}
+
+const comparing=()=> !!(drawer&&!drawer.hidden&&drawer.querySelector('.cmp-view'));
 
 function trayBox(){
   let box=document.getElementById('cmp-tray');
@@ -1306,21 +1361,16 @@ function trayBox(){
     <div class="cmp-chips"></div>
     <span class="cmp-msg"></span>
     <div class="cmp-acts">
-      <button type="button" class="cmp-mine"></button>
+      <div class="cmp-mine-wrap">
+        <button type="button" class="cmp-mine">Mi plantilla</button>
+        <div class="cmp-results cmp-mine-list" hidden></div>
+      </div>
       <button type="button" class="cmp-go primary"></button>
-      <button type="button" class="cmp-clear">Vaciar</button>
     </div>`;
   document.body.appendChild(box);
   box.querySelector('.cmp-go').addEventListener('click',openCompare);
-  box.querySelector('.cmp-mine').addEventListener('click',addMine);
-  box.querySelector('.cmp-clear').addEventListener('click',()=>{
-    // Vaciar con la tabla delante deja una comparacion de nadie, asi que se cierra con ella;
-    // si lo que hay abierto es una ficha, no se toca.
-    const comparing=drawer&&!drawer.hidden&&drawer.querySelector('.cmp-wrap');
-    tray=[]; cmpSave(); drawTray();
-    if(comparing) closeDrawer();
-  });
   wireFind(box);
+  wireMine(box);
   return box;
 }
 
@@ -1396,8 +1446,9 @@ function trayLine(){
 
 function drawTray(){
   const box=trayBox();
-  box.hidden=tray.length===0;
-  document.body.classList.toggle('tray-on',tray.length>0);
+  const visible=tray.length>0||comparing();
+  box.hidden=!visible;
+  document.body.classList.toggle('tray-on',visible);
   box.querySelector('.cmp-chips').innerHTML=tray.map(p=>
     `<span class="cmp-chip">${p.pos
         ? `<span class="pos pos-${p.pos.toLowerCase().slice(0,3)}">${p.pos}</span>`:''}
@@ -1406,9 +1457,7 @@ function drawTray(){
     </span>`).join('');
   const line=trayLine();
   const mineButton=box.querySelector('.cmp-mine');
-  mineButton.textContent=line?`+ mis ${line}`:'+ mi plantilla';
-  mineButton.title=line?`Añadir tus ${line} para verlos al lado`
-    :'Añadir tus mejores jugadores de esa posicion';
+  mineButton.title=line?`Meter tus ${line} para verlos al lado`:'Meter jugadores tuyos';
   const go=box.querySelector('.cmp-go');
   go.textContent=`Comparar (${tray.length})`;
   go.disabled=tray.length<2;
@@ -1436,18 +1485,59 @@ document.addEventListener('click',(event)=>{
   if(drop){ event.stopPropagation(); cmpDrop(drop.dataset.cmpDrop); }
 });
 
-async function addMine(){
-  let data;
-  try{
-    const res=await fetch('/api/compare?ids='+tray.map(p=>p.id).join(','));
-    if(!res.ok) throw new Error(res.status);
-    data=await res.json();
-  }catch(e){ trayMsg('No he podido leer tu plantilla'); return; }
-  const line=trayLine();
-  const mine=(data.mine||[]).filter(p=>!line||p.position===line).filter(p=>!cmpHas(p.id));
-  if(!mine.length){ trayMsg(line?`No tienes mas ${line}`:'Ya estan todos'); return; }
-  for(const p of mine){ if(!cmpAdd(p.id,p.name,p.position)) break; }
-  openCompare();
+// Tu plantilla como menu: metes al que quieras, o los de esa linea de golpe. Mejor que un
+// boton que dice "+ mis MED" y decide por ti.
+function wireMine(box){
+  const button=box.querySelector('.cmp-mine'), list=box.querySelector('.cmp-mine-list');
+  let squad=null;
+  const hide=()=>{ list.hidden=true; };
+  const row=(p)=>`
+    <button class="cmp-hit" type="button" data-cmp="${p.id}" data-cmp-name="${p.name}"
+      data-cmp-pos="${p.position||''}">
+      <span class="cmp-hit-who">
+        ${p.image
+          ? `<img src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
+          : `<span class="crest crest-${p.team_id}"></span>`}
+        <b>${p.name}</b>
+        <span class="pos pos-${String(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
+      </span>
+      <span class="cmp-hit-num">${(p.xpts||0).toFixed(2)} xPts · <b>${fmt(p.value)}</b></span>
+    </button>`;
+  const paint=()=>{
+    const line=trayLine();
+    const free=(squad||[]).filter(p=>!cmpHas(p.id));
+    if(!free.length){ list.innerHTML='<p class="cmp-none">Ya estan todos</p>'; list.hidden=false; return; }
+    const same=line?free.filter(p=>p.position===line):[];
+    const rest=free.filter(p=>!same.includes(p));
+    list.innerHTML=(same.length>1
+        ? `<button class="cmp-hit cmp-all" type="button">Añadir mis ${same.length} ${line}</button>`
+        : '')
+      + (same.length?`<p class="cmp-group">Tus ${line}</p>`+same.map(row).join(''):'')
+      + (rest.length?`<p class="cmp-group">${same.length?'El resto':'Tu plantilla'}</p>`
+          +rest.map(row).join(''):'');
+    list.hidden=false;
+    const all=list.querySelector('.cmp-all');
+    if(all) all.addEventListener('click',()=>{
+      for(const p of same){ if(!cmpAdd(p.id,p.name,p.position)) break; }
+      hide();
+      if(tray.length>1) openCompare();
+    });
+  };
+  button.addEventListener('click',async()=>{
+    if(!list.hidden){ hide(); return; }
+    if(!squad){
+      try{
+        const res=await fetch('/api/compare');
+        if(!res.ok) throw new Error(res.status);
+        squad=(await res.json()).mine||[];
+      }catch(e){ trayMsg('No he podido leer tu plantilla'); return; }
+    }
+    paint();
+  });
+  list.addEventListener('click',(event)=>{ if(event.target.closest('button[data-cmp]')) hide(); });
+  document.addEventListener('click',(event)=>{
+    if(!box.querySelector('.cmp-mine-wrap').contains(event.target)) hide();
+  });
 }
 
 const CMP_ROWS=[
@@ -1522,10 +1612,22 @@ function panelWide(on){
 }
 
 async function openCompare(){
-  if(!drawer||!tray.length) return;
+  if(!drawer) return;
   drawer.hidden=false;
   panelWide(true);
   const body=drawer.querySelector('.drawer-body');
+  // Sin nadie dentro sigue siendo el comparador: se abre con el buscador esperando.
+  if(!tray.length){
+    body.innerHTML=`<div class="cmp-view">
+      <div class="drawer-head"><h3>Comparador</h3></div>
+      <p class="sub">busca jugadores abajo y ve añadiendolos</p>
+      <p class="empty">Puedes meter a cualquiera desde el buscador, desde el boton
+        <b>Mi plantilla</b>, o con el <b>+ comparar</b> de cada ficha.</p></div>`;
+    drawTray();
+    const find=document.querySelector('.cmp-find');
+    if(find) find.focus();
+    return;
+  }
   body.innerHTML='<p class="empty">Comparando…</p>';
   let data;
   try{
@@ -1572,6 +1674,7 @@ async function openCompare(){
     return `<tr><td>${row.label}</td>${cells}</tr>`;
   }).join('');
   body.innerHTML=`
+    <div class="cmp-view">
     <div class="drawer-head"><h3>Comparador</h3></div>
     <p class="sub">${list.length} jugadores · lo mejor de cada fila en verde</p>
     ${cmpVerdict(list)}
@@ -1584,8 +1687,9 @@ async function openCompare(){
       </tbody>
     </table></div>
     <p class="drawer-note">Valor y clausula en negrita marcan el mas barato, no el mejor.
-      Pulsa un nombre para su ficha; la bandeja de abajo sigue abierta para añadir o quitar.</p>`;
-  wireDetails(body); wireManagers(body); tick();
+      Pulsa un nombre para su ficha; al cerrar, la barra de abajo se va con el comparador.</p>
+    </div>`;
+  wireDetails(body); wireManagers(body); tick(); drawTray();
 }
 
 if(drawer){
@@ -1744,6 +1848,8 @@ function connect(){
 wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids();
 wireManagers(); wireMatchdays();
 wireTabs(); tick(); drawTray();
+const headCompare=document.getElementById('open-compare');
+if(headCompare) headCompare.addEventListener('click',openCompare);
 if(window.EventSource && location.protocol.startsWith('http')) connect();
 
 // ---- legacy (fichero estatico) ----

@@ -92,6 +92,10 @@ func (s *Server) render() string {
 	return page
 }
 
+// Warm builds the page into the cache. Called before a change is announced, so the refresh
+// the browser does next reads a page that is already there.
+func (s *Server) Warm() { s.render() }
+
 func New(world *state.State, opts Options) *Server {
 	if opts.Assets == "" {
 		opts.Assets = "assets"
