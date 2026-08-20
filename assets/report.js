@@ -1708,7 +1708,7 @@ const TABS=[
   {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
   {id:'partidos', label:'Partidos', sections:['partidos']},
   // Lo de los demas en su sitio: sus plantillas enteras y lo que pueden pagar por las tuyas.
-  {id:'rivales', label:'Rivales', sections:['quientiene','rivales']},
+  {id:'rivales', label:'Rivales', sections:['rivales']},
   {id:'liga', label:'Liga', sections:['movimientos','normas']},
   {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
 ];
@@ -1719,6 +1719,8 @@ function resolveTarget(hash){
   const id=(hash||'').replace(/^#/,'');
   if(!id) return null;
   if(TABS.some(t=>t.id===id)) return {tab:id, section:null};
+  const own=document.getElementById(id);
+  if(own&&own.dataset.tab) return {tab:own.dataset.tab, section:id};
   const owner=TABS.find(t=>t.sections.includes(id));
   return owner ? {tab:owner.id, section:id} : null;
 }
@@ -1726,7 +1728,9 @@ function resolveTarget(hash){
 function showTab(id,{section=null,updateHash=true}={}){
   const tab=TABS.find(t=>t.id===id)||TABS[0];
   document.querySelectorAll('section[id]').forEach(s=>{
-    s.hidden=!tab.sections.includes(s.id);
+    // Una seccion puede decir ella misma a que pestaña va: las que nacen en tiempo de
+    // ejecucion (una por rival) no pueden estar en una lista escrita aqui.
+    s.hidden = s.dataset.tab ? s.dataset.tab!==tab.id : !tab.sections.includes(s.id);
   });
   document.querySelectorAll('.tab').forEach(b=>{
     const on=b.dataset.tab===tab.id;
