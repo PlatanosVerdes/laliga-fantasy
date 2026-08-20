@@ -751,3 +751,15 @@ table.cmp td.cmp-cheap{font-weight:700}
 /* Mejora a lo que tengo / no llega: en la tabla de quien tiene que. */
 .vs-up{color:var(--good);font-weight:700}
 td .muted,span.muted{color:var(--muted)}
+
+/* Tooltip propio, flotante: instantaneo y sin recortes dentro de una tabla con scroll. */
+.tip-float{position:fixed;z-index:90;max-width:250px;padding:6px 9px;border-radius:8px;
+  background:#0b0b0b;color:#fff;font-size:11.5px;font-weight:500;line-height:1.4;
+  letter-spacing:0;text-transform:none;pointer-events:none;
+  box-shadow:0 8px 22px rgba(0,0,0,.4)}
+.tip-float[hidden]{display:none}
+[data-tip]{cursor:help}
+
+/* El desplegable de rivales es la cabecera de su pestaña, no un filtro mas. */
+.rival-pick{margin-bottom:0}
+.rival-pick select{min-width:230px}

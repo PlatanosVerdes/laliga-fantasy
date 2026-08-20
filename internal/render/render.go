@@ -243,7 +243,7 @@ func PlayerCell(row map[string]any, section string) string {
 	if _, known := Crests[teamID]; known {
 		team := text(row["team"])
 		badge = fmt.Sprintf(`<span class="crest crest-%s" role="img" aria-label="%s" `+
-			`title="%s"></span>`, Esc(teamID), Esc(team), Esc(team))
+			`data-tip="%s"></span>`, Esc(teamID), Esc(team), Esc(team))
 	}
 	slug := positionSlug[int(number(row["position_id"]))]
 	if slug == "" {
@@ -263,7 +263,7 @@ func PlayerCell(row map[string]any, section string) string {
 	}
 	if truthy(row["prior_based"]) {
 		flags = append(flags,
-			`<span class="flag-muted" title="Sin historico: estimado por precio">est.</span>`)
+			`<span class="flag-muted" data-tip="Sin historico: estimado por precio">est.</span>`)
 	}
 	if truthy(row["is_mine"]) && !AllMine[section] {
 		flags = append(flags, `<span class="flag-mine">mio</span>`)
@@ -277,8 +277,8 @@ func PlayerCell(row map[string]any, section string) string {
 		// than the fact. The title still says it in full, and the yellow underline is what
 		// tells this lock apart from the clause one.
 		flags = append(flags, fmt.Sprintf(
-			`<span class="flag-hold" title="Norma de la liga: recien fichado, `+
-				`no se puede vender hasta el %s">🔒</span>`, Esc(until)))
+			`<span class="flag-hold" data-tip="Norma de la liga: recien fichado, `+
+				`no se puede vender hasta el %s" aria-label="Recien fichado">🔒</span>`, Esc(until)))
 	}
 
 	// The three-letter team only earns its space when there is no crest: with one, it is the
@@ -583,7 +583,7 @@ func orderNote(move map[string]any) string {
 	if note == "" {
 		return ""
 	}
-	return `<span class="plan-order" title="` + Esc(note) + `">primero ficha</span>`
+	return `<span class="plan-order" data-tip="` + Esc(note) + `">primero ficha</span>`
 }
 
 // planCard is one player inside the plan: crest, name and position, nothing else.
@@ -883,7 +883,7 @@ func RaidVerdict(row map[string]any) string {
 		explain := fmt.Sprintf("Pagando su clausula sacas %.2f pts/M; la mediana de tu "+
 			"plantilla es %.2f pts/M, asi que rinde %.1f veces mas por cada millon.",
 			ppm, ppm / *ratio, *ratio)
-		note = fmt.Sprintf(`<span class="pill-note" title="%s">%s</span>`,
+		note = fmt.Sprintf(`<span class="pill-note" data-tip="%s">%s</span>`,
 			Esc(explain), Esc(fmt.Sprintf("%.1fx pts/M de tu plantilla", *ratio)))
 	}
 	return fmt.Sprintf(`<span class="pill-%s">%s</span>`, status, Esc(verdict)) + note
@@ -2157,7 +2157,7 @@ func CellIn(value any, kind string, section string) (string, string) {
 		row, _ := value.(map[string]any)
 		who := text(row["offer_from"])
 		if truthy(row["offer_from_market"]) {
-			return `<span class="from-market" title="Oferta automatica del juego: llega cada ` +
+			return `<span class="from-market" data-tip="Oferta automatica del juego: llega cada ` +
 				`dia y caduca al cerrar el mercado">` + Esc(who) + `</span>`, "zzz " + who
 		}
 		// A person who offers is a person you can look up; the machine is not.
