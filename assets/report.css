@@ -747,3 +747,7 @@ table.cmp td.cmp-cheap{font-weight:700}
 .cmp-group{margin:6px 8px 2px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;
   color:var(--muted)}
 .cmp-all{justify-content:center;font-weight:700;color:var(--accent)}
+
+/* Mejora a lo que tengo / no llega: en la tabla de quien tiene que. */
+.vs-up{color:var(--good);font-weight:700}
+td .muted,span.muted{color:var(--muted)}

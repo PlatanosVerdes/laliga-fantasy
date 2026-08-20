@@ -1767,6 +1767,33 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		}
 		return TableIn(columns, rows, "Sin datos", "ofertas", false), nil
 
+	case "quientiene":
+		// A census of everybody else's players is only useful if each row says what it would
+		// take to get him and what he would replace, so those are the two ends of the table.
+		columns := []Column{
+			{"", whole, "cmp"},
+			{"Jugador", whole, "player"},
+			{"Dueño", whole, "owner"},
+			{"Frente a lo tuyo", whole, "vs_mine"},
+			{"Cláusula", field("clause"), "money"},
+			{"Se puede", whole, "clause_when"},
+			{"x valor", field("clause_x"), "num"},
+			{"Valor", field("value"), "money"},
+			{"En venta", field("asking"), "money"},
+			{"xPts/j", field("xpts"), "num"},
+			{"Pts/M", field("points_value"), "mag"},
+			{"Titular", field("start_probability"), "starts"},
+			{"Proximo rival", func(row map[string]any) any {
+				rival := text(row["next_rival"])
+				if rival == "" {
+					return nil
+				}
+				return rival + " " + Where(truthy(row["next_home"]))
+			}, "text"},
+		}
+		return TableIn(columns, rows, "Los rivales no tienen a nadie todavia", "quientiene",
+			true), nil
+
 	case "riesgo":
 		// Not "who is good" but "who can be taken from you today", which is why the count
 		// of rivals who could pay is a column of its own.
@@ -1828,9 +1855,16 @@ func TableIn(columns []Column, rows []map[string]any, empty, section string,
 			if price == 0 {
 				price = number(row["value"])
 			}
+			// El dueño entra en lo buscable: escribir "cristian" tiene que sacar lo que
+			// tiene cristian, no obligar a recordar los nombres de sus jugadores.
+			searchable := strings.ToLower(text(row["name"]))
+			for _, extra := range []string{text(row["owner"]), text(row["seller"])} {
+				if extra != "" {
+					searchable += " " + strings.ToLower(extra)
+				}
+			}
 			attrs = fmt.Sprintf(` data-position="%s" data-price="%.0f" data-name="%s"`,
-				Esc(text(row["position"])), price,
-				Esc(strings.ToLower(text(row["name"]))))
+				Esc(text(row["position"])), price, Esc(searchable))
 		}
 		body.WriteString("<tr" + classes + attrs + ">")
 		for _, column := range columns {
@@ -1858,7 +1892,21 @@ func TableIn(columns []Column, rows []map[string]any, empty, section string,
 
 // ActionKinds are the cells that hold a button rather than a fact.
 var ActionKinds = map[string]bool{"bid": true, "raid": true, "offer": true, "verdict": true,
-	"verdict_raid": true}
+	"verdict_raid": true, "cmp": true}
+
+// CompareButton stacks a player into the comparator from a table, without opening his card
+// first: in a table of everybody else's players, picking two to look at side by side is the
+// whole point.
+func CompareButton(row map[string]any) string {
+	id := text(row["id"])
+	if id == "" {
+		return ""
+	}
+	return `<button class="cmp-add small" type="button" data-cmp="` + Esc(id) +
+		`" data-cmp-name="` + Esc(text(row["name"])) +
+		`" data-cmp-pos="` + Esc(text(row["position"])) +
+		`" title="Añadir al comparador">+</button>`
+}
 
 // Cell returns (inner HTML, sort key) for one value. `section` only matters to the player
 // cell, which drops the "mio" flag where every row is yours.
@@ -1901,6 +1949,40 @@ func CellIn(value any, kind string, section string) (string, string) {
 	case "raid":
 		row, _ := value.(map[string]any)
 		return RaidButton(row), sortKey(asFloat(row["clause"]))
+	case "cmp":
+		row, _ := value.(map[string]any)
+		return CompareButton(row), Esc(text(row["name"]))
+	case "clause_when":
+		// Whether he can be taken today, which is the only reading of a clause that changes
+		// what you do. Shielded and locked are not the same "no".
+		row, _ := value.(map[string]any)
+		switch {
+		case truthy(row["shielded"]):
+			return `<span class="chip chip-warn">blindado</span>`, "zz"
+		case truthy(row["clause_locked"]):
+			if until := text(row["clause_locked_until"]); until != "" {
+				return `<span class="chip chip-warn">en <span data-deadline="` + Esc(until) +
+					`">…</span></span>`, until
+			}
+			return `<span class="chip chip-warn">bloqueada</span>`, "zy"
+		case number(row["clause"]) == 0:
+			return `<span class="muted">—</span>`, "zx"
+		}
+		return `<span class="chip chip-good">pagable ya</span>`, "0"
+	case "vs_mine":
+		// The reason a rival's player is interesting is what he would replace. Without this
+		// the table is a census; with it, it is a shortlist.
+		row, _ := value.(map[string]any)
+		delta, who := asFloat(row["vs_mine"]), text(row["vs_who"])
+		if delta == nil || who == "" {
+			return `<span class="muted">—</span>`, "-999"
+		}
+		if *delta > 0 {
+			return fmt.Sprintf(`<span class="vs-up">+%.2f</span> <span class="muted">sobre %s</span>`,
+				*delta, Esc(who)), sortKey(delta)
+		}
+		return fmt.Sprintf(`<span class="muted">%.2f vs %s</span>`, *delta, Esc(who)),
+			sortKey(delta)
 	case "offer":
 		row, _ := value.(map[string]any)
 		return OfferButtons(row), sortKey(asFloat(row["offer_amount"]))
