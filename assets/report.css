@@ -458,6 +458,8 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .bench-item.dragging{opacity:.35}
 .bench-item .crest{width:16px;height:16px}
 .bench-name{font-weight:600}
+/* En una fila la insignia va en la fila: flotando a la derecha se comia los xPts. */
+.bench-item .badge-status{position:static;flex:none}
 .bench-empty{color:var(--muted);font-size:12px;font-style:italic}
 .callout{background:color-mix(in srgb,var(--warning) 12%,transparent);
   border-left:3px solid var(--warning);border-radius:0 8px 8px 0;padding:11px 14px;

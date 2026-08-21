@@ -520,11 +520,11 @@ function benchHtml(player){
   const trend=player.projected_pct||0;
   return `<div class="bench-item${statusRing(player)}" draggable="true" data-player="${player.id}"
     data-pt="${player.player_team_id}" data-from="bench" title="${player.name}">
-    ${statusBadge(player)}
     ${faceHtml(player)}
     <span class="pos pos-${(LINE_LABEL[Object.keys(LINE_POS).find(k=>LINE_POS[k]===player.position_id)]||'ENT').toLowerCase()}">${
       {1:'POR',2:'DEF',3:'MED',4:'DEL'}[player.position_id]||'ENT'}</span>
     <span class="bench-name">${player.name}</span>
+    ${statusBadge(player)}
     <span class="slot-trend ${trend>=0?'up':'down'}" style="margin-left:auto">${
       (player.xpts||0).toFixed(1)}</span>
   </div>`;
