@@ -119,8 +119,10 @@ button.p-name:hover{color:var(--accent);border-bottom-color:var(--accent)}
 .flag-critical{color:#fff;background:var(--critical)}
 .flag-warning{color:#3a2c00;background:var(--warning)}
 .flag-muted{color:var(--muted);border:1px solid var(--line)}
-[class^="badge-"]:not(.badge-count){display:inline-flex;align-items:center;gap:5px;font-size:11px;
-  font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:3px 8px;border-radius:6px}
+/* Las pildoras de veredicto. La insignia de estado de la plantilla no es una: su padding
+   dejaba la caja en 1px de ancho y la cruz se salia del circulo. */
+[class^="badge-"]:not(.badge-count):not(.badge-status){display:inline-flex;align-items:center;
+  gap:5px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:3px 8px;border-radius:6px}
 .badge-icon{font-size:10px;line-height:1}
 .badge-good{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent);
   box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--good) 40%,transparent)}
