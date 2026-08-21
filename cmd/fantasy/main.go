@@ -37,6 +37,10 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
 
+// buildVersion is stamped at compile time with the tag the image was built from
+// (-X main.buildVersion=...). Unstamped it says so, which is what a local build is.
+var buildVersion = "local"
+
 func main() {
 	level := slog.LevelWarn
 	args := os.Args[1:]
@@ -1330,6 +1334,7 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 		return string(body)
 	}
 	render.Pitch, render.Filters = read("pitch.html"), read("filters.html")
+	render.Build = buildVersion
 	var crests map[string]string
 	if body, err := os.ReadFile(filepath.Join(config.CacheDir, "crests.json")); err == nil {
 		if json.Unmarshal(body, &crests) == nil {

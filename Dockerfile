@@ -3,11 +3,15 @@
 FROM golang:1.26-alpine AS build
 
 WORKDIR /src
+# The tag this image is built from, shown in the page header so what is deployed is readable
+# without opening a shell. Compose passes it; by hand it stays "local".
+ARG VERSION=local
 COPY go.mod ./
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 # Static binary: the runtime image has no libc to link against.
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/fantasy ./cmd/fantasy
+RUN CGO_ENABLED=0 go build -trimpath \
+    -ldflags="-s -w -X main.buildVersion=${VERSION}" -o /out/fantasy ./cmd/fantasy
 
 FROM alpine:3.21
 
