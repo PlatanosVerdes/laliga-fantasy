@@ -443,16 +443,6 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .st-lesionado .kit::before{left:4px;top:0;width:3px;height:11px}
 .st-lesionado .kit::after{top:4px;left:0;height:3px;width:11px}
 .st-duda{background:#fab219;color:#3a2c00}
-/* Tooltip propio: el nativo tarda casi un segundo en salir. */
-.tip{position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%) scale(.96);
-  text-transform:none;letter-spacing:normal;font-weight:400;
-  background:#101114;color:#fff;border:1px solid rgba(255,255,255,.14);border-radius:8px;
-  padding:7px 10px;font-size:11px;line-height:1.35;width:190px;text-align:left;
-  opacity:0;pointer-events:none;transition:opacity .09s ease,transform .09s ease;z-index:20;
-  box-shadow:0 8px 24px rgba(0,0,0,.45)}
-.tip strong{display:block;font-size:11px;margin-bottom:2px}
-.tip em{color:#c3c2b7;font-style:normal;font-size:10px}
-.slot:hover .tip,.bench-item:hover .tip{opacity:1;transform:translateX(-50%) scale(1)}
 .bench{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
 .bench h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;
   color:var(--muted)}
