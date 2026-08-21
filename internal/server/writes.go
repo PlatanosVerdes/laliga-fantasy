@@ -44,6 +44,11 @@ func (s *Server) writeError(writer http.ResponseWriter, err error) {
 	// A refusal is the most informative thing the write path produces: it is the tool saying
 	// no to a person, and if it is wrong nobody finds out unless it is written down.
 	slog.Warn("write refused", "status", status, "reason", err.Error())
+	// The API says the page is behind: rebuild, or the row that cannot be acted on stays there
+	// inviting the next click.
+	if errors.Is(err, writes.ErrOutdated) {
+		s.settle("desfasado")
+	}
 	s.json(writer, status, map[string]any{"error": err.Error()})
 }
 

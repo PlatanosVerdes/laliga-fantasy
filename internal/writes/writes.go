@@ -32,6 +32,9 @@ const PrepareTTL = 120 * time.Second
 var (
 	ErrDisabled = errors.New("este servidor corre en modo solo lectura")
 	ErrUnknown  = errors.New("operacion desconocida")
+	// ErrOutdated is the API saying the page is behind: what is being acted on is already gone,
+	// so the caller rebuilds instead of only reporting it.
+	ErrOutdated = errors.New("esa jugada ya no esta viva")
 )
 
 // Call is a request that has been built but not sent. Splitting building from sending is
@@ -224,7 +227,7 @@ func Send(call Call) (any, error) {
 		Headers: headers, Body: body, Retries: 1, Tag: "raw",
 	})
 	if err != nil {
-		return nil, err
+		return nil, explain(err)
 	}
 	if strings.TrimSpace(raw) == "" {
 		return nil, nil
@@ -234,6 +237,41 @@ func Send(call Call) (any, error) {
 		return nil, err
 	}
 	return answer, nil
+}
+
+// explain turns an API refusal into something a person can act on. The URL and the JSON body
+// stay in the log: quoting them in a dialog says nothing about what to do next.
+func explain(err error) error {
+	code, message := refusal(err.Error())
+	if code == "" && message == "" {
+		return err
+	}
+	slog.Warn("api refusal", "code", code, "message", message, "raw", err.Error())
+	switch code {
+	// The offer was rejected or expired while the page still showed it: nothing to retire, and
+	// nothing the person got wrong. The view was behind.
+	case "030.01.48":
+		return fmt.Errorf("%w: la rechazaron o caduco, asi que no hay nada que retirar",
+			ErrOutdated)
+	}
+	return errors.New(message)
+}
+
+// refusal reads the code and the sentence out of the API's error body, which travels inside the
+// transport error as JSON.
+func refusal(text string) (string, string) {
+	start := strings.Index(text, "{")
+	if start < 0 {
+		return "", ""
+	}
+	var body struct {
+		Message   string `json:"message"`
+		ErrorCode string `json:"errorCode"`
+	}
+	if json.Unmarshal([]byte(text[start:]), &body) != nil {
+		return "", ""
+	}
+	return body.ErrorCode, body.Message
 }
 
 // --- the two-step guard -----------------------------------------------------
