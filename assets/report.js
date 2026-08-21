@@ -461,13 +461,14 @@ function statusBadge(player){
   const s=statusOf(player);
   if(!s) return '';
   const a=player.absence||{};
-  const bits=[`<strong>${s.label}</strong>`];
-  if(a.reason) bits.push(a.reason);
-  if(a.since) bits.push(`<em>${a.since}</em>`);
-  if(a.until) bits.push(`<em>${a.until}</em>`);
-  if(!a.reason) bits.push('<em>sin detalle en futbolfantasy</em>');
-  return `<span class="badge-status ${s.cls}">${s.icon}`
-    +`<span class="tip">${bits.join('<br>')}</span></span>`;
+  const bits=[s.label];
+  if(a.reason) bits.push(a.reason); else bits.push('sin detalle en futbolfantasy');
+  if(a.since) bits.push(a.since);
+  if(a.until) bits.push(a.until);
+  // The floating tooltip, not a child of the badge: on a card in the top line the nested one
+  // hung outside the pitch and read as an empty input box.
+  const tip=bits.join(' \u00b7 ').replace(/"/g,'&quot;');
+  return `<span class="badge-status ${s.cls}" data-tip="${tip}">${s.icon}</span>`;
 }
 
 // Titularidad: el numero que decide si los xPts se van a materializar.
