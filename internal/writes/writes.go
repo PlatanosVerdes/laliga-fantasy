@@ -427,7 +427,20 @@ func check(name string, args Args, who Player, cash *int64) ([]string, error) {
 		}
 	}
 
+	// A listing and a clause are addressed by the squad slot, not by the player: an empty one
+	// reaches the API as playerId "" and comes back as 400 "Player not found".
 	switch name {
+	case "sell_to_market", "pay_clause", "raise_clause":
+		if args.PlayerTeamID == "" {
+			return nil, errors.New("no se cual es su ficha en la plantilla: recarga la pagina")
+		}
+	}
+
+	switch name {
+	case "sell_to_market":
+		if args.Amount <= 0 {
+			return nil, errors.New("el precio de venta tiene que ser positivo")
+		}
 	case "accept_offer":
 		if who.Value > 0 && args.Amount > 0 && float64(args.Amount) < who.Value*0.9 {
 			warnings = append(warnings,
