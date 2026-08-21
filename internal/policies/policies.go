@@ -192,6 +192,9 @@ func Plan(players []Row, policies map[string]Policy) []Row {
 			price := int64(math.Max(floor, value))
 			actions = append(actions, Row{
 				"player_id": text(player["id"]), "name": player["name"],
+				// The API lists by squad slot, not by player: without it the call travels with
+				// playerId "" and comes back 400.
+				"player_team_id": player["player_team_id"],
 				"action": "poner_en_venta", "amount": price,
 				"why": fmt.Sprintf("no esta en el mercado; lo listo a %s", money(price))})
 			continue

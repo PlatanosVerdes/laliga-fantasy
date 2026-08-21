@@ -318,17 +318,21 @@ func cmdServe(args []string) error {
 			}
 		}
 
+		// The guard checks a write against the player, and unattended writes have to be checked
+		// against the same fields the manual ones are: the league hold rule lives there.
+		byID := make(map[string]map[string]any, len(rows))
+		for _, row := range rows {
+			byID[text(row["id"])] = row
+		}
+		house := rules.For(league)
+
 		done := policies.Enforce(policies.Plan(rows, armed), policies.RaidPlan(rows, armed, cash),
 			func(operation string, action policies.Row) error {
-				args := writes.Args{LeagueID: league, TeamID: team,
-					Amount:   int64(number(action["amount"])),
-					MarketID: text(action["market_id"]), OfferID: text(action["offer_id"]),
-					PlayerID: text(action["player_id"]),
-					// A sale and a clause are addressed by squad slot, not by player.
-					PlayerTeamID: text(action["player_team_id"]),
+				args := automaticArgs(action, league, team)
+				who := automaticPlayer(byID[text(action["player_id"])], house.HoldExceptions)
+				if who.Name == "" {
+					who.Name = text(action["name"])
 				}
-				who := writes.Player{Name: text(action["name"]), Available: true,
-					Value: number(action["value"]), Clause: int64(number(action["clause"]))}
 				_, err := guard.Automatic(operation, args, who, allowWrites)
 				return err
 			})
@@ -1154,6 +1158,33 @@ func endingRows() []map[string]any {
 		return nil
 	}
 	return rows
+}
+
+// automaticArgs addresses what the plan asks for the way the API expects it: a listing and a
+// clause travel by squad slot, everything else by market and offer.
+func automaticArgs(action policies.Row, league, team string) writes.Args {
+	return writes.Args{LeagueID: league, TeamID: team,
+		Amount:       int64(number(action["amount"])),
+		MarketID:     text(action["market_id"]),
+		OfferID:      text(action["offer_id"]),
+		PlayerID:     text(action["player_id"]),
+		PlayerTeamID: text(action["player_team_id"]),
+	}
+}
+
+// automaticPlayer is what the guard judges an unattended write against, built from the same
+// squad row the manual path reads: without the hold fields the league rule applied to what a
+// person did and not to what the standing instructions did.
+func automaticPlayer(row map[string]any, exceptions string) writes.Player {
+	return writes.Player{
+		Name:           text(row["name"]),
+		Value:          number(row["value"]),
+		Available:      truthyValue(row["available"]),
+		SaleLocked:     truthyValue(row["sale_locked"]),
+		HoldUntil:      text(row["hold_until"]),
+		HoldExceptions: exceptions,
+		Clause:         int64(number(row["clause"])),
+	}
 }
 
 // playerRows is the universe's players as the generic rows the policy engine reads.

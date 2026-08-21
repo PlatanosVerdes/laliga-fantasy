@@ -121,6 +121,24 @@ func TestPayingLessThanTheClauseIsRefused(t *testing.T) {
 	}
 }
 
+// The 400 the API answers to playerId "" is unreadable; refusing it here says which field is
+// missing, and a listing priced at zero is not a listing.
+func TestListingWithoutSlotOrPriceIsRefused(t *testing.T) {
+	g := guard(50_000_000)
+	if _, err := g.Prepare("sell_to_market",
+		Args{LeagueID: "L", TeamID: "T", Amount: 9_000_000}, Player{Name: "X"}, true); err == nil {
+		t.Error("poner en venta sin la ficha de la plantilla deberia rechazarse")
+	}
+	if _, err := g.Prepare("sell_to_market",
+		Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT"}, Player{Name: "X"}, true); err == nil {
+		t.Error("poner en venta a cero deberia rechazarse")
+	}
+	if _, err := g.Prepare("pay_clause",
+		Args{LeagueID: "L", TeamID: "T", Amount: 1_000_000}, Player{Name: "X"}, true); err == nil {
+		t.Error("pagar una clausula sin la ficha deberia rechazarse")
+	}
+}
+
 func TestAcceptingBelowMarketValueWarns(t *testing.T) {
 	g := guard(0)
 	args := Args{LeagueID: "L", TeamID: "T", MarketID: "M", OfferID: "O", Amount: 8_000_000}

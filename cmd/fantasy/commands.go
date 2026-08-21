@@ -839,6 +839,15 @@ func asFloatValue(value any) (float64, bool) {
 			return 0, false
 		}
 		return float64(*typed), true
+	// The plan writes its amounts as int64. Without these every automatic operation travelled
+	// with amount zero.
+	case int64:
+		return float64(typed), true
+	case *int64:
+		if typed == nil {
+			return 0, false
+		}
+		return float64(*typed), true
 	}
 	return 0, false
 }
