@@ -435,13 +435,15 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   font-size:13px;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.5)}
 /* Tarjeta roja: la insignia misma, con proporcion de tarjeta. */
 .st-sancionado{background:#d03b3b}
-/* Botiquin: cruz roja sobre blanco, dos barras solidas. */
-.st-lesionado{background:#fff}
-.st-lesionado .kit{position:relative;display:block;width:11px;height:11px}
+/* Lesion y duda no son tarjetas, asi que no llevan su forma: en un rectangulo de 16x20 la
+   cruz roja sobre blanco se leia como un boton de anadir. Circulo y cruz blanca. */
+.st-lesionado,.st-duda{width:17px;height:17px;border-radius:50%}
+.st-lesionado{background:#d03b3b}
+.st-lesionado .kit{position:relative;display:block;width:9px;height:9px}
 .st-lesionado .kit::before,.st-lesionado .kit::after{content:"";position:absolute;
-  background:#d03b3b;border-radius:1px}
-.st-lesionado .kit::before{left:4px;top:0;width:3px;height:11px}
-.st-lesionado .kit::after{top:4px;left:0;height:3px;width:11px}
+  background:#fff;border-radius:1px}
+.st-lesionado .kit::before{left:3px;top:0;width:3px;height:9px}
+.st-lesionado .kit::after{top:3px;left:0;height:3px;width:9px}
 .st-duda{background:#fab219;color:#3a2c00}
 .bench{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px}
 .bench h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;
