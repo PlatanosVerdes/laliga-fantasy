@@ -448,7 +448,7 @@ func buildChip() string {
 	if Build == "" {
 		return ""
 	}
-	return fmt.Sprintf(`<span class="mode build" title="Version del binario que sirve esta `+
+	return fmt.Sprintf(`<span class="build" title="Version del binario que sirve esta `+
 		`pagina: la etiqueta con la que se construyo la imagen">%s</span>`, Esc(Build))
 }
 

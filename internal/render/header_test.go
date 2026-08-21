@@ -16,7 +16,7 @@ func TestHeaderShowsTheBuildOnlyWhenStamped(t *testing.T) {
 	Build = "v2026.08.21.3"
 	defer func() { Build = "" }()
 	got := Header("21/08/2026 16:07", "Liga", 2, nil, false, "auto")
-	if !strings.Contains(got, `class="mode build"`) || !strings.Contains(got, "v2026.08.21.3") {
+	if !strings.Contains(got, `class="build"`) || !strings.Contains(got, "v2026.08.21.3") {
 		t.Errorf("la cabecera deberia llevar la version: %s", got)
 	}
 }
