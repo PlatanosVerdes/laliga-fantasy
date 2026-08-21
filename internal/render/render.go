@@ -440,6 +440,18 @@ const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
 	`<button class="tab" role="tab" data-tab="liga" aria-selected="false" type="button">Liga</button>` +
 	`<button class="tab" role="tab" data-tab="ranking" aria-selected="false" type="button">Ranking</button></div>`
 
+// Build is the version of the binary serving this page, stamped at compile time. Empty renders
+// nothing: a page built by hand should not claim a version it does not have.
+var Build string
+
+func buildChip() string {
+	if Build == "" {
+		return ""
+	}
+	return fmt.Sprintf(`<span class="mode build" title="Version del binario que sirve esta `+
+		`pagina: la etiqueta con la que se construyo la imagen">%s</span>`, Esc(Build))
+}
+
 // Header is the title, when it was generated, the widgets and the tabs. The live dot starts
 // off: a static file is honest about not being live, and the script turns it on when the
 // push channel connects.
@@ -460,7 +472,7 @@ func Header(generated, leagueName string, week int, kpis []string, withTabs bool
 		`<span id="live-stamp">estatico</span></span>` +
 		// What this server may do, next to when it last looked: both answer "can I trust what I
 		// am seeing to be acted on".
-		modeChip(mode) +
+		modeChip(mode) + buildChip() +
 		// The comparator has no table of its own to live in, so its way in is here: a
 		// signing is decided against what you already have, from wherever you are looking.
 		`<button class="head-btn" id="open-compare" type="button" ` +
