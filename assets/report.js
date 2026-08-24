@@ -492,8 +492,8 @@ function faceHtml(player){
 }
 
 function shirtHtml(player,line,index){
-  if(!player) return `<div class="slot empty" data-line="${line}" data-index="${index}">`
-    +`${LINE_LABEL[line]}<br>libre</div>`;
+  if(!player) return `<div class="slot empty gap" data-line="${line}" data-index="${index}"
+    title="No tienes con quien cubrir esta plaza">⚠<br>${LINE_LABEL[line]}<br>sin cubrir</div>`;
   const trend=player.projected_pct||0;
   const played=(player.weeks||[]).slice(-5);
   const weeks=played.length
@@ -548,7 +548,46 @@ function renderPitch(){
   save.disabled=!pitchDirty||!pitchState.writes_enabled;
   document.getElementById('pitch-status').textContent = pitchDirty
     ? 'cambios sin guardar' : (pitchState.writes_enabled?'':'servidor en solo lectura');
+  pitchAlert();
   wireDrag();
+}
+
+const LINE_WORD={goalkeeper:['portero','porteros'],defender:['defensa','defensas'],
+                 midfield:['medio','medios'],striker:['delantero','delanteros']};
+
+// Un hueco en el once son puntos que no se juegan, asi que se dice arriba y con la salida
+// puesta: la formacion que si cuadra con los jugadores que hay, si alguna cuadra.
+function pitchAlert(){
+  const box=document.getElementById('pitch-alert');
+  if(!box) return;
+  const holes=[]; let missing=0;
+  LINE_ORDER.forEach(line=>{
+    const empty=(pitchState.lines[line]||[]).filter(p=>!p).length;
+    if(!empty) return;
+    missing+=empty;
+    holes.push(`${empty} ${LINE_WORD[line][empty>1?1:0]}`);
+  });
+  if(!missing){ box.hidden=true; box.innerHTML=''; return; }
+  const have={1:0,2:0,3:0,4:0};
+  LINE_ORDER.forEach(line=>(pitchState.lines[line]||[]).forEach(p=>{ if(p) have[p.position_id]++; }));
+  (pitchState.bench||[]).forEach(p=>{ if(p) have[p.position_id]++; });
+  const squad=have[1]+have[2]+have[3]+have[4];
+  const fits=f=>{ const [d,m,s]=f.split(',').map(Number);
+    return have[1]>=1&&have[2]>=d&&have[3]>=m&&have[4]>=s; };
+  const free=(pitchState.formations.free||[]).find(fits);
+  const premium=free?null:(pitchState.formations.premium||[]).find(fits);
+  const option=free||premium;
+  const shape=(pitchState.formation||[]).join('-');
+  let out=`<span>⚠ <b>Once incompleto</b>: el ${shape} pide 11 y sales con ${11-missing}`
+    +`. Falta${missing>1?'n':''} ${holes.join(' y ')}.</span>`;
+  if(option) out+=`<span>Con <b>${option.replace(/,/g,'-')}</b>`
+    +`${premium?' (premium)':''} cuadras el once con los ${squad} que tienes.</span>`
+    +`<button type="button" data-formation="${option}">Cambiar a ${option.replace(/,/g,'-')}</button>`;
+  else out+=`<span>Ninguna formacion cuadra con ${squad} jugadores: toca fichar.</span>`;
+  box.innerHTML=out;
+  box.hidden=false;
+  const button=box.querySelector('button[data-formation]');
+  if(button) button.addEventListener('click',()=>applyFormation(button.dataset.formation));
 }
 
 let justDragged=false;
@@ -660,6 +699,9 @@ function applyFormation(text){
   });
   pitchState.bench=pitchState.bench.concat(spare);
   pitchState.formation=[d,m,s];
+  // El selector tambien se cambia desde el aviso, y tiene que quedar diciendo la verdad.
+  const select=document.getElementById('pitch-formation-select');
+  if(select) select.value=text;
   pitchDirty=true; renderPitch();
 }
 
@@ -857,8 +899,19 @@ function miniPitch(m){
   return `<div class="mini-pitch">${order.map(line=>{
     const players=fielded[line]||[];
     if(!players.length) return '';
-    return `<div class="mini-line">${players.map(p=>slotChip(p,label[line],true)).join('')}</div>`;
+    return `<div class="mini-line">${players.map(p=>p
+      ? slotChip(p,label[line],true)
+      : `<span class="mini-hole" title="${label[line]} sin cubrir">⚠</span>`).join('')}</div>`;
   }).join('')}</div>` + benchStrip(m.bench);
+}
+
+// Las plazas que dejo vacias: un 4-4-2 con diez no es un 4-4-2, es un 4-4-2 al que le falta un
+// medio, y eso son puntos regalados.
+function gapNote(fielded){
+  let put=0, slots=0;
+  Object.keys(fielded||{}).forEach(line=>(fielded[line]||[]).forEach(p=>{
+    slots++; if(p) put++; }));
+  return put<slots ? ` · <span class="md-gap">puso ${put} de ${slots}</span>` : '';
 }
 
 function slotChip(p,line,fielded){
@@ -902,7 +955,8 @@ async function openMatchday(week){
         <div class="md-head">
           <button class="p-name" type="button" data-manager="${m.team_id}">${m.manager}</button>
           <span class="md-count">${m.lineup
-            ? (m.formation||[]).join('-')+(m.week_points!=null?` · ${Math.round(m.week_points)} pts`:'')
+            ? (m.formation||[]).join('-')+gapNote(m.lineup)
+              +(m.week_points!=null?` · ${Math.round(m.week_points)} pts`:'')
             : `${m.playing} de ${m.players} jugaron`}</span>
         </div>
         ${miniPitch(m)}
