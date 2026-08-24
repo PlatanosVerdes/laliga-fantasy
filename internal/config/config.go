@@ -87,7 +87,7 @@ func FFHeaders() map[string]string {
 var Tags = map[string]bool{
 	"activity": true, "calendar": true, "formations": true, "leagues": true,
 	"lineup": true, "market": true, "me": true, "money": true, "mv": true,
-	"offers": true, "player": true, "players": true, "squad": true,
+	"offers": true, "player": true, "players": true, "reward": true, "squad": true,
 	"standing": true, "teams": true, "week": true,
 	// futbolfantasy's pages, cached the same way.
 	"ff_market": true, "ff_detail": true, "ff_player": true, "ff_absences": true,

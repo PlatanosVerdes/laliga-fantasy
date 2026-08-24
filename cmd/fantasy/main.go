@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -30,6 +31,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/outcomes"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/render"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/rewards"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/server"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
@@ -118,6 +120,8 @@ func main() {
 		err = cmdAlways(rest[1:])
 	case "raid":
 		err = cmdRaid(rest[1:])
+	case "reward":
+		err = cmdReward(rest[1:])
 	case "rules":
 		err = cmdRules(rest[1:])
 	case "leagues":
@@ -159,6 +163,7 @@ uso: fantasy [-v|-q] <comando>
   fav           favoritos
   always        instrucciones permanentes (siempre en mercado)
   raid          clausulazos programados
+  reward        la recompensa diaria: cuanto queda y --claim para cobrarla
   leagues       tus ligas
   rules         las normas de tu liga (plazo de venta y acuerdos)
   report        la pagina, a un fichero
@@ -262,6 +267,57 @@ func cmdServe(args []string) error {
 		return int64(money.TeamMoney), nil
 	}
 
+	// The daily reward: 100.000 that no rival is competing for, and the only way to lose it is
+	// to forget. It does not go through the standing instructions because it authorises nothing
+	// and spends nothing — there is no amount and no limit to agree on, only a day.
+	claimReward := func() {
+		if !allowWrites || *noAuto {
+			return
+		}
+		league, team, err := ensureLeague()
+		if err != nil || rewards.ClaimedToday(league) {
+			return
+		}
+		status, err := client.DailyRewardStatus(league, team)
+		switch {
+		case errors.Is(err, api.ErrRewardTaken):
+			// Claimed from the phone, most likely. Stamped so the rest of the day is quiet.
+			if err := rewards.Stamp(league); err != nil {
+				slog.Warn("daily reward stamp failed", "reason", err.Error())
+			}
+			return
+		case err != nil:
+			slog.Warn("daily reward unreadable", "reason", err.Error())
+			return
+		// The catalogue says one a day in every kind of league, so anything above zero is done.
+		case status.Redeemed > 0:
+			if err := rewards.Stamp(league); err != nil {
+				slog.Warn("daily reward stamp failed", "reason", err.Error())
+			}
+			return
+		}
+
+		before := 0.0
+		if money, err := client.Money(team, 0); err == nil {
+			before = money.TeamMoney
+		}
+		if _, err := guard.Automatic("claim_daily_reward",
+			writes.Args{LeagueID: league, TeamID: team},
+			writes.Player{Name: "recompensa diaria"}, allowWrites); err != nil {
+			slog.Warn("daily reward not claimed", "reason", err.Error())
+			return
+		}
+		if err := rewards.Stamp(league); err != nil {
+			slog.Warn("daily reward stamp failed", "reason", err.Error())
+		}
+		// The claim answers no amount, so what it was worth is the difference in the balance.
+		gained := 0.0
+		if money, err := client.Money(team, 0); err == nil && before > 0 {
+			gained = money.TeamMoney - before
+		}
+		slog.Info("daily reward claimed", "league", league, "amount", int64(gained))
+	}
+
 	// Automatic execution of the standing instructions. Off in read-only and with --no-auto; on
 	// otherwise, because an instruction exists precisely to fire while nobody is watching.
 	automate := func(cause string) {
@@ -362,6 +418,7 @@ func cmdServe(args []string) error {
 			// Act first, rebuild after. A clause raid is a race decided in seconds, and a full
 			// rebuild takes several: the instructions already know the amount and the limit from
 			// the previous cycle, and the lock is judged against the clock.
+			claimReward()
 			automate(cause)
 			if err := world.Refresh(cause); err != nil {
 				return err

@@ -228,3 +228,26 @@ func TestAutomaticRefusesToSpendWithoutABalance(t *testing.T) {
 	}
 }
 
+// The claim was captured once, from the phone, and nothing else documents it: the path stops at
+// the league and the team travels in the body. Getting either wrong is a 404 or a 400, and there
+// is no second capture to compare against.
+func TestClaimDailyRewardCallShape(t *testing.T) {
+	call, err := Build("claim_daily_reward", Args{LeagueID: "018012894", TeamID: "38126981"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if call.Method != "POST" {
+		t.Errorf("metodo %q, la captura dice POST", call.Method)
+	}
+	want := "/v1/competition/1/league/018012894/team/daily-reward"
+	if call.Path != want {
+		t.Errorf("ruta %q, esperaba %q", call.Path, want)
+	}
+	body := call.Body
+	if body["teamId"] != "38126981" {
+		t.Errorf("el equipo viaja en el cuerpo: %v", body["teamId"])
+	}
+	if body["rewardedAdType"] != "dailyreward" || body["rewardedAd"] != 1 {
+		t.Errorf("el anuncio va como bandera: %v", body)
+	}
+}

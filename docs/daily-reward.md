@@ -1,13 +1,13 @@
-# The daily reward, and why it is not automated yet
+# The daily reward
 
 LaLiga Fantasy hands out a fixed amount once a day, per league, after watching an advert:
-100.000 in a private league, 200.000 with premium. Over a season that is real money in a
-game where the whole point is having cash on the right morning, so it is worth automating.
-One thing is missing: the endpoint that claims it.
+100.000 in a public or private league, 200.000 with premium. Over a season that is real money
+in a game where the whole point is having cash on the right morning, so the engine claims it.
 
-## What the API exposes
+Captured from the phone with Proxyman on 2026-08-24, which is the only reason any of this is
+written down: none of it is documented, and about 60 guessed paths had answered 404 before.
 
-One route, read-only:
+## The three routes
 
 ```
 GET  /v1/competition/1/daily-reward
@@ -15,74 +15,56 @@ GET  /v1/competition/1/daily-reward
    {"leagueType":"private","money":100000,"dailyLimit":1},
    {"leagueType":"premium","money":200000,"dailyLimit":1}]
 
-OPTIONS /v1/competition/1/daily-reward   →  405, allow: GET
+GET  /v1/competition/1/league/{league}/team/{team}/check-daily-reward
+  {"teamId":38126981,"dailyRewardsRedeemed":0}          ← queda por cobrar
+  400 {"errorCode":"050.01.04","message":"Team daily reward limit reached"}   ← ya cobrada
+
+POST /v1/competition/1/league/{league}/team/daily-reward
+  {"rewardedAdType":"dailyreward","rewardedAd":1,"teamId":"38126981"}
 ```
 
-That is the catalogue: how much a reward is worth and how many a day. It does not say whether
-today's is still there, and it cannot claim it.
+Two things about the POST are worth keeping in mind, because they are why the guessing failed:
+the path **stops at the league** — the team id travels in the body, not in the path, so every
+team-scoped path answered 404 — and the segment is `team`, singular, while standings and squads
+hang off `leagues` plural. The team id is a string in the body and a number in the check's
+response.
 
-## Where the claim is not
+The advert is a flag. The API takes `rewardedAd: 1` and attaches no proof to it, exactly like
+the shield feature does (`rewardedAdType: "Blindaje"`). Watching the video is the app's
+business, not the server's.
 
-About 60 candidate paths answered 404: league-scoped, team-scoped and user-scoped variants of
-`daily-reward`, `dailyReward`, `daily_reward`, `reward`, `rewards`, `bonus`, `daily-bonus`,
-`gift`, `prize`, `rewarded-ad`, `ad-reward`, and those with `claim`, `collect`, `redeem`,
-`apply`, `take`, `receive`, `status` appended; under `/v1` … `/v4`; and on the older
-`api-fantasy.llt-services.com` host as well.
+`check-daily-reward` answering 400 instead of a counter of one is the useful part: the absence
+of a body is the answer, and it means the claim cannot be attempted twice by accident. That
+refusal is not retried — `httpx` treats a 400 like a 404 and gives up on the first one.
 
-The 404 is conclusive, which is the useful part. This API distinguishes a wrong path from a
-wrong method: asking with the wrong verb answers **405 with an `allow:` header**, verified
-against two routes known to exist.
+## How the engine claims it
 
-```
-GET /v1/competition/1/league/{league}/shield/player   →  405, allow: PUT
-GET /v1/competition/1/league/{league}/market/sell     →  405, allow: POST
-```
+`internal/writes` has the operation (`claim_daily_reward`), and the automatic cycle calls it
+before the standing instructions, in `cmd/fantasy/main.go`. It is deliberately outside
+`policies`: there is no amount and no limit to authorise in advance, only a day.
 
-So a 404 means the path does not exist, not that the method was wrong. Guessing further is
-not worth the requests.
+The order is check, claim, stamp:
 
-Nothing else is left to read either: the old web client at `laligafantasy.relevo.com` now
-redirects to relevo.com, the `fantasy.laliga.com` bundle is a landing page with no API calls
-in it, and none of the public reverse-engineered projects implement the claim.
+- `rewards.ClaimedToday(league)` short-circuits the whole thing, so the rest of the day costs
+  no requests at all. The stamp lives in `daily_reward.json` in the state directory, keyed by
+  league, and the day is Madrid's, because that is when the counter resets.
+- `check-daily-reward` decides. A 400 or a counter above zero stamps the day and stops:
+  claiming from the phone must not have the engine asking again every two minutes.
+- the amount is not in the response, so it is the difference in `/money` around the claim, and
+  that is what goes in the log line.
 
-## The one thing that would unblock it
+By hand: `fantasy reward` says what it is worth and whether today's is still there, and
+`fantasy reward --claim` claims it.
 
-A single capture of the real request from the phone.
+## Capturing it again
 
-1. Proxyman on the Mac (the trial is enough), *iOS Device* in the welcome panel.
-2. iPhone on the same Wi-Fi: Ajustes → Wi-Fi → (i) → Configurar proxy → Manual, with the
-   Mac's address and port 9090.
-3. Certificate: open `http://proxy.man/ssl` in Safari on the phone, install the profile, and
-   **trust it** in Ajustes → General → Información → Ajustes de confianza de certificados.
-   Skipping that last step is why a capture comes back encrypted.
-4. In Proxyman, enable SSL proxying for `fantasy-api.llt-services.com` (or
-   `*.llt-services.com:443`), and filter by `llt` to cut the noise.
-5. In the app: Mercado → Recoger recompensa → Reclamar recompensa, and let the advert finish.
-6. The call that fires right after the advert: *Copy as cURL Request*. Method, path, request
-   body and response body are what matter; the `Authorization` header is not needed.
+If the shape ever changes, the capture is the way back, and two things about the setup are not
+obvious:
 
-If the app pins its certificates, Proxyman decrypts nothing and the app fails with a network
-error instead. That is the end of the cheap route.
-
-## What to build with it
-
-The advert is probably not an obstacle. This same API takes the advert as a plain flag in the
-body on another feature, with no proof attached — from
-[LaLigaApp](https://github.com/Externoak/LaLigaApp), which shields a player like this:
-
-```js
-api.put(`${CMP}/league/${leagueId}/shield/player`, {
-  playerId, rewardedAdType: "Blindaje", rewardedAd: 1,
-})
-```
-
-If the claim follows that shape, sending the flag is the whole job. Then:
-
-- a `claim_daily_reward` entry in `internal/writes`, with the captured path and body;
-- a step in the automatic cycle that runs it once a day, stamped in the state directory so a
-  restart or a busy afternoon cannot claim twice, and only when the catalogue says there is
-  something to claim;
-- the amount in the log line, like every other automatic action.
-
-One more thing it would fix: the README's cash model calls the daily reward "the one term the
-log does not record". Claiming it ourselves means we know exactly when it happened.
+- Proxyman serves its CA as a raw `.pem` at `http://proxy.man/ssl` (no `www.`, that host
+  answers nothing). Depending on the iOS version that lands in Files, where a CA cannot be
+  installed. Wrapping the certificate in a `.mobileconfig` with a `com.apple.security.root`
+  payload and serving it as `application/x-apple-aspen-config` always works.
+- With a manual proxy on the phone, the **Mac** resolves every name. A Pi-hole on the Mac's DNS
+  path therefore kills the advert, the app says there is nothing to watch, and no claim is ever
+  fired. `pihole disable 10m` for the length of the capture, and it re-enables itself.

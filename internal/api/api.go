@@ -6,6 +6,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -161,6 +162,45 @@ func (c *Client) Money(teamID string, ttl time.Duration) (Money, error) {
 	err := c.get(fmt.Sprintf("%s/teams/%s/money", config.CMP, teamID), true, ttl,
 		"money", false, &money)
 	return money, err
+}
+
+// DailyReward is one line of the reward catalogue: what a claim is worth in that kind of
+// league and how many a day are allowed.
+type DailyReward struct {
+	LeagueType string  `json:"leagueType"`
+	Money      float64 `json:"money"`
+	DailyLimit int     `json:"dailyLimit"`
+}
+
+// DailyRewardStatus is how many of today's rewards this team has already taken. It is the only
+// authority on that: the league log does not record the daily reward at all.
+type DailyRewardStatus struct {
+	TeamID   json.Number `json:"teamId"`
+	Redeemed int         `json:"dailyRewardsRedeemed"`
+}
+
+func (c *Client) DailyRewards(ttl time.Duration) ([]DailyReward, error) {
+	var rewards []DailyReward
+	err := c.getList(config.CMP+"/daily-reward", ttl, "reward", false, &rewards)
+	return rewards, err
+}
+
+// ErrRewardTaken is today's reward already claimed. The check does not answer a counter of one
+// in that case, it answers 400 with this code, so the absence of a body is the answer.
+var ErrRewardTaken = errors.New("la recompensa de hoy ya esta cobrada")
+
+const rewardTakenCode = "050.01.04"
+
+// DailyRewardStatus asks whether today's is still there. Never cached: the answer changes the
+// moment we claim, and a stale zero would claim twice.
+func (c *Client) DailyRewardStatus(leagueID, teamID string) (DailyRewardStatus, error) {
+	var status DailyRewardStatus
+	err := c.get(fmt.Sprintf("%s/league/%s/team/%s/check-daily-reward", config.CMP, leagueID,
+		teamID), true, 0, "reward", false, &status)
+	if err != nil && strings.Contains(err.Error(), rewardTakenCode) {
+		return status, ErrRewardTaken
+	}
+	return status, err
 }
 
 // Market: note /league/ singular. See the package comment.

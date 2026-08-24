@@ -229,7 +229,8 @@ func Fetch(request Request) (string, error) {
 		}
 		var httpErr *Error
 		if errors.As(err, &httpErr) &&
-			(httpErr.Status == 401 || httpErr.Status == 403 || httpErr.Status == 404) {
+			(httpErr.Status == 400 || httpErr.Status == 401 || httpErr.Status == 403 ||
+				httpErr.Status == 404) {
 			return "", err
 		}
 		lastErr = err

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -18,7 +19,9 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/rewards"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
 
 // world is the pair every reporting command needs: the universe and the advice over it. Built
@@ -397,6 +400,78 @@ func cmdPlayer(args []string) error {
 	for _, line := range lines {
 		fmt.Printf("  %-22s %s\n", line[0], line[1])
 	}
+	return nil
+}
+
+// --- daily reward -----------------------------------------------------------------------
+
+// cmdReward reads what the reward is worth and whether today's is still there, and claims it
+// when asked. The advert the app makes you watch is a flag in the body: the API attaches no
+// proof to it.
+func cmdReward(args []string) error {
+	flags := flag.NewFlagSet("reward", flag.ContinueOnError)
+	claim := flags.Bool("claim", false, "cobrarla ahora")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	leagueID, teamID, err := savedLeague()
+	if err != nil {
+		return err
+	}
+	client := api.New()
+
+	cli.Heading("Recompensa diaria")
+	catalogue, err := client.DailyRewards(time.Hour)
+	if err != nil {
+		return err
+	}
+	limit := 1
+	for _, reward := range catalogue {
+		fmt.Printf("  %-8s %12s  ·  %d al dia\n", reward.LeagueType,
+			cli.Money(reward.Money), reward.DailyLimit)
+		if reward.LeagueType == "private" && reward.DailyLimit > 0 {
+			limit = reward.DailyLimit
+		}
+	}
+
+	status, err := client.DailyRewardStatus(leagueID, teamID)
+	if errors.Is(err, api.ErrRewardTaken) {
+		fmt.Println("\nHoy ya esta cobrada.")
+		return rewards.Stamp(leagueID)
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\nHoy: %d de %d cobradas\n", status.Redeemed, limit)
+	if status.Redeemed >= limit {
+		fmt.Println("Ya no queda nada por cobrar hoy.")
+		return rewards.Stamp(leagueID)
+	}
+	if !*claim {
+		fmt.Println("Queda por cobrar. `fantasy reward --claim` la cobra.")
+		return nil
+	}
+
+	before := 0.0
+	if money, err := client.Money(teamID, 0); err == nil {
+		before = money.TeamMoney
+	}
+	guard := writes.NewGuard(client)
+	if _, err := guard.Do("claim_daily_reward",
+		writes.Args{LeagueID: leagueID, TeamID: teamID},
+		writes.Player{Name: "recompensa diaria"}, true); err != nil {
+		return err
+	}
+	if err := rewards.Stamp(leagueID); err != nil {
+		return err
+	}
+	// The claim answers with no amount, so what it was worth is the difference in the balance.
+	if money, err := client.Money(teamID, 0); err == nil && before > 0 {
+		fmt.Printf("Cobrada: %s (saldo %s)\n", cli.Money(money.TeamMoney-before),
+			cli.Money(money.TeamMoney))
+		return nil
+	}
+	fmt.Println("Cobrada.")
 	return nil
 }
 

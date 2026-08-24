@@ -149,6 +149,16 @@ var Operations = map[string]operation{
 			map[string]any{"playerId": a.MarketID, "money": a.Amount}}
 	}, []string{"market", "money"}},
 
+	// The daily reward. The path stops at the league and the team travels in the body, which
+	// is why every team-scoped path we probed answered 404. The advert is a flag: the API takes
+	// our word for it and attaches no proof.
+	"claim_daily_reward": {"cobrar la recompensa diaria", func(a Args) Call {
+		return Call{http.MethodPost,
+			fmt.Sprintf("%s/league/%s/team/daily-reward", config.CMP, a.LeagueID),
+			map[string]any{"rewardedAdType": "dailyreward", "rewardedAd": 1,
+				"teamId": a.TeamID}}
+	}, []string{"money", "reward"}},
+
 	"pay_clause": {"pagar clausula", func(a Args) Call {
 		return Call{http.MethodPost,
 			fmt.Sprintf("%s/league/%s/buyout/%s/pay", config.CMP, a.LeagueID, a.PlayerTeamID),
