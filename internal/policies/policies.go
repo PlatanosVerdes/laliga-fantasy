@@ -231,8 +231,15 @@ func Plan(players []Row, policies map[string]Policy) []Row {
 // RaidPlan is the scheduled clause raids: pay the moment the lock lifts, if it is still worth
 // it. A clause is not a fixed price — the owner can raise it or shield the player — so the
 // instruction carries max_pay and stands down rather than overpaying for yesterday's price.
+//
+// Several raids can open at the same instant, and each one spends the same balance: checking
+// every clause against the starting cash says yes to all of them and leaves the balance
+// negative. So the payable ones go into a queue — best points per million paying the clause
+// first — and the balance is spent down along it; whoever no longer fits stands down with the
+// reason, and gets his turn on a later cycle if he is still there.
 func RaidPlan(players []Row, policies map[string]Policy, cash float64) []Row {
 	actions := []Row{}
+	queue := []Row{}
 	for _, player := range players {
 		policy, armed := policies[text(player["id"])]
 		if !armed || !policy.Raid {
@@ -273,19 +280,60 @@ func RaidPlan(players []Row, policies map[string]Policy, cash float64) []Row {
 			actions = append(actions, merge(row, Row{"action": "cancelada",
 				"why": fmt.Sprintf("la clausula subio a %s, tu limite es %s",
 					money(int64(clause)), money(ceiling))}))
-		case clause > cash:
-			actions = append(actions, merge(row, Row{"action": "sin_saldo",
-				"why": fmt.Sprintf("cuesta %s y tienes %s", money(int64(clause)),
-					money(int64(cash)))}))
 		default:
-			actions = append(actions, merge(row, Row{"action": "pagar_clausula",
-				"amount": int64(clause),
+			queue = append(queue, merge(row, Row{"amount": int64(clause),
 				"player_team_id": player["player_team_id"],
-				"why": fmt.Sprintf("abierta a %s, por debajo de tu limite de %s",
-					money(int64(clause)), money(ceiling))}))
+				"ppm_at_clause":  pointsPerMillion(player, clause)}))
 		}
 	}
-	return actions
+	return append(actions, spendDown(queue, cash)...)
+}
+
+// pointsPerMillion is what the clause buys: expected points per million paid. Zero when there
+// is nothing to divide, which sends the player to the back of the queue rather than the front.
+func pointsPerMillion(player Row, clause float64) float64 {
+	if clause <= 0 {
+		return 0
+	}
+	return number(player["xpts"]) / (clause / 1e6)
+}
+
+// spendDown turns the payable raids into an ordered queue and pays along it while the balance
+// lasts. Order is points per million first and the cheaper clause second: with two raids of the
+// same worth, paying the cheap one leaves room for the next.
+func spendDown(queue []Row, cash float64) []Row {
+	sort.SliceStable(queue, func(one, two int) bool {
+		left, right := number(queue[one]["ppm_at_clause"]), number(queue[two]["ppm_at_clause"])
+		if left != right {
+			return left > right
+		}
+		return number(queue[one]["clause"]) < number(queue[two]["clause"])
+	})
+
+	remaining := cash
+	var ahead []string
+	out := make([]Row, 0, len(queue))
+	for _, row := range queue {
+		clause := number(row["clause"])
+		ceiling := int64(number(row["max_pay"]))
+		if clause > remaining {
+			why := fmt.Sprintf("cuesta %s y te quedan %s", money(int64(clause)),
+				money(int64(remaining)))
+			if len(ahead) > 0 {
+				why += ": antes va " + strings.Join(ahead, ", ")
+			}
+			out = append(out, merge(row, Row{"action": "sin_saldo", "why": why}))
+			continue
+		}
+		remaining -= clause
+		out = append(out, merge(row, Row{"action": "pagar_clausula",
+			"queue_position": len(ahead) + 1,
+			"why": fmt.Sprintf("abierta a %s, por debajo de tu limite de %s; rinde %.2f pts "+
+				"por millon y quedarian %s", money(int64(clause)), money(ceiling),
+				number(row["ppm_at_clause"]), money(int64(remaining)))}))
+		ahead = append(ahead, text(row["name"]))
+	}
+	return out
 }
 
 // money is the page's thousands-with-dots format, which these reasons are read in.

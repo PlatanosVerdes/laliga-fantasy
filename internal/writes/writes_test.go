@@ -211,3 +211,20 @@ func TestEveryOperationDeclaresItsEffects(t *testing.T) {
 		}
 	}
 }
+
+// An unattended write with no readable balance is a write with no limit: it must not happen.
+func TestAutomaticRefusesToSpendWithoutABalance(t *testing.T) {
+	blind := &Guard{tokens: map[string]pending{},
+		Cash: func(string) (int64, error) { return 0, errors.New("money 503") }}
+
+	args := Args{LeagueID: "1", TeamID: "2", PlayerTeamID: "3", Amount: 5_000_000}
+	_, err := blind.Automatic("pay_clause", args, Player{Name: "Youssef",
+		Clause: 5_000_000}, true)
+	if err == nil {
+		t.Fatal("pagar una clausula sin poder leer el saldo deberia rechazarse")
+	}
+	if !strings.Contains(err.Error(), "saldo") {
+		t.Errorf("el motivo deberia hablar del saldo, dijo %q", err.Error())
+	}
+}
+

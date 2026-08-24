@@ -123,3 +123,37 @@ func TestRaidPlanRefusesWithoutACap(t *testing.T) {
 		t.Errorf("sin saldo deberia decirlo, dijo %v", text(broke[0]["action"]))
 	}
 }
+
+// Two clauses open at once and each one spends the same balance: the queue has to stop at the
+// balance instead of saying yes to both and leaving it negative.
+func TestRaidPlanSpendsTheBalanceOnceAcrossRaids(t *testing.T) {
+	cap := 30_000_000.0
+	players := []Row{
+		{"id": "1", "name": "el caro", "owner": "rival", "clause": 20_000_000.0, "xpts": 40.0},
+		{"id": "2", "name": "el barato", "owner": "rival", "clause": 15_000_000.0, "xpts": 90.0},
+	}
+	armed := map[string]Policy{"1": {Raid: true, MaxPay: &cap}, "2": {Raid: true, MaxPay: &cap}}
+
+	plan := RaidPlan(players, armed, 30_000_000)
+	if len(plan) != 2 {
+		t.Fatalf("esperaba una fila por clausulazo, dijo %v", plan)
+	}
+	// El barato rinde mas por millon, asi que va primero y se lleva el saldo.
+	if text(plan[0]["name"]) != "el barato" || text(plan[0]["action"]) != "pagar_clausula" {
+		t.Errorf("primero deberia pagar al barato, dijo %v", plan[0])
+	}
+	if text(plan[1]["action"]) != "sin_saldo" {
+		t.Errorf("el segundo ya no cabe y deberia decirlo, dijo %v", plan[1])
+	}
+
+	// Con saldo para los dos se pagan los dos, y el mejor por millon sigue yendo primero.
+	both := RaidPlan(players, armed, 40_000_000)
+	for index, row := range both {
+		if text(row["action"]) != "pagar_clausula" {
+			t.Fatalf("con saldo de sobra los dos deberian pagarse, el %d dijo %v", index, row)
+		}
+	}
+	if text(both[0]["name"]) != "el barato" {
+		t.Errorf("la cola va por puntos por millon, empezo por %q", text(both[0]["name"]))
+	}
+}

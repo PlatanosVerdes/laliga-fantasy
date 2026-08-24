@@ -276,6 +276,13 @@ func refusal(text string) (string, string) {
 
 // --- the two-step guard -----------------------------------------------------
 
+// Spends are the operations that take money out of the balance. Only they need a balance to be
+// checked against, and an unattended one must not run without it.
+var Spends = map[string]bool{
+	"bid": true, "modify_bid": true, "buy_offer": true, "direct_offer": true,
+	"pay_clause": true, "raise_clause": true,
+}
+
 // Player is the little the guard needs to know about who is being traded, to judge the
 // amount and to say something useful about it.
 type Player struct {
@@ -512,6 +519,14 @@ func check(name string, args Args, who Player, cash *int64) ([]string, error) {
 					money(who.IdealBid)))
 		}
 
+	case "raise_clause":
+		if args.Amount <= 0 {
+			return nil, errors.New("el importe tiene que ser positivo")
+		}
+		if cash != nil && args.Amount > *cash {
+			return nil, fmt.Errorf("no te llega: tienes %s", money(*cash))
+		}
+
 	case "direct_offer", "pay_clause":
 		if args.Amount <= 0 {
 			return nil, errors.New("el importe tiene que ser positivo")
@@ -633,9 +648,18 @@ func (g *Guard) Automatic(name string, args Args, who Player, allowWrites bool) 
 
 	var cash *int64
 	if g.Cash != nil && args.TeamID != "" {
-		if balance, err := g.Cash(args.TeamID); err == nil {
+		balance, err := g.Cash(args.TeamID)
+		if err != nil {
+			slog.Warn("cash unreadable before automatic write", "operation", name,
+				"reason", err.Error())
+		} else {
 			cash = &balance
 		}
+	}
+	// Nobody is watching this one, so an unknown balance is a no: paying a clause blind is how
+	// the balance ends up negative.
+	if cash == nil && Spends[name] {
+		return nil, fmt.Errorf("no puedo leer el saldo: no gasto a ciegas sin que nadie mire")
 	}
 	warnings, err := check(name, args, who, cash)
 	if err != nil {
