@@ -335,6 +335,7 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 		}
 		lines[line] = group
 	}
+	padLines(lines, shapeOf(formation["tacticalFormation"]))
 
 	// The payload's bench comes back empty, so the reserves are simply the rest of the
 	// squad, rebuilt into the same shirt shape as the starters.

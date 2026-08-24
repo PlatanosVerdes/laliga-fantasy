@@ -184,6 +184,11 @@ func (s *Server) lineupOf(teamID string, week int,
 		known[text(row["id"])] = row
 	}
 
+	shape := []int{}
+	for _, value := range listAny(formation["tacticalFormation"]) {
+		shape = append(shape, int(number(value)))
+	}
+
 	out := map[string][]map[string]any{}
 	for _, line := range api.LineupLines {
 		for _, slot := range listOf(formation[line]) {
@@ -200,11 +205,8 @@ func (s *Server) lineupOf(teamID string, week int,
 			})
 		}
 	}
+	padLines(out, shape)
 
-	shape := []int{}
-	for _, value := range listAny(formation["tacticalFormation"]) {
-		shape = append(shape, int(number(value)))
-	}
 	return out, shape, number(payload["points"]), nil
 }
 
@@ -214,6 +216,23 @@ func listAny(value any) []any {
 		return list
 	}
 	return nil
+}
+
+// padLines opens an empty slot for every shirt the formation asks for and the payload does not
+// bring. Without it a line short of a player comes back short, so the ten that did play spread
+// themselves evenly over the pitch and the hole is invisible. The keeper is not in the shape.
+func padLines(lines map[string][]map[string]any, shape []int) {
+	want := map[string]int{"goalkeeper": 1}
+	for index, line := range []string{"defender", "midfield", "striker"} {
+		if index < len(shape) {
+			want[line] = shape[index]
+		}
+	}
+	for line, count := range want {
+		for len(lines[line]) < count {
+			lines[line] = append(lines[line], nil)
+		}
+	}
 }
 
 func playerOf(universe *model.Universe, id string) *model.Player {

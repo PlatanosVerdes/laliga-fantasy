@@ -366,6 +366,14 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .pitch-bar button.primary{background:var(--accent);color:#fff;border-color:transparent}
 .pitch-bar button[disabled]{opacity:.45;cursor:not-allowed}
 #pitch-status{margin-left:auto}
+/* Un hueco en el once se dice arriba, con la formacion que lo arregla al lado. */
+.pitch-alert{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;
+  padding:9px 12px;border-radius:9px;font-size:13px;color:var(--ink);
+  background:color-mix(in srgb,var(--warning) 14%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warning) 45%,transparent)}
+.pitch-alert button{font:inherit;font-size:12px;font-weight:600;cursor:pointer;margin-left:auto;
+  border-radius:7px;padding:5px 11px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink)}
 .pitch-wrap{display:grid;grid-template-columns:1fr 260px;gap:16px;align-items:start}
 @media (max-width:900px){.pitch-wrap{grid-template-columns:1fr}}
 .pitch{position:relative;border-radius:14px;padding:22px 16px;display:flex;
@@ -394,6 +402,8 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   box-shadow:inset 0 0 0 1px color-mix(in srgb,#fff 24%,transparent);cursor:default;
   align-items:center;justify-content:center;color:color-mix(in srgb,#fff 55%,transparent);
   font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+.slot.empty.gap{color:color-mix(in srgb,var(--warning) 70%,#fff);line-height:1.5;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warning) 55%,transparent)}
 .slot .crest{width:20px;height:20px}
 /* La cara identifica antes que el nombre; el escudo baja a la esquina. */
 .slot-avatar{position:relative;display:inline-flex;align-items:center;justify-content:center}
@@ -628,6 +638,12 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .mini-slot .chip-face,.mini-slot .crest{width:22px;height:22px}
 .mini-name{max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mini-out{opacity:.4}
+/* La plaza que ese manager no cubrio: si no se ve, los diez parecen once. */
+.mini-hole{display:inline-flex;align-items:center;justify-content:center;font-size:11px;
+  min-width:36px;height:36px;border-radius:8px;
+  color:color-mix(in srgb,var(--warning) 75%,#fff);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warning) 50%,transparent)}
+.md-gap{color:var(--warning)}
 
 /* Los puntos de cada uno en esa jornada, en la esquina de su ficha. */
 .mini-points{position:absolute;top:-4px;right:-4px;font-size:9px;font-weight:700;
