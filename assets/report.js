@@ -147,6 +147,10 @@ function wireBids(root=document){
 }
 
 function openBid(data){
+  // El modal se reutiliza, asi que lo que escondio una subida de clausula hay que devolverlo.
+  modal.querySelector('.bid-refs').hidden=false;
+  modal.querySelector('#bid-clause').hidden=true;
+  modal.querySelector('#bid-amount-label').textContent='Importe de la puja';
   // Con una puja puesta la operacion es cambiarla: la API rechaza una segunda con un 400.
   const existing=data.bid||null;
   // La operacion la manda el boton: por el mercado libre se puja y por la venta de un rival se
@@ -191,6 +195,25 @@ function showRivals(count, expires){
   node.className = 'bid-rivals'+(others?' rivals-on':'');
 }
 
+// Lo que se multiplica es la subida, no lo que pagas: pagas 8.555 y la clausula gana 17.110.
+// Vive aqui porque es la unica operacion en la que el importe que escribes no es lo que cambia.
+const CLAUSE_FACTOR=2;
+
+function clauseSums(amount){
+  const box=modal.querySelector('#bid-clause');
+  if(!box) return;
+  const rise=amount*CLAUSE_FACTOR;
+  const next=(pending.clause||0)+rise;
+  const times=pending.value ? next/pending.value : 0;
+  box.innerHTML=
+    `<dt>Multiplicador</dt><dd>${CLAUSE_FACTOR}x</dd>`
+    +`<dt>Sube la clausula</dt><dd>${exact(rise)}</dd>`
+    +`<dt>Clausula ahora</dt><dd>${exact(pending.clause||0)}</dd>`
+    +`<dt>Clausula nueva</dt><dd class="clause-new">${exact(next)}`
+    +`${times?` · ${times.toFixed(2)}x su valor`:''}</dd>`;
+  box.hidden=false;
+}
+
 function checkAmount(){
   const input=modal.querySelector('.bid-amount');
   const warn=modal.querySelector('.bid-warn');
@@ -202,6 +225,15 @@ function checkAmount(){
     input.setSelectionRange(Math.max(0,caret+shift), Math.max(0,caret+shift));
   }
   let text='';
+  // Subir una clausula no tiene puja minima ni techo de futbolfantasy: ese techo es lo que
+  // renta pagar *por el jugador*, y aqui no se compra a nadie. Decia "no le ve rentabilidad".
+  if(pending.raise){
+    clauseSums(amount);
+    if(!amount) text='Escribe lo que quieres pagar.';
+    warn.textContent=text;
+    warn.hidden=!text;
+    return;
+  }
   if(!amount) text='Escribe un importe.';
   else if(amount<pending.min_bid) text='Por debajo de la puja minima ('+exact(pending.min_bid)+').';
   if(pending.ideal && amount>pending.ideal) text='Por encima del techo rentable de futbolfantasy.';
@@ -232,12 +264,14 @@ if(modal){
       pending.token=data.token;
       const op=pending.operation||'bid';
       const movesCash=['bid','modify_bid','buy_offer','direct_offer','pay_clause',
-                       'accept_offer'].includes(op);
+                       'accept_offer','raise_clause'].includes(op);
       modal.querySelector('.bid-summary').innerHTML =
         `<dl class="bid-dl">
            <dt>Jugador</dt><dd>${data.player_name||pending.name}</dd>
            <dt>${AMOUNT_LABEL[op]||'Importe'}</dt>
              <dd><strong>${exact(data.amount)}</strong></dd>
+           ${data.new_clause?`<dt>Clausula</dt>
+             <dd>${exact(data.clause)} → <strong>${exact(data.new_clause)}</strong></dd>`:''}
            <dt>Saldo ahora</dt><dd>${exact(data.cash_before)}</dd>
            ${movesCash?`<dt>${op==='accept_offer'?'Saldo despues':'Saldo si sale'}</dt>
              <dd><strong>${exact(data.cash_after)}</strong></dd>`:''}
@@ -341,7 +375,7 @@ const DONE_LABEL={bid:'Puja enviada',sell_to_market:'Puesto en venta',
 const AMOUNT_LABEL={bid:'Pujas',modify_bid:'Nueva puja',buy_offer:'Ofreces',
   sell_to_market:'Precio de venta',
   accept_offer:'Cobras',direct_offer:'Ofreces',pay_clause:'Pagas',
-  raise_clause:'Subes la clausula'};
+  raise_clause:'Pagas'};
 
 const OP_LABELS={accept_offer:'Aceptar oferta por',decline_offer:'Rechazar oferta por',
                  withdraw:'Retirar del mercado a',sell_to_market:'Poner en venta a',
@@ -1323,14 +1357,22 @@ async function runAction(a,player){
   }
   closeDrawer();
   if(a.kind==='amount'){
+    const raise=a.op==='raise_clause';
     pending={operation:a.op, market_id:a.market_id, player_id:a.player_id||player.id,
              player_team_id:a.player_team_id||player.player_team_id,
              offer_id:a.offer_id, bid_id:a.bid_id, name:player.name, min_bid:a.min||0,
-             ideal:player.ideal_bid||0, value:player.value};
+             ideal:player.ideal_bid||0, value:player.value,
+             raise, clause:+player.clause||0};
     modal.hidden=false;
     modal.querySelector('.bid-action').textContent=a.label+' —';
     modal.querySelector('.bid-who').textContent=player.name;
     modal.querySelector('.bid-amount').value=group(a.suggested||a.min||0);
+    modal.querySelector('#bid-amount-label').textContent=
+      raise ? 'Importe a pagar (se descuenta de tu saldo)' : 'Importe de la puja';
+    // Las referencias de puja no dicen nada de una clausula, y el techo de futbolfantasy es
+    // sobre comprar al jugador, no sobre proteger al tuyo.
+    modal.querySelector('.bid-refs').hidden=raise;
+    modal.querySelector('#bid-clause').hidden=!raise;
     modal.querySelector('.bid-min').textContent=a.min?exact(a.min):'sin minimo';
     modal.querySelector('.bid-ideal').textContent=player.ideal_bid?exact(player.ideal_bid):'sin margen';
     modal.querySelector('.bid-value').textContent=exact(player.value);

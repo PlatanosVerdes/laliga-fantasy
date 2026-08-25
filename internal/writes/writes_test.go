@@ -251,3 +251,40 @@ func TestClaimDailyRewardCallShape(t *testing.T) {
 		t.Errorf("el anuncio va como bandera: %v", body)
 	}
 }
+
+// Raising a clause is the one operation whose amount is not what changes: you pay an amount and
+// the clause goes up by twice it. Both numbers have to be in the confirmation, and the balance
+// has to come down, which it did not.
+func TestRaiseClauseSaysWhatTheClauseBecomes(t *testing.T) {
+	g := guard(50_000_000)
+	summary, err := g.Prepare("raise_clause",
+		Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "slot", Amount: 4_656_624},
+		Player{Name: "Ferran Jutglà", Value: 9_313_248, Clause: 15_192_896}, true)
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	if summary.Clause != 15_192_896 {
+		t.Errorf("clause = %d, want the current one", summary.Clause)
+	}
+	// 15.192.896 + 2 × 4.656.624
+	if want := int64(24_506_144); summary.NewClause != want {
+		t.Errorf("new clause = %d, want %d", summary.NewClause, want)
+	}
+	if summary.CashAfter == nil || *summary.CashAfter != 45_343_376 {
+		t.Errorf("cash after = %v, want the balance minus what you pay", summary.CashAfter)
+	}
+}
+
+// The factor lives in one place, and the call carries it.
+func TestRaiseClauseCallCarriesTheFactor(t *testing.T) {
+	call, err := Build("raise_clause", Args{LeagueID: "L", PlayerTeamID: "slot", Amount: 1_000})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if call.Body["factor"] != ClauseFactor {
+		t.Errorf("factor = %v, want %d", call.Body["factor"], ClauseFactor)
+	}
+	if call.Body["valueToIncrease"] != int64(1_000) {
+		t.Errorf("valueToIncrease = %v, want what you pay", call.Body["valueToIncrease"])
+	}
+}
