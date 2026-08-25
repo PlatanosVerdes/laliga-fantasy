@@ -495,14 +495,34 @@ func (d Document) actionRows() []map[string]any {
 			"verdict": "protect", "entry_cost": player["clause"], "why": why}))
 	}
 
-	for index, player := range rows(d.Advice["my_clauses_soon"]) {
+	// Riskiest first, not soonest: in this league every clause opens within the same hour, so
+	// the hour sorts nothing and "quedas expuesto" on all of them said nothing either.
+	soon := append([]map[string]any{}, rows(d.Advice["my_clauses_soon"])...)
+	sort.SliceStable(soon, func(one, two int) bool {
+		return number(soon[one]["risk"]) > number(soon[two]["risk"])
+	})
+	for index, player := range soon {
 		if index >= 6 {
 			break
 		}
+		why := fmt.Sprintf("se desbloquea en %.0fh", number(player["hours_left"]))
+		switch threats := int(number(player["threats"])); {
+		case threats == 0:
+			// Kept, because it is cheap enough to be a bargain the day somebody sells.
+			why += " y hoy nadie tiene caja para pagarla"
+		case threats == 1:
+			why += fmt.Sprintf(" y %s puede pagarla", text(player["top_threat"]))
+		default:
+			why += fmt.Sprintf(" y %d rivales pueden pagarla · el mas rico: %s",
+				threats, text(player["top_threat"]))
+		}
+		// The number that decides whether the threat is worth money: nobody pays two and a half
+		// times a player's value for the pleasure of it.
+		if margin := number(player["clause_margin"]); margin != 0 {
+			why += fmt.Sprintf(" · esta a %.2fx su valor", margin)
+		}
 		out = append(out, merge(player, map[string]any{
-			"verdict": "protect", "entry_cost": player["clause"],
-			"why": fmt.Sprintf("su cláusula se desbloquea en %.0fh: quedas expuesto",
-				number(player["hours_left"]))}))
+			"verdict": "protect", "entry_cost": player["clause"], "why": why}))
 	}
 
 	// Money already on the table is the most decidable thing on the page and it was only in its
@@ -964,8 +984,11 @@ func (d Document) clauseSections() []string {
 	mine := rows(d.Advice["my_clauses_soon"])
 	table, _ := SectionTable("vencimientos", mine)
 	out = append(out, Section("Mis cláusulas que vencen", table,
-		"Cuando el candado cae, cualquiera con caja suficiente puede pagarla. "+
-			"Subir la cláusula antes de esa fecha es la unica defensa.",
+		"Cuando el candado cae, cualquiera con caja suficiente puede pagarla, y subirla antes "+
+			"es la unica defensa. Pero <strong>subirla cuesta dinero</strong>, asi que la "+
+			"columna que decide es quien puede pagarla: los que nadie de la liga alcanza no "+
+			"hace falta tocarlos, y a 1.60x su valor o mas pagarla ya es mal negocio para "+
+			"quien la paga. No aparecen los que cumplen las dos cosas.",
 		fmt.Sprintf("%d", len(mine)), "vencimientos"))
 
 	clauses := mapOf(d.Universe["clauses"])

@@ -219,25 +219,14 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 		if clause == 0 || value == 0 || truthy(player["clause_locked"]) {
 			continue
 		}
-		var able []Row
-		for _, team := range rivalTeams {
-			if number(team["estimated_cash"]) >= clause {
-				able = append(able, team)
-			}
-		}
-		margin := clause / value
+		able, margin := ClauseThreats(player, rivalTeams)
 		// A cheap clause only matters if somebody in the league can actually pay it.
-		if len(able) == 0 && margin >= 1.6 {
+		if len(able) == 0 && margin >= SafeMargin {
 			continue
 		}
-		var top any
-		if len(able) > 0 {
-			top = able[0]["manager"]
-		}
-		risk := math.Max(0.2, number(player["score"])) *
-			(0.4*float64(len(able)) + math.Max(0, 1.6-margin))
 		exposure = append(exposure, merge(player, Row{
-			"clause_margin": margin, "threats": len(able), "top_threat": top, "risk": risk,
+			"clause_margin": margin, "threats": len(able), "top_threat": TopThreat(able),
+			"risk": clauseRisk(player, able, margin),
 		}))
 	}
 
@@ -335,6 +324,22 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 	benchmark := median(squadPPM)
 
 	clauses := mapOf(universe["clauses"])
+	// The same two numbers for the clauses that have not opened yet. Without them the page told
+	// you that you were exposed on every player whose lock was falling, with no way to tell the
+	// one anybody would want from the one nobody can pay: raising a clause costs money, so
+	// "sube la clausula" on eleven players at once is not advice, it is noise.
+	soon := []Row{}
+	for _, player := range rowsOf(clauses["mine_soon"]) {
+		able, margin := ClauseThreats(player, rivalTeams)
+		if len(able) == 0 && margin >= SafeMargin {
+			continue
+		}
+		soon = append(soon, merge(player, Row{
+			"clause_margin": margin, "threats": len(able), "top_threat": TopThreat(able),
+			"risk": clauseRisk(player, able, margin),
+		}))
+	}
+
 	upcoming := []Row{}
 	for _, player := range rowsOf(clauses["rivals_soon"]) {
 		clause := number(player["clause"])
@@ -436,10 +441,51 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 		"cash_model": universe["cash_model"], "free_agent_count": len(freeAgents),
 		"clauses_locked": len(locked), "clauses_unlock_from": unlockFrom,
 		"squad_ppm_benchmark": benchmark,
-		"my_clauses_soon":     head(rowsOf(clauses["mine_soon"]), limit),
+		"my_clauses_soon":     head(soon, limit),
 		"upcoming_raids":      head(upcoming, limit),
 		"starred":             starred,
 	}
+}
+
+// SafeMargin is where a clause stops being worth a warning: at this much over what the player
+// is worth, paying it is a bad trade even for somebody holding the cash.
+const SafeMargin = 1.6
+
+// ClauseThreats is who could pay this clause today, richest first, and how far it sits above the
+// player's market value.
+//
+// Yourself excluded, which the exposure rows were not doing: with the biggest balance in the
+// league you were counted among the threats to your own player, and named as the richest one.
+//
+// Their cash is read now for a clause that may open in eight hours, which is the best answer
+// available rather than a promise. It is also the same answer the already-open rows give.
+func ClauseThreats(player Row, teams []Row) ([]Row, float64) {
+	clause, value := number(player["clause"]), number(player["value"])
+	var able []Row
+	for _, team := range teams {
+		if truthy(team["is_me"]) || number(team["estimated_cash"]) < clause {
+			continue
+		}
+		able = append(able, team)
+	}
+	margin := 0.0
+	if value != 0 {
+		margin = clause / value
+	}
+	return able, margin
+}
+
+// TopThreat is the richest of them, which is who to picture paying it.
+func TopThreat(able []Row) any {
+	if len(able) == 0 {
+		return nil
+	}
+	return able[0]["manager"]
+}
+
+func clauseRisk(player Row, able []Row, margin float64) float64 {
+	return math.Max(0.2, number(player["score"])) *
+		(0.4*float64(len(able)) + math.Max(0, SafeMargin-margin))
 }
 
 // RaidVerdict is whether paying this clause is worth it, measured against your own squad.
