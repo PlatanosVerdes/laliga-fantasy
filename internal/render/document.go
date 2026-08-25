@@ -625,8 +625,10 @@ func (d Document) planSection() string {
 			"se ejecutan en el proximo ciclo si el servidor esta en modo auto.", pending)
 	}
 	table, _ := SectionTable("siempre", d.withPolicies(d.Plan))
+	// The rows, like every other section's badge. Counting the stored instructions instead had
+	// the header saying nine over a table of six, because a scheduled raid is not one of these.
 	return Section("Siempre en mercado", table, note,
-		fmt.Sprintf("%d", len(d.Policies)), "siempre")
+		fmt.Sprintf("%d", len(d.Plan)), "siempre")
 }
 
 // withPolicies pastes the two amounts onto each row, because the renderer does not read

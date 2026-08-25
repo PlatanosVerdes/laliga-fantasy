@@ -1714,6 +1714,11 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 				if result := text(row["result"]); result != "" {
 					return result
 				}
+				// "ninguna" is the plan saying it will not act, so calling it pending was
+				// the row contradicting the column next to it.
+				if text(row["action"]) == "ninguna" {
+					return Missing
+				}
 				return "pendiente"
 			}, "text"},
 		}

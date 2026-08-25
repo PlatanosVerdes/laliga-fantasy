@@ -489,3 +489,60 @@ func Remove(id string) error {
 	delete(armed, id)
 	return Save(armed)
 }
+
+// Sold is the ids whose sell-side instructions can never run again: the player is in the
+// universe and is not yours any more. An id the universe says nothing about is left alone:
+// a missing player is a world that came back short, not a sale.
+//
+// A raid is not sell-side: it aims at somebody else's player, so not being yours is its
+// normal state.
+func Sold(mine map[string]bool, policies map[string]Policy) []string {
+	var stale []string
+	for _, id := range SortedIDs(policies) {
+		policy := policies[id]
+		if !policy.AlwaysList && !policy.AutoSell &&
+			policy.MinPrice == nil && policy.AcceptAbove == nil {
+			continue
+		}
+		if owned, known := mine[id]; !known || owned {
+			continue
+		}
+		stale = append(stale, id)
+	}
+	return stale
+}
+
+// Forget drops the sell side of these instructions and reports the names it dropped. A
+// scheduled raid on the same player survives, because that one is still about to happen.
+func Forget(ids ...string) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	armed, err := Load()
+	if err != nil {
+		return nil, err
+	}
+	var gone []string
+	for _, id := range ids {
+		entry, found := armed[id]
+		if !found {
+			continue
+		}
+		name := entry.Name
+		if name == "" {
+			name = id
+		}
+		gone = append(gone, name)
+		if !entry.Raid {
+			delete(armed, id)
+			continue
+		}
+		entry.AlwaysList, entry.AutoSell = false, false
+		entry.MinPrice, entry.AcceptAbove = nil, nil
+		armed[id] = entry
+	}
+	if len(gone) == 0 {
+		return nil, nil
+	}
+	return gone, Save(armed)
+}

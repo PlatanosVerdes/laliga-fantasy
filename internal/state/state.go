@@ -293,6 +293,7 @@ func (s *State) RefreshWith(cause string, force bool) error {
 
 	s.logMoves(universe)
 	s.trackMine(universe)
+	s.forgetSold(universe)
 
 	// One line per rebuild with what the world now holds: the shape of this line over a day
 	// is the only way to tell "quiet league" from "the scrape is silently failing".
@@ -397,6 +398,40 @@ func (s *State) logMoves(universe *model.Universe) {
 // Nothing else can: the API drops a refused offer without a word, so the ending only exists as the
 // difference between two passes. It is written to a file because it is the kind of thing you want
 // to read tomorrow -- who said no, to how much -- and by tomorrow the API remembers nothing.
+// forgetSold drops the standing instructions of players who are no longer yours. The
+// instruction outlives the sale it authorised otherwise: the section kept a row saying "ya no
+// es tuyo" for a player sold days ago, and the count in its header counted it.
+func (s *State) forgetSold(universe *model.Universe) {
+	if universe == nil || len(universe.Players) == 0 {
+		return
+	}
+	armed, err := policies.Load()
+	if err != nil {
+		return
+	}
+	mine := make(map[string]bool, len(universe.Players))
+	yours := 0
+	for _, player := range universe.Players {
+		mine[player.ID] = player.IsMine
+		if player.IsMine {
+			yours++
+		}
+	}
+	// A world where nothing is yours is a world that came back short, and forgetting every
+	// instruction on the strength of it would throw away amounts nobody can retype.
+	if yours == 0 {
+		return
+	}
+	gone, err := policies.Forget(policies.Sold(mine, armed)...)
+	if err != nil {
+		slog.Error("could not forget the instructions of sold players", "reason", err.Error())
+		return
+	}
+	for _, name := range gone {
+		slog.Info("standing instruction forgotten", "player", name, "why", "ya no es tuyo")
+	}
+}
+
 func (s *State) trackMine(universe *model.Universe) {
 	if universe == nil {
 		return
