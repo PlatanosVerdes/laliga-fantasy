@@ -274,7 +274,10 @@ func (d Document) swapSection() string {
 			"<strong>mas baratos por millon que lo que ya tienes</strong>, que es lo que "+
 			"descarta al fichaje caro que parece un salto. El precio de venta es la oferta "+
 			"que ya tienes encima de la mesa cuando la hay; si no, su valor de mercado, y "+
-			"la caja descuenta lo que tengas comprometido en pujas.",
+			"la caja descuenta lo que tengas comprometido en pujas. Los xPts son los del "+
+			"<strong>mejor once que puedes poner en el campo</strong>, con la formacion que "+
+			"lo cuadra: si no hay ninguna que lo cuadre, el plan empieza fichando para "+
+			"llenar el hueco, sin vender a nadie, porque una plaza vacia no puntua.",
 		count, "plan")
 }
 
@@ -546,18 +549,19 @@ func (d Document) actionRows() []map[string]any {
 						gained := -net
 						effect = fmt.Sprintf("y encima ganas %s", Money(&gained))
 					}
-					why += fmt.Sprintf(" · es el ultimo %s que te queda: fichas antes a %s por "+
-						"%s (%+.2f xPts, %s) y entonces puedes venderlo", position,
+					why += fmt.Sprintf(" · venderlo te deja sin once: fichas antes a un %s, "+
+						"%s por %s (%+.2f xPts, %s), y entonces puedes venderlo", position,
 						text(stand["name"]), Money(asFloat(stand["cost"])), gap, effect)
 				} else {
 					// Legal but worse: say the price in points so the trade is judged, not sold.
-					why += fmt.Sprintf(" · es el ultimo %s que te queda y el unico repuesto a "+
-						"tiro es %s por %s, con %+.2f xPts: probablemente no compense",
+					why += fmt.Sprintf(" · venderlo te deja sin once y el unico %s a tiro es "+
+						"%s por %s, con %+.2f xPts: probablemente no compense",
 						position, text(stand["name"]), Money(asFloat(stand["cost"])), gap)
 					verdict = "cash_blocked"
 				}
 			} else {
-				blocked = "es el ultimo " + position + " que te queda y no hay repuesto a tiro"
+				blocked = "venderlo te deja sin once y no hay ningun " + position +
+					" a tiro para cubrirlo"
 				verdict = "cash_blocked"
 			}
 		}
