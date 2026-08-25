@@ -111,11 +111,14 @@ var Operations = map[string]operation{
 			nil}
 	}, []string{"market", "money"}},
 
-	// The slot id, not the player's, and the factor the app uses is 2.
+	// The slot id, not the player's. What you pay is valueToIncrease and the clause goes up by
+	// ClauseFactor times that, which is the app's own arithmetic: pay 8.555 and the clause
+	// gains 17.110.
 	"raise_clause": {"subir clausula", func(a Args) Call {
 		return Call{http.MethodPut,
 			fmt.Sprintf("%s/league/%s/buyout/player", config.CMP, a.LeagueID),
-			map[string]any{"playerId": a.PlayerTeamID, "factor": 2, "valueToIncrease": a.Amount}}
+			map[string]any{"playerId": a.PlayerTeamID, "factor": ClauseFactor,
+				"valueToIncrease": a.Amount}}
 	}, []string{"squad"}},
 
 	// The API demands the amount in the body as a confirmation of what is being accepted;
@@ -286,6 +289,11 @@ func refusal(text string) (string, string) {
 
 // --- the two-step guard -----------------------------------------------------
 
+// ClauseFactor is what the game multiplies a clause rise by: you pay an amount and the clause
+// goes up by twice it. The page has to say so, because paying 4.6M and watching the clause gain
+// 9.3M is not something anybody should discover afterwards.
+const ClauseFactor = 2
+
 // Spends are the operations that take money out of the balance. Only they need a balance to be
 // checked against, and an unattended one must not run without it.
 var Spends = map[string]bool{
@@ -332,6 +340,9 @@ type Summary struct {
 	Expires     string   `json:"expires"`
 	IdealBid    int64    `json:"ideal_bid"`
 	MarketValue float64  `json:"market_value"`
+	// What the clause is and what it would become, for the one operation that changes it.
+	Clause    int64 `json:"clause"`
+	NewClause int64 `json:"new_clause"`
 	CashBefore  *int64   `json:"cash_before"`
 	CashAfter   *int64   `json:"cash_after"`
 	Warnings    []string `json:"warnings"`
@@ -408,6 +419,10 @@ func (g *Guard) Prepare(name string, args Args, who Player, allowWrites bool) (S
 		IdealBid: who.IdealBid, MarketValue: who.Value, CashBefore: cash,
 		CashAfter: after(cash, args.Amount, name), Warnings: warnings,
 		ExpiresIn: int(PrepareTTL.Seconds()),
+	}
+	if name == "raise_clause" {
+		summary.Clause = who.Clause
+		summary.NewClause = who.Clause + ClauseFactor*args.Amount
 	}
 	g.tokens[summary.Token] = pending{created: time.Now(), name: name, args: args,
 		summary: summary}
@@ -609,7 +624,7 @@ func after(cash *int64, amount int64, name string) *int64 {
 		return cash
 	}
 	switch name {
-	case "bid", "modify_bid", "buy_offer", "direct_offer", "pay_clause":
+	case "bid", "modify_bid", "buy_offer", "direct_offer", "pay_clause", "raise_clause":
 		left := *cash - amount
 		return &left
 	case "accept_offer":

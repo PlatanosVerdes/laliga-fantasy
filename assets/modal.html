@@ -4,7 +4,7 @@
     <h3><span class="bid-action">Pujar por</span> <span class="bid-who"></span></h3>
     <div id="bid-amount-step">
       <div class="bid-field">
-        <label for="bid-amount">Importe de la puja</label>
+        <label for="bid-amount" id="bid-amount-label">Importe de la puja</label>
         <input class="bid-amount" id="bid-amount" type="text" inputmode="numeric" autocomplete="off" spellcheck="false">
       </div>
       <p class="bid-refs">
@@ -13,6 +13,7 @@
         <span>Valor <b class="bid-value"></b></span>
         <span class="bid-rivals-wrap">Pujas vigentes <b class="bid-rivals"></b></span>
       </p>
+      <dl class="bid-dl bid-clause" id="bid-clause" hidden></dl>
       <p class="bid-warn" hidden></p>
     </div>
     <div id="bid-summary-step" hidden>

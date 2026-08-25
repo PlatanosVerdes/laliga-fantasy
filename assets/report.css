@@ -319,6 +319,8 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--plane);
   color:var(--ink)}
 .bid-refs{display:flex;gap:14px;font-size:12px;color:var(--ink-2);margin:2px 0 0;flex-wrap:wrap}
+/* Igual que .pitch-alert: sin esto el display de arriba gana y el bloque no se oculta. */
+.bid-refs[hidden]{display:none}
 .bid-refs b{color:var(--ink);font-variant-numeric:tabular-nums}
 .bid-refs b.rivals-on{color:var(--warning)}
 .bid-warn,.bid-warn-line{font-size:12px;color:var(--warning);margin:10px 0 0}
@@ -326,6 +328,10 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .bid-dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:4px 0 0;font-size:13px}
 .bid-dl dt{color:var(--muted)}
 .bid-dl dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.bid-dl[hidden]{display:none}
+/* La cuenta de la clausula: lo que pagas no es lo que sube, asi que se ve entera. */
+.bid-clause{margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
+.bid-clause .clause-new{color:var(--good);font-weight:600}
 .bid-ok{color:var(--good);font-weight:600}
 .modal-actions{display:flex;gap:9px;justify-content:flex-end;margin-top:20px}
 .modal-actions button{font:inherit;font-size:13px;border-radius:8px;padding:8px 15px;
