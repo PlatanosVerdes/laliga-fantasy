@@ -11,6 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+	// The zone database, embedded: the runtime image has no /usr/share/zoneinfo, and
+	// without it LoadLocation fails and the day silently becomes UTC's, two hours late.
+	_ "time/tzdata"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 )
