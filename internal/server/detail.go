@@ -411,6 +411,9 @@ func shirtOf(slot map[string]any, known map[string]map[string]any) map[string]an
 		"weeks":              weeks,
 		// from the analysis, so the pitch agrees with the tables
 		"xpts":              extra["xpts"],
+		// Whether he can play at all, decided in the model from the official status, so the
+		// pitch and the engine never disagree about who is on the pitch for nothing.
+		"available":         extra["available"],
 		"projected_pct":     extra["projected_pct"],
 		"start_probability": extra["start_probability"],
 		"next_rival":        extra["next_rival"],
