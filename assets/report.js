@@ -556,33 +556,59 @@ const LINE_WORD={goalkeeper:['portero','porteros'],defender:['defensa','defensas
                  midfield:['medio','medios'],striker:['delantero','delanteros']};
 
 // Un hueco en el once son puntos que no se juegan, asi que se dice arriba y con la salida
-// puesta: la formacion que si cuadra con los jugadores que hay, si alguna cuadra.
+// puesta: la formacion que si cuadra con los que pueden jugar, si alguna cuadra.
+//
+// Contar camisetas no vale. Once camisetas con un sancionado dentro son diez jugadores y una
+// plaza con nombre, y este aviso ofrecia el cambio de formacion que las junta como si eso
+// arreglara algo.
+const cannotPlay=p=>{
+  if(!p) return false;
+  if(p.available===false) return true;
+  const s=statusOf(p);
+  return !!s&&s.cls!=='st-duda';
+};
+
 function pitchAlert(){
   const box=document.getElementById('pitch-alert');
   if(!box) return;
-  const holes=[]; let missing=0;
+  const holes=[]; let missing=0; const idle=[];
   LINE_ORDER.forEach(line=>{
-    const empty=(pitchState.lines[line]||[]).filter(p=>!p).length;
+    const slots=pitchState.lines[line]||[];
+    slots.forEach(p=>{ if(cannotPlay(p)) idle.push(p); });
+    const empty=slots.filter(p=>!p).length;
     if(!empty) return;
     missing+=empty;
     holes.push(`${empty} ${LINE_WORD[line][empty>1?1:0]}`);
   });
-  if(!missing){ box.hidden=true; box.innerHTML=''; return; }
-  const have={1:0,2:0,3:0,4:0};
-  LINE_ORDER.forEach(line=>(pitchState.lines[line]||[]).forEach(p=>{ if(p) have[p.position_id]++; }));
-  (pitchState.bench||[]).forEach(p=>{ if(p) have[p.position_id]++; });
+  // Ni huecos ni nadie ahi puesto para nada: no hay nada que decir.
+  if(!missing&&!idle.length){ box.hidden=true; box.innerHTML=''; return; }
+
+  const have={1:0,2:0,3:0,4:0}, can={1:0,2:0,3:0,4:0};
+  const tally=p=>{ if(!p) return; have[p.position_id]++; if(!cannotPlay(p)) can[p.position_id]++; };
+  LINE_ORDER.forEach(line=>(pitchState.lines[line]||[]).forEach(tally));
+  (pitchState.bench||[]).forEach(tally);
   const squad=have[1]+have[2]+have[3]+have[4];
+  const playable=can[1]+can[2]+can[3]+can[4];
   const fits=f=>{ const [d,m,s]=f.split(',').map(Number);
-    return have[1]>=1&&have[2]>=d&&have[3]>=m&&have[4]>=s; };
+    return can[1]>=1&&can[2]>=d&&can[3]>=m&&can[4]>=s; };
   const free=(pitchState.formations.free||[]).find(fits);
   const premium=free?null:(pitchState.formations.premium||[]).find(fits);
   const option=free||premium;
   const shape=(pitchState.formation||[]).join('-');
-  let out=`<span>⚠ <b>Once incompleto</b>: el ${shape} pide 11 y sales con ${11-missing}`
-    +`. Falta${missing>1?'n':''} ${holes.join(' y ')}.</span>`;
+
+  let out='';
+  if(missing) out+=`<span>⚠ <b>Once incompleto</b>: el ${shape} pide 11 y sales con `
+    +`${11-missing}. Falta${missing>1?'n':''} ${holes.join(' y ')}.</span>`;
+  if(idle.length){
+    const who=idle.map(p=>{ const s=statusOf(p);
+      return `<b>${p.name}</b>${s?` (${s.label.toLowerCase()})`:''}`; }).join(', ');
+    out+=`<span>⚠ ${who} en el campo sin poder jugar: esa plaza no puntua.</span>`;
+  }
   if(option) out+=`<span>Con <b>${option.replace(/,/g,'-')}</b>`
-    +`${premium?' (premium)':''} cuadras el once con los ${squad} que tienes.</span>`
+    +`${premium?' (premium)':''} cuadras el once sin contar a quien no puede jugar.</span>`
     +`<button type="button" data-formation="${option}">Cambiar a ${option.replace(/,/g,'-')}</button>`;
+  else if(playable<11) out+=`<span>Hoy solo pueden jugar ${playable} de tus ${squad}: `
+    +`ninguna formacion cuadra el once, y cambiarla no lo arregla. Toca fichar.</span>`;
   else out+=`<span>Ninguna formacion cuadra con ${squad} jugadores: toca fichar.</span>`;
   box.innerHTML=out;
   box.hidden=false;
