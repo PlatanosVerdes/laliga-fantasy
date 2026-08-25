@@ -428,7 +428,7 @@ func (s *State) forgetSold(universe *model.Universe) {
 		return
 	}
 	for _, name := range gone {
-		slog.Info("standing instruction forgotten", "player", name, "why", "ya no es tuyo")
+		slog.Info("standing instruction forgotten", "player", name, "why", "no longer yours")
 	}
 }
 

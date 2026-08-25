@@ -17,7 +17,7 @@ func TestSold(t *testing.T) {
 		"2": {ID: "2", Name: "Yuri", AlwaysList: true},
 		"3": {ID: "3", Name: "Youssef", Raid: true, MaxPay: amount(1_200_000)},
 		"4": {ID: "4", Name: "Isi", MinPrice: amount(5_000_000)},
-		"5": {ID: "5", Name: "Fuera del universo", AlwaysList: true},
+		"5": {ID: "5", Name: "Outside the universe", AlwaysList: true},
 	}
 	mine := map[string]bool{"1": false, "2": true, "3": false, "4": false}
 
