@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 )
 
 type Row = map[string]any
@@ -40,6 +41,7 @@ type Policy struct {
 const GoodOverValue = 1.02
 
 // Squad rules: eleven legal starters need a keeper, three defenders and three midfielders.
+// Kept for what reads it from outside; what a sale is judged against is eleven.Room.
 var MinPerPosition = map[int]int{1: 1, 2: 3, 3: 3, 4: 1}
 
 func Load() (map[string]Policy, error) {
@@ -100,16 +102,20 @@ func GoodOfferFloor(player Row, policy Policy) (int64, string) {
 	return best.amount, best.source
 }
 
-// SquadRoom is how many of that position could be sold before the squad stops being legal.
+// SquadRoom is how many of that position could be sold with a legal eleven still standing.
 // A price can be excellent and the sale still be a mistake.
+//
+// It used to answer "how many above the floor for his position", which is eight players in
+// total and says nothing about fielding eleven: with a squad of exactly eleven it cleared the
+// sale of any player in surplus at his position and left ten, which no formation fields.
 func SquadRoom(players []Row, positionID int) int {
-	have := 0
+	counts := map[int]int{}
 	for _, player := range players {
-		if truthy(player["is_mine"]) && int(number(player["position_id"])) == positionID {
-			have++
+		if truthy(player["is_mine"]) {
+			counts[int(number(player["position_id"]))]++
 		}
 	}
-	return have - MinPerPosition[positionID]
+	return eleven.Room(counts, positionID)
 }
 
 // Plan is what the standing instructions would do right now, without doing it. Returned
@@ -163,18 +169,15 @@ func Plan(players []Row, policies map[string]Policy) []Row {
 		bestAmount := number(best["money"])
 
 		if threshold != nil && best != nil && bestAmount >= float64(*threshold) && room <= 0 {
-			// Good price, bad idea: this is the last one at his position.
-			position := text(player["position"])
-			if position == "" {
-				position = "jugador"
-			}
+			// Good price, bad idea: after this sale there is no eleven to field. Either he is
+			// the last one at his position or the squad is down to eleven and every sale is.
 			actions = append(actions, Row{
 				"player_id": text(player["id"]), "name": player["name"],
 				"action": "avisar", "amount": int64(bestAmount),
 				"offer_id": text(best["id"]), "market_id": listing["market_id"],
-				"why": fmt.Sprintf("ofrecen %s (por encima de %s), pero es tu ultimo %s"+
-					" y te quedarias sin alineacion legal",
-					money(int64(bestAmount)), money(*threshold), position)})
+				"why": fmt.Sprintf("ofrecen %s (por encima de %s), pero venderlo te deja sin "+
+					"once que alinear: ficha antes y decides tu",
+					money(int64(bestAmount)), money(*threshold))})
 			continue
 		}
 

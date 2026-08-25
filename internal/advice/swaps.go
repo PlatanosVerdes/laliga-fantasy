@@ -5,11 +5,13 @@ import (
 	"log/slog"
 	"math"
 	"sort"
+
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 )
 
-// The squad rules the plan must not break: eleven legal starters need a keeper, three
-// defenders, three midfielders and a striker.
-var minPerPosition = map[int]int{1: 1, 2: 3, 3: 3, 4: 1}
+// Positions in the order the pitch reads, so a plan built from a map still comes out the same
+// twice. What a legal eleven asks for lives in the eleven package.
+var positionOrder = []int{eleven.Keeper, eleven.Defender, eleven.Midfielder, eleven.Striker}
 
 var positionWord = map[int]string{1: "portero", 2: "defensa", 3: "centrocampista",
 	4: "delantero"}
@@ -78,9 +80,53 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 
 	taken := map[string]bool{}
 	var moves []Row
+	var warnings []string
 	// Money already promised is money you do not have: a bid you placed can land tomorrow.
 	committed := pendingBids(universe)
 	free := cash - committed
+
+	// What you can field right now, and under which formation. Computed before anything moves,
+	// because it is what every gain below is added to.
+	before, shape, starters := bestEleven(squad)
+
+	// A hole no swap can close. Every move below trades one of yours for somebody else's, so a
+	// squad that cannot field eleven -- ten players, or eleven that no formation lines up --
+	// had the plan proposing upgrades while the pitch was a man short. Signings come first: a
+	// slot nobody fills scores nothing, which is worse than any upgrade is good.
+	//
+	// Several positions usually close the same hole, so the pick is whoever is actually for
+	// sale and cheapest per point, not whichever formation happens to be listed first.
+	for attempt := 0; attempt < 4 && !eleven.Any(counts); attempt++ {
+		short := eleven.Missing(counts)
+		var pick Row
+		pickPosition, pickScore := 0, 0.0
+		for _, positionID := range positionOrder {
+			if short[positionID] == 0 {
+				continue
+			}
+			in, score := fillFor(candidates, positionID, free, taken)
+			if in != nil && score > pickScore {
+				pick, pickPosition, pickScore = in, positionID, score
+			}
+		}
+		if pick == nil {
+			warnings = append(warnings, fmt.Sprintf(
+				"no puedes alinear once y ninguno de los que hay a tiro entra en los %.2fM "+
+					"que te quedan", free/1e6))
+			break
+		}
+		cost := number(pick["cost"])
+		taken[text(pick["id"])] = true
+		free -= cost
+		counts[pickPosition]++
+		moves = append(moves, Row{
+			"in": pick, "cost": cost, "net": cost, "gain": number(pick["xpts"]),
+			"position": positionWord[pickPosition],
+			"why": fmt.Sprintf("hueco en el once: con un %s mas ya hay formacion que "+
+				"cubra los once", positionWord[pickPosition]),
+			"cash_after": free,
+		})
+	}
 
 	// Sell side, worst first: an unavailable player is dead weight however much he cost.
 	sellable := append([]Row{}, squad...)
@@ -103,7 +149,7 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 		// wrong order, so the move says so instead of being dropped. This guard used to skip
 		// them outright, which hid every replacement for the positions where you most need
 		// one -- exactly the case worth being told about.
-		tight := counts[positionID] <= minPerPosition[positionID]
+		tight := eleven.Room(counts, positionID) == 0
 		sale := number(out["value"])
 		how := "vendiendolo a su valor"
 		if offer, ok := offerFor[text(out["id"])]; ok {
@@ -170,8 +216,7 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 			free -= net
 			order := ""
 			if tight {
-				order = "ficha primero y vende despues: es el " + positionWord[positionID] +
-					" justo y no puedes quedarte sin el"
+				order = "ficha primero y vende despues: sin el no te queda once que alinear"
 			}
 			moves = append(moves, Row{
 				"out": out, "in": in, "sale": sale, "sale_note": how,
@@ -184,27 +229,43 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 		}
 	}
 
-	// What the eleven is worth before and after, so the plan states its own effect.
-	before := bestEleven(squad)
+	// Every gain lands on the eleven measured before anything moved, and a signing fills a slot
+	// that was scoring nothing, so its whole xPts is the gain.
 	after := before
 	for _, move := range moves {
 		after += number(move["gain"])
 	}
 
-	var warnings []string
 	if committed > 0 {
 		warnings = append(warnings, fmt.Sprintf(
 			"la caja ya descuenta %.2fM comprometidos en pujas vivas", committed/1e6))
 	}
-	for positionID, minimum := range minPerPosition {
-		if counts[positionID] <= minimum {
+	if starters < 11 {
+		warnings = append(warnings, fmt.Sprintf(
+			"ahora mismo solo puedes alinear a %d: ninguna formacion cubre el once con esta "+
+				"plantilla", starters))
+	} else {
+		// Nobody spare anywhere reads as one sentence; a single tight position reads as its own.
+		spare := 0
+		for _, positionID := range positionOrder {
+			spare += eleven.Room(counts, positionID)
+		}
+		if spare == 0 {
 			warnings = append(warnings, fmt.Sprintf(
-				"vas justo de %ss (%d, el minimo es %d): vender uno sin reemplazo deja el once ilegal",
-				positionWord[positionID], counts[positionID], minimum))
+				"tienes el once justo (%d jugadores, solo cuadra el %s): cualquier venta sin "+
+					"fichar antes lo deja sin cubrir", len(squad), shape))
+		} else {
+			for _, positionID := range positionOrder {
+				if counts[positionID] > 0 && eleven.Room(counts, positionID) == 0 {
+					warnings = append(warnings, fmt.Sprintf(
+						"no te sobra ningun %s: vender uno sin fichar antes deja el once sin "+
+							"cubrir", positionWord[positionID]))
+				}
+			}
 		}
 	}
 	slog.Info("plan ready", "moves", len(moves), "xpts_before", before,
-		"xpts_after", math.Round(after*100)/100,
+		"xpts_after", math.Round(after*100)/100, "shape", shape, "starters", starters,
 		"cash_before", int64(cash-committed), "cash_after", int64(free),
 		"committed", int64(committed))
 
@@ -212,8 +273,36 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 		"moves": moves, "cash_before": cash - committed, "cash_after": free,
 		"committed": committed,
 		"xpts_before": before, "xpts_after": after,
+		"shape": shape, "starters": starters,
 		"warnings": warnings,
 	}
+}
+
+// fillFor is who to sign for a slot nobody fills: the most points per million among the ones
+// you can actually pay for. The squad's own rate does not apply here -- an empty slot scores
+// nothing at all, so any legal signing beats it, and refusing one for being inefficient is how
+// the plan ends up recommending upgrades to a team of ten.
+func fillFor(candidates []Row, positionID int, budget float64,
+	taken map[string]bool) (Row, float64) {
+	var best Row
+	bestScore := 0.0
+	for _, in := range candidates {
+		if taken[text(in["id"])] || int(number(in["position_id"])) != positionID {
+			continue
+		}
+		if truthy(in["sale_locked"]) {
+			continue
+		}
+		cost := number(in["cost"])
+		if cost > budget {
+			continue
+		}
+		score := number(in["xpts"]) / math.Max(cost/1e6, 0.25)
+		if score > bestScore {
+			best, bestScore = in, score
+		}
+	}
+	return best, bestScore
 }
 
 // exitScore ranks who should leave first: whoever cannot score, then whoever somebody is
@@ -262,36 +351,47 @@ func reason(player Row) string {
 	return fmt.Sprintf("rinde %.2f pts por millon", number(player["xpts"])/(value/1e6))
 }
 
-// bestEleven is the xPts of the best legal eleven, which is what a change actually moves.
-func bestEleven(squad []Row) float64 {
+// bestEleven is the best eleven you can actually field: the points, the formation it needs and
+// how many of the eleven slots it fills.
+//
+// It used to be "the best eleven xPts" measured as the top eleven scorers with a floor per
+// position, which assumes any eleven can line up together. They cannot: with four defenders and
+// six midfielders there is no free formation to put them in, and the number quietly claimed an
+// eleven that never took the field. Shapes are consulted now, and when none fits it reports the
+// most players a shape can seat, which is what starters is for.
+func bestEleven(squad []Row) (float64, string, int) {
 	byPosition := map[int][]float64{}
+	counts := map[int]int{}
 	for _, player := range squad {
 		positionID := int(number(player["position_id"]))
 		byPosition[positionID] = append(byPosition[positionID], number(player["xpts"]))
+		counts[positionID]++
 	}
-	total, used := 0.0, 0
-	var rest []float64
-	for positionID, minimum := range minPerPosition {
-		points := byPosition[positionID]
+	for _, points := range byPosition {
 		sort.Sort(sort.Reverse(sort.Float64Slice(points)))
-		for index, value := range points {
-			if index < minimum {
-				total += value
+	}
+
+	best, shape, filled := 0.0, "", 0
+	for _, option := range eleven.Shapes {
+		total, used := 0.0, 0
+		for _, positionID := range positionOrder {
+			points := byPosition[positionID]
+			for index := 0; index < option.Need[positionID] && index < len(points); index++ {
+				total += points[index]
 				used++
-			} else {
-				rest = append(rest, value)
 			}
 		}
-	}
-	sort.Sort(sort.Reverse(sort.Float64Slice(rest)))
-	for _, value := range rest {
-		if used >= 11 {
-			break
+		// The shape that seats the most players wins, and points break the tie: a formation
+		// that fields eleven is better than a richer one that fields ten, always.
+		if used > filled || (used == filled && total > best) {
+			best, shape, filled = total, option.Name, used
 		}
-		total += value
-		used++
 	}
-	return math.Round(total*100) / 100
+	if filled < 11 {
+		// No shape fits, so naming one would read as a plan. The count is the honest part.
+		shape = ""
+	}
+	return math.Round(best*100) / 100, shape, filled
 }
 
 // pendingBids is money already promised: a bid you placed is cash you cannot spend twice.

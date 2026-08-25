@@ -70,3 +70,32 @@ func TestForgetKeepsTheRaid(t *testing.T) {
 		t.Fatalf("the sell side survived on the raid: %+v", raid)
 	}
 }
+
+// The automatic sale that made a hole. Eleven players, five defenders, an offer over the
+// threshold: the old floor per position said two defenders were spare, so it sold one and left
+// ten, which no formation fields.
+func TestAutoSellStopsShortOfBreakingTheEleven(t *testing.T) {
+	squad := []Row{}
+	for index, position := range []int{1, 2, 2, 2, 2, 2, 3, 3, 3, 4, 4} {
+		squad = append(squad, Row{"id": string(rune('a' + index)), "name": "p",
+			"is_mine": true, "position_id": position, "value": 10_000_000.0})
+	}
+	// The defender with a good offer on the table and permission to sell at that price.
+	seller := squad[1]
+	seller["offers"] = []Row{{"id": "o1", "money": 12_000_000.0}}
+	seller["market"] = Row{"market_id": "m1", "min_bid": 11_000_000.0}
+
+	armed := map[string]Policy{
+		text(seller["id"]): {ID: text(seller["id"]), AlwaysList: true, AutoSell: true},
+	}
+	plan := Plan(squad, armed)
+	if len(plan) != 1 {
+		t.Fatalf("%d actions, want one", len(plan))
+	}
+	if action := text(plan[0]["action"]); action != "avisar" {
+		t.Fatalf("action = %q, want avisar: selling him leaves ten players", action)
+	}
+	if room := SquadRoom(squad, 2); room != 0 {
+		t.Errorf("SquadRoom(defender) = %d, want 0 with eleven players", room)
+	}
+}

@@ -529,21 +529,31 @@ func Page(css, js, crestCSS, header, body, footer, modal, drawer string) string 
 // top to bottom, and acted on.
 func SwapPlan(plan map[string]any) string {
 	moves := rows(plan["moves"])
+	var out strings.Builder
+	// The warnings outlive the moves: "no hay once que alinear" is the most important thing
+	// this section can say and it used to be dropped whenever the market offered no upgrade.
 	if len(moves) == 0 {
-		return `<p class="empty">Ningun cambio del mercado de hoy mejora tu once sin ` +
-			`pagar de mas. No mover tambien es un plan.</p>`
+		out.WriteString(`<p class="empty">Ningun cambio del mercado de hoy mejora tu once sin ` +
+			`pagar de mas. No mover tambien es un plan.</p>`)
+		planWarnings(&out, plan)
+		return out.String()
 	}
 
-	var out strings.Builder
 	before, after := asFloat(plan["xpts_before"]), asFloat(plan["xpts_after"])
 	cashBefore, cashAfter := asFloat(plan["cash_before"]), asFloat(plan["cash_after"])
+	shape := ""
+	if named := text(plan["shape"]); named != "" {
+		// Which formation the points assume, because they are not the top eleven scorers: they
+		// are the best eleven that can stand on the pitch together.
+		shape = `<span class="plan-shape">con ` + Esc(named) + `</span>`
+	}
 	fmt.Fprintf(&out, `<div class="plan-head">`+
 		`<span class="plan-total"><b>%s</b> xPts <span class="plan-arrow">→</span> `+
 		`<b class="up">%s</b></span>`+
 		`<span class="plan-total">Caja <b>%s</b> <span class="plan-arrow">→</span> `+
 		`<b>%s</b></span>`+
-		`<span class="plan-count">%d cambio%s</span></div>`,
-		Num(before, 2), Num(after, 2), Money(cashBefore), Money(cashAfter),
+		`%s<span class="plan-count">%d cambio%s</span></div>`,
+		Num(before, 2), Num(after, 2), Money(cashBefore), Money(cashAfter), shape,
 		len(moves), map[bool]string{true: "", false: "s"}[len(moves) == 1])
 
 	out.WriteString(`<div class="plan">`)
@@ -554,6 +564,24 @@ func SwapPlan(plan map[string]any) string {
 		if net != nil && *net <= 0 {
 			positive := -*net
 			netClass, netText = "up", "-"+Money(&positive)
+		}
+		// Nobody leaves in a signing: the slot on the left is the empty one being filled, and
+		// there is no sale price to put under it.
+		if leaving == nil {
+			fmt.Fprintf(&out, `<div class="plan-move">`+
+				`<div class="plan-side out"><span class="plan-who plan-empty">%s sin cubrir`+
+				`</span><span class="plan-why">%s</span></div>`+
+				`<div class="plan-mid"><span class="plan-arrow">→</span>`+
+				`<span class="plan-gain up">+%s xPts</span>`+
+				`<span class="plan-net down">%s</span></div>`+
+				`<div class="plan-side in">%s<span class="plan-why">%s titular · %s xPts</span>`+
+				`<span class="plan-money">cuesta %s</span></div></div>`,
+				Esc(text(move["position"])), Esc(text(move["why"])),
+				Num(gain, 2), Esc("+"+Money(asFloat(move["cost"]))),
+				planCard(arriving), starts(asFloat(arriving["start_probability"])),
+				Num(asFloat(arriving["xpts"]), 2),
+				Esc(Money(asFloat(move["cost"]))))
+			continue
 		}
 		fmt.Fprintf(&out, `<div class="plan-move">`+
 			`<div class="plan-side out">%s<span class="plan-why">%s</span>`+
@@ -571,11 +599,26 @@ func SwapPlan(plan map[string]any) string {
 			Esc(Money(asFloat(move["cost"]))))
 	}
 	out.WriteString(`</div>`)
-
-	for _, warning := range plan["warnings"].([]string) {
-		fmt.Fprintf(&out, `<p class="plan-warn">⚠ %s</p>`, Esc(warning))
-	}
+	planWarnings(&out, plan)
 	return out.String()
+}
+
+// planWarnings prints what the plan wants said whether or not it found a move. The list is
+// read defensively because the same document is rendered from a JSON dump, where a []string
+// comes back as []any.
+func planWarnings(out *strings.Builder, plan map[string]any) {
+	var lines []string
+	switch typed := plan["warnings"].(type) {
+	case []string:
+		lines = typed
+	case []any:
+		for _, value := range typed {
+			lines = append(lines, text(value))
+		}
+	}
+	for _, warning := range lines {
+		fmt.Fprintf(out, `<p class="plan-warn">⚠ %s</p>`, Esc(warning))
+	}
 }
 
 // starts is the probability as plain text: inside the plan the pill would compete with the
