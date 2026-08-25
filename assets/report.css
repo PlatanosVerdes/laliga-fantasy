@@ -332,6 +332,8 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 /* La cuenta de la clausula: lo que pagas no es lo que sube, asi que se ve entera. */
 .bid-clause{margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
 .bid-clause .clause-new{color:var(--good);font-weight:600}
+.bid-clause .clause-safe{color:var(--good);font-size:12px}
+.bid-clause .clause-open{color:var(--warning);font-size:12px}
 .bid-ok{color:var(--good);font-weight:600}
 .modal-actions{display:flex;gap:9px;justify-content:flex-end;margin-top:20px}
 .modal-actions button{font:inherit;font-size:13px;border-radius:8px;padding:8px 15px;
