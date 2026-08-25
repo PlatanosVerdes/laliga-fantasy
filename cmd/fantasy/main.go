@@ -480,11 +480,14 @@ func cmdServe(args []string) error {
 			// rebuild takes several: the instructions already know the amount and the limit from
 			// the previous cycle, and the lock is judged against the clock.
 			claimReward()
-			fixLineup()
 			automate(cause)
 			if err := world.Refresh(cause); err != nil {
 				return err
 			}
+			// After the rebuild, not before. A signing or a sale from this very cycle has to be
+			// in the squad the eleven is judged against, and unlike a clause raid a lineup is
+			// never a race: nobody is competing for it.
+			fixLineup()
 			return nil
 		},
 		Invalidate: func(tags ...string) {

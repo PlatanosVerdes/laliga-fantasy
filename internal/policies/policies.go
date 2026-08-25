@@ -123,6 +123,16 @@ func SquadRoom(players []Row, positionID int) int {
 // executes.
 func Plan(players []Row, policies map[string]Policy) []Row {
 	actions := []Row{}
+	// The squad the next sale is judged against, not the one this pass started with. A cycle
+	// may perform three operations, and with every sale measured against the same untouched
+	// squad two of them could each be "one to spare" and leave ten between them. The raids
+	// already spend the balance down this way; this is the same idea for the eleven.
+	counts := map[int]int{}
+	for _, player := range players {
+		if truthy(player["is_mine"]) {
+			counts[int(number(player["position_id"]))]++
+		}
+	}
 	for _, player := range players {
 		policy, armed := policies[text(player["id"])]
 		if !armed || !policy.AlwaysList {
@@ -165,7 +175,8 @@ func Plan(players []Row, policies map[string]Policy) []Row {
 			threshold, source = &amount, why
 		}
 
-		room := SquadRoom(players, int(number(player["position_id"])))
+		positionID := int(number(player["position_id"]))
+		room := eleven.Room(counts, positionID)
 		bestAmount := number(best["money"])
 
 		if threshold != nil && best != nil && bestAmount >= float64(*threshold) && room <= 0 {
@@ -182,6 +193,8 @@ func Plan(players []Row, policies map[string]Policy) []Row {
 		}
 
 		if threshold != nil && best != nil && bestAmount >= float64(*threshold) {
+			// He is gone as far as the rest of this plan is concerned.
+			counts[positionID]--
 			actions = append(actions, Row{
 				"player_id": text(player["id"]), "name": player["name"],
 				"action": "aceptar_oferta", "amount": int64(bestAmount),
