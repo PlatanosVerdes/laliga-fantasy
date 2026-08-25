@@ -1807,7 +1807,23 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 	case "vencimientos":
 		// Yours, and the clock is the subject: when the lock falls, anyone with the cash
 		// can pay. So the countdown is the first column, not an afterthought.
-		return TableIn(clauseColumns(), rows,
+		//
+		// "Anyone with the cash" is the whole question, and it was the one thing the table did
+		// not answer: a clause at 2.60x his value that nobody in the league can pay does not
+		// need raising, and raising costs money.
+		columns := append(clauseColumns(),
+			Column{"x valor", field("clause_margin"), "num"},
+			Column{"Quien puede pagarla", func(row map[string]any) any {
+				threats := int(number(row["threats"]))
+				if threats == 0 {
+					return "nadie hoy"
+				}
+				if top := text(row["top_threat"]); top != "" {
+					return fmt.Sprintf("%d · %s", threats, top)
+				}
+				return fmt.Sprintf("%d", threats)
+			}, "text"})
+		return TableIn(columns, rows,
 			"Ninguna se desbloquea en los proximos 10 dias.", "vencimientos", false), nil
 
 	case "proximas":
