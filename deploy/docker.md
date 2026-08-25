@@ -108,10 +108,16 @@ By default the page can bid, sell, accept offers and pay clauses, and it carries
 standing instructions (keep-listed, scheduled clause raids) on its own — that is what they
 are for, since a clause opens when it opens.
 
+Two things it also does unasked, because both are free and neither can be got wrong: it claims
+the daily reward, and it fixes the lineup when the saved one fields fewer than eleven who can
+play — a formation with more slots than you have players for that line, or a starter who is
+injured or sanctioned. It only ever moves in the direction of more players on the pitch, so a
+lineup that already fields eleven available players is left exactly as you set it.
+
 | Flag | Effect |
 |---|---|
-| *(none)* | buttons work, standing instructions execute |
-| `--no-auto` | buttons work, standing instructions are shown but not executed |
+| *(none)* | buttons work, standing instructions execute, reward and lineup are fixed |
+| `--no-auto` | buttons work, standing instructions are shown but not executed; reward and lineup are left alone |
 | `--read-only` | nothing that moves money is possible |
 
 Writes go through a two-step confirmation with a single-use token, and the standing

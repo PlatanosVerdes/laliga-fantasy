@@ -16,6 +16,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/cli"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
@@ -942,4 +943,120 @@ func truthyValue(value any) bool {
 		return typed != 0
 	}
 	return false
+}
+
+// myEleven is the squad as a lineup decision reads it, and how many of mine it had to leave
+// out. The id is the squad slot, not the player: the lineup call travels with playerTeamId and
+// answers 400 without it, so a player missing one cannot be placed at all -- and a lineup
+// built from a squad with holes in it would bench somebody for no reason, which is why the
+// count comes back too.
+func myEleven(universe *model.Universe) ([]eleven.Player, int) {
+	var squad []eleven.Player
+	missing := 0
+	for _, player := range universe.Players {
+		if !player.IsMine {
+			continue
+		}
+		if player.PlayerTeamID == nil || *player.PlayerTeamID == "" {
+			missing++
+			continue
+		}
+		squad = append(squad, eleven.Player{ID: *player.PlayerTeamID, Name: player.Name,
+			Position: player.PositionID, XPts: player.XPts, Available: player.Available})
+	}
+	return squad, missing
+}
+
+// savedLineup is who is on the pitch right now and the shape they are in. The four lines all
+// come back as lists on the way in, keeper included, which is not how they go out.
+func savedLineup(client *api.Client, teamID string) ([]string, string, error) {
+	payload, err := client.Lineup(teamID, time.Minute)
+	if err != nil {
+		return nil, "", err
+	}
+	formation := mapFrom(payload["formation"])
+	var starters []string
+	for _, line := range api.LineupLines {
+		for _, slot := range listFrom(formation[line]) {
+			if id := text(mapFrom(slot)["playerTeamId"]); id != "" {
+				starters = append(starters, id)
+			}
+		}
+	}
+	var numbers []string
+	for _, value := range listFrom(formation["tacticalFormation"]) {
+		numbers = append(numbers, text(value))
+	}
+	return starters, strings.Join(numbers, "-"), nil
+}
+
+func listFrom(value any) []any {
+	if items, ok := value.([]any); ok {
+		return items
+	}
+	return nil
+}
+
+// cmdLineup says who is on the pitch, who cannot play and what the best legal eleven would be.
+// With --fix it saves it, which is the same write the page's pitch does.
+func cmdLineup(args []string) error {
+	flags := flag.NewFlagSet("lineup", flag.ContinueOnError)
+	fix := flags.Bool("fix", false, "guardar el mejor once")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	state, err := loadWorld(15, false)
+	if err != nil {
+		return err
+	}
+	squad, _ := myEleven(state.Universe)
+	if len(squad) == 0 {
+		fmt.Println(cli.Red("Necesito sesion y liga para ver tu alineacion."))
+		return nil
+	}
+	client := api.New()
+	saved, was, err := savedLineup(client, state.TeamID)
+	if err != nil {
+		return err
+	}
+	byID := map[string]eleven.Player{}
+	for _, player := range squad {
+		byID[player.ID] = player
+	}
+
+	cli.Heading("Alineacion")
+	playing := eleven.Playable(saved, squad)
+	fmt.Printf("  Guardada    : %s, %d de 11 pueden jugar\n", was, playing)
+	for _, id := range saved {
+		if player := byID[id]; player.ID != "" && !player.Available {
+			fmt.Printf("  %s %s\n", cli.Red("no juega:"), player.Name)
+		}
+	}
+
+	best, complete := eleven.Best(squad)
+	fmt.Printf("  Mejor legal : %s, %d de 11", best.Shape.Name, best.Starters())
+	if !complete {
+		fmt.Print(" (no hay disponibles para cubrir el resto)")
+	}
+	fmt.Println()
+
+	if best.Starters() <= playing {
+		fmt.Println("\nLa que tienes ya pone a tantos como se puede. No la toco.")
+		return nil
+	}
+	if !*fix {
+		fmt.Printf("\nCambiando a %s pondrias %d en vez de %d. `fantasy lineup --fix` lo guarda.\n",
+			best.Shape.Name, best.Starters(), playing)
+		return nil
+	}
+
+	guard := writes.NewGuard(client)
+	if _, err := guard.Do("save_lineup", writes.Args{LeagueID: state.League,
+		TeamID: state.TeamID, Goalkeeper: best.Keeper, Defender: best.Defence,
+		Midfield: best.Middle, Striker: best.Attack, Formation: best.Shape.Numbers()},
+		writes.Player{Name: "tu alineacion"}, true); err != nil {
+		return err
+	}
+	fmt.Printf("Guardada: %s con %d titulares.\n", best.Shape.Name, best.Starters())
+	return nil
 }
