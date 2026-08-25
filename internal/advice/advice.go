@@ -14,6 +14,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 )
 
 // Squad rules of LaLiga Fantasy: eleven starters within a legal formation.
@@ -27,6 +29,12 @@ type Row = map[string]any
 
 // Shape is how the squad stands against the rules, per position.
 func Shape(mine []Row) map[int]map[string]int {
+	counts := map[int]int{}
+	for _, player := range mine {
+		counts[int(number(player["position_id"]))]++
+	}
+	missing := eleven.Missing(counts)
+
 	shape := map[int]map[string]int{}
 	for positionID, ideal := range IdealPerPosition {
 		owned := 0
@@ -37,7 +45,10 @@ func Shape(mine []Row) map[int]map[string]int {
 		}
 		shape[positionID] = map[string]int{
 			"owned": owned, "ideal": ideal, "minimum": MinPerPosition[positionID],
-			"gap":     max(0, MinPerPosition[positionID]-owned),
+			// What it takes to field a legal eleven, not what it takes to clear the floor for
+			// this position: with 1-5-3-2 every floor is clear and the squad still only fits
+			// one formation, and with ten players no floor notices that nothing fits.
+			"gap":     missing[positionID],
 			"surplus": max(0, owned-ideal),
 		}
 	}
@@ -61,7 +72,11 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 		}
 	}
 	shape := Shape(mine)
-	spendingPower := budget + math.Max(0, maxDebt)
+	// Money already promised is money you cannot spend twice: a bid you placed can land
+	// tomorrow. The plan has always subtracted it and this bucket did not, so the same page
+	// called a player affordable in one section and out of reach in the other.
+	committed := pendingBids(universe)
+	spendingPower := math.Max(0, budget-committed) + math.Max(0, maxDebt)
 
 	entry := func(player Row, cost float64, route string, extra Row) Row {
 		need := shape[int(number(player["position_id"]))]
@@ -412,7 +427,7 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 
 	return Row{
 		"budget": budget, "max_debt": maxDebt, "spending_power": spendingPower,
-		"squad": squad, "shape": shapeOut,
+		"squad": squad, "shape": shapeOut, "committed": committed,
 		"bids_now": head(bidsNow, limit), "asks": head(asks, limit),
 		"watchlist": head(watchlist, limit), "my_listings": myListings,
 		"offers": offers, "my_bids": sent,
