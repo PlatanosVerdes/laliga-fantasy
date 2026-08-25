@@ -212,6 +212,10 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 	}
 
 	rivalTeams := RivalCash(universe, budget)
+	// What each squad in the league already returns per million: the bar a clause has to beat
+	// for its owner to be tempted. Every player in the feed, so a rival's own squad is measured
+	// the same way yours is.
+	rates := SquadRates(players)
 
 	exposure := []Row{}
 	for _, player := range mine {
@@ -219,14 +223,14 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 		if clause == 0 || value == 0 || truthy(player["clause_locked"]) {
 			continue
 		}
-		able, margin := ClauseThreats(player, rivalTeams)
+		threats, margin := ClauseThreats(player, rivalTeams, rates)
 		// A cheap clause only matters if somebody in the league can actually pay it.
-		if len(able) == 0 && margin >= SafeMargin {
+		if len(threats) == 0 && margin >= SafeMargin {
 			continue
 		}
 		exposure = append(exposure, merge(player, Row{
-			"clause_margin": margin, "threats": len(able), "top_threat": TopThreat(able),
-			"risk": clauseRisk(player, able, margin),
+			"clause_margin": margin, "threats": len(threats), "tempted": Tempted(threats),
+			"top_threat": TopThreat(threats), "risk": clauseRisk(player, threats, margin),
 		}))
 	}
 
@@ -330,13 +334,13 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 	// "sube la clausula" on eleven players at once is not advice, it is noise.
 	soon := []Row{}
 	for _, player := range rowsOf(clauses["mine_soon"]) {
-		able, margin := ClauseThreats(player, rivalTeams)
-		if len(able) == 0 && margin >= SafeMargin {
+		threats, margin := ClauseThreats(player, rivalTeams, rates)
+		if len(threats) == 0 && margin >= SafeMargin {
 			continue
 		}
 		soon = append(soon, merge(player, Row{
-			"clause_margin": margin, "threats": len(able), "top_threat": TopThreat(able),
-			"risk": clauseRisk(player, able, margin),
+			"clause_margin": margin, "threats": len(threats), "tempted": Tempted(threats),
+			"top_threat": TopThreat(threats), "risk": clauseRisk(player, threats, margin),
 		}))
 	}
 
@@ -451,41 +455,104 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 // is worth, paying it is a bad trade even for somebody holding the cash.
 const SafeMargin = 1.6
 
-// ClauseThreats is who could pay this clause today, richest first, and how far it sits above the
-// player's market value.
+// Threat is a rival who could pay this clause, and whether paying it would be a good trade for
+// him: the points per million the clause buys him against the rate his own squad already
+// returns. Being able to pay and wanting to are different questions, and only the second one
+// costs you the player.
+type Threat struct {
+	Manager string
+	Cash    float64
+	PPM     float64
+	Bar     float64
+	Worth   bool
+}
+
+// SquadRates is what each squad in the league already returns per million, which is the bar a
+// clause has to beat to be worth paying. Keyed by team id and measured exactly as your own
+// benchmark is, because the question a rival asks himself is the one you ask yourself.
+func SquadRates(players []Row) map[string]float64 {
+	byTeam := map[string][]float64{}
+	for _, player := range players {
+		team := text(player["owner_team_id"])
+		value, xpts := number(player["value"]), number(player["xpts"])
+		if team == "" || value == 0 || xpts <= 0 {
+			continue
+		}
+		byTeam[team] = append(byTeam[team], xpts/(value/1e6))
+	}
+	rates := make(map[string]float64, len(byTeam))
+	for team, values := range byTeam {
+		rates[team] = median(values)
+	}
+	return rates
+}
+
+// ClauseThreats is who could pay this clause today, richest first, with what it would buy each
+// of them, and how far the clause sits above the player's market value.
 //
 // Yourself excluded, which the exposure rows were not doing: with the biggest balance in the
 // league you were counted among the threats to your own player, and named as the richest one.
 //
 // Their cash is read now for a clause that may open in eight hours, which is the best answer
 // available rather than a promise. It is also the same answer the already-open rows give.
-func ClauseThreats(player Row, teams []Row) ([]Row, float64) {
-	clause, value := number(player["clause"]), number(player["value"])
-	var able []Row
+func ClauseThreats(player Row, teams []Row, rates map[string]float64) ([]Threat, float64) {
+	clause, value, xpts := number(player["clause"]), number(player["value"]),
+		number(player["xpts"])
+	var out []Threat
 	for _, team := range teams {
 		if truthy(team["is_me"]) || number(team["estimated_cash"]) < clause {
 			continue
 		}
-		able = append(able, team)
+		threat := Threat{Manager: text(team["manager"]),
+			Cash: number(team["estimated_cash"]), Bar: rates[text(team["team_id"])]}
+		if clause != 0 {
+			threat.PPM = xpts / (clause / 1e6)
+		}
+		// No squad to measure him against is not a reason to call it a bargain for him.
+		threat.Worth = threat.Bar > 0 && threat.PPM >= threat.Bar
+		out = append(out, threat)
 	}
 	margin := 0.0
 	if value != 0 {
 		margin = clause / value
 	}
-	return able, margin
+	return out, margin
 }
 
-// TopThreat is the richest of them, which is who to picture paying it.
-func TopThreat(able []Row) any {
-	if len(able) == 0 {
-		return nil
+// Tempted is how many of them would be trading up by paying it.
+func Tempted(threats []Threat) int {
+	count := 0
+	for _, threat := range threats {
+		if threat.Worth {
+			count++
+		}
 	}
-	return able[0]["manager"]
+	return count
 }
 
-func clauseRisk(player Row, able []Row, margin float64) float64 {
+// TopThreat is who to picture paying it: the richest of the ones it pays off for, and when it
+// pays off for nobody, the richest who could pay it anyway.
+func TopThreat(threats []Threat) any {
+	for _, threat := range threats {
+		if threat.Worth {
+			return threat.Manager
+		}
+	}
+	if len(threats) > 0 {
+		return threats[0].Manager
+	}
+	return nil
+}
+
+// clauseRisk weighs wanting it over being able to pay it. Somebody who cannot beat his own
+// squad's rate at that price is not nothing -- values move and people overpay -- but he is not
+// the one who takes the player either, and ranking him level with somebody who would put
+// "sube la clausula" on the wrong players.
+func clauseRisk(player Row, threats []Threat, margin float64) float64 {
+	tempted := Tempted(threats)
 	return math.Max(0.2, number(player["score"])) *
-		(0.4*float64(len(able)) + math.Max(0, SafeMargin-margin))
+		(0.4*float64(tempted) + 0.1*float64(len(threats)-tempted) +
+			math.Max(0, SafeMargin-margin))
 }
 
 // RaidVerdict is whether paying this clause is worth it, measured against your own squad.

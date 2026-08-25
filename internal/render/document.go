@@ -506,18 +506,22 @@ func (d Document) actionRows() []map[string]any {
 			break
 		}
 		why := fmt.Sprintf("se desbloquea en %.0fh", number(player["hours_left"]))
-		switch threats := int(number(player["threats"])); {
-		case threats == 0:
+		able, tempted := int(number(player["threats"])), int(number(player["tempted"]))
+		switch {
+		case able == 0:
 			// Kept, because it is cheap enough to be a bargain the day somebody sells.
 			why += " y hoy nadie tiene caja para pagarla"
-		case threats == 1:
-			why += fmt.Sprintf(" y %s puede pagarla", text(player["top_threat"]))
+		case tempted == 0:
+			// They could and it would still be a bad trade for them, which is the difference
+			// between a clause worth raising and a clause already doing its job.
+			why += fmt.Sprintf(" y %d pueden pagarla, pero a ninguno le renta a ese precio",
+				able)
+		case tempted == 1:
+			why += fmt.Sprintf(" y a %s le renta pagarla", text(player["top_threat"]))
 		default:
-			why += fmt.Sprintf(" y %d rivales pueden pagarla · el mas rico: %s",
-				threats, text(player["top_threat"]))
+			why += fmt.Sprintf(" y a %d de los %d que pueden pagarla les renta · el mas rico: %s",
+				tempted, able, text(player["top_threat"]))
 		}
-		// The number that decides whether the threat is worth money: nobody pays two and a half
-		// times a player's value for the pleasure of it.
 		if margin := number(player["clause_margin"]); margin != 0 {
 			why += fmt.Sprintf(" · esta a %.2fx su valor", margin)
 		}
@@ -985,10 +989,11 @@ func (d Document) clauseSections() []string {
 	table, _ := SectionTable("vencimientos", mine)
 	out = append(out, Section("Mis cláusulas que vencen", table,
 		"Cuando el candado cae, cualquiera con caja suficiente puede pagarla, y subirla antes "+
-			"es la unica defensa. Pero <strong>subirla cuesta dinero</strong>, asi que la "+
-			"columna que decide es quien puede pagarla: los que nadie de la liga alcanza no "+
-			"hace falta tocarlos, y a 1.60x su valor o mas pagarla ya es mal negocio para "+
-			"quien la paga. No aparecen los que cumplen las dos cosas.",
+			"es la unica defensa. Pero <strong>subirla cuesta dinero</strong>, asi que lo que "+
+			"decide no es quien puede pagarla sino <strong>a quien le renta</strong>: los "+
+			"puntos por millon que se lleva pagando la cláusula, contra lo que ya le da su "+
+			"propia plantilla. Si a nadie le sale a cuenta, esa cláusula ya esta haciendo su "+
+			"trabajo. No aparecen las que nadie puede pagar y encima estan a 1.60x o mas.",
 		fmt.Sprintf("%d", len(mine)), "vencimientos"))
 
 	clauses := mapOf(d.Universe["clauses"])
