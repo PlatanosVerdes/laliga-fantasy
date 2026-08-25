@@ -45,8 +45,9 @@ one directory so there is a single volume to mount. Outside a container the file
 XDG spec instead — see [Where things live](../README.md#where-things-live).
 
 The image is a two-stage build: `golang:1.26-alpine` compiles a static binary, `alpine:3.21`
-carries it plus the page's assets. There are no dependencies to download, so it builds
-anywhere, ARM included, and the result is about 24 MB.
+carries it plus the page's assets and `tzdata`, so `date` in a shell there answers the same
+hour the engine does. The Go side downloads nothing, so it builds anywhere, ARM included, and
+the result is about 26 MB.
 
 ## The session
 
