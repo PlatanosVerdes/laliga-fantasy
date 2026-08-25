@@ -1813,15 +1813,23 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		// need raising, and raising costs money.
 		columns := append(clauseColumns(),
 			Column{"x valor", field("clause_margin"), "num"},
-			Column{"Quien puede pagarla", func(row map[string]any) any {
-				threats := int(number(row["threats"]))
-				if threats == 0 {
-					return "nadie hoy"
+			Column{"Pueden pagarla", func(row map[string]any) any {
+				if able := int(number(row["threats"])); able > 0 {
+					return fmt.Sprintf("%d", able)
+				}
+				return "nadie hoy"
+			}, "text"},
+			// The column that decides: paying it has to beat what his own squad already
+			// returns per million, or he is not coming for the player.
+			Column{"Les renta", func(row map[string]any) any {
+				tempted := int(number(row["tempted"]))
+				if tempted == 0 {
+					return "a nadie"
 				}
 				if top := text(row["top_threat"]); top != "" {
-					return fmt.Sprintf("%d · %s", threats, top)
+					return fmt.Sprintf("%d · %s", tempted, top)
 				}
-				return fmt.Sprintf("%d", threats)
+				return fmt.Sprintf("%d", tempted)
 			}, "text"})
 		return TableIn(columns, rows,
 			"Ninguna se desbloquea en los proximos 10 dias.", "vencimientos", false), nil
