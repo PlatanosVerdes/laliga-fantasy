@@ -129,6 +129,7 @@ directory — see [Where things live](#where-things-live).
 | `player <name>` | Full profile. `--history 10` adds the per-matchday table from futbolfantasy |
 | `standings` / `leagues` | League table and your leagues |
 | `activity` | The league's transfer log (`--pages N`) |
+| `lineup` | Who is on the pitch, who cannot play, and the best legal eleven. `--fix` saves it |
 | `report` | Self-contained HTML dashboard with sortable tables (`--open`, `--json`) |
 | `serve` | Serve the report over HTTP with a JSON API and SSE push — see [deploy/docker.md](deploy/docker.md) |
 | `probe <what>` | Dump a raw endpoint payload — use it when the API shape changes |

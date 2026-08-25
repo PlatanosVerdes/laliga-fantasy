@@ -23,6 +23,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/auth"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/cli"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/engine"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
@@ -122,6 +123,8 @@ func main() {
 		err = cmdRaid(rest[1:])
 	case "reward":
 		err = cmdReward(rest[1:])
+	case "lineup":
+		err = cmdLineup(rest[1:])
 	case "rules":
 		err = cmdRules(rest[1:])
 	case "leagues":
@@ -164,6 +167,7 @@ uso: fantasy [-v|-q] <comando>
   always        instrucciones permanentes (siempre en mercado)
   raid          clausulazos programados
   reward        la recompensa diaria: cuanto queda y --claim para cobrarla
+  lineup        quien sale, quien no puede jugar y --fix para arreglarlo
   leagues       tus ligas
   rules         las normas de tu liga (plazo de venta y acuerdos)
   report        la pagina, a un fichero
@@ -318,6 +322,63 @@ func cmdServe(args []string) error {
 		slog.Info("daily reward claimed", "league", league, "amount", int64(gained))
 	}
 
+	// The lineup. A formation that seats ten of your eleven, or a starter who cannot play, is
+	// points thrown away, and this is the one write that costs nothing and is undone by another
+	// write of the same kind.
+	//
+	// It moves only when more of your eleven would actually be on the pitch afterwards. A lineup
+	// that already fields eleven who can play is left exactly as it is, whatever the bench looks
+	// like: this exists to fix a hole, not to overrule what you picked.
+	fixLineup := func() {
+		if !allowWrites || *noAuto {
+			return
+		}
+		universe := world.Universe()
+		if universe == nil {
+			return
+		}
+		league, team, err := ensureLeague()
+		if err != nil {
+			return
+		}
+		squad, missing := myEleven(universe)
+		// Placing ten of eleven would bench somebody for the sake of a field the feed did not
+		// send. Better to leave the lineup alone and say why.
+		if len(squad) == 0 || missing > 0 {
+			if missing > 0 {
+				slog.Warn("lineup left alone", "reason", "player_team_id missing",
+					"players", missing)
+			}
+			return
+		}
+		saved, was, err := savedLineup(client, team)
+		if err != nil {
+			slog.Warn("lineup unreadable", "reason", err.Error())
+			return
+		}
+		// No shape means the payload was not understood, and a lineup nobody could read is not
+		// one to overwrite: without this a parsing change would re-save the same eleven every
+		// cycle for ever.
+		if was == "" {
+			slog.Warn("lineup left alone", "reason", "the saved formation came back empty")
+			return
+		}
+		playing := eleven.Playable(saved, squad)
+		best, complete := eleven.Best(squad)
+		if best.Starters() <= playing {
+			return
+		}
+		if _, err := guard.Automatic("save_lineup", writes.Args{LeagueID: league, TeamID: team,
+			Goalkeeper: best.Keeper, Defender: best.Defence, Midfield: best.Middle,
+			Striker: best.Attack, Formation: best.Shape.Numbers()},
+			writes.Player{Name: "tu alineacion"}, allowWrites); err != nil {
+			slog.Warn("lineup not saved", "reason", err.Error())
+			return
+		}
+		slog.Info("lineup fixed", "from", was, "to", best.Shape.Name,
+			"was_playing", playing, "now", best.Starters(), "complete", complete)
+	}
+
 	// Automatic execution of the standing instructions. Off in read-only and with --no-auto; on
 	// otherwise, because an instruction exists precisely to fire while nobody is watching.
 	automate := func(cause string) {
@@ -419,6 +480,7 @@ func cmdServe(args []string) error {
 			// rebuild takes several: the instructions already know the amount and the limit from
 			// the previous cycle, and the lock is judged against the clock.
 			claimReward()
+			fixLineup()
 			automate(cause)
 			if err := world.Refresh(cause); err != nil {
 				return err

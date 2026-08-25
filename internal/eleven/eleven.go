@@ -44,6 +44,12 @@ func shape(defenders, midfielders, strikers int) Shape {
 	}
 }
 
+// Numbers is the shape as the lineup call wants it: defenders, midfielders, strikers, with the
+// keeper left implied, which is how the API writes tacticalFormation too.
+func (s Shape) Numbers() []int {
+	return []int{s.Need[Defender], s.Need[Midfielder], s.Need[Striker]}
+}
+
 // Fillable reports whether a squad with these counts can put this shape on the pitch.
 func (s Shape) Fillable(counts map[int]int) bool {
 	for position, need := range s.Need {
