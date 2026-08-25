@@ -1,5 +1,5 @@
-# Zero dependencies either side of the build: the module has no requires, so there is
-# nothing to download and the build works offline.
+# The module has no requires, so the compile downloads nothing. The runtime stage pulls one
+# apk package and that is the only thing the build needs a network for.
 FROM golang:1.26-alpine AS build
 
 WORKDIR /src
@@ -16,6 +16,10 @@ RUN CGO_ENABLED=0 go build -trimpath \
 FROM alpine:3.21
 
 WORKDIR /app
+# The binary carries its own zone database, so this one is for the shell: without it `date`
+# inside the container answers UTC while the engine answers Madrid. Read through TZ, which
+# compose sets.
+RUN apk add --no-cache tzdata
 COPY --from=build /out/fantasy /usr/local/bin/fantasy
 # The page's CSS, JS and HTML pieces are read at render time.
 COPY assets/ ./assets/
