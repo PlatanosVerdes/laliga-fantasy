@@ -99,3 +99,34 @@ func TestAutoSellStopsShortOfBreakingTheEleven(t *testing.T) {
 		t.Errorf("SquadRoom(defender) = %d, want 0 with eleven players", room)
 	}
 }
+
+// Two sales in one pass. Each one on its own leaves a legal eleven, so measured against the
+// squad this pass started with both were cleared, and between them they left ten: a cycle
+// performs up to three operations. The second one has to see the squad the first one leaves.
+func TestASecondSaleSeesTheSquadTheFirstOneLeaves(t *testing.T) {
+	// Twelve players, six defenders: exactly one to spare.
+	squad := []Row{}
+	for index, position := range []int{1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 4, 4} {
+		squad = append(squad, Row{"id": string(rune('a' + index)), "name": "p",
+			"is_mine": true, "position_id": position, "value": 10_000_000.0})
+	}
+	armed := map[string]Policy{}
+	for _, index := range []int{1, 2} {
+		player := squad[index]
+		player["offers"] = []Row{{"id": "o", "money": 12_000_000.0}}
+		player["market"] = Row{"market_id": "m", "min_bid": 11_000_000.0}
+		armed[text(player["id"])] = Policy{ID: text(player["id"]), AlwaysList: true,
+			AutoSell: true}
+	}
+
+	plan := Plan(squad, armed)
+	sales := 0
+	for _, action := range plan {
+		if text(action["action"]) == "aceptar_oferta" {
+			sales++
+		}
+	}
+	if sales != 1 {
+		t.Fatalf("%d sales authorised, want 1: the second leaves ten players", sales)
+	}
+}
