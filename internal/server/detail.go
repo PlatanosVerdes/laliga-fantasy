@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
@@ -179,10 +180,15 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 					"label": "Rechazar la de " + who, "kind": "confirm", "danger": true,
 					"offer_id": text(offer["id"]), "market_id": listing["market_id"]})
 		}
+		// What it would take to put the clause where the advice stops calling it a risk, and
+		// nothing when it is already there. Half his market value was a number with no argument
+		// behind it, and it contradicted the same page two sections up: over SafeMargin nobody in
+		// the league gains by paying it, so there is nothing to buy.
 		actions = append(actions, map[string]any{"op": "raise_clause",
 			"label": "Subir clausula", "kind": "amount",
 			"player_team_id": player["player_team_id"],
-			"suggested":      int64(number(player["value"]) * 0.5)})
+			"safe_margin":    advice.SafeMargin,
+			"suggested":      raiseToSafe(number(player["value"]), number(player["clause"]))})
 
 	case text(listing["kind"]) == "libre":
 		suggested := number(player["ideal_bid"])
@@ -517,4 +523,15 @@ func shapeOf(value any) []int {
 		out = append(out, int(number(item)))
 	}
 	return out
+}
+
+// raiseToSafe is what to pay so the clause lands on the line the advice draws, remembering that
+// the clause goes up by twice what you pay. Zero when it is already above it, which the page
+// then says out loud instead of proposing a number.
+func raiseToSafe(value, clause float64) int64 {
+	missing := advice.SafeMargin*value - clause
+	if value <= 0 || missing <= 0 {
+		return 0
+	}
+	return int64(missing / writes.ClauseFactor)
 }

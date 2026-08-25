@@ -205,12 +205,22 @@ function clauseSums(amount){
   const rise=amount*CLAUSE_FACTOR;
   const next=(pending.clause||0)+rise;
   const times=pending.value ? next/pending.value : 0;
+  const safe=pending.safe||0;
+  // La misma linea que usa el consejo, dicha aqui mientras escribes: por encima de ella pagar
+  // la clausula es mal negocio para quien la paga, y eso es toda la defensa que compra.
+  let verdict='';
+  if(safe && times){
+    verdict = times>=safe
+      ? `<dt></dt><dd class="clause-safe">por encima de ${safe.toFixed(2)}x: a nadie le renta pagarla</dd>`
+      : `<dt></dt><dd class="clause-open">por debajo de ${safe.toFixed(2)}x: sigue siendo negocio para quien pueda pagarla</dd>`;
+  }
   box.innerHTML=
     `<dt>Multiplicador</dt><dd>${CLAUSE_FACTOR}x</dd>`
     +`<dt>Sube la clausula</dt><dd>${exact(rise)}</dd>`
     +`<dt>Clausula ahora</dt><dd>${exact(pending.clause||0)}</dd>`
     +`<dt>Clausula nueva</dt><dd class="clause-new">${exact(next)}`
-    +`${times?` · ${times.toFixed(2)}x su valor`:''}</dd>`;
+    +`${times?` · ${times.toFixed(2)}x su valor`:''}</dd>`
+    +verdict;
   box.hidden=false;
 }
 
@@ -229,7 +239,14 @@ function checkAmount(){
   // renta pagar *por el jugador*, y aqui no se compra a nadie. Decia "no le ve rentabilidad".
   if(pending.raise){
     clauseSums(amount);
-    if(!amount) text='Escribe lo que quieres pagar.';
+    if(!amount){
+      const now=pending.value ? (pending.clause||0)/pending.value : 0;
+      // Sugerir cero es una respuesta, no un hueco: la clausula ya esta donde tiene que estar.
+      text = pending.safe && now>=pending.safe
+        ? `Ya esta a ${now.toFixed(2)}x su valor, por encima de ${pending.safe.toFixed(2)}x: `
+          +'no hace falta subirla. Si aun asi quieres, escribe un importe.'
+        : 'Escribe lo que quieres pagar.';
+    }
     warn.textContent=text;
     warn.hidden=!text;
     return;
@@ -1362,11 +1379,13 @@ async function runAction(a,player){
              player_team_id:a.player_team_id||player.player_team_id,
              offer_id:a.offer_id, bid_id:a.bid_id, name:player.name, min_bid:a.min||0,
              ideal:player.ideal_bid||0, value:player.value,
-             raise, clause:+player.clause||0};
+             raise, clause:+player.clause||0, safe:+a.safe_margin||0};
     modal.hidden=false;
     modal.querySelector('.bid-action').textContent=a.label+' —';
     modal.querySelector('.bid-who').textContent=player.name;
-    modal.querySelector('.bid-amount').value=group(a.suggested||a.min||0);
+    // Un cero sugerido se deja en blanco a proposito: el aviso de debajo explica por que.
+    modal.querySelector('.bid-amount').value =
+      raise && !a.suggested ? '' : group(a.suggested||a.min||0);
     modal.querySelector('#bid-amount-label').textContent=
       raise ? 'Importe a pagar (se descuenta de tu saldo)' : 'Importe de la puja';
     // Las referencias de puja no dicen nada de una clausula, y el techo de futbolfantasy es
