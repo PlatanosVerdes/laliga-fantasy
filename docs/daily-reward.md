@@ -47,7 +47,10 @@ The order is check, claim, stamp:
 
 - `rewards.ClaimedToday(league)` short-circuits the whole thing, so the rest of the day costs
   no requests at all. The stamp lives in `daily_reward.json` in the state directory, keyed by
-  league, and the day is Madrid's, because that is when the counter resets.
+  league, and the day is Madrid's, because that is when the counter resets. The zone database
+  travels inside the binary (`_ "time/tzdata"`), which is not optional: the runtime image is
+  alpine and has no `/usr/share/zoneinfo`, so `LoadLocation` failed, the day fell back to
+  UTC's, and the claim landed at 02:08 Madrid instead of just after midnight.
 - `check-daily-reward` decides. A 400 or a counter above zero stamps the day and stops:
   claiming from the phone must not have the engine asking again every two minutes.
 - the amount is not in the response, so it is the difference in `/money` around the claim, and
