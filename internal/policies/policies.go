@@ -271,6 +271,11 @@ func RaidPlan(players []Row, policies map[string]Policy, cash float64) []Row {
 			"owner_team_id": player["owner_team_id"]}
 
 		switch {
+		// Already yours: the instruction is spent, whether the raid paid it or you signed
+		// him another way. Leaving the row turned the section into a list of players you
+		// were not going to clause, which is the opposite of what it is for.
+		case truthy(player["is_mine"]):
+			continue
 		// No cap, no automatic payment. The page always demands an amount when arming a raid, but
 		// a policies.json edited by hand does not, and "pay whatever it costs" is not something
 		// anybody authorised: without this the ceiling of zero skipped its own check and the only
@@ -278,8 +283,6 @@ func RaidPlan(players []Row, policies map[string]Policy, cash float64) []Row {
 		case ceiling == 0:
 			actions = append(actions, merge(row, Row{"action": "sin_limite",
 				"why": "no tiene pago maximo: no pago solo sin un limite escrito"}))
-		case truthy(player["is_mine"]):
-			actions = append(actions, merge(row, Row{"action": "ninguna", "why": "ya es tuyo"}))
 		case text(player["owner"]) == "":
 			actions = append(actions, merge(row, Row{"action": "ninguna",
 				"why": "ya no lo tiene nadie"}))
@@ -526,6 +529,61 @@ func Sold(mine map[string]bool, policies map[string]Policy) []string {
 		stale = append(stale, id)
 	}
 	return stale
+}
+
+// Signed is the ids whose scheduled raid can never run again: the player is in the universe
+// and is already yours. Same guard as Sold — an id the universe says nothing about is left
+// alone, because a missing player is a short read, not a signing.
+func Signed(mine map[string]bool, policies map[string]Policy) []string {
+	var done []string
+	for _, id := range SortedIDs(policies) {
+		if !policies[id].Raid {
+			continue
+		}
+		if owned, known := mine[id]; !known || !owned {
+			continue
+		}
+		done = append(done, id)
+	}
+	return done
+}
+
+// Disarm drops the raid side of these instructions and reports the names it dropped. The sell
+// side survives, because a player you now own is exactly who those instructions are about.
+//
+// Not only tidying: an armed raid left on a player of yours would come back to life the day you
+// sell him and pay a clause nobody armed again.
+func Disarm(ids ...string) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	armed, err := Load()
+	if err != nil {
+		return nil, err
+	}
+	var gone []string
+	for _, id := range ids {
+		entry, found := armed[id]
+		if !found || !entry.Raid {
+			continue
+		}
+		name := entry.Name
+		if name == "" {
+			name = id
+		}
+		gone = append(gone, name)
+		entry.Raid, entry.MaxPay = false, nil
+		if !entry.AlwaysList && !entry.AutoSell && entry.MinPrice == nil &&
+			entry.AcceptAbove == nil {
+			delete(armed, id)
+			continue
+		}
+		armed[id] = entry
+	}
+	if len(gone) == 0 {
+		return nil, nil
+	}
+	return gone, Save(armed)
 }
 
 // Forget drops the sell side of these instructions and reports the names it dropped. A

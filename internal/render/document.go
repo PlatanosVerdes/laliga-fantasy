@@ -673,25 +673,54 @@ func (d Document) withPolicies(plan []map[string]any) []map[string]any {
 	return out
 }
 
+// raidsStandingDown are the raids that are not going to happen as they are: the clause rose
+// over the limit, the owner shielded him, there is no cap written or no cash left. They are
+// not pending, and listing them next to the ones still on their way made the section read as
+// if all of them were.
+var raidsStandingDown = map[string]bool{
+	"cancelada": true, "bloqueada": true, "sin_limite": true, "sin_saldo": true,
+	"ninguna": true,
+}
+
 func (d Document) raidsSection() string {
 	if len(d.Raids) == 0 {
 		return ""
 	}
 	armed := 0
+	var live, stood []map[string]any
 	for _, raid := range d.Raids {
+		if raidsStandingDown[text(raid["action"])] {
+			stood = append(stood, raid)
+			continue
+		}
 		if text(raid["action"]) == "pagar_clausula" {
 			armed++
 		}
+		live = append(live, raid)
 	}
+
 	note := "Clausulazos programados: se pagan solos en cuanto la cláusula se " +
 		"libere, <strong>y solo si sigue por debajo del limite que fijaste</strong>. " +
 		"Si el dueño la sube o blinda al jugador, se cancela en vez de pagar de mas."
 	if armed > 0 {
 		note += fmt.Sprintf(" <strong>%d listo(s) para ejecutar ahora.</strong>", armed)
 	}
-	table, _ := SectionTable("programados", d.Raids)
-	return Section("Clausulazos programados", table, note,
-		fmt.Sprintf("%d", len(d.Raids)), "programados")
+
+	body, _ := SectionTable("programados", live)
+	if len(stood) > 0 {
+		table, _ := SectionTable("programados", stood)
+		body += `<h3 class="kpi-label" style="margin-top:26px">No se pudieron hacer</h3>` +
+			table
+		note += " Debajo, los que <strong>no se pudieron hacer</strong> y por que: " +
+			"siguen armados, asi que si la cláusula vuelve a bajar de tu limite se pagan. " +
+			"Si ya no lo quieres, cancelalos."
+	}
+
+	badge := fmt.Sprintf("%d", len(live))
+	if len(stood) > 0 {
+		badge = fmt.Sprintf("%d en pie · %d sin hacer", len(live), len(stood))
+	}
+	return Section("Clausulazos programados", body, note, badge, "programados")
 }
 
 func (d Document) offersSection() string {

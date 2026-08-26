@@ -430,6 +430,16 @@ func (s *State) forgetSold(universe *model.Universe) {
 	for _, name := range gone {
 		slog.Info("standing instruction forgotten", "player", name, "why", "no longer yours")
 	}
+
+	// The mirror image on the buy side: a raid on somebody who is now yours is done.
+	signed, err := policies.Disarm(policies.Signed(mine, armed)...)
+	if err != nil {
+		slog.Error("could not disarm the raids of signed players", "reason", err.Error())
+		return
+	}
+	for _, name := range signed {
+		slog.Info("scheduled raid disarmed", "player", name, "why", "already yours")
+	}
 }
 
 func (s *State) trackMine(universe *model.Universe) {
