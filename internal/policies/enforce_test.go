@@ -157,3 +157,48 @@ func TestRaidPlanSpendsTheBalanceOnceAcrossRaids(t *testing.T) {
 		t.Errorf("la cola va por puntos por millon, empezo por %q", text(both[0]["name"]))
 	}
 }
+
+// Un jugador que ya es tuyo no es un clausulazo pendiente: el que fichaste tiene que
+// desaparecer de la seccion en vez de quedarse con un "ya es tuyo".
+func TestRaidPlanDropsPlayersAlreadyYours(t *testing.T) {
+	cap := 30_000_000.0
+	players := []Row{
+		{"id": "1", "name": "el fichado", "owner": "yo", "is_mine": true,
+			"clause": 20_000_000.0},
+		{"id": "2", "name": "el rival", "owner": "rival", "clause": 15_000_000.0},
+	}
+	armed := map[string]Policy{"1": {Raid: true, MaxPay: &cap}, "2": {Raid: true, MaxPay: &cap}}
+
+	plan := RaidPlan(players, armed, 90_000_000)
+	if len(plan) != 1 || text(plan[0]["name"]) != "el rival" {
+		t.Fatalf("el fichado no deberia salir en el plan, dijo %v", plan)
+	}
+
+	// Y sin limite escrito tampoco: primero es tuyo, y despues ya se mira el cap.
+	sinLimite := RaidPlan(players[:1], map[string]Policy{"1": {Raid: true}}, 90_000_000)
+	if len(sinLimite) != 0 {
+		t.Errorf("un jugador tuyo no deberia salir ni sin limite, dijo %v", sinLimite)
+	}
+}
+
+// La otra mitad: la instruccion guardada tambien se desarma, porque si no revive el dia que
+// lo vendas y pagaria una clausula que nadie volvio a armar.
+func TestSignedFindsTheRaidsThatAreDone(t *testing.T) {
+	cap := 30_000_000.0
+	armed := map[string]Policy{
+		"1": {ID: "1", Raid: true, MaxPay: &cap},
+		"2": {ID: "2", Raid: true, MaxPay: &cap},
+		"3": {ID: "3", AlwaysList: true},
+	}
+	mine := map[string]bool{"1": true, "2": false, "3": true}
+
+	done := Signed(mine, armed)
+	if len(done) != 1 || done[0] != "1" {
+		t.Fatalf("solo el clausulazo del que ya es tuyo esta hecho, dijo %v", done)
+	}
+
+	// Un jugador del que el mundo no dice nada se deja en paz: falta, no es que lo fichases.
+	if quiet := Signed(map[string]bool{}, armed); len(quiet) != 0 {
+		t.Errorf("sin mundo no se desarma nada, dijo %v", quiet)
+	}
+}

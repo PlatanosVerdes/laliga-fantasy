@@ -127,3 +127,48 @@ func note(section string) string {
 	end := strings.Index(section[start:], "</p>")
 	return section[start : start+end]
 }
+
+// Los clausulazos que no se pudieron hacer van en su propia subseccion: mezclados con los que
+// siguen en pie, la seccion se leia como si todos estuvieran a punto de pagarse.
+func TestRaidsSectionSeparatesTheOnesThatCouldNotRun(t *testing.T) {
+	document := Document{Raids: []map[string]any{
+		{"player_id": "1", "name": "El que espera", "owner": "cristian",
+			"clause": 20_000_000.0, "max_pay": 25_000_000.0, "action": "esperando",
+			"why": "clausula bloqueada, se abre en 12h"},
+		{"player_id": "2", "name": "El que subio", "owner": "tete",
+			"clause": 30_129_276.0, "max_pay": 17_155_131.0, "action": "cancelada",
+			"why": "la clausula subio a 30.129.276, tu limite es 17.155.131"},
+	}}
+
+	section := document.raidsSection()
+	cut := strings.Index(section, "No se pudieron hacer")
+	if cut < 0 {
+		t.Fatalf("falta la subseccion de los que no se pudieron hacer: %.200s", section)
+	}
+	if !strings.Contains(section[:cut], "El que espera") {
+		t.Error("el que sigue en pie va en la tabla de arriba")
+	}
+	if !strings.Contains(section[cut:], "El que subio") ||
+		strings.Contains(section[:cut], "El que subio") {
+		t.Error("el cancelado va debajo, no arriba")
+	}
+	if !strings.Contains(section, "1 en pie · 1 sin hacer") {
+		t.Errorf("el contador tiene que separar los dos: %.200s", section)
+	}
+}
+
+// Y con todos caidos la tabla de arriba lo dice en vez de quedarse en "Sin datos".
+func TestRaidsSectionSaysNoneStandingWhenAllFell(t *testing.T) {
+	document := Document{Raids: []map[string]any{
+		{"player_id": "2", "name": "El blindado", "owner": "tete", "clause": 30_000_000.0,
+			"max_pay": 40_000_000.0, "action": "bloqueada", "why": "tete lo ha blindado"},
+	}}
+
+	section := document.raidsSection()
+	if !strings.Contains(section, "Ninguno en pie ahora mismo") {
+		t.Errorf("sin clausulazos en pie hay que decirlo: %.200s", section)
+	}
+	if !strings.Contains(section, "0 en pie · 1 sin hacer") {
+		t.Errorf("el contador no cuadra: %.200s", section)
+	}
+}

@@ -1780,7 +1780,7 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 			}, "status"},
 			{"Motivo", field("why"), "text"},
 		}
-		return TableIn(columns, rows, "Sin datos", "", false), nil
+		return TableIn(columns, rows, "Ninguno en pie ahora mismo", "", false), nil
 
 	case "rivales":
 		// Who can buy today, which is a different table from who is winning: cash beats
