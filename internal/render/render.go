@@ -678,6 +678,86 @@ func HouseRules(holdDays int, exceptions string, notes []string) string {
 	return out.String()
 }
 
+// Outlook is the three managers the next matchday treats worst, and then the whole league in a
+// table so the three read as a ranking rather than an assertion.
+//
+// Cards rather than the first three rows of the table because this is the one section of the page
+// whose answer is a *name*: the numbers are the argument, and the argument needs room to be
+// written in words. The rest of the league stays underneath, because "he looks bad" only means
+// something next to what everybody else looks like.
+func Outlook(rows []map[string]any) string {
+	if len(rows) == 0 {
+		return ""
+	}
+	var out strings.Builder
+	out.WriteString(`<div class="pinta">`)
+	// How many go on the podium is the forecast's own judgement, not this function's: the rows
+	// arrive already sorted and already flagged.
+	index := -1
+	for _, row := range rows {
+		if !truthy(row["worst"]) {
+			break
+		}
+		index++
+		expected, ceiling := asFloat(row["xpts"]), asFloat(row["ceiling"])
+		lost := asFloat(row["lost"])
+		manager := text(row["manager"])
+		if manager == "" {
+			manager = text(row["team_id"])
+		}
+		seat := ""
+		if position := asFloat(row["position"]); position != nil && *position > 0 {
+			seat = fmt.Sprintf(`<span class="pinta-seat">%.0fº de la liga</span>`, *position)
+		}
+		mine := ""
+		if truthy(row["is_me"]) {
+			mine = `<span class="flag-mine">tu</span>`
+		}
+		var reasons strings.Builder
+		for _, reason := range asStrings(row["reasons"]) {
+			fmt.Fprintf(&reasons, `<li>%s</li>`, Esc(reason))
+		}
+		if reasons.Len() == 0 {
+			// No absence, no hole, no brutal fixture: he is simply not very good, and saying
+			// so out loud is better than an empty card that looks like a bug.
+			reasons.WriteString(`<li>nada roto: su once vale eso</li>`)
+		}
+		drop := ""
+		if lost != nil && *lost >= 0.05 {
+			drop = fmt.Sprintf(` <span class="pinta-drop">−%s</span>`, Num(lost, 1))
+		}
+		fmt.Fprintf(&out, `<div class="pinta-card"><div class="pinta-head">`+
+			`<span class="pinta-rank">%s</span>%s%s</div>`+
+			`<div class="pinta-who">%s</div>`+
+			`<div class="pinta-xpts"><b>%s</b> xPts%s</div>`+
+			`<div class="pinta-ceiling">con todos sanos serian %s</div>`+
+			`<ul class="pinta-why">%s</ul></div>`,
+			Esc(worstLabel(index)), seat, mine,
+			ManagerLink(manager, text(row["team_id"])),
+			Num(expected, 1), drop, Num(ceiling, 1), reasons.String())
+	}
+	out.WriteString(`</div>`)
+
+	table, err := SectionTable("pinta", rows)
+	if err == nil {
+		out.WriteString(table)
+	}
+	return out.String()
+}
+
+// worstLabel names the podium. "el peor" rather than "1º" because first place on this list is
+// not something anybody is winning.
+func worstLabel(index int) string {
+	switch index {
+	case 0:
+		return "el que peor pinta"
+	case 1:
+		return "2º peor"
+	default:
+		return "3º peor"
+	}
+}
+
 // modeChip is the one-word answer to what the server may do. Coloured by how much it can act,
 // because "solo lectura" and "auto" are opposite ends of the same question.
 func modeChip(mode string) string {
@@ -1799,6 +1879,26 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		}
 		return TableIn(columns, rows, "Sin datos", "", false), nil
 
+	case "pinta":
+		// The whole league by how the next matchday looks, worst first. Two point totals side
+		// by side because either one alone misleads: the expected eleven says who scores least,
+		// and the same eleven with everybody fit says whether that is a bad squad or a bad week.
+		columns := []Column{
+			{"#", field("rank"), "int"},
+			{"Manager", whole, "manager"},
+			{"Once esperado", field("xpts"), "num"},
+			{"Con todos sanos", field("ceiling"), "num"},
+			{"Se deja", field("lost"), "num"},
+			{"Bajas", field("outs"), "int"},
+			{"Dudas", field("doubts"), "int"},
+			{"En el aire", field("air"), "num"},
+			{"Huecos", whole, "holes"},
+			{"Fuera de casa", field("away"), "int"},
+			{"Calendario", field("fixture_pct"), "pct_plain"},
+			{"Rivales duros", field("hard"), "list"},
+		}
+		return TableIn(columns, rows, "Sin datos", "", false), nil
+
 	case "acciones":
 		// The one table that says what to do rather than what is true, so the verdict is
 		// the first column and the reason sits right next to the name.
@@ -2311,6 +2411,17 @@ func CellIn(value any, kind string, section string) (string, string) {
 		}
 		return fmt.Sprintf(`<span class="pill-%s">%s</span>`, status,
 			Esc(strings.ReplaceAll(label, "_", " "))), label
+	case "holes":
+		// Zero holes is the good case and by far the common one, so it says "once completo"
+		// rather than printing a nought that reads like a missing number. A hole is a slot
+		// nobody can fill: eleven minus whatever his best legal formation seats.
+		row, _ := value.(map[string]any)
+		holes := int(number(row["holes"]))
+		if holes == 0 {
+			return `<span class="muted">once completo</span>`, "0"
+		}
+		return fmt.Sprintf(`<span class="pill-critical">%d en blanco</span>`, holes),
+			fmt.Sprintf("%d", holes)
 	case "list":
 		items := asStrings(value)
 		if len(items) == 0 {

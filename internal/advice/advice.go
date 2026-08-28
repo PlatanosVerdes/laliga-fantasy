@@ -14,8 +14,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/outlook"
 )
 
 // Squad rules of LaLiga Fantasy: eleven starters within a legal formation.
@@ -448,6 +450,9 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 		"my_clauses_soon":     head(soon, limit),
 		"upcoming_raids":      head(upcoming, limit),
 		"starred":             starred,
+		// How the next matchday looks for everybody, which is the one question about the
+		// league the money tables cannot answer.
+		"outlook": outlook.League(universe, time.Now()),
 	}
 }
 

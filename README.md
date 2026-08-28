@@ -206,6 +206,41 @@ has never traded lands exactly on the base, and squad value plus cash comes out 
 That turns the clause-risk section from "this clause looks low" into "these three managers can
 pay it right now, and the richest is X".
 
+### Who looks worst next matchday
+
+The cash table says who is rich; it cannot say who is about to have a bad weekend. So the league
+is also read forward: one row per manager in the **Rivales** tab, ranked by the points each
+squad can be expected to score on the next matchday still to be played:
+
+```
+eleven = the best legal eleven, by expected points, of everything he owns
+xPts   = Σ base · availability · fixture(that matchday) · confidence · fitness
+```
+
+Four inputs, three of which the page already had:
+
+* **the eleven**: formations are the rule, so only eleven in a legal shape score. A squad that
+  cannot fill one carries its empty slots as zeros: nine players field nine, and it says so.
+* **the fixture of that matchday**: read from the calendar rather than from whatever
+  futbolfantasy calls a given player's next game, so every squad is measured against the *same*
+  matchday. Opponent strength is the 0..1 club percentile the model already uses (±12%), plus
+  ±4% for home or away, which is why a Barça and a Girona do not count the same.
+* **who is out**: the API's status, and above it futbolfantasy's verdict for that exact
+  matchday ("Baja confirmada para la jornada 3", "Duda para la jornada 3", "Disponible para la
+  jornada 3"). That verdict wins when it names the matchday being asked about, because the API
+  lags: it keeps a player flagged for days after he is training again. A doubt is ×0.55, the
+  same discount the model applies everywhere; a suspension and a player who has left LaLiga are
+  zero.
+* **fitness against depth**: the same eleven is computed twice, once as it stands and once with
+  every absence cleared. The gap is the news: an injury three deep on the bench costs nothing,
+  and the same injury in a squad of eleven costs the whole player. One number separates a bad
+  squad from a bad week.
+
+Two things it does not know, and says so on the page. What a rival will actually line up, so
+this is only the best eleven he *could* field: he can do worse, never better. And the odds of
+somebody getting injured, which nobody publishes: what exists is who is out, until when, and the
+odds of starting, which is where the risk of not playing lives.
+
 ### Caveats
 
 * At the very start of a season everything rests on last-season output and the odds of

@@ -395,12 +395,10 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		}
 		player.BaseWeek = currentWeight*perWeekNow + (1-currentWeight)*perWeekLast
 
-		availability := 1.0
 		if trend != nil && trend.StartProbability != nil {
 			player.StartProbability = trend.StartProbability
-			availability = (*trend.StartProbability / 100.0) / BaselineStartProbability
-			availability = math.Max(AvailabilityFloor, math.Min(AvailabilityCeiling, availability))
 		}
+		availability := Availability(player.StartProbability)
 
 		var rivalStrength *float64
 		if trend != nil && trend.NextRival != nil {

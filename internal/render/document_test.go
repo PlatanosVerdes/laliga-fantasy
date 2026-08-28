@@ -119,6 +119,76 @@ func TestRivalSectionsWithoutLeagueTeams(t *testing.T) {
 	}
 }
 
+// The forecast section: three cards off the podium flag, the whole league underneath, and the
+// tab it belongs to said out loud. A section that does not name its tab is a section nobody ever
+// sees, which is the failure this file exists for.
+func TestOutlookSectionCardsAndTable(t *testing.T) {
+	document := Document{Advice: map[string]any{"outlook": []any{
+		map[string]any{"manager": "cristian", "team_id": "200", "week": 3.0, "rank": 1.0,
+			"worst": true, "xpts": 18.5, "ceiling": 24.0, "lost": 5.5, "position": 4.0,
+			"outs": 2.0, "holes": 1.0, "doubts": 0.0, "air": 0.0, "away": 6.0,
+			"fixture_pct": -3.2, "hard": []any{"BAR"},
+			"reasons": []any{"2 bajas (Uno, Dos) · 5.5 xPts fuera"}},
+		map[string]any{"manager": "tete", "team_id": "300", "week": 3.0, "rank": 2.0,
+			"worst": true, "xpts": 22.0, "ceiling": 22.0, "lost": 0.0, "position": 2.0,
+			"holes": 0.0, "reasons": []any{}},
+		map[string]any{"manager": "yo", "team_id": "100", "week": 3.0, "rank": 3.0,
+			"worst": true, "xpts": 25.0, "ceiling": 25.0, "lost": 0.0, "is_me": true,
+			"holes": 0.0, "reasons": []any{}},
+		map[string]any{"manager": "otro", "team_id": "400", "week": 3.0, "rank": 4.0,
+			"worst": false, "xpts": 30.0, "ceiling": 30.0, "lost": 0.0, "holes": 0.0,
+			"reasons": []any{}},
+	}}}
+
+	section := document.outlookSection()
+	if !strings.Contains(section, `id="pinta"`) ||
+		!strings.Contains(section, `data-tab="rivales"`) {
+		t.Fatalf("la seccion tiene que decir su id y su pestaña: %.160s", section)
+	}
+	if !strings.Contains(section, "Quien pinta peor la J3") {
+		t.Error("el titulo tiene que nombrar la jornada")
+	}
+	// Three cards, not four: who goes on the podium is the forecast's own judgement.
+	if got := strings.Count(section, `class="pinta-card"`); got != 3 {
+		t.Errorf("%d tarjetas, want 3", got)
+	}
+	if !strings.Contains(section, "el que peor pinta") {
+		t.Error("falta la etiqueta del primero")
+	}
+	if !strings.Contains(section, "2 bajas (Uno, Dos) · 5.5 xPts fuera") {
+		t.Error("los motivos de la tarjeta no salieron")
+	}
+	// A card with nothing broken still says something rather than sitting empty.
+	if !strings.Contains(section, "nada roto") {
+		t.Error("una tarjeta sin motivos tiene que decirlo")
+	}
+	if !strings.Contains(section, `−5.5`) {
+		t.Error("falta lo que se deja respecto a su once sano")
+	}
+	if !strings.Contains(section, `class="flag-mine"`) {
+		t.Error("si el tuyo esta entre los peores hay que decirlo")
+	}
+	// The four rows of the league are the table, podium or not.
+	if got := strings.Count(section, "<tr"); got != 5 {
+		t.Errorf("%d filas (cabecera incluida), want 5", got)
+	}
+	if !strings.Contains(section, "1 en blanco") {
+		t.Error("un hueco en el once tiene que verse en la tabla")
+	}
+	if !strings.Contains(section, "once completo") {
+		t.Error("cero huecos no es un numero que falte, es una buena noticia")
+	}
+	if !strings.Contains(section, "-3.20%") {
+		t.Error("falta lo que hace el calendario")
+	}
+}
+
+func TestOutlookSectionWithoutAForecast(t *testing.T) {
+	if got := (Document{}).outlookSection(); got != "" {
+		t.Errorf("sin datos no hay seccion, salio %.80s", got)
+	}
+}
+
 func note(section string) string {
 	start := strings.Index(section, `<p class="note">`)
 	if start < 0 {
