@@ -424,19 +424,6 @@ func cmdServe(args []string) error {
 					row["clause_locked"] = hours > 0
 				}
 			}
-			// An expired listing is no listing, whatever the last rebuild recorded. Without this
-			// a player under "siempre en mercado" sat unlisted until some later cycle noticed,
-			// which is the same mistake as the clause: acting on a stale clock.
-			listing := mapFrom(row["market"])
-			if listing == nil {
-				continue
-			}
-			if expires := text(listing["expires"]); expires != "" {
-				if when, err := time.Parse(time.RFC3339, expires); err == nil &&
-					now.After(when.Add(RaidGrace)) {
-					row["market"] = nil
-				}
-			}
 		}
 
 		// The guard checks a write against the player, and unattended writes have to be checked
@@ -447,7 +434,10 @@ func cmdServe(args []string) error {
 		}
 		house := rules.For(league)
 
-		done := policies.Enforce(policies.Plan(rows, armed), policies.RaidPlan(rows, armed, cash),
+		// An expired listing is no listing, and the plan is the one that knows it now: the rule
+		// used to be applied to these rows here, where only the acting half could see it.
+		done := policies.Enforce(policies.Plan(rows, armed, now),
+			policies.RaidPlan(rows, armed, cash),
 			func(operation string, action policies.Row) error {
 				args := automaticArgs(action, league, team)
 				who := automaticPlayer(byID[text(action["player_id"])], house.HoldExceptions)
@@ -1030,7 +1020,7 @@ func cmdPlan(args []string) error {
 		return err
 	}
 	blob, err := json.Marshal(map[string]any{
-		"plan":  policies.Plan(players, armed),
+		"plan":  policies.Plan(players, armed, time.Now()),
 		"raids": policies.RaidPlan(players, armed, cash),
 	})
 	if err != nil {
@@ -1475,7 +1465,7 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 		RuleNotes:      house.Notes,
 		CSS: read("report.css"), JS: read("report.js"),
 		Modal: read("modal.html"), Drawer: read("drawer.html"),
-		Plan:     policies.Plan(players, armed),
+		Plan:     policies.Plan(players, armed, time.Now()),
 		Raids:    policies.RaidPlan(players, armed, cash),
 		Policies: policyRows,
 	}

@@ -573,7 +573,7 @@ func cmdAlways(args []string) error {
 		if err != nil {
 			return err
 		}
-		plan := policies.Plan(state.Players, armed)
+		plan := policies.Plan(state.Players, armed, time.Now())
 		if len(plan) > 0 {
 			cli.Heading("Que haria ahora mismo")
 			planRows := make([][]string, 0, len(plan))
