@@ -94,6 +94,7 @@ func (d Document) HTML() string {
 		sections = append(sections, d.marketSections()...)
 		sections = append(sections, d.clauseSections()...)
 	}
+	sections = append(sections, d.matchdaySection())
 	sections = append(sections, d.scheduleSection(players))
 	sections = append(sections, d.rulesSection())
 	sections = append(sections, d.rankingSections(players)...)
@@ -148,7 +149,8 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 		Label:    fmt.Sprintf("Jornada %d", int(number(week["weekNumber"]))),
 		Value:    value,
 		Deadline: deadline,
-		Hint:     state, Notes: notes, Status: "neutral"})}
+		// The widget states which matchday it is; the section says how it is going.
+		Hint: state, Notes: notes, Status: "neutral", Tab: "jornada"})}
 
 	if len(d.Advice) == 0 {
 		kpis = append(kpis,
@@ -743,6 +745,106 @@ func (d Document) offersSection() string {
 	table, _ := SectionTable("ofertas", offers)
 	return Section("Ofertas que has recibido", table, note,
 		fmt.Sprintf("%d", len(offers)), "ofertas")
+}
+
+// matchdaySection is the matchday in play: what everybody has scored so far and what each of
+// them still has on the pitch.
+//
+// It is a scoreboard and a warning about scoreboards at the same time. The league's live table is
+// the number everybody quotes at each other on a Sunday, and halfway through a matchday it is
+// close to meaningless: the manager two points behind you with six men still to kick off is not
+// behind you. So the table is sorted the way the league sorts it, and the seat each one would
+// end in rides along in the projection column, which is where the two disagree.
+func (d Document) matchdaySection() string {
+	matchday := mapOf(d.Advice["matchday"])
+	managers := rows(matchday["managers"])
+	if len(managers) == 0 {
+		return ""
+	}
+	week := int(number(matchday["week"]))
+	live := truthy(matchday["live"])
+
+	title := fmt.Sprintf("Como va la J%d", week)
+	if !live {
+		title = fmt.Sprintf("Como acabo la J%d", week)
+	}
+
+	// Where you stand, first and in one sentence: it is the only row of the table anybody looks
+	// for, and looking for it is what the section should not cost.
+	note := ""
+	for _, row := range managers {
+		if !truthy(row["is_me"]) {
+			continue
+		}
+		seat, ending := int(number(row["points_rank"])), int(number(row["projection_rank"]))
+		verb := "Vas"
+		if !live {
+			verb = "Has acabado"
+		}
+		note = fmt.Sprintf("%s <strong>%dº de la jornada</strong> con %.0f puntos", verb, seat,
+			number(row["points"]))
+		if gap := number(managers[0]["points"]) - number(row["points"]); gap > 0 {
+			note += fmt.Sprintf(", a %.0f del primero", gap)
+		}
+		if waiting := int(number(row["waiting"])); waiting > 0 {
+			note += fmt.Sprintf(", y te quedan <strong>%s</strong> por jugar",
+				counted(waiting, "jugador", "jugadores"))
+		} else if live {
+			note += ", y ya no te queda nadie por jugar"
+		}
+		if ending != seat {
+			note += fmt.Sprintf(". Por lo que le queda a cada uno <strong>acabarias %dº</strong>",
+				ending)
+		}
+		note += ". "
+		break
+	}
+
+	if live {
+		note += fmt.Sprintf("Quedan <strong>%d de %d partidos</strong>",
+			int(number(matchday["matches"]))-int(number(matchday["played"])),
+			int(number(matchday["matches"])))
+		if pending := rows(matchday["pending_matches"]); len(pending) > 0 {
+			names := make([]string, 0, len(pending))
+			for _, fixture := range pending {
+				names = append(names, Esc(text(fixture["local"]))+"-"+
+					Esc(text(fixture["visitor"])))
+			}
+			note += " (" + strings.Join(names, ", ") + ")"
+		}
+		note += ". "
+	}
+
+	note += "<strong>Puntos</strong> es la cifra del propio juego, no una reconstruccion."
+	// The columns that explain themselves are gone once the matchday is over, and so is the
+	// paragraph that explained them.
+	if live {
+		note += " <strong>Por sumar</strong> son los xPts de los jugadores de cada uno cuyo " +
+			"partido no ha empezado todavia, y es un <em>techo</em>, no una prevision: la " +
+			"alineacion de un rival no se puede leer sin una peticion por manager, asi que " +
+			"cuento a todos los que le quedan y solo puntuan once. Los lesionados y " +
+			"sancionados no entran, que tampoco van a jugar."
+	}
+
+	table, err := SectionTable("jornada", managers)
+	if err != nil {
+		return ""
+	}
+	badge := fmt.Sprintf("%d de %d partidos", int(number(matchday["played"])),
+		int(number(matchday["matches"])))
+	if !live {
+		badge = "terminada"
+	}
+	return Section(title, table, note, badge, "jornada")
+}
+
+// counted is a number with its noun. The package already has a plural() for the "s" that goes on
+// the end of an English-shaped word, which is not what "jugador" needs.
+func counted(count int, one, many string) string {
+	if count == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", count, many)
 }
 
 // feedSection is outside the advice block on purpose: the league moves whether or not this

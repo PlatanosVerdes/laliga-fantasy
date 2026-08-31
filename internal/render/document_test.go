@@ -119,6 +119,98 @@ func TestRivalSectionsWithoutLeagueTeams(t *testing.T) {
 	}
 }
 
+// The matchday board. The arrows are the point of it: the table is sorted the way the league
+// sorts it, and the column that disagrees has to say so.
+func matchdayDocument(live bool) Document {
+	pending := []any{}
+	if live {
+		pending = []any{map[string]any{"local": "OSA", "visitor": "GET",
+			"kickoff": "2026-08-31T19:30:00+02:00"}}
+	}
+	// A matchday that is over has nobody left anywhere: that is what makes it over.
+	rataneta, mine := 1.0, 2.0
+	if !live {
+		rataneta, mine = 0, 0
+	}
+	return Document{Advice: map[string]any{"matchday": map[string]any{
+		"week": 3.0, "live": live, "matches": 10.0, "played": 9.0,
+		"pending_matches": pending,
+		"managers": []any{
+			map[string]any{"manager": "La rataneta", "team_id": "200", "points": 48.0,
+				"reported": true, "waiting": rataneta, "to_come": 1.3, "projection": 49.3,
+				"points_rank": 1.0, "projection_rank": 2.0,
+				"waiting_names": []any{"Mario Martin"}},
+			map[string]any{"manager": "yo", "team_id": "100", "is_me": true, "points": 46.0,
+				"reported": true, "waiting": mine, "to_come": 6.8, "projection": 52.8,
+				"points_rank": 2.0, "projection_rank": 1.0,
+				"waiting_names": []any{"Djene", "Marc Bernal"}},
+			map[string]any{"manager": "sin alinear", "team_id": "300", "points": 0.0,
+				"reported": false, "waiting": 0.0, "to_come": 0.0, "projection": 0.0,
+				"points_rank": 3.0, "projection_rank": 3.0, "waiting_names": []any{}},
+		},
+	}}}
+}
+
+func TestMatchdaySectionShowsWhereItIsHeading(t *testing.T) {
+	section := matchdayDocument(true).matchdaySection()
+	if !strings.Contains(section, `id="jornada"`) {
+		t.Fatalf("falta el id de la seccion: %.140s", section)
+	}
+	if !strings.Contains(section, "Como va la J3") {
+		t.Error("el titulo tiene que nombrar la jornada en juego")
+	}
+	// Where you stand, in words, before any table.
+	if !strings.Contains(section, "Vas <strong>2º de la jornada</strong> con 46 puntos") {
+		t.Errorf("la nota tiene que abrir con tu puesto: %s", note(section))
+	}
+	if !strings.Contains(section, "acabarias 1º") {
+		t.Errorf("y decir donde acabarias cuando cambia: %s", note(section))
+	}
+	if !strings.Contains(section, "OSA-GET") {
+		t.Errorf("y que partidos quedan: %s", note(section))
+	}
+	// The disagreement between the two orders, one arrow each way.
+	if !strings.Contains(section, `class="seat-down">↓ 2º`) {
+		t.Error("el primero por puntos acabaria segundo y tiene que verse")
+	}
+	if !strings.Contains(section, `class="seat-up">↑ 1º`) {
+		t.Error("falta la flecha del que sube")
+	}
+	// No figure at all is not a nought.
+	if !strings.Contains(section, "sin puntos") {
+		t.Error("un manager sin cifra en la clasificacion no puntua cero, no puntua nada")
+	}
+	if !strings.Contains(section, `class="pill-neutral">cerrado`) {
+		t.Error("quien no tiene a nadie por jugar tiene la jornada cerrada")
+	}
+}
+
+// Once the last ball is kicked the four forward-looking columns are four strips of nothing, and
+// so is the paragraph that explained them.
+func TestMatchdaySectionCollapsesWhenItIsOver(t *testing.T) {
+	section := matchdayDocument(false).matchdaySection()
+	if !strings.Contains(section, "Como acabo la J3") {
+		t.Error("el titulo tiene que decir que acabo")
+	}
+	if !strings.Contains(section, "Has acabado <strong>2º de la jornada</strong>") {
+		t.Errorf("en pasado: %s", note(section))
+	}
+	for _, gone := range []string{"Por sumar", "Acabaria en", "Quien le queda", "Le quedan"} {
+		if strings.Contains(section, gone) {
+			t.Errorf("la columna %q no tiene nada que decir en una jornada terminada", gone)
+		}
+	}
+	if got := strings.Count(section, "<th data-kind="); got != 3 {
+		t.Errorf("%d columnas, want 3", got)
+	}
+}
+
+func TestMatchdaySectionWithoutABoard(t *testing.T) {
+	if got := (Document{}).matchdaySection(); got != "" {
+		t.Errorf("sin datos no hay seccion, salio %.80s", got)
+	}
+}
+
 // The forecast section: three cards off the podium flag, the whole league underneath, and the
 // tab it belongs to said out loud. A section that does not name its tab is a section nobody ever
 // sees, which is the failure this file exists for.

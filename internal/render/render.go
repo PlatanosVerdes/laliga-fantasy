@@ -1345,8 +1345,10 @@ func parseStamp(value string) (time.Time, bool) {
 
 // NumericKinds are right-aligned, and the page's sort code reads the same list.
 var NumericKinds = map[string]bool{
-	"money": true, "num": true, "int": true, "pct": true, "pct_plain": true,
+	"money": true, "num": true, "num1": true, "int": true, "pct": true, "pct_plain": true,
 	"mag": true, "ideal": true, "starts": true,
+	// The three the matchday board adds: all of them are numbers with a word beside them.
+	"live_points": true, "waiting": true, "projection": true,
 }
 
 // Column is a header, how to read the value out of a row, and how to render it.
@@ -1876,6 +1878,34 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 			{"Premios", field("rewards"), "money"},
 			{"Caja estimada", field("estimated_cash"), "money"},
 			{"Suma de cláusulas", field("clause_total"), "money"},
+		}
+		return TableIn(columns, rows, "Sin datos", "", false), nil
+
+	case "jornada":
+		// The matchday as it stands, and beside it where it is heading. Both orders are in the
+		// table on purpose: the league's own is the one everybody quotes and it is not the one
+		// the afternoon is going to end in.
+		columns := []Column{
+			{"#", field("points_rank"), "int"},
+			{"Manager", whole, "manager"},
+			{"Puntos", whole, "live_points"},
+			{"Le quedan", whole, "waiting"},
+			{"Por sumar", field("to_come"), "num1"},
+			{"Acabaria en", whole, "projection"},
+			{"Quien le queda", field("waiting_names"), "list"},
+		}
+		// Once the last ball is kicked the four forward-looking columns are four strips of
+		// nothing, and the same rule the tables already follow applies: a column nobody has
+		// data for is noise. What is left is the result, which is all a finished matchday is.
+		waiting := false
+		for _, row := range rows {
+			if number(row["waiting"]) > 0 {
+				waiting = true
+				break
+			}
+		}
+		if !waiting {
+			columns = columns[:3]
 		}
 		return TableIn(columns, rows, "Sin datos", "", false), nil
 
@@ -2411,6 +2441,47 @@ func CellIn(value any, kind string, section string) (string, string) {
 		}
 		return fmt.Sprintf(`<span class="pill-%s">%s</span>`, status,
 			Esc(strings.ReplaceAll(label, "_", " "))), label
+	case "live_points":
+		// A manager with nobody on the pitch has no figure in the standings, and a nought there
+		// would read as a bad matchday rather than as no matchday at all.
+		row, _ := value.(map[string]any)
+		points := asFloat(row["points"])
+		if !truthy(row["reported"]) {
+			return `<span class="muted">sin puntos</span>`, "-1"
+		}
+		return fmt.Sprintf(`<b>%d</b>`, int64(number(points))), sortKey(points)
+
+	case "waiting":
+		// Nobody left is the most decisive thing a row can say, so it says it in words: his
+		// afternoon is over whatever the rest of the league still has to play.
+		row, _ := value.(map[string]any)
+		waiting := int(number(row["waiting"]))
+		if waiting == 0 {
+			return `<span class="pill-neutral">cerrado</span>`, "0"
+		}
+		return fmt.Sprintf(`%d`, waiting), fmt.Sprintf("%d", waiting)
+
+	case "projection":
+		// The number and, when it disagrees with the order the table is sorted in, the seat it
+		// would end in. That disagreement is the whole reason the column exists.
+		row, _ := value.(map[string]any)
+		projection := asFloat(row["projection"])
+		seat := ""
+		if now, then := int(number(row["points_rank"])), int(number(row["projection_rank"])); then != now {
+			class, arrow := "up", "↑"
+			if then > now {
+				class, arrow = "down", "↓"
+			}
+			seat = fmt.Sprintf(` <span class="seat-%s">%s %dº</span>`, class, arrow, then)
+		}
+		if truthy(row["done"]) {
+			// Nothing left to add: the projection is the result, and repeating it as a forecast
+			// would invent a doubt that is not there.
+			return fmt.Sprintf(`%s <span class="muted">final</span>%s`,
+				Num(projection, 1), seat), sortKey(projection)
+		}
+		return Num(projection, 1) + seat, sortKey(projection)
+
 	case "holes":
 		// Zero holes is the good case and by far the common one, so it says "once completo"
 		// rather than printing a nought that reads like a missing number. A hole is a slot
@@ -2436,6 +2507,8 @@ func CellIn(value any, kind string, section string) (string, string) {
 		return DivergingBar(amount, 12.0), sortKey(amount)
 	case "num":
 		return Esc(Num(amount, 2)), sortKey(amount)
+	case "num1":
+		return Esc(Num(amount, 1)), sortKey(amount)
 	case "mag":
 		return MagnitudeBar(amount, 1.0, 2), sortKey(amount)
 	case "int":

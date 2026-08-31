@@ -84,16 +84,20 @@ func TestWeekIsTheNextMatchdayStillToBePlayed(t *testing.T) {
 	if got := Week(world(), when); got != 3 {
 		t.Errorf("Week = %d, want 3", got)
 	}
-	// Mid-matchday: one game of 3 gone, one still to come. It is still matchday 3.
+	// Mid-matchday: one game of 3 gone, one still to come. That one is not this question any
+	// more, because half its points are already real and the live board reads them; the forecast
+	// moves on to the first matchday nobody has played.
 	live := world()
 	live["schedule"] = []any{
 		fixtureRow(3, "1", "2", when.Add(-2*time.Hour)),
 		fixtureRow(3, "3", "4", when.Add(2*time.Hour)),
+		fixtureRow(4, "1", "3", when.Add(7*24*time.Hour)),
+		fixtureRow(4, "2", "4", when.Add(7*24*time.Hour)),
 	}
-	if got := Week(live, when); got != 3 {
-		t.Errorf("con la jornada en juego Week = %d, want 3", got)
+	if got := Week(live, when); got != 4 {
+		t.Errorf("con la J3 en juego Week = %d, want 4", got)
 	}
-	// Nothing left ahead: fall back to what the API calls the next one.
+	// Nothing untouched in the calendar at all: fall back to what the API calls the next one.
 	over := world()
 	over["schedule"] = []any{fixtureRow(3, "1", "2", when.Add(-2*time.Hour))}
 	if got := Week(over, when); got != 4 {
