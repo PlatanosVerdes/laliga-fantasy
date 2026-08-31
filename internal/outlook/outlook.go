@@ -86,19 +86,36 @@ type match struct {
 	home     bool
 }
 
-// Week is the next matchday still to be decided: the earliest one with a kick-off ahead of now.
+// Week is the earliest matchday no ball of which has been kicked yet.
 //
-// Neither of the two numbers the API offers answers this. weekNumber is still called the
-// current matchday for hours after the last ball of it was kicked, and nextWeek is the one
-// after that. The fixture list is the only thing that knows, so the fixture list decides.
+// Neither of the two numbers the API offers answers this. weekNumber is still called the current
+// matchday for hours after the last ball of it was kicked, and nextWeek is the one after that. The
+// fixture list is the only thing that knows, so the fixture list decides.
+//
+// A matchday already under way is deliberately not this one, even though it still has matches to
+// come. Its points are half real by then, and a forecast that answers with expected points while
+// forty-eight actual ones are already on the board is answering worse than the scoreboard. The
+// live matchday belongs to the board that reads the game's own figures; this looks at the first
+// one nobody has played yet.
 func Week(universe Row, now time.Time) int {
-	best := 0
+	ahead, started := map[int]bool{}, map[int]bool{}
 	for _, entry := range calendar(universe) {
-		if !entry.dated || !entry.kickoff.After(now) {
+		if !entry.dated {
 			continue
 		}
-		if best == 0 || entry.week < best {
-			best = entry.week
+		if entry.kickoff.After(now) {
+			ahead[entry.week] = true
+		} else {
+			started[entry.week] = true
+		}
+	}
+	best := 0
+	for week := range ahead {
+		if started[week] {
+			continue
+		}
+		if best == 0 || week < best {
+			best = week
 		}
 	}
 	if best > 0 {

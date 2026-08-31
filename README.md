@@ -235,8 +235,10 @@ the paragraph that explained them: a finished matchday is a result.
 ### Who looks worst next matchday
 
 The cash table says who is rich; it cannot say who is about to have a bad weekend. So the league
-is also read forward: one row per manager in the **Rivales** tab, ranked by the points each
-squad can be expected to score on the next matchday still to be played:
+is also read forward: one row per manager in the **Rivales** tab, ranked by the points each squad
+can be expected to score on the first matchday nobody has played yet. Deliberately not the one
+under way, however many matches it still has to come: half its points are real by then, and the
+section above reads those.
 
 ```
 eleven = the best legal eleven, by expected points, of everything he owns
