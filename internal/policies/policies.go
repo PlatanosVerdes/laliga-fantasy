@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
@@ -43,6 +44,48 @@ const GoodOverValue = 1.02
 // Squad rules: eleven legal starters need a keeper, three defenders and three midfielders.
 // Kept for what reads it from outside; what a sale is judged against is eleven.Room.
 var MinPerPosition = map[int]int{1: 1, 2: 3, 3: 3, 4: 1}
+
+// ListingGrace is how long past its own expiry a listing is still believed. A second, only so
+// that an advert expiring this very instant is not called dead a moment early.
+const ListingGrace = time.Second
+
+// LiveListing is the player's listing as it stands right now, and nothing at all once it has
+// expired.
+//
+// The feed keeps returning a listing after its own expiration date, until the game's daily
+// rotation clears it, and for those hours the player is simply not on sale however loudly the
+// market list says he is. The rule used to live in the serve loop, which meant only the half of
+// the code that *acts* could see it: the page read the raw feed and said "ya listado a 5.437.025"
+// about a player who was not in the market at all, while the engine was already trying to list
+// him again. One rule in one place, so the page and the engine cannot disagree about something
+// you can go and check in the app.
+//
+// A listing with no date is believed: no date is missing information, not an expired advert.
+func LiveListing(player Row, now time.Time) Row {
+	listing := mapOf(player["market"])
+	if listing == nil {
+		return nil
+	}
+	expires := text(listing["expires"])
+	if expires == "" {
+		return listing
+	}
+	when, err := time.Parse(time.RFC3339, expires)
+	if err != nil || now.Before(when.Add(ListingGrace)) {
+		return listing
+	}
+	return nil
+}
+
+// clock is a timestamp the way these reasons are read: the day and the hour, in the server's
+// own timezone, which is what somebody compares against the app.
+func clock(stamp string) string {
+	when, err := time.Parse(time.RFC3339, stamp)
+	if err != nil {
+		return stamp
+	}
+	return when.Local().Format("02/01 15:04")
+}
 
 func Load() (map[string]Policy, error) {
 	body, err := os.ReadFile(config.PolicyFile)
@@ -121,7 +164,10 @@ func SquadRoom(players []Row, positionID int) int {
 // Plan is what the standing instructions would do right now, without doing it. Returned
 // whether or not writes are enabled, because the plan is the useful part even when nothing
 // executes.
-func Plan(players []Row, policies map[string]Policy) []Row {
+//
+// `now` is a parameter rather than a clock read inside, because whether a player is listed is a
+// question about an instant: the listing the feed hands over may already have expired.
+func Plan(players []Row, policies map[string]Policy, now time.Time) []Row {
 	actions := []Row{}
 	// The squad the next sale is judged against, not the one this pass started with. A cycle
 	// may perform three operations, and with every sale measured against the same untouched
@@ -150,7 +196,9 @@ func Plan(players []Row, policies map[string]Policy) []Row {
 		if policy.MinPrice != nil && *policy.MinPrice != 0 {
 			floor = *policy.MinPrice
 		}
-		listing := mapOf(player["market"])
+		// The advert as it stands now, not as the last read of the feed remembers it.
+		advertised := mapOf(player["market"])
+		listing := LiveListing(player, now)
 		offers := rowsOf(player["offers"])
 		var best Row
 		if len(offers) > 0 {
@@ -206,18 +254,30 @@ func Plan(players []Row, policies map[string]Policy) []Row {
 
 		if listing == nil {
 			price := int64(math.Max(floor, value))
+			why := fmt.Sprintf("no esta en el mercado; lo listo a %s", money(price))
+			// An advert that ran out and one that never existed both need listing, but they are
+			// not the same news: the feed still reports the expired one, so saying which it is
+			// is what stops the page and the app from looking like they disagree.
+			if stale := text(advertised["expires"]); stale != "" {
+				why = fmt.Sprintf("su anuncio caduco el %s; lo vuelvo a listar a %s",
+					clock(stale), money(price))
+			}
 			actions = append(actions, Row{
 				"player_id": text(player["id"]), "name": player["name"],
 				// The API lists by squad slot, not by player: without it the call travels with
 				// playerId "" and comes back 400.
 				"player_team_id": player["player_team_id"],
-				"action": "poner_en_venta", "amount": price,
-				"why": fmt.Sprintf("no esta en el mercado; lo listo a %s", money(price))})
+				"action": "poner_en_venta", "amount": price, "why": why})
 			continue
 		}
 
 		listedAt := int64(number(listing["min_bid"]))
-		why := fmt.Sprintf("ya listado a %s", money(listedAt))
+		why := fmt.Sprintf("listado a %s", money(listedAt))
+		// Until when, because "ya listado" is a claim about the market you cannot check without
+		// a date on it, and it is the claim that turned out to be wrong.
+		if until := text(listing["expires"]); until != "" {
+			why += fmt.Sprintf(" hasta el %s", clock(until))
+		}
 		if best != nil {
 			why += fmt.Sprintf(", mejor oferta %s", money(int64(bestAmount)))
 		} else {

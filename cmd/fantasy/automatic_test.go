@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
@@ -17,7 +18,7 @@ func TestAutomaticListingCarriesTheSlotAndThePrice(t *testing.T) {
 	}}
 	armed := map[string]policies.Policy{"1300": {AlwaysList: true}}
 
-	plan := policies.Plan(rows, armed)
+	plan := policies.Plan(rows, armed, time.Now())
 	if len(plan) != 1 || text(plan[0]["action"]) != "poner_en_venta" {
 		t.Fatalf("el plan deberia ponerlo en venta, dice %v", plan)
 	}
