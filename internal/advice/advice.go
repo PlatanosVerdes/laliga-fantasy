@@ -450,9 +450,10 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 		"my_clauses_soon":     head(soon, limit),
 		"upcoming_raids":      head(upcoming, limit),
 		"starred":             starred,
-		// How the next matchday looks for everybody, which is the one question about the
-		// league the money tables cannot answer.
-		"outlook": outlook.League(universe, time.Now()),
+		// The two halves of the same question about the league, which the money tables cannot
+		// answer either way: how the matchday in play is going, and how the next one looks.
+		"matchday": Matchday(universe, time.Now()),
+		"outlook":  outlook.League(universe, time.Now()),
 	}
 }
 

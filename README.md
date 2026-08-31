@@ -206,6 +206,32 @@ has never traded lands exactly on the base, and squad value plus cash comes out 
 That turns the clause-risk section from "this clause looks low" into "these three managers can
 pay it right now, and the richest is X".
 
+### The matchday in play
+
+The **Partidos** tab opens with the matchday as it stands, because the number everybody quotes at
+each other on a Sunday is the league's live table and halfway through a matchday it says the wrong
+thing: a manager two points behind you with six men still to kick off is not behind you.
+
+So every row carries what is still to come beside what is already scored, and the seat each one
+would end in rides along:
+
+* **Puntos** is the game's own `livePoints` from the standings, not a reconstruction. Verified
+  against the per-manager totals the week-scoped lineup route serves: all thirteen agree to the
+  point.
+* **Por sumar** is the xPts of that manager's players whose match has not kicked off. Pending is
+  judged by kick-off and never by the match state, because the calendar is cached for hours and
+  its states go stale while a kick-off time cannot.
+* **Acabaria en** is the two added together, with an arrow when it disagrees with the order the
+  table is sorted in. On a real matchday the manager leading on points was heading for fourth and
+  the one lying fifth was heading for first, which is the entire reason the column is there.
+
+It is a ceiling rather than a forecast, and says so on the page: a rival's saved eleven is not
+readable without a request per manager, so what is counted is every player of his still to kick
+off, capped at eleven because only eleven score. The injured and the suspended are left out.
+
+Once the last ball is kicked the four forward-looking columns hold nothing, so they go, along with
+the paragraph that explained them: a finished matchday is a result.
+
 ### Who looks worst next matchday
 
 The cash table says who is rich; it cannot say who is about to have a bad weekend. So the league

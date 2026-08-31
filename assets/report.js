@@ -9,7 +9,11 @@ function wireTables(root=document){
     table.querySelectorAll('th').forEach((th,index)=>{
       th.addEventListener('click',()=>{
         const body=table.tBodies[0], rows=[...body.rows];
-        const numeric=['money','pct','num','int','pct_plain','spark','verdict','mag','ideal','hours','ratio'].includes(th.dataset.kind);
+        // Los de la jornada tambien: la clave de orden que traen es un numero, y sin estar
+        // aqui se ordenarian como texto (48 delante de 9).
+        const numeric=['money','pct','num','num1','int','pct_plain','spark','verdict','mag',
+                       'ideal','hours','ratio','live_points','waiting','projection']
+                      .includes(th.dataset.kind);
         const desc=!th.classList.contains('sorted-desc');
         table.querySelectorAll('th').forEach(h=>h.classList.remove('sorted-asc','sorted-desc'));
         th.classList.add(desc?'sorted-desc':'sorted-asc');
@@ -1885,7 +1889,7 @@ const TABS=[
   {id:'misofertas', label:'Mis ofertas', sections:['mispujas','ofertas','resueltas']},
   {id:'clausulas', label:'Cláusulas', sections:['programados','calendario','vencimientos','oportunidades','riesgo','clausulas']},
   {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
-  {id:'partidos', label:'Partidos', sections:['partidos']},
+  {id:'partidos', label:'Partidos', sections:['jornada','partidos']},
   // Lo de los demas en su sitio: sus plantillas enteras y lo que pueden pagar por las tuyas.
   {id:'rivales', label:'Rivales', sections:['rivales']},
   {id:'liga', label:'Liga', sections:['movimientos','normas']},
