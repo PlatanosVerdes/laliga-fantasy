@@ -149,6 +149,21 @@ func rankPercentiles(values map[string]float64) map[string]float64 {
 	return out
 }
 
+// Availability is the odds of starting turned into a multiplier on the weekly baseline, and 1
+// when nobody published any: `base` already averages over the weeks he missed, so this corrects
+// for a changed role, never for absences twice.
+//
+// Exported because the fixture forecast has to measure every player against the same matchday,
+// which means rebuilding his points with a different fixture, and a formula copied to do that is
+// a formula that drifts.
+func Availability(startProbability *float64) float64 {
+	if startProbability == nil {
+		return 1.0
+	}
+	availability := (*startProbability / 100.0) / BaselineStartProbability
+	return math.Max(AvailabilityFloor, math.Min(AvailabilityCeiling, availability))
+}
+
 // FixtureFactor: a harder opponent and an away trip both cost expected points.
 func FixtureFactor(opponentStrength *float64, home *bool) float64 {
 	factor := 1.0

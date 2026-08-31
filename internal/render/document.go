@@ -1046,6 +1046,8 @@ func (d Document) clauseSections() []string {
 	out = append(out, Section("Cláusulas de rivales que se abren", table, note,
 		fmt.Sprintf("%d", len(upcoming)), "oportunidades"))
 
+	out = append(out, d.outlookSection())
+
 	if rivals := rows(d.Advice["rivals"]); len(rivals) > 0 {
 		model := mapOf(d.Advice["cash_model"])
 		note := "El API solo publica el saldo de tu equipo, y la cifra de la clasificacion es " +
@@ -1075,6 +1077,56 @@ func (d Document) clauseSections() []string {
 	// One section per rival, after the table that compares them all.
 	out = append(out, d.rivalSections(rows(d.Universe["players"]))...)
 	return out
+}
+
+// outlookSection is who the next matchday treats worst, which is the only question about the
+// league that the money tables cannot answer.
+//
+// The note is long because the number is a forecast and a forecast has to say what it assumes.
+// Two assumptions matter. Nobody publishes what a rival will actually line up, so this is only
+// the best eleven he *could* line up: he can do worse, never better. And there is no such thing
+// as a published probability of getting injured; what exists is who is out, futbolfantasy's
+// verdict for this exact matchday, and the odds of starting, which is where minutes risk lives.
+func (d Document) outlookSection() string {
+	forecast := rows(d.Advice["outlook"])
+	if len(forecast) == 0 {
+		return ""
+	}
+	week := int(number(forecast[0]["week"]))
+
+	// Whose week is worst is not the same question as who is worst, and both are worth one
+	// line: the answer changes every matchday and the ranking mostly does not.
+	damaged := forecast[0]
+	for _, row := range forecast {
+		if number(row["lost"]) > number(damaged["lost"]) {
+			damaged = row
+		}
+	}
+	extra := ""
+	if lost := number(damaged["lost"]); lost >= 1 &&
+		text(damaged["team_id"]) != text(forecast[0]["team_id"]) {
+		extra = fmt.Sprintf(" El que <strong>mas se deja respecto a si mismo</strong> es otro: "+
+			"%s, %.1f xPts por debajo de su propio once sano.",
+			Esc(text(damaged["manager"])), lost)
+	}
+
+	note := fmt.Sprintf("Los puntos que cabe esperar de cada plantilla en la <strong>J%d</strong>, "+
+		"y de ahi los tres que peor lo tienen. No es la suma de la plantilla: es el "+
+		"<strong>mejor once legal</strong> que cada uno podria alinear, porque solo puntuan "+
+		"once y solo en una formacion que exista. Cada jugador entra con sus puntos por "+
+		"jornada, su probabilidad de ser titular, su rival de esa jornada y si juega en casa "+
+		"o fuera. La fuerza de cada club es el percentil de valor de plantilla y puntos de la "+
+		"temporada pasada que ya usa todo el modelo, asi que un Barça y un Girona no cuentan "+
+		"igual. Las bajas salen del estado del API y, por encima, del veredicto de "+
+		"futbolfantasy <em>para esta jornada exacta</em> («baja confirmada», «duda», "+
+		"«disponible»), que es mas fresco. <strong>Con todos sanos</strong> es el mismo once "+
+		"sin ninguna baja, asi que la diferencia separa al que tiene una plantilla mala del "+
+		"que tiene una mala semana.%s Lo que esto no sabe: lo que cada uno alineara de verdad, "+
+		"asi que es su techo (puede hacerlo peor, no mejor), y quien se va a lesionar, que eso "+
+		"no lo publica nadie.", week, extra)
+
+	return SectionIn("rivales", fmt.Sprintf("Quien pinta peor la J%d", week),
+		Outlook(forecast), note, fmt.Sprintf("%d managers", len(forecast)), "pinta")
 }
 
 // rivalSections is one section per rival, each with his squad whole. Grouped by manager and
