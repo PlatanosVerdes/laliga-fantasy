@@ -2,6 +2,7 @@ package writes
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -286,5 +287,37 @@ func TestRaiseClauseCallCarriesTheFactor(t *testing.T) {
 	}
 	if call.Body["valueToIncrease"] != int64(1_000) {
 		t.Errorf("valueToIncrease = %v, want what you pay", call.Body["valueToIncrease"])
+	}
+}
+
+// The shield is addressed by the slot, like a clause: sending the player's own id comes back
+// 404 and looks like the route is wrong.
+func TestShieldGoesByTheSlot(t *testing.T) {
+	call, err := Build("shield_player", Args{LeagueID: "L", PlayerTeamID: "slot"})
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if call.Method != http.MethodPut {
+		t.Errorf("method = %s, want PUT: the other verbs answer 405", call.Method)
+	}
+	if call.Body["playerId"] != "slot" {
+		t.Errorf("playerId = %v, want the slot id", call.Body["playerId"])
+	}
+	if call.Body["rewardedAd"] != 1 || call.Body["rewardedAdType"] != "Blindaje" {
+		t.Errorf("el anuncio va como bandera: %v", call.Body)
+	}
+}
+
+// A live shield cannot be bought over: the advert would be spent for nothing.
+func TestShieldRefusedWhileOneHolds(t *testing.T) {
+	g := guard(50_000_000)
+	_, err := g.Prepare("shield_player", Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "slot"},
+		Player{Name: "M. Dituro", Shielded: true,
+			ShieldedUntil: "2026-09-05T17:46:36+02:00"}, true)
+	if err == nil {
+		t.Fatal("un blindaje vivo tiene que rechazarse")
+	}
+	if !strings.Contains(err.Error(), "05/09 17:46") {
+		t.Errorf("la negativa tiene que decir hasta cuando: %v", err)
 	}
 }

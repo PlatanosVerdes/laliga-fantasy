@@ -51,6 +51,7 @@ func (s *Server) manager(writer http.ResponseWriter, request *http.Request) {
 			"clause": player["clause"], "clause_locked": player["clause_locked"],
 			"clause_locked_until": player["clause_locked_until"],
 			"shielded":            player["shielded"],
+			"shielded_until":      player["shielded_until"],
 			"sale_locked":         player["sale_locked"], "hold_until": player["hold_until"],
 			"market": listing, "score": player["score"],
 		})

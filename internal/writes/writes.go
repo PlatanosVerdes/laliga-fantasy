@@ -162,6 +162,16 @@ var Operations = map[string]operation{
 				"teamId": a.TeamID}}
 	}, []string{"money", "reward"}},
 
+	// The shield: 24h in which nobody can pay his clause. Found by verb rather than by path,
+	// because POST, PATCH and DELETE answer 405 here and only PUT reaches the handler. The id
+	// is the slot's, like a clause rise, and the advert is a flag the API takes on trust.
+	"shield_player": {"blindar jugador", func(a Args) Call {
+		return Call{http.MethodPut,
+			fmt.Sprintf("%s/league/%s/shield/player", config.CMP, a.LeagueID),
+			map[string]any{"playerId": a.PlayerTeamID, "rewardedAdType": "Blindaje",
+				"rewardedAd": 1}}
+	}, []string{"squad"}},
+
 	"pay_clause": {"pagar clausula", func(a Args) Call {
 		return Call{http.MethodPost,
 			fmt.Sprintf("%s/league/%s/buyout/%s/pay", config.CMP, a.LeagueID, a.PlayerTeamID),
@@ -326,6 +336,9 @@ type Player struct {
 	// an explicit no is treated as one.
 	DirectOffer *bool
 	Owner       string
+	// Shielded, and until when: a second shield over a live one spends the advert for nothing.
+	Shielded      bool
+	ShieldedUntil string
 }
 
 // Summary is what a person is asked to confirm.
@@ -500,13 +513,22 @@ func check(name string, args Args, who Player, cash *int64) ([]string, error) {
 	// A listing and a clause are addressed by the squad slot, not by the player: an empty one
 	// reaches the API as playerId "" and comes back as 400 "Player not found".
 	switch name {
-	case "sell_to_market", "pay_clause", "raise_clause":
+	case "sell_to_market", "pay_clause", "raise_clause", "shield_player":
 		if args.PlayerTeamID == "" {
 			return nil, errors.New("no se cual es su ficha en la plantilla: recarga la pagina")
 		}
 	}
 
 	switch name {
+	case "shield_player":
+		if who.Shielded {
+			until := who.ShieldedUntil
+			if len(until) >= 16 {
+				until = until[8:10] + "/" + until[5:7] + " " + until[11:16]
+			}
+			return nil, fmt.Errorf("ya esta blindado hasta el %s: el anuncio se gastaria "+
+				"sin darte nada", until)
+		}
 	case "sell_to_market":
 		if args.Amount <= 0 {
 			return nil, errors.New("el precio de venta tiene que ser positivo")

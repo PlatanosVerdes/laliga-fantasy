@@ -2198,6 +2198,10 @@ func CellIn(value any, kind string, section string) (string, string) {
 		row, _ := value.(map[string]any)
 		switch {
 		case truthy(row["shielded"]):
+			if until := text(row["shielded_until"]); until != "" {
+				return `<span class="chip chip-warn">blindado <span data-deadline="` +
+					Esc(until) + `">…</span></span>`, until
+			}
 			return `<span class="chip chip-warn">blindado</span>`, "zz"
 		case truthy(row["clause_locked"]):
 			if until := text(row["clause_locked_until"]); until != "" {

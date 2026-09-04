@@ -392,7 +392,7 @@ const DONE_LABEL={bid:'Puja enviada',sell_to_market:'Puesto en venta',
   withdraw:'Retirado del mercado',direct_offer:'Oferta enviada',
   pay_clause:'Clausula pagada',raise_clause:'Clausula subida',
   cancel_bid:'Puja retirada',modify_bid:'Puja cambiada',buy_offer:'Oferta enviada',
-  cancel_offer:'Oferta retirada'};
+  cancel_offer:'Oferta retirada',shield_player:'Blindado 24h'};
 const AMOUNT_LABEL={bid:'Pujas',modify_bid:'Nueva puja',buy_offer:'Ofreces',
   sell_to_market:'Precio de venta',
   accept_offer:'Cobras',direct_offer:'Ofreces',pay_clause:'Pagas',
@@ -401,7 +401,8 @@ const AMOUNT_LABEL={bid:'Pujas',modify_bid:'Nueva puja',buy_offer:'Ofreces',
 const OP_LABELS={accept_offer:'Aceptar oferta por',decline_offer:'Rechazar oferta por',
                  withdraw:'Retirar del mercado a',sell_to_market:'Poner en venta a',
                  cancel_offer:'Retirar tu oferta por',cancel_raid:'Cancelar el clausulazo de',
-                 drop_always:'Quitar de siempre-en-mercado a'};
+                 drop_always:'Quitar de siempre-en-mercado a',
+                 shield_player:'Blindar 24h a'};
 
 function wireOps(root=document){
   root.querySelectorAll('button.op').forEach(button=>{
@@ -1108,7 +1109,10 @@ function managerRow(p){
   const listing=p.market||{};
   const chips=[];
   if(listing.market_id) chips.push(`<span class="chip">en venta ${fmt(listing.min_bid)}</span>`);
-  if(p.shielded) chips.push('<span class="chip chip-warn">blindado</span>');
+  if(p.shielded) chips.push(p.shielded_until
+    ? `<span class="chip chip-warn">blindado <span
+        data-deadline="${p.shielded_until}">${leftUntil(p.shielded_until)}</span></span>`
+    : '<span class="chip chip-warn">blindado</span>');
   else if(p.clause_locked&&p.clause_locked_until)
     chips.push(`<span class="chip chip-warn">clausula en <span data-deadline="${p.clause_locked_until}">…</span></span>`);
   else if(p.clause) chips.push('<span class="chip chip-good">clausula pagable</span>');
@@ -1191,6 +1195,9 @@ async function openDetail(playerId){
         <span style="color:var(--muted);font-weight:400"> · ${String(p.clause_locked_until).slice(0,10)}</span></dd></div>`:''}
       ${!p.clause_locked&&p.clause&&!p.is_mine?`<div><dt>Clausula</dt><dd
         style="color:var(--pole-pos)">pagable ya</dd></div>`:''}
+      ${p.shielded&&p.shielded_until?`<div><dt>Blindaje acaba en</dt>
+        <dd><span data-deadline="${p.shielded_until}">${leftUntil(p.shielded_until)}</span>
+        <span style="color:var(--muted);font-weight:400"> · ${String(p.shielded_until).slice(11,16)}</span></dd></div>`:''}
       ${p.bought_at?`<div><dt>Fichado</dt><dd>${since(p.bought_at)}
         <span style="color:var(--muted);font-weight:400"> · ${String(p.bought_at).slice(0,10)}</span></dd></div>`:''}
       ${p.sale_locked&&p.hold_until?`<div><dt>${p.is_mine?'Puedes venderlo en':'Puede venderlo en'}</dt>
@@ -1316,7 +1323,8 @@ function alwaysPanel(a){
 }
 
 function actionButton(a){
-  if(a.kind==='note') return `<p class="drawer-note">${a.label}</p>`;
+  if(a.kind==='note') return `<p class="drawer-note">${a.label}${a.deadline
+    ? ` · quedan <span data-deadline="${a.deadline}">${leftUntil(a.deadline)}</span>` : ''}</p>`;
   const cls=a.op==='decline_offer'||a.op==='withdraw' ? 'danger-full'
           : (a.op==='always'||a.op==='raid') ? (a.on?'on':'') : 'primary';
   const off=a.blocked?' disabled':'';
@@ -1744,7 +1752,10 @@ function cmpChips(p){
   const listing=p.market||{};
   const chips=[];
   if(listing.market_id) chips.push(`<span class="chip">en venta ${fmt(listing.min_bid)}</span>`);
-  if(p.shielded) chips.push('<span class="chip chip-warn">blindado</span>');
+  if(p.shielded) chips.push(p.shielded_until
+    ? `<span class="chip chip-warn">blindado <span
+        data-deadline="${p.shielded_until}">${leftUntil(p.shielded_until)}</span></span>`
+    : '<span class="chip chip-warn">blindado</span>');
   else if(p.clause_locked&&p.clause_locked_until)
     chips.push(`<span class="chip chip-warn">clausula en <span
       data-deadline="${p.clause_locked_until}">…</span></span>`);
@@ -2027,6 +2038,7 @@ const OPERATION_LABELS={sell_to_market:'Puesto en venta',accept_offer:'Oferta ac
   modify_bid:'Puja modificada',cancel_bid:'Puja cancelada',direct_offer:'Oferta directa',
   pay_clause:'Clausulazo pagado',raise_clause:'Clausula subida',
   save_lineup:'Alineacion guardada',policy:'Instruccion ejecutada',
+  shield_player:'Jugador blindado',
   traspaso:'Se ha movido la liga',mercado:'Cambios en el mercado',
   partido:'Partido en juego',
   vencimiento:'Ha vencido algo',refresco:'Actualizado'};

@@ -10,7 +10,8 @@ It merges two sources:
 | `fantasy-api.llt-services.com` (official API) | 733 players with price, status, last-season points, live points; teams; calendar; daily market-value history; **your league, squad, cash, rivals' squads and clauses** | Bearer, league data only |
 | `futbolfantasy.com` (HTML scrape) | value deltas over 1/2/3/7/14/30 days, trend, acceleration, next fixture, **odds of starting it**, "puja máxima rentable", per-matchday points and injury history | none |
 
-It can also act: bid, sell, accept an offer, pay a clause, save a lineup. Nothing moves
+It can also act: bid, sell, accept an offer, pay a clause, shield one of your own players,
+save a lineup. Nothing moves
 without confirming it first — every operation is prepared, shown with its amount and what it
 leaves in the bank, and only then confirmed with a single-use token. `--read-only` refuses all
 of them.

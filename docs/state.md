@@ -94,8 +94,9 @@ twelve API calls on every rebuild for something the account cannot use:
 ## What is missing
 
 * **Writes not yet exercised live**: `modify_bid`, `cancel_bid`, `accept_offer`,
-  `decline_offer`, `pay_clause`, `raise_clause` and `save_lineup` are implemented and checked
-  through `prepare` + `dry_run`, but only `bid` has actually been executed.
+  `decline_offer`, `pay_clause`, `raise_clause`, `shield_player` and `save_lineup` are
+  implemented and checked through `prepare` + `dry_run`, but only `bid` has actually been
+  executed.
 * **Tests**: only `engine` and `writes` have any. The swap planner (`advice/swaps.go`) and the
   renderer have none, and the planner is the part most likely to change.
 * **The swap plan** only proposes one-for-one, same-position moves. Selling two to buy one is

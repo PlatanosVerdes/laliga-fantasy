@@ -30,8 +30,8 @@ hang off `leagues` plural. The team id is a string in the body and a number in t
 response.
 
 The advert is a flag. The API takes `rewardedAd: 1` and attaches no proof to it, exactly like
-the shield feature does (`rewardedAdType: "Blindaje"`). Watching the video is the app's
-business, not the server's.
+the shield does (`rewardedAdType: "Blindaje"`, see [shield.md](shield.md)). Watching the video
+is the app's business, not the server's.
 
 `check-daily-reward` answering 400 instead of a counter of one is the useful part: the absence
 of a body is the answer, and it means the claim cannot be attempted twice by accident. That

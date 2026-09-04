@@ -294,6 +294,10 @@ func (s *Server) prepare(writer http.ResponseWriter, request *http.Request) {
 		PlayerID:     text(body["player_id"]),
 		PlayerTeamID: text(body["player_team_id"]),
 	}
+	// The confirm buttons carry the player id and nothing else, so the slot is resolved here.
+	if args.PlayerTeamID == "" {
+		args.PlayerTeamID = s.slotFor(args.PlayerID)
+	}
 	summary, err := s.opts.Guard.Prepare(operation, args, s.playerFor(text(body["player_id"])),
 		s.opts.AllowWrites)
 	if err != nil {
@@ -396,7 +400,11 @@ func (s *Server) playerFor(id string) writes.Player {
 			continue
 		}
 		who := writes.Player{Name: player.Name, Value: player.Value,
-			SaleLocked: player.SaleLocked, Available: player.Available}
+			SaleLocked: player.SaleLocked, Available: player.Available,
+			Shielded: player.Shielded}
+		if player.ShieldUntil != nil {
+			who.ShieldedUntil = *player.ShieldUntil
+		}
 		if player.HoldUntil != nil {
 			who.HoldUntil = *player.HoldUntil
 		}
@@ -434,6 +442,21 @@ func (s *Server) playerFor(id string) writes.Player {
 		return who
 	}
 	return writes.Player{}
+}
+
+// slotFor is the squad slot a player occupies, which is not his own id: the API addresses a
+// clause or a shield by the slot.
+func (s *Server) slotFor(id string) string {
+	universe := s.state.Universe()
+	if universe == nil || id == "" {
+		return ""
+	}
+	for _, player := range universe.Players {
+		if player.ID == id && player.PlayerTeamID != nil {
+			return *player.PlayerTeamID
+		}
+	}
+	return ""
 }
 
 func amountOf(value any) (float64, bool) {

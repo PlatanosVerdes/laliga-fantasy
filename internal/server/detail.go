@@ -190,6 +190,18 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 			"safe_margin":    advice.SafeMargin,
 			"suggested":      raiseToSafe(number(player["value"]), number(player["clause"]))})
 
+		// The shield lasts 24h and lapses on its own: while it holds there is nothing to press,
+		// and the button comes back by itself when it runs out.
+		if truthy(player["shielded"]) {
+			actions = append(actions, map[string]any{"op": "note", "kind": "note",
+				"label":    "Blindado: nadie puede pagar su clausula",
+				"deadline": player["shielded_until"]})
+		} else {
+			actions = append(actions, map[string]any{"op": "shield_player",
+				"label": "Blindar 24h", "kind": "confirm",
+				"player_team_id": player["player_team_id"]})
+		}
+
 	case text(listing["kind"]) == "libre":
 		suggested := number(player["ideal_bid"])
 		if suggested == 0 {
