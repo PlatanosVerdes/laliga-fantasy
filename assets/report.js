@@ -444,38 +444,47 @@ function wireOps(root=document){
         }catch(err){ alert('No he podido cancelarlo: '+err.message); }
         return;
       }
-      pending={operation:d.op, market_id:d.opMarket, offer_id:d.opOffer,
-               player_id:d.opPlayer, name:d.opName, amount:+d.opAmount||null};
-      modal.hidden=false;
-      modal.querySelector('.bid-who').textContent=d.opName;
-      modal.querySelector('.bid-action').textContent=OP_LABELS[d.op]||'Confirmar';
-      modal.querySelector('.bid-drop').hidden=true;
-      modal.querySelector('.bid-error').textContent='';
-      modal.querySelector('.bid-summary').innerHTML='<p>Comprobando…</p>';
-      showStep(2,{confirmLabel:CONFIRM_LABEL[d.op]||'Aceptar'});
-      try{
-        const res=await fetch('/api/bid/prepare',{method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({operation:d.op,market_id:d.opMarket,offer_id:d.opOffer,
-                               player_id:d.opPlayer,amount:+d.opAmount||undefined})});
-        const data=await res.json();
-        if(!res.ok) throw new Error(data.error||res.status);
-        pending.token=data.token;
-        modal.querySelector('.bid-summary').innerHTML=
-          `<dl class="bid-dl">
-             <dt>Operacion</dt><dd>${data.label}</dd>
-             <dt>Jugador</dt><dd>${data.player_name||d.opName}</dd>
-             ${data.amount?`<dt>Importe</dt><dd><strong>${exact(data.amount)}</strong></dd>`:''}
-             <dt>Saldo</dt><dd>${exact(data.cash_before)}</dd>
-           </dl>` +
-          (data.warnings||[]).map(w=>`<p class="bid-warn-line">⚠ ${w}</p>`).join('');
-      }catch(err){
-        modal.querySelector('.bid-summary').innerHTML='';
-        modal.querySelector('.bid-error').textContent=err.message;
-        modal.querySelector('.bid-confirm').hidden=true;
-      }
+      confirmOp({op:d.op, name:d.opName, player_id:d.opPlayer, market_id:d.opMarket,
+                 offer_id:d.opOffer, amount:+d.opAmount||null});
     });
   });
+}
+
+// La confirmacion de dos pasos: el resumen que da el servidor, su token de un solo uso y el
+// boton final. Vive aparte porque la piden dos sitios, las tablas y el cajon, y el cajon no
+// tiene ningun boton de tabla del que colgarse.
+async function confirmOp(op){
+  const name=op.name||'';
+  pending={operation:op.op, market_id:op.market_id||'', offer_id:op.offer_id||'',
+           player_id:op.player_id, name, amount:op.amount||null};
+  modal.hidden=false;
+  modal.querySelector('.bid-who').textContent=name;
+  modal.querySelector('.bid-action').textContent=OP_LABELS[op.op]||'Confirmar';
+  modal.querySelector('.bid-drop').hidden=true;
+  modal.querySelector('.bid-error').textContent='';
+  modal.querySelector('.bid-summary').innerHTML='<p>Comprobando…</p>';
+  showStep(2,{confirmLabel:CONFIRM_LABEL[op.op]||'Aceptar'});
+  try{
+    const res=await fetch('/api/bid/prepare',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({operation:op.op, market_id:op.market_id, offer_id:op.offer_id,
+                           player_id:op.player_id, amount:op.amount||undefined})});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error||res.status);
+    pending.token=data.token;
+    modal.querySelector('.bid-summary').innerHTML=
+      `<dl class="bid-dl">
+         <dt>Operacion</dt><dd>${data.label}</dd>
+         <dt>Jugador</dt><dd>${data.player_name||name}</dd>
+         ${data.amount?`<dt>Importe</dt><dd><strong>${exact(data.amount)}</strong></dd>`:''}
+         <dt>Saldo</dt><dd>${exact(data.cash_before)}</dd>
+       </dl>` +
+      (data.warnings||[]).map(w=>`<p class="bid-warn-line">⚠ ${w}</p>`).join('');
+  }catch(err){
+    modal.querySelector('.bid-summary').innerHTML='';
+    modal.querySelector('.bid-error').textContent=err.message;
+    modal.querySelector('.bid-confirm').hidden=true;
+  }
 }
 
 
@@ -1394,7 +1403,7 @@ async function runAction(a,player){
     if(answer===null) return;
     if(/^\s*(ahora|ya|now)\s*$/i.test(answer)){
       closeDrawer();
-      fireOp({op:'shield_player',player_id:player.id},player);
+      confirmOp({op:'shield_player', name:player.name, player_id:player.id});
       return;
     }
     const at=stampFrom(answer,a.suggested);
@@ -1478,20 +1487,9 @@ async function runAction(a,player){
     modal.querySelector('.bid-error').textContent='';
     checkAmount();
   }else{
-    fireOp(a,player);
+    confirmOp({op:a.op, name:player.name, player_id:a.player_id||player.id,
+               market_id:a.market_id, offer_id:a.offer_id, amount:a.amount||null});
   }
-}
-
-// La confirmacion de dos pasos vive en los botones de las tablas, asi que una accion del cajon
-// se ejecuta prestandole uno: mismo camino, misma ventana, mismo token de un solo uso.
-function fireOp(a,player){
-  const button=document.createElement('button');
-  button.className='op'; button.dataset.op=a.op;
-  button.dataset.opMarket=a.market_id||''; button.dataset.opOffer=a.offer_id||'';
-  button.dataset.opPlayer=a.player_id||player.id; button.dataset.opName=player.name;
-  button.dataset.opAmount=a.amount||'';
-  document.body.appendChild(button); wireOps(document.body); button.click();
-  button.remove();
 }
 
 async function scheduleRaid(dataset){
