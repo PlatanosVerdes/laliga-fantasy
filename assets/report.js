@@ -1382,15 +1382,21 @@ async function runAction(a,player){
     if(res.ok) openDetail(player.id);
     return;
   }
-  if(a.op==='shield_at'){
+  if(a.op==='shield'){
     const suggested=a.suggested?stampText(a.suggested):'';
-    const answer=prompt('Blindaje programado para '+player.name+'.\n\n'
-      +'Dura 24h y caduca solo, asi que lo unico que decides es la hora. Mientras la jornada '
-      +'esta en marcha nadie puede pagar clausulas, y un blindaje gastado en esas horas no '
-      +'protege de nada.\n\n'
-      +(suggested?'Te sugiero '+suggested+', que es cuando reabre la ventana.\n\n':'')
-      +'Hora ("21:30" o "07/09 21:30"):', suggested);
+    const answer=prompt('Blindar a '+player.name+'.\n\n'
+      +'Dura 24h y caduca solo, asi que lo unico que se decide es cuando empiezan. Mientras la '
+      +'jornada esta en marcha nadie puede pagar clausulas, y un blindaje gastado en esas horas '
+      +'no protege de nada.\n\n'
+      +(suggested?'Te sugiero '+suggested+', que es cuando reabre la ventana.\n\n'
+                 :'La ventana esta abierta, asi que ahora mismo ya protege.\n\n')
+      +'Escribe "ahora", o una hora ("21:30" o "07/09 21:30"):', suggested||'ahora');
     if(answer===null) return;
+    if(/^\s*(ahora|ya|now)\s*$/i.test(answer)){
+      closeDrawer();
+      fireOp({op:'shield_player',player_id:player.id},player);
+      return;
+    }
     const at=stampFrom(answer,a.suggested);
     if(!at){ alert('No he entendido esa hora.'); return; }
     const res=await fetch('/api/shield',{method:'POST',
@@ -1472,14 +1478,20 @@ async function runAction(a,player){
     modal.querySelector('.bid-error').textContent='';
     checkAmount();
   }else{
-    const button=document.createElement('button');
-    button.className='op'; button.dataset.op=a.op;
-    button.dataset.opMarket=a.market_id||''; button.dataset.opOffer=a.offer_id||'';
-    button.dataset.opPlayer=a.player_id||player.id; button.dataset.opName=player.name;
-    button.dataset.opAmount=a.amount||'';
-    document.body.appendChild(button); wireOps(document.body); button.click();
-    button.remove();
+    fireOp(a,player);
   }
+}
+
+// La confirmacion de dos pasos vive en los botones de las tablas, asi que una accion del cajon
+// se ejecuta prestandole uno: mismo camino, misma ventana, mismo token de un solo uso.
+function fireOp(a,player){
+  const button=document.createElement('button');
+  button.className='op'; button.dataset.op=a.op;
+  button.dataset.opMarket=a.market_id||''; button.dataset.opOffer=a.offer_id||'';
+  button.dataset.opPlayer=a.player_id||player.id; button.dataset.opName=player.name;
+  button.dataset.opAmount=a.amount||'';
+  document.body.appendChild(button); wireOps(document.body); button.click();
+  button.remove();
 }
 
 async function scheduleRaid(dataset){
