@@ -111,7 +111,9 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 	id := text(player["id"])
 	actions := []map[string]any{}
 	policy := armed[id]
-	_, standing := armed[id]
+	// Having an entry is not being always-listed: a scheduled shield is an entry too, and
+	// reading the map instead of the flag turned the toggle on for a player nobody had listed.
+	standing := policy.AlwaysList
 
 	// The house rule decides what can even be offered: a button the league forbids is worse
 	// than no button, because it looks like the tool disagrees with the pact.
@@ -191,15 +193,38 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 			"suggested":      raiseToSafe(number(player["value"]), number(player["clause"]))})
 
 		// The shield lasts 24h and lapses on its own: while it holds there is nothing to press,
-		// and the button comes back by itself when it runs out.
-		if truthy(player["shielded"]) {
+		// and the button comes back by itself when it runs out. Scheduling it is the other half,
+		// because the 24h are only worth something during the hours a clause can be paid.
+		switch {
+		case truthy(player["shielded"]):
 			actions = append(actions, map[string]any{"op": "note", "kind": "note",
 				"label":    "Blindado: nadie puede pagar su clausula",
 				"deadline": player["shielded_until"]})
-		} else {
+		case policy.Shield:
+			label := "Blindaje programado"
+			if policy.ShieldAt != nil {
+				if when, err := time.Parse(time.RFC3339, *policy.ShieldAt); err == nil {
+					label += " para el " + when.Local().Format("02/01 a las 15:04")
+				}
+			}
+			actions = append(actions,
+				map[string]any{"op": "note", "kind": "note", "label": label,
+					"deadline": policy.ShieldAt},
+				map[string]any{"op": "cancel_shield", "kind": "prompt", "danger": true,
+					"label": "Cancelar el blindaje programado", "player_id": id})
+		default:
 			actions = append(actions, map[string]any{"op": "shield_player",
-				"label": "Blindar 24h", "kind": "confirm",
+				"label": "Blindar 24h ahora", "kind": "confirm",
 				"player_team_id": player["player_team_id"]})
+			// The hour to suggest: when clauses can be paid again, which is when the cover
+			// starts being worth its advert. Open right now means the moment itself.
+			suggested := ""
+			if window := s.state.ClauseWindow(time.Now()); !window.Open {
+				suggested = window.OpensAt
+			}
+			actions = append(actions, map[string]any{"op": "shield_at", "kind": "prompt",
+				"label": "Programar blindaje", "player_id": id,
+				"suggested": suggested})
 		}
 
 	case text(listing["kind"]) == "libre":

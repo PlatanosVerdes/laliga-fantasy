@@ -18,6 +18,7 @@ import (
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 )
 
 type Row = map[string]any
@@ -32,6 +33,11 @@ type Policy struct {
 	AutoSell    bool     `json:"auto_sell,omitempty"`
 	Raid        bool     `json:"raid,omitempty"`
 	MaxPay      *float64 `json:"max_pay,omitempty"`
+	// Shield buys a 24h shield on one of your own players at ShieldAt. It is one-shot: the
+	// cover it buys is worth nothing outside the hours somebody could actually pay his clause,
+	// so the instruction is an appointment and not a state to keep.
+	Shield   bool    `json:"shield,omitempty"`
+	ShieldAt *string `json:"shield_at,omitempty"`
 }
 
 // What counts as a good offer, when you would rather not pick a number: the highest of three
@@ -313,7 +319,8 @@ func Plan(players []Row, policies map[string]Policy, now time.Time) []Row {
 // negative. So the payable ones go into a queue — best points per million paying the clause
 // first — and the balance is spent down along it; whoever no longer fits stands down with the
 // reason, and gets his turn on a later cycle if he is still there.
-func RaidPlan(players []Row, policies map[string]Policy, cash float64) []Row {
+func RaidPlan(players []Row, policies map[string]Policy, cash float64,
+	window *schedule.Window) []Row {
 	actions := []Row{}
 	queue := []Row{}
 	for _, player := range players {
@@ -336,6 +343,15 @@ func RaidPlan(players []Row, policies map[string]Policy, cash float64) []Row {
 		// were not going to clause, which is the opposite of what it is for.
 		case truthy(player["is_mine"]):
 			continue
+		// Nobody can pay a clause while the matchday is within a day of starting, us included.
+		// Without this the instruction fired into a 030.01.17 every two minutes all weekend and
+		// the page reported it as a failure rather than as a wait.
+		case window != nil && !window.Open:
+			why := "la ventana de clausulas esta cerrada, la jornada esta en marcha"
+			if window.OpensAt != "" {
+				why += ", reabre " + shortWhen(window.OpensAt)
+			}
+			actions = append(actions, merge(row, Row{"action": "esperando", "why": why}))
 		// No cap, no automatic payment. The page always demands an amount when arming a raid, but
 		// a policies.json edited by hand does not, and "pay whatever it costs" is not something
 		// anybody authorised: without this the ceiling of zero skipped its own check and the only
@@ -366,6 +382,81 @@ func RaidPlan(players []Row, policies map[string]Policy, cash float64) []Row {
 		}
 	}
 	return append(actions, spendDown(queue, cash)...)
+}
+
+// shortWhen is a stamp inside a sentence: "el lun 07/09 a las 21:30", and nothing at all for
+// anything unparseable, so a reason never carries half a date.
+func shortWhen(stamp string) string {
+	when, err := time.Parse(time.RFC3339, stamp)
+	if err != nil {
+		return ""
+	}
+	days := []string{"dom", "lun", "mar", "mie", "jue", "vie", "sab"}
+	return fmt.Sprintf("el %s %02d/%02d a las %02d:%02d", days[int(when.Weekday())],
+		when.Day(), int(when.Month()), when.Hour(), when.Minute())
+}
+
+// ShieldGrace is how long after its hour a scheduled shield may still be bought. A cycle can be
+// missed — a rebuild running long, the Pi rebooting — and buying it an hour late still covers
+// most of what it was meant to cover. Days late it would cover the wrong day entirely, and the
+// instruction is better dropped than fired blind.
+const ShieldGrace = 2 * time.Hour
+
+// ShieldPlan is the scheduled shields: buy 24h of cover on your own player at the hour you
+// picked. It only ever acts on your own players and it never spends money — the shield costs an
+// advert the API takes on trust — so what it has to get right is the hour and the once.
+//
+// Waiting is the normal state here, and the reason says which hour it is waiting for: a shield
+// spent while nobody can pay a clause anyway buys nothing.
+func ShieldPlan(players []Row, policies map[string]Policy, now time.Time) []Row {
+	actions := []Row{}
+	for _, player := range players {
+		policy, armed := policies[text(player["id"])]
+		if !armed || !policy.Shield {
+			continue
+		}
+		row := Row{"player_id": text(player["id"]), "name": player["name"],
+			"player_team_id": player["player_team_id"], "shield_at": policy.ShieldAt}
+
+		when, hasHour := parseStamp(policy.ShieldAt)
+		switch {
+		case !truthy(player["is_mine"]):
+			actions = append(actions, merge(row, Row{"action": "ninguna",
+				"why": "ya no es tuyo, no hay nada que blindar"}))
+		case truthy(player["shielded"]):
+			why := "ya esta blindado"
+			if until := shortWhen(text(player["shielded_until"])); until != "" {
+				why += ", acaba " + until
+			}
+			actions = append(actions, merge(row, Row{"action": "ninguna", "why": why}))
+		case !hasHour:
+			actions = append(actions, merge(row, Row{"action": "blindar",
+				"why": "sin hora: lo blindo en cuanto lo veo"}))
+		case now.Before(when):
+			actions = append(actions, merge(row, Row{"action": "esperando",
+				"why": "lo blindo " + shortWhen(*policy.ShieldAt)}))
+		case now.Sub(when) > ShieldGrace:
+			actions = append(actions, merge(row, Row{"action": "cancelada",
+				"why": fmt.Sprintf("su hora era %s y ya pasaron mas de %.0fh",
+					shortWhen(*policy.ShieldAt), ShieldGrace.Hours())}))
+		default:
+			actions = append(actions, merge(row, Row{"action": "blindar",
+				"why": "le tocaba " + shortWhen(*policy.ShieldAt)}))
+		}
+	}
+	return actions
+}
+
+// parseStamp reads one of the API's dates, and says so when there is nothing to read.
+func parseStamp(value *string) (time.Time, bool) {
+	if value == nil || *value == "" {
+		return time.Time{}, false
+	}
+	when, err := time.Parse(time.RFC3339, *value)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return when, true
 }
 
 // pointsPerMillion is what the clause buys: expected points per million paid. Zero when there
@@ -554,10 +645,49 @@ func Set(id string, apply func(*Policy), unset ...string) (Policy, error) {
 			entry.AcceptAbove = nil
 		case "max_pay":
 			entry.MaxPay = nil
+		case "shield_at":
+			entry.ShieldAt = nil
 		}
 	}
 	armed[id] = entry
 	return entry, Save(armed)
+}
+
+// Clear takes one instruction off a player and leaves the rest alone: somebody can have a
+// player always-listed and shield-armed, and calling off one is not calling off the other. With
+// nothing left the entry goes, so the file does not fill up with instructions that say nothing.
+func Clear(id, what string) error {
+	armed, err := Load()
+	if err != nil {
+		return err
+	}
+	entry, exists := armed[id]
+	if !exists {
+		return nil
+	}
+	switch what {
+	case "raid":
+		entry.Raid, entry.MaxPay = false, nil
+	case "shield":
+		entry.Shield, entry.ShieldAt = false, nil
+	case "listing":
+		entry.AlwaysList, entry.AutoSell = false, false
+		entry.MinPrice, entry.AcceptAbove = nil, nil
+	default:
+		return fmt.Errorf("no se que instruccion es %q", what)
+	}
+	if entry.silent() {
+		delete(armed, id)
+	} else {
+		armed[id] = entry
+	}
+	return Save(armed)
+}
+
+// silent is an entry that no longer asks for anything.
+func (p Policy) silent() bool {
+	return !p.AlwaysList && p.MinPrice == nil && p.AcceptAbove == nil && !p.AutoSell &&
+		!p.Raid && p.MaxPay == nil && !p.Shield && p.ShieldAt == nil
 }
 
 func Remove(id string) error {
@@ -633,8 +763,7 @@ func Disarm(ids ...string) ([]string, error) {
 		}
 		gone = append(gone, name)
 		entry.Raid, entry.MaxPay = false, nil
-		if !entry.AlwaysList && !entry.AutoSell && entry.MinPrice == nil &&
-			entry.AcceptAbove == nil {
+		if entry.silent() {
 			delete(armed, id)
 			continue
 		}

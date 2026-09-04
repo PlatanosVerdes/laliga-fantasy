@@ -270,6 +270,12 @@ func cmdServe(args []string) error {
 		}
 		return int64(money.TeamMoney), nil
 	}
+	// The clause window comes from the calendar, so the refusal can be given here with the hour
+	// it reopens instead of arriving from the API in English and without one.
+	guard.Clauses = func() *writes.Window {
+		window := world.ClauseWindow(time.Now())
+		return &writes.Window{Open: window.Open, OpensAt: window.OpensAt}
+	}
 
 	// The daily reward: 100.000 that no rival is competing for, and the only way to lose it is
 	// to forget. It does not go through the standing instructions because it authorises nothing
@@ -437,7 +443,8 @@ func cmdServe(args []string) error {
 		// An expired listing is no listing, and the plan is the one that knows it now: the rule
 		// used to be applied to these rows here, where only the acting half could see it.
 		done := policies.Enforce(policies.Plan(rows, armed, now),
-			policies.RaidPlan(rows, armed, cash),
+			policies.RaidPlan(rows, armed, cash, clauseWindow(universe.Schedule)),
+			policies.ShieldPlan(rows, armed, now),
 			func(operation string, action policies.Row) error {
 				args := automaticArgs(action, league, team)
 				who := automaticPlayer(byID[text(action["player_id"])], house.HoldExceptions)
@@ -452,6 +459,13 @@ func cmdServe(args []string) error {
 		}
 		for _, action := range done {
 			slog.Info("automatic action", "detail", policies.Describe(action), "cause", cause)
+			// The shield is an appointment, not a state: leaving it armed would buy another one
+			// tomorrow, when the hours it covers are somebody else's problem.
+			if text(action["operation"]) == "shield_player" && truthyValue(action["ok"]) {
+				if err := policies.Clear(text(action["player_id"]), "shield"); err != nil {
+					slog.Warn("shield instruction not cleared", "reason", err.Error())
+				}
+			}
 		}
 		// The world moved because we moved it: rebuild so the page tells the truth.
 		if err := world.RefreshWith("automatico", true); err != nil {
@@ -1021,7 +1035,7 @@ func cmdPlan(args []string) error {
 	}
 	blob, err := json.Marshal(map[string]any{
 		"plan":  policies.Plan(players, armed, time.Now()),
-		"raids": policies.RaidPlan(players, armed, cash),
+		"raids": policies.RaidPlan(players, armed, cash, nil),
 	})
 	if err != nil {
 		return err
@@ -1278,6 +1292,20 @@ func endingRows() []map[string]any {
 
 // automaticArgs addresses what the plan asks for the way the API expects it: a listing and a
 // clause travel by squad slot, everything else by market and offer.
+// clauseWindow is the clause window for a known calendar, and nothing when the calendar is
+// missing: an unknown window must not stand a raid down.
+func clauseWindow(fixtures []model.Fixture) *schedule.Window {
+	if len(fixtures) == 0 {
+		return nil
+	}
+	narrow := make([]schedule.Fixture, 0, len(fixtures))
+	for _, fixture := range fixtures {
+		narrow = append(narrow, schedule.Fixture{Kickoff: fixture.Kickoff})
+	}
+	window := schedule.Clauses(narrow, time.Now())
+	return &window
+}
+
 func automaticArgs(action policies.Row, league, team string) writes.Args {
 	return writes.Args{LeagueID: league, TeamID: team,
 		Amount:       int64(number(action["amount"])),
@@ -1300,6 +1328,8 @@ func automaticPlayer(row map[string]any, exceptions string) writes.Player {
 		HoldUntil:      text(row["hold_until"]),
 		HoldExceptions: exceptions,
 		Clause:         int64(number(row["clause"])),
+		Shielded:       truthyValue(row["shielded"]),
+		ShieldedUntil:  text(row["shielded_until"]),
 	}
 }
 
@@ -1466,7 +1496,8 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 		CSS: read("report.css"), JS: read("report.js"),
 		Modal: read("modal.html"), Drawer: read("drawer.html"),
 		Plan:     policies.Plan(players, armed, time.Now()),
-		Raids:    policies.RaidPlan(players, armed, cash),
+		Raids:    policies.RaidPlan(players, armed, cash, clauseWindow(universe.Schedule)),
+		Window:   clauseWindow(universe.Schedule),
 		Policies: policyRows,
 	}
 	return document.HTML(), nil

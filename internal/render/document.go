@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 )
 
 // Document assembles the whole page: the order of the sections, their titles, their notes
@@ -42,10 +43,34 @@ type Document struct {
 	// MineByWeek is how many of my players each team had on a past matchday, keyed by week.
 	// Reconstructed outside, because that needs the transfer log and this package only draws.
 	MineByWeek map[int]map[string]int
+	// ClauseWindow is when the game accepts a clause payment at all. Nil is nobody having
+	// worked it out, and then the page says nothing rather than guessing an hour.
+	Window *schedule.Window
 	// The league's house rules: the hold period, its exceptions, and the social pacts.
 	HoldDays       int
 	HoldExceptions string
 	RuleNotes      []string
+}
+
+// windowNote is the state of the clause window as a sentence, and nothing at all when it is
+// open with no closing hour known: a section does not need a line to say business as usual.
+func (d Document) windowNote() string {
+	if d.Window == nil {
+		return ""
+	}
+	if !d.Window.Open {
+		note := "<strong>Ventana cerrada</strong>: con un partido a menos de un dia el juego " +
+			"no acepta pagos de cláusula, ni tuyos ni de nadie"
+		if d.Window.OpensAt != "" {
+			note += `, reabre en <span data-deadline="` + Esc(d.Window.OpensAt) + `">…</span>`
+		}
+		return note + ". "
+	}
+	if d.Window.ClosesAt != "" {
+		return `Ventana abierta, se cierra en <span data-deadline="` +
+			Esc(d.Window.ClosesAt) + `">…</span>. `
+	}
+	return ""
 }
 
 func rows(source any) []map[string]any {
@@ -701,7 +726,7 @@ func (d Document) raidsSection() string {
 		live = append(live, raid)
 	}
 
-	note := "Clausulazos programados: se pagan solos en cuanto la cláusula se " +
+	note := d.windowNote() + "Clausulazos programados: se pagan solos en cuanto la cláusula se " +
 		"libere, <strong>y solo si sigue por debajo del limite que fijaste</strong>. " +
 		"Si el dueño la sube o blinda al jugador, se cancela en vez de pagar de mas."
 	if armed > 0 {
@@ -1096,7 +1121,8 @@ func (d Document) marketSections() []string {
 			`bloqueadas hasta %s.</p>`, int(number(d.Advice["clauses_locked"])), from)
 	}
 	out = append(out, Section("Cláusulas pagables", table,
-		"Jugadores de rivales con la cláusula desbloqueada y dentro de tu poder de compra.",
+		d.windowNote()+
+			"Jugadores de rivales con la cláusula desbloqueada y dentro de tu poder de compra.",
 		fmt.Sprintf("%d", len(raids)), "clausulas"))
 
 	sells := rows(d.Advice["sells"])

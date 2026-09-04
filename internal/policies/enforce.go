@@ -7,8 +7,9 @@ package policies
 // instruction — a clause opens at 03:00 and an offer expires while you sleep — but it means the
 // limits have to be somebody else's decision, taken in advance and in writing:
 //
-//   - it only ever performs the three actions the plan marks as ready: list a player you told it
-//     to keep listed, accept an offer above the floor you set, pay a clause under the cap you set;
+//   - it only ever performs the four actions the plan marks as ready: list a player you told it
+//     to keep listed, accept an offer above the floor you set, pay a clause under the cap you
+//     set, buy the shield you scheduled for one of your own;
 //   - `avisar`, `esperando`, `bloqueada`, `cancelada` and `sin_saldo` are never acted on, they are
 //     the plan saying no;
 //   - a cap per cycle, so a bug costs a bounded amount rather than a squad;
@@ -27,9 +28,10 @@ const PerCycle = 3
 // Doable are the actions Enforce is allowed to perform, and their operation names. Anything not
 // in here is a notice.
 var Doable = map[string]string{
-	"poner_en_venta":  "sell_to_market",
-	"aceptar_oferta":  "accept_offer",
-	"pagar_clausula":  "pay_clause",
+	"poner_en_venta": "sell_to_market",
+	"aceptar_oferta": "accept_offer",
+	"pagar_clausula": "pay_clause",
+	"blindar":        "shield_player",
 }
 
 // Runner performs one operation and reports what happened. Injected so the enforcement can be
@@ -38,9 +40,9 @@ type Runner func(operation string, action Row) error
 
 // Enforce walks the plan and performs what is ready, in order, up to the cap. It returns what it
 // did, for the log and for the page.
-func Enforce(plan []Row, raids []Row, run Runner) []Row {
+func Enforce(plan, raids, shields []Row, run Runner) []Row {
 	done := []Row{}
-	for _, action := range append(append([]Row{}, plan...), raids...) {
+	for _, action := range append(append(append([]Row{}, plan...), raids...), shields...) {
 		if len(done) >= PerCycle {
 			slog.Warn("automatic actions capped for this cycle", "cap", PerCycle,
 				"pending", "se hara en el siguiente ciclo")

@@ -2,7 +2,11 @@ package policies
 
 import (
 	"errors"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 )
 
 // The enforcement is the only code here that spends money without a person confirming it, so what
@@ -25,7 +29,7 @@ func TestEnforceOnlyActsOnReadyActions(t *testing.T) {
 	}
 
 	var ran []string
-	done := Enforce(plan, raids, func(operation string, action Row) error {
+	done := Enforce(plan, raids, nil, func(operation string, action Row) error {
 		ran = append(ran, operation+":"+text(action["name"]))
 		return nil
 	})
@@ -56,7 +60,7 @@ func TestEnforceStopsAtTheCap(t *testing.T) {
 		plan = append(plan, Row{"action": "poner_en_venta", "name": "uno", "amount": 1_000.0})
 	}
 	count := 0
-	Enforce(plan, nil, func(string, Row) error { count++; return nil })
+	Enforce(plan, nil, nil, func(string, Row) error { count++; return nil })
 	if count != PerCycle {
 		t.Fatalf("ejecuto %d, el tope es %d", count, PerCycle)
 	}
@@ -69,7 +73,7 @@ func TestEnforceRecordsFailuresAndCarriesOn(t *testing.T) {
 		{"action": "aceptar_oferta", "name": "se cayo", "amount": 1.0},
 		{"action": "poner_en_venta", "name": "sigue", "amount": 2.0},
 	}
-	done := Enforce(plan, nil, func(operation string, action Row) error {
+	done := Enforce(plan, nil, nil, func(operation string, action Row) error {
 		if text(action["name"]) == "se cayo" {
 			return errors.New("la oferta ya no existe")
 		}
@@ -97,13 +101,13 @@ func TestRaidPlanRefusesWithoutACap(t *testing.T) {
 		"is_mine": false, "clause_locked": false,
 	}}
 
-	without := RaidPlan(players, map[string]Policy{"1": {Raid: true}}, 90_000_000)
+	without := RaidPlan(players, map[string]Policy{"1": {Raid: true}}, 90_000_000, nil)
 	if len(without) != 1 || text(without[0]["action"]) != "sin_limite" {
 		t.Fatalf("sin limite deberia negarse, dijo %v", without)
 	}
 
 	cap := 1_200_000.0
-	with := RaidPlan(players, map[string]Policy{"1": {Raid: true, MaxPay: &cap}}, 90_000_000)
+	with := RaidPlan(players, map[string]Policy{"1": {Raid: true, MaxPay: &cap}}, 90_000_000, nil)
 	if len(with) != 1 || text(with[0]["action"]) != "pagar_clausula" {
 		t.Fatalf("con limite por encima deberia pagar, dijo %v", with)
 	}
@@ -112,13 +116,13 @@ func TestRaidPlanRefusesWithoutACap(t *testing.T) {
 	}
 
 	low := 900_000.0
-	under := RaidPlan(players, map[string]Policy{"1": {Raid: true, MaxPay: &low}}, 90_000_000)
+	under := RaidPlan(players, map[string]Policy{"1": {Raid: true, MaxPay: &low}}, 90_000_000, nil)
 	if text(under[0]["action"]) != "cancelada" {
 		t.Errorf("con la clausula por encima del limite deberia cancelarse, dijo %v",
 			text(under[0]["action"]))
 	}
 
-	broke := RaidPlan(players, map[string]Policy{"1": {Raid: true, MaxPay: &cap}}, 500_000)
+	broke := RaidPlan(players, map[string]Policy{"1": {Raid: true, MaxPay: &cap}}, 500_000, nil)
 	if text(broke[0]["action"]) != "sin_saldo" {
 		t.Errorf("sin saldo deberia decirlo, dijo %v", text(broke[0]["action"]))
 	}
@@ -134,7 +138,7 @@ func TestRaidPlanSpendsTheBalanceOnceAcrossRaids(t *testing.T) {
 	}
 	armed := map[string]Policy{"1": {Raid: true, MaxPay: &cap}, "2": {Raid: true, MaxPay: &cap}}
 
-	plan := RaidPlan(players, armed, 30_000_000)
+	plan := RaidPlan(players, armed, 30_000_000, nil)
 	if len(plan) != 2 {
 		t.Fatalf("esperaba una fila por clausulazo, dijo %v", plan)
 	}
@@ -147,7 +151,7 @@ func TestRaidPlanSpendsTheBalanceOnceAcrossRaids(t *testing.T) {
 	}
 
 	// Con saldo para los dos se pagan los dos, y el mejor por millon sigue yendo primero.
-	both := RaidPlan(players, armed, 40_000_000)
+	both := RaidPlan(players, armed, 40_000_000, nil)
 	for index, row := range both {
 		if text(row["action"]) != "pagar_clausula" {
 			t.Fatalf("con saldo de sobra los dos deberian pagarse, el %d dijo %v", index, row)
@@ -169,13 +173,13 @@ func TestRaidPlanDropsPlayersAlreadyYours(t *testing.T) {
 	}
 	armed := map[string]Policy{"1": {Raid: true, MaxPay: &cap}, "2": {Raid: true, MaxPay: &cap}}
 
-	plan := RaidPlan(players, armed, 90_000_000)
+	plan := RaidPlan(players, armed, 90_000_000, nil)
 	if len(plan) != 1 || text(plan[0]["name"]) != "el rival" {
 		t.Fatalf("el fichado no deberia salir en el plan, dijo %v", plan)
 	}
 
 	// Y sin limite escrito tampoco: primero es tuyo, y despues ya se mira el cap.
-	sinLimite := RaidPlan(players[:1], map[string]Policy{"1": {Raid: true}}, 90_000_000)
+	sinLimite := RaidPlan(players[:1], map[string]Policy{"1": {Raid: true}}, 90_000_000, nil)
 	if len(sinLimite) != 0 {
 		t.Errorf("un jugador tuyo no deberia salir ni sin limite, dijo %v", sinLimite)
 	}
@@ -200,5 +204,89 @@ func TestSignedFindsTheRaidsThatAreDone(t *testing.T) {
 	// Un jugador del que el mundo no dice nada se deja en paz: falta, no es que lo fichases.
 	if quiet := Signed(map[string]bool{}, armed); len(quiet) != 0 {
 		t.Errorf("sin mundo no se desarma nada, dijo %v", quiet)
+	}
+}
+
+// The whole matchday is closed for everybody: the API refuses the payment with 030.01.17 while
+// a fixture starts within the day. A raid armed on those hours has to wait and say so, not fire
+// every two minutes into the same refusal.
+func TestRaidPlanWaitsForTheClauseWindow(t *testing.T) {
+	cap := 1_200_000.0
+	players := []Row{{
+		"id": "1", "name": "Youssef", "owner": "LamineTheTuareg", "clause": 1_000_000.0,
+		"is_mine": false, "clause_locked": false,
+	}}
+	armed := map[string]Policy{"1": {Raid: true, MaxPay: &cap}}
+
+	shut := RaidPlan(players, armed, 90_000_000,
+		&schedule.Window{Open: false, OpensAt: "2026-09-07T21:30:00+02:00"})
+	if len(shut) != 1 || text(shut[0]["action"]) != "esperando" {
+		t.Fatalf("con la ventana cerrada deberia esperar, dijo %v", shut)
+	}
+	if !strings.Contains(text(shut[0]["why"]), "21:30") {
+		t.Errorf("el motivo tiene que decir cuando reabre: %q", text(shut[0]["why"]))
+	}
+	if _, doable := Doable[text(shut[0]["action"])]; doable {
+		t.Error("esperando no se ejecuta")
+	}
+
+	open := RaidPlan(players, armed, 90_000_000, &schedule.Window{Open: true})
+	if text(open[0]["action"]) != "pagar_clausula" {
+		t.Errorf("con la ventana abierta se paga, dijo %v", text(open[0]["action"]))
+	}
+}
+
+// The shield is an appointment: it must not fire early, and days late it would cover the wrong
+// day entirely, so it stands down instead.
+func TestShieldPlanKeepsItsHour(t *testing.T) {
+	now := time.Date(2026, 9, 7, 20, 0, 0, 0, time.UTC)
+	hour := now.Add(time.Hour).Format(time.RFC3339)
+	players := []Row{{"id": "1", "name": "Iñigo Vicente", "is_mine": true,
+		"player_team_id": "42111060"}}
+	armed := map[string]Policy{"1": {Shield: true, ShieldAt: &hour}}
+
+	early := ShieldPlan(players, armed, now)
+	if len(early) != 1 || text(early[0]["action"]) != "esperando" {
+		t.Fatalf("antes de su hora espera, dijo %v", early)
+	}
+	if _, doable := Doable[text(early[0]["action"])]; doable {
+		t.Error("esperando no se ejecuta")
+	}
+
+	ready := ShieldPlan(players, armed, now.Add(time.Hour))
+	if text(ready[0]["action"]) != "blindar" {
+		t.Fatalf("a su hora se blinda, dijo %v", text(ready[0]["action"]))
+	}
+	if Doable[text(ready[0]["action"])] != "shield_player" {
+		t.Error("blindar tiene que mapear a la operacion del blindaje")
+	}
+	if text(ready[0]["player_team_id"]) != "42111060" {
+		t.Error("la API blinda por la ficha, no por el jugador")
+	}
+
+	late := ShieldPlan(players, armed, now.Add(ShieldGrace+2*time.Hour))
+	if text(late[0]["action"]) != "cancelada" {
+		t.Errorf("muy tarde se cae en vez de blindar a ciegas, dijo %v", text(late[0]["action"]))
+	}
+}
+
+// Two ways the instruction is already pointless: he is shielded, or he is not yours any more.
+func TestShieldPlanDoesNotBuyWhatIsAlreadyThere(t *testing.T) {
+	now := time.Date(2026, 9, 7, 22, 0, 0, 0, time.UTC)
+	hour := now.Add(-time.Minute).Format(time.RFC3339)
+	armed := map[string]Policy{"1": {Shield: true, ShieldAt: &hour}}
+
+	shielded := ShieldPlan([]Row{{"id": "1", "name": "M. Dituro", "is_mine": true,
+		"shielded": true, "shielded_until": "2026-09-08T22:00:00+02:00"}}, armed, now)
+	if text(shielded[0]["action"]) != "ninguna" {
+		t.Errorf("ya blindado no se vuelve a blindar, dijo %v", shielded[0])
+	}
+	if !strings.Contains(text(shielded[0]["why"]), "blindado") {
+		t.Errorf("el motivo tiene que decirlo: %q", text(shielded[0]["why"]))
+	}
+
+	sold := ShieldPlan([]Row{{"id": "1", "name": "M. Dituro", "is_mine": false}}, armed, now)
+	if text(sold[0]["action"]) != "ninguna" {
+		t.Errorf("un jugador que ya no es tuyo no se blinda, dijo %v", sold[0])
 	}
 }
