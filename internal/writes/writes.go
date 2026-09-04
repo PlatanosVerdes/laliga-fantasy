@@ -208,7 +208,7 @@ type ValidationCase struct {
 // things would a person be warned about?
 func Validate(testCase ValidationCase) (refused bool, reason string, warnings []string) {
 	cash := testCase.Cash
-	warnings, err := check(testCase.Name, testCase.Args, testCase.Player, &cash)
+	warnings, err := check(testCase.Name, testCase.Args, testCase.Player, &cash, nil)
 	if err != nil {
 		return true, err.Error(), nil
 	}
@@ -276,6 +276,11 @@ func explain(err error) error {
 	case "030.01.48":
 		return fmt.Errorf("%w: la rechazaron o caduco, asi que no hay nada que retirar",
 			ErrOutdated)
+	// The clause window, which the API states in English and without saying when it reopens.
+	// Reached only when nothing told the guard the calendar; otherwise this never fires.
+	case "030.01.17":
+		return errors.New("no se pueden pagar clausulas con la jornada a menos de un dia: " +
+			"reabre al empezar el ultimo partido")
 	}
 	return errors.New(message)
 }
@@ -369,6 +374,14 @@ type pending struct {
 	summary Summary
 }
 
+// Window is when the game accepts a clause payment: whether it is open and, when it is not,
+// the hour it opens again. A nil window is nobody having told the guard, and then it has no
+// opinion — refusing on an unknown would stop every payment there is.
+type Window struct {
+	Open    bool
+	OpensAt string
+}
+
 type Guard struct {
 	mu      sync.Mutex
 	tokens  map[string]pending
@@ -376,6 +389,9 @@ type Guard struct {
 	// Cash reads the current balance. Injected so the guard can be exercised without a
 	// session, and so a test cannot accidentally reach the API.
 	Cash func(teamID string) (int64, error)
+	// Clauses is the clause window, read at the moment of the write rather than kept, because
+	// it changes with the clock. Optional: without it the API's refusal is the only warning.
+	Clauses func() *Window
 }
 
 func NewGuard(client *api.Client) *Guard {
@@ -388,6 +404,25 @@ func NewGuard(client *api.Client) *Guard {
 		return int64(money.TeamMoney), nil
 	}
 	return guard
+}
+
+// window is the clause window if anybody wired one, and nothing otherwise.
+func (g *Guard) window() *Window {
+	if g.Clauses == nil {
+		return nil
+	}
+	return g.Clauses()
+}
+
+// whenText is a stamp somebody can read out loud: day and hour, no year and no zone. Empty for
+// anything unparseable, so a refusal never carries half a date.
+func whenText(stamp string) string {
+	when, err := time.Parse(time.RFC3339, stamp)
+	if err != nil {
+		return ""
+	}
+	days := []string{"domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"}
+	return fmt.Sprintf("%s a las %02d:%02d", days[int(when.Weekday())], when.Hour(), when.Minute())
 }
 
 func (g *Guard) purge() {
@@ -417,7 +452,7 @@ func (g *Guard) Prepare(name string, args Args, who Player, allowWrites bool) (S
 		}
 	}
 
-	warnings, err := check(name, args, who, cash)
+	warnings, err := check(name, args, who, cash, g.window())
 	if err != nil {
 		return Summary{}, err
 	}
@@ -483,8 +518,19 @@ func (g *Guard) Confirm(token string, allowWrites, dryRun bool) (map[string]any,
 
 // check is the validation, kept as one function so the rules are read together. Refusals
 // are errors; everything a person should know but may still choose is a warning.
-func check(name string, args Args, who Player, cash *int64) ([]string, error) {
+func check(name string, args Args, who Player, cash *int64, window *Window) ([]string, error) {
 	var warnings []string
+
+	// The clause window is the calendar's rule and not the market's: the API refuses a payment
+	// while a fixture starts within the day (030.01.17). Reading it here turns that refusal into
+	// a sentence with an hour in it, before anything is sent.
+	if name == "pay_clause" && window != nil && !window.Open {
+		reason := "no se pueden pagar clausulas con la jornada a menos de un dia"
+		if when := whenText(window.OpensAt); when != "" {
+			reason += ": reabre el " + when
+		}
+		return nil, errors.New(reason)
+	}
 
 	// The house rule first: it is not the API that refuses, it is the league, and finding out
 	// afterwards means having sold somebody you had agreed not to sell.
@@ -708,7 +754,7 @@ func (g *Guard) Automatic(name string, args Args, who Player, allowWrites bool) 
 	if cash == nil && Spends[name] {
 		return nil, fmt.Errorf("no puedo leer el saldo: no gasto a ciegas sin que nadie mire")
 	}
-	warnings, err := check(name, args, who, cash)
+	warnings, err := check(name, args, who, cash, g.window())
 	if err != nil {
 		return nil, err
 	}

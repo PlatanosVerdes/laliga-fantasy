@@ -50,7 +50,7 @@ func TestAutomaticRaidCarriesTheSlotAndTheAmount(t *testing.T) {
 	}}
 	armed := map[string]policies.Policy{"2568": {Raid: true, MaxPay: &limit}}
 
-	plan := policies.RaidPlan(rows, armed, 50_000_000)
+	plan := policies.RaidPlan(rows, armed, 50_000_000, nil)
 	if len(plan) != 1 || text(plan[0]["action"]) != "pagar_clausula" {
 		t.Fatalf("el plan deberia pagar la clausula, dice %v", plan)
 	}

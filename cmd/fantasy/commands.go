@@ -680,7 +680,8 @@ func cmdRaid(args []string) error {
 			return err
 		}
 		cli.Heading("Clausulazos programados")
-		plan := policies.RaidPlan(state.Players, armed, state.Cash)
+		plan := policies.RaidPlan(state.Players, armed, state.Cash,
+			clauseWindow(state.Universe.Schedule))
 		rows := make([][]string, 0, len(plan))
 		for _, action := range plan {
 			rows = append(rows, []string{text(action["name"]), text(action["owner"]),

@@ -51,12 +51,34 @@ One caveat for the next probe of this kind: a control path matters. `POST /leagu
 also answers 405, so anything under `buyout/` proves nothing on its own. `zzzz/player` and
 `shield/zzzz` both answer 404, which is what makes the `shield/player` reading trustworthy.
 
+## Scheduling it
+
+The 24 hours are the whole problem: they are worth nothing during the hours nobody can pay a
+clause anyway, and the matchday closes that window for three days at a time
+([clause-window.md](clause-window.md)). Buying the shield on the Friday of a matchday spends an
+advert on hours in which no rival could have touched the player.
+
+So the shield is an appointment. `policies.Policy` carries `shield` and `shield_at`, the page
+suggests the instant the window reopens, and `policies.ShieldPlan` acts on the hour:
+
+- before it, the instruction waits and says which hour it is waiting for;
+- more than `ShieldGrace` (2 h) after it, it stands down rather than covering the wrong day: a
+  cycle can be missed, a whole day cannot be recovered;
+- once bought, the instruction is cleared. Leaving it armed would buy another one tomorrow,
+  and the shield already expires on its own.
+
+It never spends money, which is why it is not in `Spends` and needs no cap: what is being
+authorised is the moment.
+
 ## In the tool
 
 `internal/writes` has the operation (`shield_player`) and it goes through the same two-step
 guard as the rest: prepare, read the summary, confirm. It refuses to shield a player who
 already is, naming the hour the current one runs out, because the second advert would buy
 nothing.
+
+`fantasy raid list` and the page's two clause sections show the window; the drawer of one of
+your own players has both buttons, "Blindar 24h ahora" and "Programar blindaje".
 
 There is no limit endpoint. `/shield`, `/shields` and every `check-shield` shape answer 404, so
 whether the game caps how many can be shielded in a day is not knowable from here: the answer

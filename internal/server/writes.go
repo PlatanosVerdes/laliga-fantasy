@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/favourites"
@@ -179,9 +180,11 @@ func (s *Server) always(writer http.ResponseWriter, request *http.Request) {
 		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
 	}
+	// The flag and not the entry: with a shield scheduled on him there is an entry either way,
+	// and removing it to turn a listing off would take the appointment with it.
 	on := true
-	if _, exists := armed[id]; exists {
-		err, on = policies.Remove(id), false
+	if armed[id].AlwaysList {
+		err, on = policies.Clear(id, "listing"), false
 	} else {
 		_, err = policies.Set(id, func(policy *policies.Policy) {
 			policy.Name = name
@@ -265,6 +268,71 @@ func (s *Server) raid(writer http.ResponseWriter, request *http.Request) {
 	slog.Info("raid scheduled", "player_id", id, "max_pay", int64(maxPay))
 	s.settle("raid")
 	s.json(writer, http.StatusOK, entry)
+}
+
+// shield schedules the 24h shield on one of your own players for an hour you pick. It spends no
+// money — the shield costs an advert — so what is being authorised is the moment, and that is
+// the whole reason it is worth scheduling: the cover is worthless during the hours nobody can
+// pay a clause anyway.
+func (s *Server) shield(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		s.json(writer, http.StatusMethodNotAllowed, map[string]any{"error": "solo POST"})
+		return
+	}
+	body := s.body(request)
+	id := text(body["id"])
+	if id == "" {
+		s.json(writer, http.StatusBadRequest, map[string]any{"error": "falta el id"})
+		return
+	}
+	at := strings.TrimSpace(text(body["at"]))
+	if at != "" {
+		when, err := time.Parse(time.RFC3339, at)
+		if err != nil {
+			s.json(writer, http.StatusBadRequest,
+				map[string]any{"error": "no entiendo esa fecha: " + at})
+			return
+		}
+		at = when.Format(time.RFC3339)
+	}
+	entry, err := policies.Set(id, func(policy *policies.Policy) {
+		policy.Name = text(body["name"])
+		policy.Shield = true
+		if at == "" {
+			policy.ShieldAt = nil
+			return
+		}
+		stamp := at
+		policy.ShieldAt = &stamp
+	})
+	if err != nil {
+		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	slog.Info("shield scheduled", "player_id", id, "at", at)
+	s.settle("shield")
+	s.json(writer, http.StatusOK, entry)
+}
+
+// cancelShield calls off a scheduled shield and leaves every other instruction on that player
+// alone.
+func (s *Server) cancelShield(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		s.json(writer, http.StatusMethodNotAllowed, map[string]any{"error": "solo POST"})
+		return
+	}
+	id := text(s.body(request)["id"])
+	if id == "" {
+		s.json(writer, http.StatusBadRequest, map[string]any{"error": "falta el id"})
+		return
+	}
+	if err := policies.Clear(id, "shield"); err != nil {
+		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	slog.Info("shield cancelled", "player_id", id)
+	s.settle("shield")
+	s.json(writer, http.StatusOK, map[string]any{"id": id, "shield": false})
 }
 
 // prepare is step one of every money operation: it builds the call, checks it against the

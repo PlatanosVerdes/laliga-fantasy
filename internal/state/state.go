@@ -123,6 +123,23 @@ func (s *State) Payload() map[string]any {
 	}
 }
 
+// ClauseWindow is whether a clause can be paid at all right now. It reads the whole schedule
+// and not only this matchday, because when the window opens again is the next matchday's
+// business.
+func (s *State) ClauseWindow(now time.Time) schedule.Window {
+	s.mu.RLock()
+	universe := s.universe
+	s.mu.RUnlock()
+	if universe == nil {
+		return schedule.Window{Open: true}
+	}
+	fixtures := make([]schedule.Fixture, 0, len(universe.Schedule))
+	for _, fixture := range universe.Schedule {
+		fixtures = append(fixtures, schedule.Fixture{Kickoff: fixture.Kickoff})
+	}
+	return schedule.Clauses(fixtures, now)
+}
+
 // SchedulePayload is the narrow view the scheduler reads.
 func (s *State) SchedulePayload() schedule.Payload {
 	s.mu.RLock()

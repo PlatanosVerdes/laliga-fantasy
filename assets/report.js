@@ -871,6 +871,38 @@ function since(stamp){
                : 'hace '+m+'m';
 }
 
+// El dia y la hora de una marca ISO, en local y sin año: es como se teclea y como se lee.
+function stampText(stamp){
+  const when=new Date(stamp);
+  if(isNaN(when.getTime())) return '';
+  const pad=n=>String(n).padStart(2,'0');
+  return `${pad(when.getDate())}/${pad(when.getMonth()+1)} ${pad(when.getHours())}:${pad(when.getMinutes())}`;
+}
+
+// Lo que se teclea en el prompt: "21:30" es la proxima vez que sean las 21:30, y "07/09 21:30"
+// ese momento del año en curso. Sale en ISO, que es lo que el servidor entiende.
+function stampFrom(text,fallback){
+  const value=(text||'').trim();
+  if(!value) return fallback||'';
+  const now=new Date();
+  let match=/^(\d{1,2})[\/-](\d{1,2})[ ,]+(\d{1,2}):(\d{2})$/.exec(value);
+  if(match){
+    const when=new Date(now.getFullYear(),+match[2]-1,+match[1],+match[3],+match[4]);
+    if(when<now) when.setFullYear(now.getFullYear()+1);
+    return when.toISOString();
+  }
+  match=/^(\d{1,2}):(\d{2})$/.exec(value);
+  if(match){
+    const when=new Date(now);
+    when.setSeconds(0,0);
+    when.setHours(+match[1],+match[2]);
+    if(when<=now) when.setDate(when.getDate()+1);
+    return when.toISOString();
+  }
+  const parsed=new Date(value);
+  return isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
 function leftUntil(stamp){
   const left=new Date(stamp).getTime()-Date.now();
   if(isNaN(left)) return '—';
@@ -1348,6 +1380,33 @@ async function runAction(a,player){
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({id:player.id,name:player.name,max_pay})});
     if(res.ok) openDetail(player.id);
+    return;
+  }
+  if(a.op==='shield_at'){
+    const suggested=a.suggested?stampText(a.suggested):'';
+    const answer=prompt('Blindaje programado para '+player.name+'.\n\n'
+      +'Dura 24h y caduca solo, asi que lo unico que decides es la hora. Mientras la jornada '
+      +'esta en marcha nadie puede pagar clausulas, y un blindaje gastado en esas horas no '
+      +'protege de nada.\n\n'
+      +(suggested?'Te sugiero '+suggested+', que es cuando reabre la ventana.\n\n':'')
+      +'Hora ("21:30" o "07/09 21:30"):', suggested);
+    if(answer===null) return;
+    const at=stampFrom(answer,a.suggested);
+    if(!at){ alert('No he entendido esa hora.'); return; }
+    const res=await fetch('/api/shield',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:player.id,name:player.name,at})});
+    if(!res.ok){ alert('No he podido programarlo.'); return; }
+    openDetail(player.id);
+    return;
+  }
+  if(a.op==='cancel_shield'){
+    if(!confirm('Cancelar el blindaje programado de '+player.name+'?')) return;
+    const res=await fetch('/api/shield/cancel',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:player.id})});
+    if(!res.ok){ alert('No he podido cancelarlo.'); return; }
+    openDetail(player.id);
     return;
   }
   if(a.op==='always'){
@@ -2038,7 +2097,7 @@ const OPERATION_LABELS={sell_to_market:'Puesto en venta',accept_offer:'Oferta ac
   modify_bid:'Puja modificada',cancel_bid:'Puja cancelada',direct_offer:'Oferta directa',
   pay_clause:'Clausulazo pagado',raise_clause:'Clausula subida',
   save_lineup:'Alineacion guardada',policy:'Instruccion ejecutada',
-  shield_player:'Jugador blindado',
+  shield_player:'Jugador blindado',shield:'Blindaje programado',
   traspaso:'Se ha movido la liga',mercado:'Cambios en el mercado',
   partido:'Partido en juego',
   vencimiento:'Ha vencido algo',refresco:'Actualizado'};
