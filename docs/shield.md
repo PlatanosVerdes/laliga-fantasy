@@ -77,8 +77,11 @@ guard as the rest: prepare, read the summary, confirm. It refuses to shield a pl
 already is, naming the hour the current one runs out, because the second advert would buy
 nothing.
 
-`fantasy raid list` and the page's two clause sections show the window; the drawer of one of
-your own players has both buttons, "Blindar 24h ahora" and "Programar blindaje".
+`fantasy raid list` and the page's two clause sections show the window. The drawer of one of
+your own players has one button, "Blindar 24h", because buying it and scheduling it are the same
+decision taken at different hours: it asks when, with the reopening already filled in, and
+"ahora" is one of the answers — that one goes through the two-step confirmation, since it is a
+write.
 
 There is no limit endpoint. `/shield`, `/shields` and every `check-shield` shape answer 404, so
 whether the game caps how many can be shielded in a day is not knowable from here: the answer

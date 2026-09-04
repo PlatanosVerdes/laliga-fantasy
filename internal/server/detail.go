@@ -213,18 +213,18 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 				map[string]any{"op": "cancel_shield", "kind": "prompt", "danger": true,
 					"label": "Cancelar el blindaje programado", "player_id": id})
 		default:
-			actions = append(actions, map[string]any{"op": "shield_player",
-				"label": "Blindar 24h ahora", "kind": "confirm",
-				"player_team_id": player["player_team_id"]})
-			// The hour to suggest: when clauses can be paid again, which is when the cover
-			// starts being worth its advert. Open right now means the moment itself.
+			// One button, because buying it and scheduling it are the same decision taken at
+			// different hours: the question is when, and "now" is one of the answers. The hour
+			// suggested is when clauses can be paid again, which is when the cover starts being
+			// worth its advert; with the window already open, now is that hour.
 			suggested := ""
 			if window := s.state.ClauseWindow(time.Now()); !window.Open {
 				suggested = window.OpensAt
 			}
-			actions = append(actions, map[string]any{"op": "shield_at", "kind": "prompt",
-				"label": "Programar blindaje", "player_id": id,
-				"suggested": suggested})
+			actions = append(actions, map[string]any{"op": "shield", "kind": "prompt",
+				"label": "Blindar 24h", "player_id": id,
+				"player_team_id": player["player_team_id"],
+				"suggested":      suggested})
 		}
 
 	case text(listing["kind"]) == "libre":
