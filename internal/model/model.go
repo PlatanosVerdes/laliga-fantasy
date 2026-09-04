@@ -62,6 +62,7 @@ type Player struct {
 	ClauseLocked  bool     `json:"clause_locked"`
 	ClauseUntil   *string  `json:"clause_locked_until"`
 	Shielded      bool     `json:"shielded"`
+	ShieldUntil   *string  `json:"shielded_until"`
 	PlayerTeamID  *string  `json:"player_team_id"`
 	IsMine        bool     `json:"is_mine"`
 
@@ -465,6 +466,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 			player.ClauseUntil = owned.LockedUntil
 			player.ClauseLocked = owned.Locked
 			player.Shielded = owned.Shielded
+			player.ShieldUntil = owned.ShieldUntil
 			player.PlayerTeamID = owned.PlayerTeamID
 			player.IsMine = myTeamID != "" && owned.TeamID == myTeamID
 		}
@@ -559,6 +561,7 @@ type slot struct {
 	LockedUntil  *string
 	Locked       bool
 	Shielded     bool
+	ShieldUntil  *string
 	PlayerTeamID *string
 }
 
@@ -614,6 +617,9 @@ func loadOwnership(client *api.Client, leagueID string) (map[string]slot,
 				}
 			}
 			held.Shielded = truthy(raw["isShielded"])
+			if until := text(raw["shieldedEndDate"]); until != "" {
+				held.ShieldUntil = &until
+			}
 			if pt := text(raw["playerTeamId"]); pt != "" {
 				held.PlayerTeamID = &pt
 			} else if pt := text(raw["id"]); pt != "" {
