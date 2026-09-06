@@ -211,7 +211,7 @@ func (s *Server) json(writer http.ResponseWriter, status int, body any) {
 func (s *Server) health(writer http.ResponseWriter, _ *http.Request) {
 	health := s.state.Health()
 	status := http.StatusOK
-	if health.Status != "ok" {
+	if health.Status == "degraded" {
 		status = http.StatusServiceUnavailable
 	}
 	s.json(writer, status, health)

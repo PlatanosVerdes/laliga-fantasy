@@ -96,7 +96,7 @@ does. `/healthz` reports how much life it has left, so a blackbox probe against 
 | `/api/player/{id}` | one player: stats, value history and the actions available now |
 | `/api/events` | SSE stream: a message whenever the state version moves |
 | `/api/fragments` | each section rendered, for partial swaps |
-| `/healthz` | `200` when the last refresh worked, `503` otherwise; includes session TTL |
+| `/healthz` | `200` while a recent document is being served (`ok`, or `stale` when the last refresh failed), `503` once it is older than 30 minutes; includes session TTL |
 | `/refresh` | force a refresh now |
 | `/api/session` | POST the pasted redirect (or a `tokens.json`) when there is no session |
 | `/api/bid/prepare` · `/api/bid/confirm` | the two steps of every operation that moves money |
