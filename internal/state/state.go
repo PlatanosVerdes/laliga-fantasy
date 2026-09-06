@@ -665,18 +665,30 @@ type Health struct {
 	Frozen      bool    `json:"frozen"`
 }
 
+// staleGrace is how long the document may go without a successful rebuild before the service
+// counts as broken. Refreshes run every two minutes, so this is fifteen missed in a row.
+const staleGrace = 30 * time.Minute
+
 func (s *State) Health() Health {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	health := Health{Version: s.version, Runs: s.runs, Subscribers: len(s.subs),
 		LastEffect: s.lastEffect, Status: "degraded", Frozen: httpx.Frozen}
-	if !s.generatedAt.IsZero() && s.lastError == "" {
-		health.Status = "ok"
-	}
 	if !s.generatedAt.IsZero() {
 		stamp := s.generatedAt.UTC().Format(time.RFC3339)
-		age := int(time.Since(s.generatedAt).Seconds())
-		health.GeneratedAt, health.AgeSeconds = &stamp, &age
+		age := time.Since(s.generatedAt)
+		seconds := int(age.Seconds())
+		health.GeneratedAt, health.AgeSeconds = &stamp, &seconds
+		// A failed refresh on top of a document that is still recent is the upstream having a
+		// bad minute, not this service being down: the page carries on serving what it has.
+		switch {
+		case age > staleGrace:
+			health.Status = "degraded"
+		case s.lastError != "":
+			health.Status = "stale"
+		default:
+			health.Status = "ok"
+		}
 	}
 	if s.lastError != "" {
 		reason := s.lastError
