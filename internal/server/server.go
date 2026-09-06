@@ -211,8 +211,6 @@ func (s *Server) json(writer http.ResponseWriter, status int, body any) {
 func (s *Server) health(writer http.ResponseWriter, _ *http.Request) {
 	health := s.state.Health()
 	status := http.StatusOK
-	// "stale" is a served document whose last refresh failed, which is the upstream's problem
-	// and not this service's: only a document too old to trust takes the endpoint down.
 	if health.Status == "degraded" {
 		status = http.StatusServiceUnavailable
 	}
