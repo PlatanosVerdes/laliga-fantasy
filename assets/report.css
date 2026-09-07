@@ -42,6 +42,12 @@ header p{margin:0;color:var(--ink-2);font-size:13px}
    pantallas estrechas y las cabeceras de tabla se pegan justo debajo. */
 .tabs{display:flex;flex-wrap:wrap;gap:4px;margin:22px 0 0;border-bottom:1px solid var(--line);
   padding-bottom:0;position:sticky;top:0;z-index:6;background:var(--plane)}
+/* Como queda la caja despues de la operacion, en el mismo paso en que se escribe el importe. */
+.bid-balance{margin:10px 0 0;font-size:13px;color:var(--ink-2)}
+.bid-balance b{font-variant-numeric:tabular-nums;color:var(--ink)}
+.bid-balance b.balance-after{color:var(--ink)}
+.bid-balance .balance-bad{color:var(--critical)}
+
 .tab-cash{margin-left:auto;align-self:center;padding:4px 10px;font-size:13px;font-weight:700;
   font-variant-numeric:tabular-nums;color:var(--ink);
   background:color-mix(in srgb,var(--good) 16%,transparent);border-radius:6px}

@@ -133,12 +133,12 @@ func (d Document) HTML() string {
 
 	kpis := d.widgets(week, players)
 	// The balance rides in the tab bar, which is the only strip that stays on screen.
-	cash := ""
-	if budget := asFloat(d.Advice["budget"]); budget != nil {
+	cash, budget := "", asFloat(d.Advice["budget"])
+	if budget != nil {
 		cash = Money(budget)
 	}
 	header := Header(d.Generated, d.LeagueName, int(number(week["weekNumber"])), kpis,
-		hasAdvice, d.Mode, cash)
+		hasAdvice, d.Mode, cash, budget)
 	footer := Footer(number(universe["current_weight"]))
 
 	body := strings.Join(filterEmpty(sections), "")

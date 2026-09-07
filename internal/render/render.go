@@ -439,10 +439,20 @@ func RankOf(value float64, others []float64) (string, float64, string) {
 // on this page is judged against: with it only in the header it was gone after one scroll and
 // stale after any purchase, since the live refresh only replaces sections.
 func TabsWith(cash string) string {
+	return TabsWithAmount(cash, nil)
+}
+
+// TabsWithAmount also stamps the exact figure, which is what the page needs to say how a
+// purchase would leave the balance while somebody is still typing the amount.
+func TabsWithAmount(cash string, amount *float64) string {
 	if cash == "" {
 		return Tabs
 	}
-	chip := `<span class="tab-cash" id="tab-cash" title="Tu saldo ahora mismo">` +
+	exact := ""
+	if amount != nil {
+		exact = fmt.Sprintf(` data-cash="%.0f"`, *amount)
+	}
+	chip := `<span class="tab-cash" id="tab-cash" title="Tu saldo ahora mismo"` + exact + `>` +
 		Esc(cash) + `</span>`
 	return strings.Replace(Tabs, `</div>`, chip+`</div>`, 1)
 }
@@ -476,14 +486,14 @@ func buildChip() string {
 // off: a static file is honest about not being live, and the script turns it on when the
 // push channel connects.
 func Header(generated, leagueName string, week int, kpis []string, withTabs bool,
-	mode, cash string) string {
+	mode, cash string, cashAmount *float64) string {
 	league := ""
 	if leagueName != "" {
 		league = ` · liga <strong>` + Esc(leagueName) + `</strong>`
 	}
 	tabs := ""
 	if withTabs {
-		tabs = TabsWith(cash)
+		tabs = TabsWithAmount(cash, cashAmount)
 	}
 	return `<header><h1>LaLiga Fantasy · panel de decisiones</h1>` +
 		`<p>` + Esc(generated) + league +
