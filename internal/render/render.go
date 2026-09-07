@@ -1103,6 +1103,48 @@ func PowerBadge(row map[string]any) string {
 
 // BidButton is only rendered where a bid is actually possible; the server re-validates
 // anyway, because a page can be minutes old by the time somebody clicks.
+// RiskBar is an estimated chance as a bar: the number reads first and the fill is the second
+// reading, the same way every other magnitude on the page is drawn.
+func RiskBar(share float64) string {
+	percent := math.Max(0, math.Min(100, share*100))
+	return fmt.Sprintf(`<span class="bar-cell" title="%s">`+
+		`<span class="bar-num">%.0f%%</span>`+
+		`<span class="mag-track"><span class="mag-fill" style="width:%.1f%%"></span></span>`+
+		`</span>`,
+		"probabilidad estimada de que alguien pague su cláusula al abrirse la ventana",
+		percent, percent)
+}
+
+// RaiseButton is the recommendation as a click: the amount is already computed, so the button
+// carries it and the modal opens on the confirmation rather than on an empty field.
+func RaiseButton(row map[string]any) string {
+	pay := number(row["pay"])
+	if pay <= 0 || text(row["verdict"]) == "dejalo ir" {
+		return Missing
+	}
+	return fmt.Sprintf(`<button class="raise" data-raise="%s" data-raise-name="%s" `+
+		`data-raise-pay="%d" data-raise-slot="%s" data-raise-clause="%d" `+
+		`data-raise-target="%d" type="button">Subir</button>`,
+		Esc(text(row["id"])), Esc(text(row["name"])), int64(pay),
+		Esc(text(row["player_team_id"])), int64(number(row["clause"])),
+		int64(number(row["target_clause"])))
+}
+
+// RaiseVerdict is the sentence, coloured by what it asks for: spending, waiting, or letting him
+// go. The reason travels in the same cell, because "sube" without it is an order.
+func RaiseVerdict(row map[string]any) string {
+	verdict, why := text(row["verdict"]), text(row["why"])
+	status := map[string]string{
+		"sube": "warning", "no te llega": "critical", "dejalo ir": "neutral",
+		"tranquilo": "good",
+	}[verdict]
+	if status == "" {
+		status = "neutral"
+	}
+	return fmt.Sprintf(`<span class="pill-%s">%s</span>`, status, Esc(verdict)) +
+		` <span class="muted">` + Esc(why) + `</span>`
+}
+
 func BidButton(row map[string]any) string {
 	listing, _ := row["market"].(map[string]any)
 	marketID := text(listing["market_id"])
@@ -1993,6 +2035,117 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		columns = insert(columns, 0, Column{"Clausulazo", whole, "raid"})
 		return TableIn(columns, rows, "Ninguna cláusula a tu alcance", "", false), nil
 
+	case "caja":
+		// The wallet's table: what they pay, what it is worth, and the two numbers that
+		// decide it — how much of the price is above value, and what the sale gives away
+		// in points when his match has not been played yet.
+		columns := []Column{
+			{"", whole, "offer"},
+			{"Jugador", whole, "player"},
+			{"Te ofrecen", field("offer_amount"), "money"},
+			{"Valor", field("value"), "money"},
+			{"De mas", field("over_value"), "money"},
+			{"Tu once pierde", func(row map[string]any) any {
+				drop := number(row["xi_drop"])
+				if drop <= 0 {
+					return "nada: entra otro igual"
+				}
+				shape := text(row["shape_after"])
+				if starters := int(number(row["starters_after"])); starters < 11 {
+					return fmt.Sprintf("-%s xPts y te deja en %d", Num(&drop, 2), starters)
+				}
+				if shape != "" {
+					return fmt.Sprintf("-%s xPts, te obliga a %s", Num(&drop, 2), shape)
+				}
+				return "-" + Num(&drop, 2) + " xPts"
+			}, "text"},
+			{"Si vendes ya", func(row map[string]any) any {
+				if !truthy(row["match_pending"]) {
+					return "ya jugo: puntos a salvo"
+				}
+				kickoff := text(row["kickoff"])
+				if len(kickoff) >= 16 {
+					kickoff = kickoff[11:16]
+				}
+				return fmt.Sprintf("regalas %s xPts, juega a las %s",
+					Num(asFloat(row["points_at_risk"]), 1), kickoff)
+			}, "text"},
+		}
+		return TableIn(columns, rows, "Nadie te esta ofreciendo mas de lo que valen",
+			"caja", false), nil
+
+	case "perdiendo":
+		columns := []Column{
+			{"Jugador", whole, "player"},
+			{"Valor", field("value"), "money"},
+			{"Pierde en 7d", field("loses"), "money"},
+			{"Valor 7d", field("projected_pct"), "pct"},
+			{"xPts/j", field("xpts"), "num"},
+			{"Titular", field("start_probability"), "starts"},
+		}
+		return TableIn(columns, rows, "Ninguno se esta desinflando", "perdiendo", false), nil
+
+	case "chollos":
+		columns := []Column{
+			{"Jugador", whole, "player"},
+			{"Dueño", field("owner"), "text"},
+			{"Vale", field("value"), "money"},
+			{"Cuesta", field("entry_cost"), "money"},
+			{"Ganas de entrada", field("gap"), "money"},
+			{"Por donde", field("route"), "text"},
+			{"Su cláusula queda", func(row map[string]any) any {
+				after := number(row["clause_after"])
+				if after <= 0 {
+					return Missing
+				}
+				return fmt.Sprintf("%s · %.2fx", Money(&after), number(row["margin_after"]))
+			}, "text"},
+			{"Tu once gana", func(row map[string]any) any {
+				gain := number(row["xi_gain"])
+				if gain <= 0 {
+					return "nada: no entra en el once"
+				}
+				return "+" + Num(&gain, 2) + " xPts"
+			}, "text"},
+			{"Con tu caja", func(row map[string]any) any {
+				if truthy(row["affordable"]) {
+					return "lo pagas"
+				}
+				return "no llegas"
+			}, "text"},
+			{"xPts/j", field("xpts"), "num"},
+			{"Titular", field("start_probability"), "starts"},
+			{"Valor 7d", field("projected_pct"), "pct"},
+		}
+		return TableIn(columns, rows, "Nada por debajo de su valor ahora mismo", "chollos",
+			true), nil
+
+	case "subir":
+		// The defence of one player, in the order that matters: how likely he is to be taken,
+		// what losing him would do to the pitch, and only then what keeping him costs.
+		columns := []Column{
+			{"", whole, "raise"},
+			{"Jugador", whole, "player"},
+			{"Riesgo", field("risk"), "risk_pct"},
+			{"Quien", field("top_threat"), "text"},
+			{"Le renta a", field("tempted"), "int"},
+			{"Cláusula", field("clause"), "money"},
+			{"x valor", field("clause_margin"), "num"},
+			{"Se puede pagar", whole, "clause_when"},
+			{"Si te lo quitan", func(row map[string]any) any {
+				drop := number(row["xi_drop"])
+				if drop <= 0 {
+					return "nada: entra otro igual"
+				}
+				return "-" + Num(&drop, 2) + " xPts"
+			}, "text"},
+			{"Pagas", field("pay"), "money"},
+			{"Queda en", field("target_clause"), "money"},
+			{"Que hago", whole, "raise_verdict"},
+		}
+		return TableIn(columns, rows, "Ninguna cláusula tuya esta en peligro", "subir",
+			true), nil
+
 	case "ofertas":
 		// One row per offer, and the first thing it says is who: a rival's offer and the
 		// game's daily automatic bid are the same money and completely different news.
@@ -2189,6 +2342,15 @@ func CellIn(value any, kind string, section string) (string, string) {
 	case "raid":
 		row, _ := value.(map[string]any)
 		return RaidButton(row), sortKey(asFloat(row["clause"]))
+	case "raise":
+		row, _ := value.(map[string]any)
+		return RaiseButton(row), sortKey(asFloat(row["pay"]))
+	case "risk_pct":
+		// A share, not a measured frequency, and the row carries who and why beside it.
+		return RiskBar(number(value)), sortKey(asFloat(value))
+	case "raise_verdict":
+		row, _ := value.(map[string]any)
+		return RaiseVerdict(row), Esc(text(row["verdict"]))
 	case "cmp":
 		row, _ := value.(map[string]any)
 		return CompareButton(row), Esc(text(row["name"]))

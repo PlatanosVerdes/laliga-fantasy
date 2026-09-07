@@ -1460,36 +1460,59 @@ async function runAction(a,player){
   }
   closeDrawer();
   if(a.kind==='amount'){
-    const raise=a.op==='raise_clause';
-    pending={operation:a.op, market_id:a.market_id, player_id:a.player_id||player.id,
-             player_team_id:a.player_team_id||player.player_team_id,
-             offer_id:a.offer_id, bid_id:a.bid_id, name:player.name, min_bid:a.min||0,
-             ideal:player.ideal_bid||0, value:player.value,
-             raise, clause:+player.clause||0, safe:+a.safe_margin||0};
-    modal.hidden=false;
-    modal.querySelector('.bid-action').textContent=a.label+' —';
-    modal.querySelector('.bid-who').textContent=player.name;
-    // Un cero sugerido se deja en blanco a proposito: el aviso de debajo explica por que.
-    modal.querySelector('.bid-amount').value =
-      raise && !a.suggested ? '' : group(a.suggested||a.min||0);
-    modal.querySelector('#bid-amount-label').textContent=
-      raise ? 'Importe a pagar (se descuenta de tu saldo)' : 'Importe de la puja';
-    // Las referencias de puja no dicen nada de una clausula, y el techo de futbolfantasy es
-    // sobre comprar al jugador, no sobre proteger al tuyo.
-    modal.querySelector('.bid-refs').hidden=raise;
-    modal.querySelector('#bid-clause').hidden=!raise;
-    modal.querySelector('.bid-min').textContent=a.min?exact(a.min):'sin minimo';
-    modal.querySelector('.bid-ideal').textContent=player.ideal_bid?exact(player.ideal_bid):'sin margen';
-    modal.querySelector('.bid-value').textContent=exact(player.value);
-    showRivals(+a.bids||0, a.expires);
-    modal.querySelector('.bid-drop').hidden=true;
-    showStep(1);
-    modal.querySelector('.bid-error').textContent='';
-    checkAmount();
+    openAmount(a,player);
   }else{
     confirmOp({op:a.op, name:player.name, player_id:a.player_id||player.id,
                market_id:a.market_id, offer_id:a.offer_id, amount:a.amount||null});
   }
+}
+
+// El modal de importe: puja, venta o subida de clausula. Lo piden el cajon y los botones de
+// las tablas, asi que vive aparte y recibe el jugador ya resuelto.
+function openAmount(a,player){
+  const raise=a.op==='raise_clause';
+  pending={operation:a.op, market_id:a.market_id, player_id:a.player_id||player.id,
+           player_team_id:a.player_team_id||player.player_team_id,
+           offer_id:a.offer_id, bid_id:a.bid_id, name:player.name, min_bid:a.min||0,
+           ideal:player.ideal_bid||0, value:player.value,
+           raise, clause:+player.clause||0, safe:+a.safe_margin||0};
+  modal.hidden=false;
+  modal.querySelector('.bid-action').textContent=a.label+' —';
+  modal.querySelector('.bid-who').textContent=player.name;
+  // Un cero sugerido se deja en blanco a proposito: el aviso de debajo explica por que.
+  modal.querySelector('.bid-amount').value =
+    raise && !a.suggested ? '' : group(a.suggested||a.min||0);
+  modal.querySelector('#bid-amount-label').textContent=
+    raise ? 'Importe a pagar (se descuenta de tu saldo)' : 'Importe de la puja';
+  // Las referencias de puja no dicen nada de una clausula, y el techo de futbolfantasy es
+  // sobre comprar al jugador, no sobre proteger al tuyo.
+  modal.querySelector('.bid-refs').hidden=raise;
+  modal.querySelector('#bid-clause').hidden=!raise;
+  modal.querySelector('.bid-min').textContent=a.min?exact(a.min):'sin minimo';
+  modal.querySelector('.bid-ideal').textContent=player.ideal_bid?exact(player.ideal_bid):'sin margen';
+  modal.querySelector('.bid-value').textContent=exact(player.value);
+  showRivals(+a.bids||0, a.expires);
+  modal.querySelector('.bid-drop').hidden=true;
+  showStep(1);
+  modal.querySelector('.bid-error').textContent='';
+  checkAmount();
+}
+
+// El boton de la tabla de subida de clausulas: el importe ya esta calculado, asi que abre el
+// modal con el puesto y con la clausula que quedaria a la vista.
+function wireRaises(root=document){
+  root.querySelectorAll('button.raise[data-raise]').forEach(button=>{
+    if(button.dataset.wired) return;
+    button.dataset.wired='1';
+    button.addEventListener('click',()=>{
+      const d=button.dataset;
+      openAmount({op:'raise_clause', kind:'amount', label:'Subir clausula',
+                  player_id:d.raise, player_team_id:d.raiseSlot,
+                  suggested:+d.raisePay||0},
+                 {id:d.raise, name:d.raiseName, clause:+d.raiseClause||0,
+                  value:+d.raiseClause||0, ideal_bid:0});
+    });
+  });
 }
 
 async function scheduleRaid(dataset){
@@ -1963,11 +1986,11 @@ if(drawer){
 
 // ---- pestañas: una vista a la vez ------------------------------------------
 const TABS=[
-  {id:'decidir', label:'Decidir', sections:['plan','acciones']},
+  {id:'decidir', label:'Decidir', sections:['plan','acciones','caja','chollos']},
   {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
   // Lo que esta en marcha, en su propio sitio: lo que has puesto tu y lo que te han puesto a ti.
   {id:'misofertas', label:'Mis ofertas', sections:['mispujas','ofertas','resueltas']},
-  {id:'clausulas', label:'Cláusulas', sections:['programados','calendario','vencimientos','oportunidades','riesgo','clausulas']},
+  {id:'clausulas', label:'Cláusulas', sections:['subir','programados','calendario','vencimientos','oportunidades','clausulas']},
   {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
   {id:'partidos', label:'Partidos', sections:['jornada','partidos']},
   // Lo de los demas en su sitio: sus plantillas enteras y lo que pueden pagar por las tuyas.
@@ -2092,6 +2115,7 @@ async function swap(){
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });
   wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids();
+  wireRaises();
   wireManagers(); wireMatchdays(); tick();
   showTab(document.querySelector('.tab.on')?.dataset.tab||'decidir',
           {updateHash:false});
@@ -2157,7 +2181,7 @@ function connect(){
 }
 
 wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids();
-wireManagers(); wireMatchdays();
+wireRaises(); wireManagers(); wireMatchdays();
 wireTabs(); tick(); drawTray();
 const headCompare=document.getElementById('open-compare');
 if(headCompare) headCompare.addEventListener('click',openCompare);

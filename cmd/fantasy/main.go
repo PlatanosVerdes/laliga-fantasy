@@ -1498,6 +1498,8 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 		Plan:     policies.Plan(players, armed, time.Now()),
 		Raids:    policies.RaidPlan(players, armed, cash, clauseWindow(universe.Schedule)),
 		Window:   clauseWindow(universe.Schedule),
+		Money:    advice.Money(generic, cash, time.Now()),
+		Raise:    advice.ClausePlan(generic, cash),
 		Policies: policyRows,
 	}
 	return document.HTML(), nil
