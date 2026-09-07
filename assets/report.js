@@ -2066,6 +2066,14 @@ function showTab(id,{section=null,updateHash=true}={}){
   }
 }
 
+// El alto real de la barra pegada: las pestañas se parten en dos lineas en pantallas
+// estrechas, asi que la cabecera de tabla no puede pegarse a un numero escrito a mano.
+function measureTabs(){
+  const bar=document.getElementById('tabs');
+  if(!bar) return;
+  document.documentElement.style.setProperty('--tabs-h', bar.offsetHeight+'px');
+}
+
 function wireTabs(){
   const bar=document.getElementById('tabs');
   if(!bar||bar.dataset.wired) return;
@@ -2091,6 +2099,17 @@ let currentVersion=null;
 // cambios de alineacion sin guardar).
 const CLIENT_OWNED=new Set(['once']);
 
+// El saldo esta en dos sitios y no puede decir dos cosas: la pastilla de la barra, que es la
+// que se ve siempre, y el widget de la cabecera, que ademas lleva el puesto en la liga.
+function showCash(amount){
+  if(typeof amount!=='number') return;
+  const text=exact(amount);
+  const chip=document.getElementById('tab-cash');
+  if(chip){ chip.textContent=fmt(amount); chip.title='Tu saldo ahora mismo: '+text; }
+  const kpi=document.getElementById('kpi-cash');
+  if(kpi) kpi.textContent=fmt(amount);
+}
+
 async function swap(){
   const res=await fetch('/api/fragments');
   if(!res.ok) return;
@@ -2109,6 +2128,7 @@ async function swap(){
     return;
   }
   currentVersion=data.version;
+  showCash(data.cash);
   Object.entries(data.sections).forEach(([id,inner])=>{
     if(CLIENT_OWNED.has(id)) return;
     const node=document.getElementById(id);
@@ -2183,6 +2203,8 @@ function connect(){
 wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids();
 wireRaises(); wireManagers(); wireMatchdays();
 wireTabs(); tick(); drawTray();
+measureTabs();
+window.addEventListener('resize',measureTabs);
 const headCompare=document.getElementById('open-compare');
 if(headCompare) headCompare.addEventListener('click',openCompare);
 if(window.EventSource && location.protocol.startsWith('http')) connect();

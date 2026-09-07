@@ -1643,8 +1643,9 @@ func cmdShell(args []string) error {
 
 	case "cabecera":
 		fmt.Println(render.Header("18/08/2026 16:20", "Liga Fantasy Comité 2026-", 1,
-			[]string{`<div class="kpi">uno</div>`, `<div class="kpi">dos</div>`}, true, "auto"))
-		fmt.Println(render.Header("18/08/2026 16:20", "", 3, nil, false, ""))
+			[]string{`<div class="kpi">uno</div>`, `<div class="kpi">dos</div>`}, true, "auto",
+			"18.21M"))
+		fmt.Println(render.Header("18/08/2026 16:20", "", 3, nil, false, "", ""))
 
 	default:
 		return fmt.Errorf("caso desconocido: %s", args[0])
