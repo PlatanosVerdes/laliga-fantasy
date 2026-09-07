@@ -132,8 +132,13 @@ func (d Document) HTML() string {
 	sections = append(sections, d.rankingSections(players)...)
 
 	kpis := d.widgets(week, players)
+	// The balance rides in the tab bar, which is the only strip that stays on screen.
+	cash := ""
+	if budget := asFloat(d.Advice["budget"]); budget != nil {
+		cash = Money(budget)
+	}
 	header := Header(d.Generated, d.LeagueName, int(number(week["weekNumber"])), kpis,
-		hasAdvice, d.Mode)
+		hasAdvice, d.Mode, cash)
 	footer := Footer(number(universe["current_weight"]))
 
 	body := strings.Join(filterEmpty(sections), "")
@@ -231,7 +236,7 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 		Widget(KPI{Label: "Mi puesto", Value: position + "º",
 			Hint: fmt.Sprintf("%d puntos", int(number(me["points"]))),
 			Rank: pointsRank, Meter: &pointsShare, Status: pointsStatus, Tab: "rivales"}),
-		Widget(KPI{Label: "Mi saldo", Value: Money(budget),
+		Widget(KPI{Label: "Mi saldo", Value: Money(budget), ValueID: "kpi-cash",
 			Hint: text(me["power_note"]), Rank: cashRank, Meter: &cashShare,
 			Status: cashStatus, Tab: "rivales"}),
 		Widget(KPI{Label: "Valor de plantilla", Value: Money(&squadValue),

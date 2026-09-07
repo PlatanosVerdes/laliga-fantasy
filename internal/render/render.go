@@ -353,7 +353,10 @@ func truthy(value any) bool {
 type KPI struct {
 	Label string
 	Value string
-	Hint  string
+	// ID on the value, for the few whose number the live refresh has to keep honest without
+	// re-rendering the whole strip.
+	ValueID string
+	Hint    string
 	Rank  string
 	Meter *float64
 	Status string
@@ -370,9 +373,13 @@ func Widget(kpi KPI) string {
 	if kpi.Deadline != "" {
 		stamp = ` data-deadline="` + Esc(kpi.Deadline) + `" data-plain="1"`
 	}
+	ident := ""
+	if kpi.ValueID != "" {
+		ident = ` id="` + Esc(kpi.ValueID) + `"`
+	}
 	parts := []string{
 		`<span class="kpi-label">` + Esc(kpi.Label) + `</span>`,
-		`<span class="kpi-value"` + stamp + `>` + Esc(kpi.Value) + `</span>`,
+		`<span class="kpi-value"` + ident + stamp + `>` + Esc(kpi.Value) + `</span>`,
 	}
 	if kpi.Rank != "" {
 		status := kpi.Status
@@ -427,6 +434,19 @@ func RankOf(value float64, others []float64) (string, float64, string) {
 
 // Tabs are the page's groups. Rendered only when there is a session, because a chip
 // that jumps nowhere is worse than no chip.
+// TabsWith is the tab bar plus the balance. The bar is sticky, so this is the one place where
+// a number stays on screen while you scroll a table, and the balance is the number every button
+// on this page is judged against: with it only in the header it was gone after one scroll and
+// stale after any purchase, since the live refresh only replaces sections.
+func TabsWith(cash string) string {
+	if cash == "" {
+		return Tabs
+	}
+	chip := `<span class="tab-cash" id="tab-cash" title="Tu saldo ahora mismo">` +
+		Esc(cash) + `</span>`
+	return strings.Replace(Tabs, `</div>`, chip+`</div>`, 1)
+}
+
 const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
 	`<button class="tab" role="tab" data-tab="decidir" aria-selected="false" type="button">Decidir</button>` +
 	`<button class="tab" role="tab" data-tab="mercado" aria-selected="false" type="button">Mercado</button>` +
@@ -456,14 +476,14 @@ func buildChip() string {
 // off: a static file is honest about not being live, and the script turns it on when the
 // push channel connects.
 func Header(generated, leagueName string, week int, kpis []string, withTabs bool,
-	mode string) string {
+	mode, cash string) string {
 	league := ""
 	if leagueName != "" {
 		league = ` · liga <strong>` + Esc(leagueName) + `</strong>`
 	}
 	tabs := ""
 	if withTabs {
-		tabs = Tabs
+		tabs = TabsWith(cash)
 	}
 	return `<header><h1>LaLiga Fantasy · panel de decisiones</h1>` +
 		`<p>` + Esc(generated) + league +

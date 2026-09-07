@@ -37,8 +37,14 @@ body{margin:0;background:var(--plane);color:var(--ink);
 .wrap{max-width:1500px;margin:0 auto;padding:32px 20px 80px}
 header h1{font-size:27px;margin:0 0 4px;letter-spacing:-.015em}
 header p{margin:0;color:var(--ink-2);font-size:13px}
+/* Pegada arriba: es la unica tira que se queda en pantalla, asi que es donde vive el saldo.
+   El alto real lo mide el JS en --tabs-h, porque las pestañas se parten en dos lineas en
+   pantallas estrechas y las cabeceras de tabla se pegan justo debajo. */
 .tabs{display:flex;flex-wrap:wrap;gap:4px;margin:22px 0 0;border-bottom:1px solid var(--line);
-  padding-bottom:0}
+  padding-bottom:0;position:sticky;top:0;z-index:6;background:var(--plane)}
+.tab-cash{margin-left:auto;align-self:center;padding:4px 10px;font-size:13px;font-weight:700;
+  font-variant-numeric:tabular-nums;color:var(--ink);
+  background:color-mix(in srgb,var(--good) 16%,transparent);border-radius:6px}
 .tab{font:inherit;font-size:13px;font-weight:600;color:var(--muted);background:none;
   border:none;border-bottom:2px solid transparent;padding:9px 14px;cursor:pointer;
   margin-bottom:-1px}
@@ -79,7 +85,7 @@ h2{font-size:17px;margin:0 0 6px;display:flex;align-items:center;gap:9px;letter-
 table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
 th,td{padding:9px 11px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
 tbody tr:last-child td{border-bottom:none}
-th{position:sticky;top:0;z-index:1;background:var(--surface);cursor:pointer;font-size:11px;
+th{position:sticky;top:var(--tabs-h,0);z-index:1;background:var(--surface);cursor:pointer;font-size:11px;
   font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
   user-select:none;border-bottom:1px solid var(--baseline)}
 th:hover{color:var(--ink)}
