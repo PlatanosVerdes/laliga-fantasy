@@ -43,6 +43,8 @@ type Document struct {
 	// MineByWeek is how many of my players each team had on a past matchday, keyed by week.
 	// Reconstructed outside, because that needs the transfer log and this package only draws.
 	MineByWeek map[int]map[string]int
+	// Money is the wallet's view of the same world, computed by the advice layer.
+	Money map[string]any
 	// ClauseWindow is when the game accepts a clause payment at all. Nil is nobody having
 	// worked it out, and then the page says nothing rather than guessing an hour.
 	Window *schedule.Window
@@ -108,6 +110,8 @@ func (d Document) HTML() string {
 	if hasAdvice {
 		sections = append(sections, d.swapSection())
 		sections = append(sections, d.actionsSection())
+		sections = append(sections, d.moneySection())
+		sections = append(sections, d.bargainsSection())
 		sections = append(sections, d.planSection())
 		sections = append(sections, d.raidsSection())
 		sections = append(sections, d.offersSection())
@@ -748,6 +752,74 @@ func (d Document) raidsSection() string {
 		badge = fmt.Sprintf("%d en pie · %d sin hacer", len(live), len(stood))
 	}
 	return Section("Clausulazos programados", body, note, badge, "programados")
+}
+
+// moneySection is the wallet: what a sale would bank, what holding is costing, and what is on
+// sale for less than it is worth. The rest of the page ranks by score, which orders a squad and
+// not a balance — an offer 300k over value and a clause two million under it never appeared as
+// the same kind of decision anywhere.
+func (d Document) moneySection() string {
+	money := d.Money
+	if len(money) == 0 {
+		return ""
+	}
+	sell := rows(money["sell"])
+	losing := rows(money["fading"])
+	if len(sell) == 0 && len(losing) == 0 {
+		return ""
+	}
+
+	note := fmt.Sprintf("Caja <strong>%s</strong> · plantilla %s · en 7 dias %s por "+
+		"revalorizacion.", Money(asFloat(money["cash"])), Money(asFloat(money["squad_value"])),
+		signedMoney(number(money["projected_7d"])))
+	if banked := number(money["banked"]); banked > 0 {
+		note += fmt.Sprintf(" Aceptando lo de abajo tendrias <strong>%s</strong>.",
+			Money(asFloat(money["cash_if_sold"])))
+	}
+	note += " Vender a alguien cuyo partido no ha empezado <strong>regala sus puntos de esta " +
+		"jornada</strong>, asi que la fila lo dice."
+
+	body, _ := SectionTable("caja", sell)
+	if len(losing) > 0 {
+		table, _ := SectionTable("perdiendo", losing)
+		body += `<h3 class="kpi-label" style="margin-top:26px">Perdiendo valor</h3>` + table
+	}
+	return Section("Hacer caja", body, note, fmt.Sprintf("%d", len(sell)), "caja")
+}
+
+// signedMoney keeps the sign of a projection: "gana 1.20M" and "pierde 1.20M" are the same
+// figure and opposite news, and Money alone writes the minus where it is easy to miss.
+func signedMoney(amount float64) string {
+	if amount < 0 {
+		return "pierdes " + Money(asFloat(-amount))
+	}
+	return "ganas " + Money(asFloat(amount))
+}
+
+// bargainsSection is the other half of the wallet: paper profit the moment it lands, because
+// what leaves the balance is less than what the player is worth.
+func (d Document) bargainsSection() string {
+	found := rows(d.Money["bargains"])
+	if len(found) == 0 {
+		return ""
+	}
+	reach := 0
+	for _, row := range found {
+		if truthy(row["affordable"]) {
+			reach++
+		}
+	}
+	note := "Se compran por menos de lo que valen, asi que el jugador entra valiendo mas que " +
+		"lo que sale de la caja. <strong>Ganas de entrada</strong> es esa diferencia, y es lo " +
+		"que ordena la tabla: ninguna otra la mira. " +
+		fmt.Sprintf("<strong>%d de %d</strong> caben en tu caja. ", reach, len(found)) +
+		"Cuidado con la via: una <strong>cláusula</strong> se paga y ya esta, una " +
+		"<strong>oferta al dueño</strong> la tiene que aceptar el, y una <strong>puja " +
+		"libre</strong> es el minimo de una subasta que hay que ganar. Los fichajes recientes " +
+		"de rivales no salen: la norma de la liga tampoco les deja venderlos."
+	table, _ := SectionTable("chollos", found)
+	return Section("Por debajo de su valor", table, note,
+		fmt.Sprintf("%d", len(found)), "chollos")
 }
 
 func (d Document) offersSection() string {

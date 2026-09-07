@@ -1993,6 +1993,63 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		columns = insert(columns, 0, Column{"Clausulazo", whole, "raid"})
 		return TableIn(columns, rows, "Ninguna cláusula a tu alcance", "", false), nil
 
+	case "caja":
+		// The wallet's table: what they pay, what it is worth, and the two numbers that
+		// decide it — how much of the price is above value, and what the sale gives away
+		// in points when his match has not been played yet.
+		columns := []Column{
+			{"", whole, "offer"},
+			{"Jugador", whole, "player"},
+			{"Te ofrecen", field("offer_amount"), "money"},
+			{"Valor", field("value"), "money"},
+			{"De mas", field("over_value"), "money"},
+			{"Si vendes ya", func(row map[string]any) any {
+				if !truthy(row["match_pending"]) {
+					return "ya jugo: puntos a salvo"
+				}
+				kickoff := text(row["kickoff"])
+				if len(kickoff) >= 16 {
+					kickoff = kickoff[11:16]
+				}
+				return fmt.Sprintf("regalas %s xPts, juega a las %s",
+					Num(asFloat(row["points_at_risk"]), 1), kickoff)
+			}, "text"},
+		}
+		return TableIn(columns, rows, "Nadie te esta ofreciendo mas de lo que valen",
+			"caja", false), nil
+
+	case "perdiendo":
+		columns := []Column{
+			{"Jugador", whole, "player"},
+			{"Valor", field("value"), "money"},
+			{"Pierde en 7d", field("loses"), "money"},
+			{"Valor 7d", field("projected_pct"), "pct"},
+			{"xPts/j", field("xpts"), "num"},
+			{"Titular", field("start_probability"), "starts"},
+		}
+		return TableIn(columns, rows, "Ninguno se esta desinflando", "perdiendo", false), nil
+
+	case "chollos":
+		columns := []Column{
+			{"Jugador", whole, "player"},
+			{"Dueño", field("owner"), "text"},
+			{"Vale", field("value"), "money"},
+			{"Cuesta", field("entry_cost"), "money"},
+			{"Ganas de entrada", field("gap"), "money"},
+			{"Por donde", field("route"), "text"},
+			{"Con tu caja", func(row map[string]any) any {
+				if truthy(row["affordable"]) {
+					return "lo pagas"
+				}
+				return "no llegas"
+			}, "text"},
+			{"xPts/j", field("xpts"), "num"},
+			{"Titular", field("start_probability"), "starts"},
+			{"Valor 7d", field("projected_pct"), "pct"},
+		}
+		return TableIn(columns, rows, "Nada por debajo de su valor ahora mismo", "chollos",
+			true), nil
+
 	case "ofertas":
 		// One row per offer, and the first thing it says is who: a rival's offer and the
 		// game's daily automatic bid are the same money and completely different news.

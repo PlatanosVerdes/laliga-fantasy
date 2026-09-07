@@ -1963,7 +1963,7 @@ if(drawer){
 
 // ---- pestañas: una vista a la vez ------------------------------------------
 const TABS=[
-  {id:'decidir', label:'Decidir', sections:['plan','acciones']},
+  {id:'decidir', label:'Decidir', sections:['plan','acciones','caja','chollos']},
   {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
   // Lo que esta en marcha, en su propio sitio: lo que has puesto tu y lo que te han puesto a ti.
   {id:'misofertas', label:'Mis ofertas', sections:['mispujas','ofertas','resueltas']},
