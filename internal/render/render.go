@@ -2020,11 +2020,13 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 			"Ninguna cláusula interesante se abre en los proximos 10 dias.", "", false), nil
 
 	case "enventa":
-		// What rivals are asking, next to what the player is worth: this is where the
-		// fantasy prices show up, so the ratio sits right after the price.
-		columns := insert(PlayerColumns("Pide"), 2,
+		// Two prices, because they are two different things: what the listing asks, which is
+		// where the fantasy prices show up, and what a yes actually costs — no owner here
+		// takes less than his own cost or than the clause protecting the player.
+		columns := insert(PlayerColumns("Cuesta"), 2,
 			Column{"Vende", whole, "seller"})
-		columns = insert(columns, 5, Column{"Sobre valor", field("ask_ratio"), "ratio"})
+		columns = insert(columns, 4, Column{"Piden", field("asking"), "money"})
+		columns = insert(columns, 6, Column{"Sobre valor", field("ask_ratio"), "ratio"})
 		columns = insert(columns, 0, Column{"", whole, "bid"})
 		return TableIn(columns, rows, "Nadie ha puesto a nadie en venta", "", true), nil
 
@@ -2090,8 +2092,22 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 			{"Jugador", whole, "player"},
 			{"Dueño", field("owner"), "text"},
 			{"Vale", field("value"), "money"},
-			{"Cuesta", field("entry_cost"), "money"},
-			{"Ganas de entrada", field("gap"), "money"},
+			{"Piden", func(row map[string]any) any {
+				// Nothing at all on a clause: there is no listing to ask a price on, and a
+				// zero reads as free.
+				if asking := number(row["asking"]); asking > 0 {
+					return asking
+				}
+				return nil
+			}, "money"},
+			{"Cuesta de verdad", func(row map[string]any) any {
+				cost := number(row["entry_cost"])
+				if floor := text(row["cost_floor"]); floor != "" {
+					return Money(&cost) + " · " + floor
+				}
+				return Money(&cost)
+			}, "text"},
+			{"Sobre su valor", field("gap"), "money"},
 			{"Por donde", field("route"), "text"},
 			{"Su cláusula queda", func(row map[string]any) any {
 				after := number(row["clause_after"])

@@ -142,3 +142,51 @@ func TestMoneyBargainSaysWhatThePitchGains(t *testing.T) {
 		}
 	}
 }
+
+// Nobody in this league sells under his own cost or under the clause protecting the player, so
+// the asking price is not the price. Planning with it produced offers that were refused on
+// arrival and swaps that read as bargains.
+func TestRealCostUsesTheHigherFloor(t *testing.T) {
+	listed := func(asking, clause, paid float64) Row {
+		row := Row{"owner": "cristian1206", "value": 23_130_000.0, "clause": clause,
+			"market": Row{"market_id": "m", "min_bid": asking}}
+		if paid > 0 {
+			row["bought_for"] = paid
+		}
+		return row
+	}
+
+	cost, why := RealCost(listed(21_170_000, 23_130_000, 0))
+	if cost != 23_130_000 || why != "su cláusula" {
+		t.Errorf("la cláusula manda sobre lo que piden: %v %q", cost, why)
+	}
+
+	cost, why = RealCost(listed(21_170_000, 23_130_000, 26_000_000))
+	if cost != 26_000_000 || why != "lo que pagó por él" {
+		t.Errorf("y lo que pago manda sobre las dos: %v %q", cost, why)
+	}
+
+	// A free agent has nobody to refuse, so the minimum bid is the price.
+	free := Row{"value": 6_740_000.0, "market": Row{"market_id": "m", "min_bid": 6_510_000.0}}
+	if cost, why = RealCost(free); cost != 6_510_000 || why != "" {
+		t.Errorf("en el mercado libre no hay dueño que diga no: %v %q", cost, why)
+	}
+}
+
+// A signing that costs money and leaves the eleven exactly as it was has no reason to be on the
+// page, however big the discount looks.
+func TestMoneyDropsSigningsThatChangeNothing(t *testing.T) {
+	world := moneyWorld()
+	players := world["players"].([]any)
+	// Priced over his value and useless on the pitch: the two conditions together.
+	players = append(players, Row{"id": "7", "name": "decoracion", "owner": "them",
+		"position_id": 4.0, "value": 5_000_000.0, "xpts": 0.0, "clause": 9_000_000.0,
+		"market": Row{"market_id": "m7", "min_bid": 4_000_000.0}})
+	world["players"] = players
+
+	for _, row := range rowsOf(Money(world, 100_000_000, time.Date(2026, 9, 7, 11, 0, 0, 0, time.UTC))["bargains"]) {
+		if text(row["name"]) == "decoracion" {
+			t.Errorf("no suma nada al once y cuesta mas que su valor: %v", row["entry_cost"])
+		}
+	}
+}

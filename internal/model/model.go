@@ -94,9 +94,10 @@ type Player struct {
 	Image            string                 `json:"image"`
 	// When he was signed, read from the league's own log, and when the league's hold rule
 	// lets him be sold. Absent when he was never bought (or the log does not reach that far).
-	BoughtAt   *string `json:"bought_at"`
-	HoldUntil  *string `json:"hold_until"`
-	SaleLocked bool    `json:"sale_locked"`
+	BoughtAt   *string  `json:"bought_at"`
+	BoughtFor  *float64 `json:"bought_for"`
+	HoldUntil  *string  `json:"hold_until"`
+	SaleLocked bool     `json:"sale_locked"`
 	Starred          bool                   `json:"starred"`
 	RaidScheduled    bool                   `json:"raid_scheduled"`
 	MarketEntry      *Listing               `json:"market"`
@@ -954,8 +955,9 @@ func ApplyHoldRule(universe *Universe, myTeamID string, league rules.League) {
 
 	// Latest purchase wins: a player sold and bought back starts his hold again.
 	type purchase struct {
-		buyer string
-		when  time.Time
+		buyer  string
+		when   time.Time
+		amount *float64
 	}
 	bought := map[string]purchase{}
 	for _, event := range universe.Activity {
@@ -971,7 +973,8 @@ func ApplyHoldRule(universe *Universe, myTeamID string, league rules.League) {
 			continue
 		}
 		if previous, seen := bought[*event.PlayerID]; !seen || when.After(previous.when) {
-			bought[*event.PlayerID] = purchase{buyer: event.User1, when: when}
+			bought[*event.PlayerID] = purchase{buyer: event.User1, when: when,
+				amount: event.Amount}
 		}
 	}
 
@@ -998,6 +1001,9 @@ func ApplyHoldRule(universe *Universe, myTeamID string, league rules.League) {
 
 		stamp := last.when.Format(time.RFC3339)
 		player.BoughtAt = &stamp
+		// What his owner paid, which is the floor he sells at: in this league nobody takes an
+		// offer under his own cost, so the asking price alone is a price nobody accepts.
+		player.BoughtFor = last.amount
 		until := league.HeldUntil(last.when)
 		if until == nil {
 			continue

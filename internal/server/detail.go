@@ -281,7 +281,16 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 					map[string]any{"op": "direct_offer", "label": "Ofrecer a " + owner,
 						"kind": "amount", "market_id": marketID, "suggested": int64(suggested)})
 			}
-			actions = append(actions, bidActions(listing, number(listing["min_bid"]))...)
+			// Not the asking price: an offer under what the owner paid or under the clause he
+			// is protected by gets refused, so the field opens at what a yes costs.
+			realistic, floor := advice.RealCost(player)
+			offers := bidActions(listing, realistic)
+			if floor != "" && len(offers) > 0 && text(offers[0]["op"]) == "buy_offer" {
+				offers[0]["note"] = "Le llega como oferta de compra y decide el. Te sugiero " +
+					thousands(int64(realistic)) + ", que es " + floor + ": por debajo no suele " +
+					"aceptar nadie."
+			}
+			actions = append(actions, offers...)
 		} else {
 			actions = append(actions, map[string]any{"op": "note", "kind": "note",
 				"label": owner + " no lo tiene en venta: solo se le puede pagar la clausula"})
