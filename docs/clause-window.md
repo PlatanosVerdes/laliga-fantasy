@@ -11,7 +11,8 @@ POST /v1/competition/1/league/{league}/buyout/{slot}/pay
 ```
 
 So the rule is the calendar's, not the market's, and it is the same for everybody: while the
-window is shut no rival can raid you either. That is worth knowing before spending anything,
+window is shut no rival can raid you either. What the clause itself is worth, and what it
+becomes when a player changes hands, is in [clauses.md](clauses.md). That is worth knowing before spending anything,
 because a shield bought inside those hours protects against nothing
 ([shield.md](shield.md)).
 

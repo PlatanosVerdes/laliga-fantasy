@@ -467,10 +467,13 @@ const SafeMargin = 1.6
 // costs you the player.
 type Threat struct {
 	Manager string
-	Cash    float64
-	PPM     float64
-	Bar     float64
-	Worth   bool
+	// TeamID so the threat can be looked up again: whether his squad is short in that
+	// position is the difference between a rival who might and one who has a reason to.
+	TeamID string
+	Cash   float64
+	PPM    float64
+	Bar    float64
+	Worth  bool
 }
 
 // SquadRates is what each squad in the league already returns per million, which is the bar a
@@ -509,7 +512,7 @@ func ClauseThreats(player Row, teams []Row, rates map[string]float64) ([]Threat,
 		if truthy(team["is_me"]) || number(team["estimated_cash"]) < clause {
 			continue
 		}
-		threat := Threat{Manager: text(team["manager"]),
+		threat := Threat{Manager: text(team["manager"]), TeamID: text(team["team_id"]),
 			Cash: number(team["estimated_cash"]), Bar: rates[text(team["team_id"])]}
 		if clause != 0 {
 			threat.PPM = xpts / (clause / 1e6)

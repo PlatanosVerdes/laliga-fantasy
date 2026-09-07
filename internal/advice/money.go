@@ -18,6 +18,14 @@ import (
 // noise: every player drifts a few thousand a day.
 const FadingFloor = 200_000
 
+// What a signing's clause becomes, measured rather than assumed: over nine transfers in this
+// league the clause after a purchase was max(price, market value), never under a million, and
+// locked for exactly 336 hours. See docs/clauses.md.
+const (
+	ClauseFloor = 1_000_000
+	ClauseGrace = 14 * 24 * time.Hour
+)
+
 // Money is the wallet's view: what selling would bank, what holding is costing, and what is on
 // sale for less than it is worth.
 func Money(universe Row, cash float64, now time.Time) Row {
@@ -35,17 +43,24 @@ func Money(universe Row, cash float64, now time.Time) Row {
 		projected += number(player["projected_gain"])
 	}
 
-	sell, banked := sellNow(mine, pending)
+	// What the pitch is worth before anything moves. Selling is never the loss of a player's
+	// points, it is the drop to whoever takes his slot, and buying a good one is only a gain if
+	// he displaces somebody: that is the difference between a signing and a decoration.
+	xiNow, shapeNow, _ := bestEleven(mine)
+
+	sell, banked := sellNow(mine, pending, xiNow)
 	return Row{
 		"cash":         cash,
 		"squad_value":  squadValue,
 		"projected_7d": projected,
+		"xi_now":       xiNow,
+		"shape_now":    shapeNow,
 		// What the wallet would hold tonight if every offer worth taking were taken.
 		"cash_if_sold": cash + banked,
 		"banked":       banked,
 		"sell":         sell,
 		"fading":       fading(mine),
-		"bargains":     bargains(players, cash, now),
+		"bargains":     bargains(players, mine, cash, xiNow),
 	}
 }
 
@@ -54,7 +69,7 @@ func Money(universe Row, cash float64, now time.Time) Row {
 //
 // The points a sale costs travel with it. Selling a player whose match has not kicked off gives
 // away this matchday's points along with the player, and nothing on the page said so.
-func sellNow(mine []Row, pending map[string]string) ([]Row, float64) {
+func sellNow(mine []Row, pending map[string]string, xiNow float64) ([]Row, float64) {
 	out := []Row{}
 	banked := 0.0
 	for _, player := range mine {
@@ -77,6 +92,10 @@ func sellNow(mine []Row, pending map[string]string) ([]Row, float64) {
 				row["kickoff"] = kickoff
 				row["points_at_risk"] = number(player["xpts"])
 			}
+			after, shape, starters := bestEleven(without(mine, text(player["id"])))
+			row["xi_after"], row["xi_drop"] = after, xiNow-after
+			row["shape_after"] = shape
+			row["starters_after"] = starters
 			out = append(out, row)
 			banked += amount
 		}
@@ -107,7 +126,7 @@ func fading(mine []Row) []Row {
 //
 // The gap is paper profit the moment it lands — the player is immediately worth more than what
 // left the balance — and it is the one number none of the other tables sorts by.
-func bargains(players []Row, cash float64, now time.Time) []Row {
+func bargains(players, mine []Row, cash, xiNow float64) []Row {
 	out := []Row{}
 	for _, player := range players {
 		if truthy(player["is_mine"]) {
@@ -121,9 +140,21 @@ func bargains(players []Row, cash float64, now time.Time) []Row {
 			if cost <= 0 || cost >= value {
 				return
 			}
+			// What his clause becomes the moment he is yours, measured over nine signings in
+			// this league: max(price, value) with a floor of a million, locked for exactly 14
+			// days. So a bargain arrives at 1.00x — the cheapest clause there is — and the
+			// margin only gets worse as his value grows. The gap is real, the exposure comes
+			// with it, and both belong on the same row.
+			clause := math.Max(math.Max(cost, value), ClauseFloor)
+			with, shape, _ := bestEleven(append(append([]Row{}, mine...), player))
 			out = append(out, merge(player, Row{
 				"entry_cost": cost, "route": route, "gap": value - cost,
 				"affordable": cost <= cash,
+				// What he would actually add to the pitch. A striker who does not get into
+				// the eleven is 21 million of decoration.
+				"xi_with": with, "xi_gain": with - xiNow, "shape_with": shape,
+				"clause_after": clause, "margin_after": clause / value,
+				"safe_until":   ClauseGrace.Hours(),
 			}))
 		}
 
@@ -152,6 +183,17 @@ func bargains(players []Row, cash float64, now time.Time) []Row {
 	sort.SliceStable(out, func(one, two int) bool {
 		return number(out[one]["gap"]) > number(out[two]["gap"])
 	})
+	return out
+}
+
+// without is the squad minus one player, by id.
+func without(squad []Row, id string) []Row {
+	out := make([]Row, 0, len(squad))
+	for _, player := range squad {
+		if text(player["id"]) != id {
+			out = append(out, player)
+		}
+	}
 	return out
 }
 

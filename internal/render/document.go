@@ -45,6 +45,9 @@ type Document struct {
 	MineByWeek map[int]map[string]int
 	// Money is the wallet's view of the same world, computed by the advice layer.
 	Money map[string]any
+	// Raise is the clause-raise plan: what each of my players is exposed to and what
+	// defending him would cost.
+	Raise map[string]any
 	// ClauseWindow is when the game accepts a clause payment at all. Nil is nobody having
 	// worked it out, and then the page says nothing rather than guessing an hour.
 	Window *schedule.Window
@@ -787,6 +790,41 @@ func (d Document) moneySection() string {
 	return Section("Hacer caja", body, note, fmt.Sprintf("%d", len(sell)), "caja")
 }
 
+// raiseSection is the defence of the squad: who is likely to be taken when the window opens,
+// what losing him would cost the pitch, and what keeping him would cost the balance.
+func (d Document) raiseSection() string {
+	plan := d.Raise
+	if len(plan) == 0 {
+		return ""
+	}
+	entries := rows(plan["rows"])
+	if len(entries) == 0 {
+		return ""
+	}
+	armed := 0
+	for _, row := range entries {
+		if truthy(row["in_plan"]) {
+			armed++
+		}
+	}
+
+	note := "El <strong>riesgo</strong> es una estimacion, no una frecuencia medida: sale de " +
+		"quien tiene caja para pagar la cláusula, de cuanto le renta por millon frente a lo " +
+		"que ya tiene, y de si le falta esa posicion. Al lado va quien es. " +
+		"<strong>Pagas</strong> es lo que sale de tu caja, y la cláusula sube el doble, " +
+		"hasta dejarla donde ya no le renta a nadie o donde nadie puede pagarla, lo que " +
+		"salga mas barato. Y antes de gastar, la columna que decide: <strong>si te lo " +
+		"quitan, cuanto pierde tu mejor once</strong> — si es poco, defenderlo es tirar el " +
+		"dinero y la cláusula cobrada es mejor negocio."
+	if armed > 0 {
+		note += fmt.Sprintf(" Con tu caja llegas a <strong>%d</strong>, %s en total, y te "+
+			"quedarian %s.", armed, Money(asFloat(plan["spend"])),
+			Money(asFloat(plan["cash_left"])))
+	}
+	table, _ := SectionTable("subir", entries)
+	return Section("Subir cláusulas", table, note, fmt.Sprintf("%d", armed), "subir")
+}
+
 // signedMoney keeps the sign of a projection: "gana 1.20M" and "pierde 1.20M" are the same
 // figure and opposite news, and Money alone writes the minus where it is easy to miss.
 func signedMoney(amount float64) string {
@@ -812,6 +850,10 @@ func (d Document) bargainsSection() string {
 	note := "Se compran por menos de lo que valen, asi que el jugador entra valiendo mas que " +
 		"lo que sale de la caja. <strong>Ganas de entrada</strong> es esa diferencia, y es lo " +
 		"que ordena la tabla: ninguna otra la mira. " +
+		"<strong>Su cláusula queda</strong> en lo que pagues o en su valor, el mayor de los " +
+		"dos, y no se puede pagar durante 14 dias: comprarlo barato es entrar con la " +
+		"cláusula a 1.00x, que es la mas expuesta que hay, asi que la subida entra en el " +
+		"precio de la operacion. " +
 		fmt.Sprintf("<strong>%d de %d</strong> caben en tu caja. ", reach, len(found)) +
 		"Cuidado con la via: una <strong>cláusula</strong> se paga y ya esta, una " +
 		"<strong>oferta al dueño</strong> la tiene que aceptar el, y una <strong>puja " +
@@ -1203,16 +1245,16 @@ func (d Document) marketSections() []string {
 		"Ordenados por presion de venta: score bajo, valor cayendo, poca titularidad "+
 			"o exceso en la posicion.", "", "ventas"))
 
-	exposure := rows(d.Advice["exposure"])
-	table, _ = SectionTable("riesgo", exposure)
-	out = append(out, Section("Riesgo de cláusula", table,
-		"Tus jugadores buenos con cláusula baja, contando cuantos rivales tienen caja "+
-			"para pagarla ahora mismo.", "", "riesgo"))
+	// The exposure table used to live here, saying who was cheap and how many could pay it.
+	// "Subir cláusulas" answers the same question and then the next two — how likely it is,
+	// and what defending him costs — so keeping both would be the same section twice.
 	return out
 }
 
 func (d Document) clauseSections() []string {
 	var out []string
+
+	out = append(out, d.raiseSection())
 
 	mine := rows(d.Advice["my_clauses_soon"])
 	table, _ := SectionTable("vencimientos", mine)

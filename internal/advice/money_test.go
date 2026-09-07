@@ -105,3 +105,40 @@ func names(rows []Row) []string {
 	}
 	return out
 }
+
+// A signing arrives with a clause of its own, and what it lands at was measured rather than
+// assumed: max(price, value), floored at a million. Buying below value therefore means entering
+// at 1.00x, which is the most exposed clause there is, so the row has to say it.
+func TestMoneyBargainSaysWhatTheClauseBecomes(t *testing.T) {
+	money := Money(moneyWorld(), 100_000_000, time.Date(2026, 9, 7, 11, 0, 0, 0, time.UTC))
+	for _, row := range rowsOf(money["bargains"]) {
+		want := number(row["value"])
+		if cost := number(row["entry_cost"]); cost > want {
+			want = cost
+		}
+		if want < ClauseFloor {
+			want = ClauseFloor
+		}
+		if got := number(row["clause_after"]); got != want {
+			t.Errorf("%s: clausula al fichar %v, want %v", text(row["name"]), got, want)
+		}
+		if margin := number(row["margin_after"]); margin < 1 {
+			t.Errorf("%s: entrar por debajo de su valor deja la clausula a %.2fx",
+				text(row["name"]), margin)
+		}
+	}
+}
+
+// A signing that does not get into the eleven is decoration, however big the discount is.
+func TestMoneyBargainSaysWhatThePitchGains(t *testing.T) {
+	money := Money(moneyWorld(), 100_000_000, time.Date(2026, 9, 7, 11, 0, 0, 0, time.UTC))
+	found := rowsOf(money["bargains"])
+	if len(found) == 0 {
+		t.Fatal("sin chollos no hay nada que medir")
+	}
+	for _, row := range found {
+		if _, ok := row["xi_gain"]; !ok {
+			t.Errorf("%s no dice lo que suma al once", text(row["name"]))
+		}
+	}
+}
