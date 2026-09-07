@@ -834,8 +834,8 @@ func signedMoney(amount float64) string {
 	return "ganas " + Money(asFloat(amount))
 }
 
-// bargainsSection is the other half of the wallet: paper profit the moment it lands, because
-// what leaves the balance is less than what the player is worth.
+// bargainsSection is the other half of the wallet: what a signing really costs — nobody here
+// sells under his own cost or under the clause — and what the pitch really gets for it.
 func (d Document) bargainsSection() string {
 	found := rows(d.Money["bargains"])
 	if len(found) == 0 {
@@ -847,20 +847,22 @@ func (d Document) bargainsSection() string {
 			reach++
 		}
 	}
-	note := "Se compran por menos de lo que valen, asi que el jugador entra valiendo mas que " +
-		"lo que sale de la caja. <strong>Ganas de entrada</strong> es esa diferencia, y es lo " +
-		"que ordena la tabla: ninguna otra la mira. " +
+	note := "<strong>Lo que piden no es lo que cuesta</strong>: aqui nadie acepta una oferta " +
+		"por debajo de lo que pago por el jugador ni por debajo de la cláusula que lo " +
+		"protege, asi que la columna de al lado es el precio al que hay un si, y dice cual de " +
+		"los dos suelos manda. " +
+		"La tabla la ordena <strong>lo que gana tu mejor once</strong>, no el descuento: un " +
+		"chollo que no entra en el once es dinero decorando el banquillo. " +
 		"<strong>Su cláusula queda</strong> en lo que pagues o en su valor, el mayor de los " +
-		"dos, y no se puede pagar durante 14 dias: comprarlo barato es entrar con la " +
-		"cláusula a 1.00x, que es la mas expuesta que hay, asi que la subida entra en el " +
-		"precio de la operacion. " +
+		"dos, y no se puede pagar durante 14 dias — ficharlo por su valor justo es entrar a " +
+		"1.00x, la cláusula mas expuesta que hay, asi que la subida forma parte del precio. " +
 		fmt.Sprintf("<strong>%d de %d</strong> caben en tu caja. ", reach, len(found)) +
-		"Cuidado con la via: una <strong>cláusula</strong> se paga y ya esta, una " +
-		"<strong>oferta al dueño</strong> la tiene que aceptar el, y una <strong>puja " +
-		"libre</strong> es el minimo de una subasta que hay que ganar. Los fichajes recientes " +
-		"de rivales no salen: la norma de la liga tampoco les deja venderlos."
+		"Y la via cambia quien decide: una <strong>cláusula</strong> se paga y nadie puede " +
+		"negarse, una <strong>oferta al dueño</strong> la acepta el si quiere, y una " +
+		"<strong>puja libre</strong> es el minimo de una subasta que hay que ganar. Los " +
+		"fichajes recientes de rivales no salen: la norma de la liga tampoco les deja venderlos."
 	table, _ := SectionTable("chollos", found)
-	return Section("Por debajo de su valor", table, note,
+	return Section("Fichar: lo que cuesta de verdad", table, note,
 		fmt.Sprintf("%d", len(found)), "chollos")
 }
 
@@ -1172,8 +1174,10 @@ func (d Document) marketSections() []string {
 	asks := rows(d.Advice["asks"])
 	table, _ = SectionTable("enventa", asks)
 	out = append(out, Section("En venta por rivales", table,
-		"Lo que los demas han puesto en el mercado, con lo que piden comparado con el "+
-			"valor real. Aqui es donde aparecen los precios de fantasia.",
+		"Lo que los demas han puesto en el mercado. <strong>Piden</strong> es el precio del "+
+			"anuncio, que es donde salen los precios de fantasia, y <strong>Cuesta</strong> "+
+			"es lo que hay que poner para que digan si: nadie acepta por debajo de lo que "+
+			"pago ni por debajo de la cláusula que protege al jugador.",
 		fmt.Sprintf("%d", len(asks)), "enventa"))
 
 	if sent := rows(d.Advice["my_bids"]); len(sent) > 0 {

@@ -132,9 +132,21 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 			}
 		default:
 			ratio := number(over)
-			asks = append(asks, entry(player, cost, "venta de rival", Row{
-				"ask_ratio": over, "seller": listing["seller"],
-				"overpriced": over != nil && ratio > 1.15,
+			// The asking price is not the price: nobody here sells under his own cost or under
+			// the clause protecting the player, so the plan is priced at what a yes costs.
+			real, floor := RealCost(player)
+			// The ratio has to be the real cost over the value, not the advert over the
+			// value: with the asking price it called a player a bargain in one column while
+			// the next one said he costs more than he is worth.
+			var realRatio any
+			if value := number(player["value"]); value != 0 {
+				realRatio = real / value
+				ratio = real / value
+			}
+			asks = append(asks, entry(player, real, "venta de rival", Row{
+				"ask_ratio": realRatio, "seller": listing["seller"],
+				"overpriced": realRatio != nil && ratio > 1.15,
+				"asking":     cost, "cost_floor": floor,
 			}))
 		}
 	}

@@ -121,11 +121,13 @@ func fading(mine []Row) []Row {
 	return out
 }
 
-// bargains is everything on sale for less than the game says it is worth, by whichever route
-// it can be bought: a rival's listing, the free market, or a buyout clause under his value.
+// bargains is what signing somebody would really cost and what the pitch would really get.
 //
-// The gap is paper profit the moment it lands — the player is immediately worth more than what
-// left the balance — and it is the one number none of the other tables sorts by.
+// It started as "everything under its market value", which in this league is almost nothing: no
+// rival accepts an offer below what he paid or below the clause protecting the player, so the
+// floor is the clause and the paper profit disappears. What is left is the pair of numbers that
+// actually decide a signing — the price a yes costs, and how much better the best legal eleven
+// gets — so the order is by the second and the first is written beside it.
 func bargains(players, mine []Row, cash, xiNow float64) []Row {
 	out := []Row{}
 	for _, player := range players {
@@ -136,8 +138,10 @@ func bargains(players, mine []Row, cash, xiNow float64) []Row {
 		if value <= 0 {
 			continue
 		}
-		add := func(cost float64, route string) {
-			if cost <= 0 || cost >= value {
+		add := func(cost float64, route, floor string) {
+			// A price over value is normal now; what is never worth a row is a signing that
+			// costs money and leaves the eleven exactly as it was.
+			if cost <= 0 {
 				return
 			}
 			// What his clause becomes the moment he is yours, measured over nine signings in
@@ -147,8 +151,12 @@ func bargains(players, mine []Row, cash, xiNow float64) []Row {
 			// with it, and both belong on the same row.
 			clause := math.Max(math.Max(cost, value), ClauseFloor)
 			with, shape, _ := bestEleven(append(append([]Row{}, mine...), player))
+			if with-xiNow <= 0 && cost >= value {
+				return
+			}
 			out = append(out, merge(player, Row{
 				"entry_cost": cost, "route": route, "gap": value - cost,
+				"cost_floor": floor, "asking": number(mapOf(player["market"])["min_bid"]),
 				"affordable": cost <= cash,
 				// What he would actually add to the pitch. A striker who does not get into
 				// the eleven is 21 million of decoration.
@@ -161,6 +169,7 @@ func bargains(players, mine []Row, cash, xiNow float64) []Row {
 		listing := mapOf(player["market"])
 		if truthy(listing["market_id"]) {
 			route := "puja libre"
+			cost, floor := RealCost(player)
 			// A rival's listing is an offer he still has to accept, and the league's hold rule
 			// applies to him too: asking for a player he agreed not to sell yet is asking him
 			// to break the pact, so it is not an opportunity.
@@ -171,16 +180,24 @@ func bargains(players, mine []Row, cash, xiNow float64) []Row {
 				}
 			}
 			if route != "" {
-				add(number(listing["min_bid"]), route)
+				add(cost, route, floor)
 			}
 		}
 		// A clause is only a route while it is unlocked and nobody has shielded him.
 		if text(player["owner"]) != "" && !truthy(player["shielded"]) &&
 			!truthy(player["clause_locked"]) {
-			add(number(player["clause"]), "clausula")
+			// The one route nobody can refuse, which is what makes it worth its own row even
+			// when it costs more than the listing.
+			add(number(player["clause"]), "clausula", "")
 		}
 	}
+	// By what it does for the pitch, and the gap only breaks ties: 1.9M of paper profit on a
+	// player who never starts is worth less than a point of xPts every matchday.
 	sort.SliceStable(out, func(one, two int) bool {
+		first, second := number(out[one]["xi_gain"]), number(out[two]["xi_gain"])
+		if first != second {
+			return first > second
+		}
 		return number(out[one]["gap"]) > number(out[two]["gap"])
 	})
 	return out
