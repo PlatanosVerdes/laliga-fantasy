@@ -9,13 +9,13 @@ import (
 // is deployed is to read the container's logs, and a stale page looks exactly like a broken fix.
 func TestHeaderShowsTheBuildOnlyWhenStamped(t *testing.T) {
 	Build = ""
-	if got := Header("21/08/2026 16:07", "Liga", 2, nil, false, "auto", ""); strings.Contains(got, "build") {
+	if got := Header("21/08/2026 16:07", "Liga", 2, nil, false, "auto", "", nil); strings.Contains(got, "build") {
 		t.Errorf("sin sello no deberia anunciar version: %s", got)
 	}
 
 	Build = "v2026.08.21.3"
 	defer func() { Build = "" }()
-	got := Header("21/08/2026 16:07", "Liga", 2, nil, false, "auto", "")
+	got := Header("21/08/2026 16:07", "Liga", 2, nil, false, "auto", "", nil)
 	if !strings.Contains(got, `class="build"`) || !strings.Contains(got, "v2026.08.21.3") {
 		t.Errorf("la cabecera deberia llevar la version: %s", got)
 	}
@@ -35,5 +35,19 @@ func TestTabBarCarriesTheBalance(t *testing.T) {
 	// No session, no balance: an empty chip would read as being broke.
 	if TabsWith("") != Tabs {
 		t.Error("sin saldo la barra se queda como estaba")
+	}
+}
+
+// The page does arithmetic with the balance while somebody types an amount, so the chip carries
+// the exact figure and not only the rounded label it shows.
+func TestTabBarStampsTheExactBalance(t *testing.T) {
+	amount := 18_205_453.0
+	got := TabsWithAmount("18.21M", &amount)
+	if !strings.Contains(got, `data-cash="18205453"`) {
+		t.Errorf("la barra tiene que llevar la cifra exacta: %s", got)
+	}
+	// Without a figure there is nothing to stamp, and a zero would read as being broke.
+	if strings.Contains(TabsWithAmount("18.21M", nil), "data-cash") {
+		t.Error("sin cifra no se estampa nada")
 	}
 }

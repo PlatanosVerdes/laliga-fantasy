@@ -203,6 +203,31 @@ function showRivals(count, expires){
 // Vive aqui porque es la unica operacion en la que el importe que escribes no es lo que cambia.
 const CLAUSE_FACTOR=2;
 
+// Cuando el dinero entra en vez de salir. Una venta no cobra hoy: cobra si alguien la compra,
+// y por eso la linea lo dice en vez de sumar y callarse.
+const CASH_IN=new Set(['sell_to_market','accept_offer']);
+// Lo que todavia no ha pasado: una puja no descuenta hasta que se gana, y una oferta a un
+// rival no descuenta hasta que la acepta.
+const CASH_WHEN={bid:'si la ganas', modify_bid:'si la ganas', buy_offer:'si te la aceptan',
+                 direct_offer:'si te la aceptan', sell_to_market:'si te lo compran',
+                 accept_offer:'al aceptarla'};
+
+// Como queda el saldo, mientras se escribe el importe. Es la unica referencia que decide si la
+// operacion se puede hacer, y solo aparecia en el paso dos, cuando el importe ya estaba puesto.
+function showBalance(amount){
+  const box=modal.querySelector('.bid-balance');
+  if(!box) return;
+  const op=pending.operation||'bid';
+  if(myCash==null||!amount){ box.hidden=true; return; }
+  const after=myCash+(CASH_IN.has(op)?amount:-amount);
+  const when=CASH_WHEN[op];
+  box.innerHTML='Saldo <b>'+exact(myCash)+'</b> → <b class="'
+    +(after<0?'balance-bad':'balance-after')+'">'+exact(after)+'</b>'
+    +(when?' <span class="muted">'+when+'</span>':'')
+    +(after<0?' <span class="balance-bad">no te llega</span>':'');
+  box.hidden=false;
+}
+
 function clauseSums(amount){
   const box=modal.querySelector('#bid-clause');
   if(!box) return;
@@ -241,6 +266,7 @@ function checkAmount(){
   let text='';
   // Subir una clausula no tiene puja minima ni techo de futbolfantasy: ese techo es lo que
   // renta pagar *por el jugador*, y aqui no se compra a nadie. Decia "no le ve rentabilidad".
+  showBalance(amount);
   if(pending.raise){
     clauseSums(amount);
     if(!amount){
@@ -1381,6 +1407,7 @@ async function runAction(a,player){
     const answer=prompt('Clausulazo programado para '+player.name+'.\n\n'
       +'Se pagara en cuanto se libere la clausula, y SOLO si entonces sigue por debajo '
       +'del importe que pongas aqui. Si el dueño la sube o le pone blindaje, se cancela.\n\n'
+      +(myCash!=null?'Tu saldo ahora: '+exact(myCash)+'\n\n':'')
       +'Pago maximo (€):', current);
     if(answer===null) return;
     const max_pay=digits(answer);
@@ -1483,7 +1510,10 @@ function openAmount(a,player){
   modal.querySelector('.bid-amount').value =
     raise && !a.suggested ? '' : group(a.suggested||a.min||0);
   modal.querySelector('#bid-amount-label').textContent=
-    raise ? 'Importe a pagar (se descuenta de tu saldo)' : 'Importe de la puja';
+    raise ? 'Importe a pagar (se descuenta de tu saldo)'
+          : a.op==='pay_clause' ? 'Importe de la clausula (se descuenta de tu saldo)'
+          : a.op==='sell_to_market' ? 'Precio de venta'
+          : 'Importe de la puja';
   // Las referencias de puja no dicen nada de una clausula, y el techo de futbolfantasy es
   // sobre comprar al jugador, no sobre proteger al tuyo.
   modal.querySelector('.bid-refs').hidden=raise;
@@ -1524,6 +1554,7 @@ async function scheduleRaid(dataset){
     +(clause?('Clausula ahora: '+clause.toLocaleString('es-ES')+' €\n'):'')
     +'Si el dueño la sube por encima de tu limite, o blinda al jugador, se cancela '
     +'sola y no se paga nada.\n\n'
+    +(myCash!=null?'Tu saldo ahora: '+exact(myCash)+'\n\n':'')
     +'Pago maximo (€):', suggested);
   if(answer===null) return;
   const max_pay=digits(answer);
@@ -2101,8 +2132,11 @@ const CLIENT_OWNED=new Set(['once']);
 
 // El saldo esta en dos sitios y no puede decir dos cosas: la pastilla de la barra, que es la
 // que se ve siempre, y el widget de la cabecera, que ademas lleva el puesto en la liga.
+let myCash=null;
+
 function showCash(amount){
   if(typeof amount!=='number') return;
+  myCash=amount;
   const text=exact(amount);
   const chip=document.getElementById('tab-cash');
   if(chip){ chip.textContent=fmt(amount); chip.title='Tu saldo ahora mismo: '+text; }
@@ -2205,6 +2239,10 @@ wireRaises(); wireManagers(); wireMatchdays();
 wireTabs(); tick(); drawTray();
 measureTabs();
 window.addEventListener('resize',measureTabs);
+{
+  const stamped=document.getElementById('tab-cash');
+  if(stamped&&stamped.dataset.cash) myCash=+stamped.dataset.cash;
+}
 const headCompare=document.getElementById('open-compare');
 if(headCompare) headCompare.addEventListener('click',openCompare);
 if(window.EventSource && location.protocol.startsWith('http')) connect();
