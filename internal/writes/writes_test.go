@@ -321,3 +321,29 @@ func TestShieldRefusedWhileOneHolds(t *testing.T) {
 		t.Errorf("la negativa tiene que decir hasta cuando: %v", err)
 	}
 }
+
+// The confirmation says what the balance becomes, and for money coming in that is the point of
+// the figure: a listing does not pay today, it pays if somebody buys, and the page labels it
+// with that condition.
+func TestSummarySaysWhereTheBalanceEndsUp(t *testing.T) {
+	g := guard(10_000_000)
+	paying, err := g.Prepare("pay_clause",
+		Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "slot", Amount: 1_725_981},
+		Player{Name: "Raúl"}, true)
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	if paying.CashAfter == nil || *paying.CashAfter != 8_274_019 {
+		t.Errorf("pagar una clausula resta: %v", paying.CashAfter)
+	}
+
+	listing, err := g.Prepare("sell_to_market",
+		Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "slot", Amount: 11_020_000},
+		Player{Name: "Tárrega", Value: 11_020_000}, true)
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	if listing.CashAfter == nil || *listing.CashAfter != 21_020_000 {
+		t.Errorf("ponerlo en venta suma si te lo compran: %v", listing.CashAfter)
+	}
+}

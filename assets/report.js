@@ -203,7 +203,9 @@ function showRivals(count, expires){
 // Vive aqui porque es la unica operacion en la que el importe que escribes no es lo que cambia.
 const CLAUSE_FACTOR=2;
 
-// Cuando el dinero entra en vez de salir. Una venta no cobra hoy: cobra si alguien la compra,
+// Cuando el dinero entra en vez de salir. Lo usan los dos pasos del dialogo, el de escribir el
+// importe y el de confirmarlo, para que no llamen a lo mismo de dos maneras: pagar una
+// clausula sale de la caja ya, y "si sale" era mentira en esa fila. Una venta no cobra hoy: cobra si alguien la compra,
 // y por eso la linea lo dice en vez de sumar y callarse.
 const CASH_IN=new Set(['sell_to_market','accept_offer']);
 // Lo que todavia no ha pasado: una puja no descuenta hasta que se gana, y una oferta a un
@@ -311,7 +313,7 @@ if(modal){
       pending.token=data.token;
       const op=pending.operation||'bid';
       const movesCash=['bid','modify_bid','buy_offer','direct_offer','pay_clause',
-                       'accept_offer','raise_clause'].includes(op);
+                       'accept_offer','raise_clause','sell_to_market'].includes(op);
       modal.querySelector('.bid-summary').innerHTML =
         `<dl class="bid-dl">
            <dt>Jugador</dt><dd>${data.player_name||pending.name}</dd>
@@ -320,7 +322,7 @@ if(modal){
            ${data.new_clause?`<dt>Clausula</dt>
              <dd>${exact(data.clause)} → <strong>${exact(data.new_clause)}</strong></dd>`:''}
            <dt>Saldo ahora</dt><dd>${exact(data.cash_before)}</dd>
-           ${movesCash?`<dt>${op==='accept_offer'?'Saldo despues':'Saldo si sale'}</dt>
+           ${movesCash?`<dt>Saldo ${CASH_WHEN[op]||'despues'}</dt>
              <dd><strong>${exact(data.cash_after)}</strong></dd>`:''}
          </dl>` +
         (data.warnings||[]).map(w=>`<p class="bid-warn-line">⚠ ${w}</p>`).join('');

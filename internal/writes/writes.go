@@ -695,7 +695,9 @@ func after(cash *int64, amount int64, name string) *int64 {
 	case "bid", "modify_bid", "buy_offer", "direct_offer", "pay_clause", "raise_clause":
 		left := *cash - amount
 		return &left
-	case "accept_offer":
+	// Money coming in. A listing does not pay today — it pays if somebody buys — and the
+	// page labels it with that condition, which is why the figure is worth giving.
+	case "accept_offer", "sell_to_market":
 		left := *cash + amount
 		return &left
 	}
