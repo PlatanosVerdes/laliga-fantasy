@@ -815,6 +815,22 @@ table.cmp td.cmp-cheap{font-weight:700}
   border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
 .head-btn:hover{border-color:var(--baseline);color:var(--ink)}
 
+/* The card search, next to it. Results drop downwards rather than up like the comparator's:
+   that tray sits against the bottom edge, this one is in the header. */
+/* Back to the squad this card was opened from. Top of the drawer and quiet: it is a way out,
+   not an action. */
+.drawer-back{font:inherit;font-size:12px;display:inline-flex;align-items:center;gap:4px;
+  margin:0 0 10px;padding:3px 10px 3px 7px;border-radius:20px;cursor:pointer;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
+.drawer-back:hover{border-color:var(--baseline);color:var(--ink)}
+
+.head-find{position:relative;display:inline-block;margin-left:8px;vertical-align:middle}
+.head-input{font:inherit;font-size:12px;width:150px;padding:3px 10px;border-radius:20px;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.head-input:focus{outline:none;border-color:var(--accent);width:210px}
+.head-input,.head-input:focus{transition:width .12s ease}
+.find-results{bottom:auto;top:calc(100% + 6px);z-index:60}
+
 /* El menu de tu plantilla, con la misma pinta que los resultados del buscador. */
 .cmp-mine-wrap{position:relative}
 .cmp-mine-list{left:auto;right:0;width:300px}
@@ -850,6 +866,11 @@ td .muted,span.muted{color:var(--muted)}
   header h1{font-size:19px;line-height:1.25}
   header p{font-size:12px}
   .head-btn{margin-left:0;margin-top:6px}
+  /* At 400px a 150px box does not fit beside the button: it takes a line of its own, and the
+     results with it. */
+  .head-find{display:block;margin:6px 0 0}
+  .head-input,.head-input:focus{width:100%}
+  .find-results{width:100%}
   section{margin:28px 0}
   h2{font-size:16px}
   .note{font-size:12.5px}

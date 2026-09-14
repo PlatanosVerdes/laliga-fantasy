@@ -75,7 +75,7 @@ func main() {
 	}
 
 	if len(rest) == 0 {
-		usage()
+		printUsage()
 		os.Exit(2)
 	}
 
@@ -123,6 +123,8 @@ func main() {
 		err = cmdRaid(rest[1:])
 	case "reward":
 		err = cmdReward(rest[1:])
+	case "usage":
+		err = cmdUsage(rest[1:])
 	case "lineup":
 		err = cmdLineup(rest[1:])
 	case "rules":
@@ -144,7 +146,7 @@ func main() {
 	case "paths":
 		err = cmdPaths()
 	default:
-		usage()
+		printUsage()
 		os.Exit(2)
 	}
 	if err != nil {
@@ -153,7 +155,7 @@ func main() {
 	}
 }
 
-func usage() {
+func printUsage() {
 	fmt.Fprintln(os.Stderr, strings.TrimSpace(`
 uso: fantasy [-v|-q] <comando>
 
@@ -167,6 +169,7 @@ uso: fantasy [-v|-q] <comando>
   always        instrucciones permanentes (siempre en mercado)
   raid          clausulazos programados
   reward        la recompensa diaria: cuanto queda y --claim para cobrarla
+  usage         que se mira y que se toca en la pagina, --days N
   lineup        quien sale, quien no puede jugar y --fix para arreglarlo
   leagues       tus ligas
   rules         las normas de tu liga (plazo de venta y acuerdos)
