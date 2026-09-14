@@ -132,6 +132,7 @@ directory — see [Where things live](#where-things-live).
 | `activity` | The league's transfer log (`--pages N`) |
 | `lineup` | Who is on the pitch, who cannot play, and the best legal eleven. `--fix` saves it |
 | `report` | Self-contained HTML dashboard with sortable tables (`--open`, `--json`) |
+| `usage` | What the page is used for: tabs by time, clicks and sorts (`--days N`) |
 | `serve` | Serve the report over HTTP with a JSON API and SSE push — see [deploy/docker.md](deploy/docker.md) |
 | `probe <what>` | Dump a raw endpoint payload — use it when the API shape changes |
 | `cache` | Cache size, `--clear` to wipe |
@@ -410,6 +411,42 @@ and this is the one operation where that gap is expensive: the owner can raise t
 or shield the player at any moment, and paying is irreversible. So before the write, one
 request re-reads that squad slot, and the raid stands down if the player is shielded, the
 clause is still locked, or it has risen above your `max_pay`.
+
+## Measuring the page
+
+A layout argued from memory is an argument nobody can win, so the page records what it is used
+for and the answer is a table.
+
+Half of it needed no code. Every page load, every player card, every operation is a request, so
+the reverse proxy's access log already held twenty-eight days of it: 605 loads, 490 cards over
+135 different players, 92 bids started against 76 confirmed, and thirteen scheduled raids against
+nine cancelled by hand, which is what sent somebody to look at
+[the raid that outlived its target](#paying-a-clause-re-reads-it-first).
+
+The other half never leaves the browser. Which tab is open, what is pressed inside it, which
+column a table is sorted by: with nine tabs and thirty sections that is the half that decides
+where things go, and no request carries it. So the page sends it, batched every fifteen seconds
+and on the way out, to `/api/usage`, which appends it to `usage.log` in the state directory.
+
+Three rules it follows, because each of them is a way the measurement would lie:
+
+* **Time runs only while the tab is visible.** A fantasy panel sits open in a window all
+  afternoon. Without `visibilitychange` the winner of "where do you spend your time" is whichever
+  tab happened to be open when you walked away.
+* **A click is filed under its section, not its label.** The same "Pujar" from four tables is one
+  row that says nothing about where to put it.
+* **The static report records nothing.** It has nowhere to send it, and a fetch that always fails
+  is noise in somebody's console rather than a measurement. The page knows by the `data-mode` the
+  server stamps in the header.
+
+`fantasy usage --days 7` prints it. The file is JSON lines and it ends in `.log`, so Vector tails
+it into VictoriaLogs with the rest and nothing new had to be configured.
+
+Nothing is sent anywhere else. A hosted analytics tool would have meant shipping a page carrying
+your balance, your league and buttons that spend money to somebody else's server, and the only
+thing protecting it is that nobody else can reach it. For one user a heat map is the wrong
+instrument anyway: it is a device for averaging thousands of sessions, and with ten actions a
+session the sorted list *is* the heat map.
 
 ## Logging
 

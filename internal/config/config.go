@@ -48,6 +48,7 @@ var (
 	RulesFile      string
 	ReportFile     string
 	LogFile        string
+	UsageFile      string
 )
 
 // APIHeaders are what the official app sends. x-app: 2 is not optional.
@@ -104,6 +105,10 @@ func init() {
 	RulesFile = filepath.Join(ConfigDir, "rules.json")
 	ReportFile = filepath.Join(StateDir, "report.html")
 	LogFile = filepath.Join(StateDir, "fantasy.log")
+	// Usage is regenerable in the sense that losing it costs a measurement and nothing else,
+	// and the .log suffix is load-bearing: Vector tails *.log, so it reaches VictoriaLogs
+	// with no configuration, exactly like fantasy.log.
+	UsageFile = filepath.Join(StateDir, "usage.log")
 }
 
 // resolveDirs honours one override and the XDG spec, in the same order as Python.

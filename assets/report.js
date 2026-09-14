@@ -1,4 +1,62 @@
 
+// ---- usage: what is looked at, what is touched and for how long -----------
+// What no server log can hold because it never becomes a request: the tab, the click inside it
+// and the order of a table. The why is in internal/usage.
+const usage=(()=>{
+  const OFF={tab(){},click(){},sort(){},op(){}};
+  // The static report has nowhere to send it, and a fetch that always fails is noise in the
+  // console of whoever opened the file rather than a measurement.
+  const mode=document.querySelector('.mode')?.dataset.mode||'';
+  if(!mode||mode==='informe') return OFF;
+
+  const phone=matchMedia('(max-width: 700px)').matches;
+  let queue=[], timer=null, tab=null, since=0, seen=0;
+  const nowMs=()=>Date.now();
+
+  const send=(beacon)=>{
+    if(!queue.length) return;
+    const batch=queue.slice(0,200); queue=queue.slice(200);
+    const body=JSON.stringify(batch);
+    try{
+      if(beacon&&navigator.sendBeacon){
+        navigator.sendBeacon('/api/usage',new Blob([body],{type:'application/json'}));
+      }else{
+        fetch('/api/usage',{method:'POST',headers:{'Content-Type':'application/json'},
+          body,keepalive:true}).catch(()=>{});
+      }
+    }catch(e){}
+  };
+  const push=(event)=>{
+    queue.push({at:new Date().toISOString(),phone,...event});
+    if(queue.length>=200){ send(false); return; }
+    if(!timer) timer=setTimeout(()=>{ timer=null; send(false); },15000);
+  };
+
+  // The clock runs only while the page is visible: a fantasy panel sits open all afternoon, and
+  // without this "an hour in Mercado" would be an hour of not looking at it.
+  const stop=()=>{ if(tab&&since) seen+=nowMs()-since; since=0; };
+  const start=()=>{ if(tab&&!since) since=nowMs(); };
+  const close=()=>{
+    stop();
+    if(tab&&seen>=1000) push({kind:'tab',what:tab,seconds:Math.round(seen/1000)});
+    tab=null; seen=0;
+  };
+
+  document.addEventListener('visibilitychange',()=>{ document.hidden?stop():start(); });
+  addEventListener('pagehide',()=>{ close(); send(true); });
+
+  return {
+    tab(id){ if(id===tab) return; close(); tab=id; seen=0; start(); },
+    click(where,label,what){ push({kind:'click',where,label,what}); },
+    sort(where,column){ push({kind:'sort',where,what:column}); },
+    op(name,where){ push({kind:'op',what:name,where:where||tab||''}); },
+  };
+})();
+
+function sectionOf(node){
+  return node?.closest?.('section[id]')?.id||'';
+}
+
 // ---- estado de filtros, para que sobreviva a un recambio de seccion --------
 const filterState = {pos:'all', price:'', text:''};
 
@@ -23,6 +81,7 @@ function wireTables(root=document){
           return desc?-cmp:cmp;
         });
         rows.forEach(r=>body.appendChild(r));
+        usage.sort(sectionOf(table),th.textContent.trim()||th.dataset.kind||'');
       });
     });
   });
@@ -301,6 +360,7 @@ if(modal){
   modal.querySelector('.bid-next').addEventListener('click', async ()=>{
     const amount=digits(modal.querySelector('.bid-amount').value);
     modal.querySelector('.bid-error').textContent='';
+    usage.op('empezar '+(pending.operation||'bid'));
     try{
       const res=await fetch('/api/bid/prepare',{method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -354,6 +414,7 @@ if(modal){
   modal.querySelector('.bid-confirm').addEventListener('click', async ()=>{
     const button=modal.querySelector('.bid-confirm');
     button.disabled=true; button.textContent='Enviando…';
+    usage.op('confirmar '+(pending.operation||'bid'));
     try{
       const res=await fetch('/api/bid/confirm',{method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -935,8 +996,13 @@ const drawer=document.getElementById('drawer');
 // aviso prometa algo que este servidor no hace.
 const MODE=(document.querySelector('.mode b')||{}).textContent||'manual';
 
+// The drawer is a single space that gets rewritten whole, so opening a card from a squad
+// destroyed the squad. This is the way back.
+let drawerFrom=null;
+
 function closeDrawer(){
   if(!drawer) return;
+  drawerFrom=null;
   // Cerrar el comparador es haber terminado de comparar: la barra de abajo se va con el.
   const wasComparing=!!drawer.querySelector('.cmp-view');
   drawer.hidden=true;
@@ -1180,6 +1246,14 @@ function wireManagers(root=document){
     button.dataset.wired='1';
     button.addEventListener('click',(e)=>{ e.stopPropagation(); openManager(button.dataset.manager); });
   });
+  root.querySelectorAll('button[data-back]').forEach(button=>{
+    if(button.dataset.wired) return;
+    button.dataset.wired='1';
+    button.addEventListener('click',()=>{
+      usage.click('ficha','volver a la plantilla');
+      openManager(button.dataset.back);
+    });
+  });
 }
 
 // La plantilla de un rival. Sale del mundo que ya tenemos, asi que no cuesta ninguna peticion a
@@ -1200,6 +1274,10 @@ async function openManager(teamId){
     return;
   }
   const pos=d.position?`${d.position}º`:'—';
+  body.dataset.view='manager';
+  body.dataset.manager=String(teamId);
+  body.dataset.managerName=d.manager||'';
+  drawerFrom=null;
   body.innerHTML=`
     <div class="drawer-head"><h3>${d.manager}</h3></div>
     <p class="sub">${d.team_name||''} · ${pos} con ${Math.round(d.points)} puntos</p>
@@ -1255,9 +1333,15 @@ function managerRow(p){
 
 async function openDetail(playerId){
   if(!drawer) return;
+  usage.click('ficha','abrir ficha',String(playerId));
+  const body=drawer.querySelector('.drawer-body');
+  // Read before writing: the drawer is the only thing that knows what was in it.
+  drawerFrom = !drawer.hidden && body.dataset.view==='manager'
+    ? {id:body.dataset.manager, label:body.dataset.managerName||'la plantilla'}
+    : null;
   drawer.hidden=false;
   panelWide(false);
-  const body=drawer.querySelector('.drawer-body');
+  body.dataset.view='player';
   body.innerHTML='<p class="empty">Cargando…</p>';
   let data;
   try{
@@ -1284,6 +1368,8 @@ async function openDetail(playerId){
     ? `<img class="drawer-face" src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
     : `<span class="drawer-face crest crest-${p.team_id}"></span>`;
   body.innerHTML=`
+    ${drawerFrom?`<button class="drawer-back" type="button" data-back="${drawerFrom.id}"
+      >← ${drawerFrom.label}</button>`:''}
     <div class="drawer-head">${face}<h3>${p.name}</h3></div>
     <p class="sub"><span class="pos pos-${(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
       ${p.team||''} · ${owner}${p.starred?' · ★':''}
@@ -2074,6 +2160,65 @@ if(drawer){
   document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeDrawer(); });
 }
 
+// ---- find a player and open his card --------------------------------------
+// A card was reachable only by finding the player's row in one of the thirty sections. This runs
+// off the same /api/compare the comparator uses, so there is no new index.
+function wireFindPlayer(){
+  const input=document.getElementById('find');
+  if(!input||input.dataset.wired) return;
+  input.dataset.wired='1';
+  const list=input.parentElement.querySelector('.find-results');
+  let timer=null, found=[];
+  const hide=()=>{ list.hidden=true; list.innerHTML=''; found=[]; };
+  const open=(id)=>{ hide(); input.value=''; input.blur(); openDetail(id); };
+  const run=async()=>{
+    const query=input.value.trim();
+    if(query.length<2){ hide(); return; }
+    try{
+      const res=await fetch('/api/compare?q='+encodeURIComponent(query));
+      if(!res.ok) throw new Error(res.status);
+      found=(await res.json()).matches||[];
+    }catch(e){ hide(); return; }
+    if(!found.length){
+      list.innerHTML='<p class="cmp-none">Nadie con ese nombre</p>';
+      list.hidden=false;
+      return;
+    }
+    list.innerHTML=found.map((p,i)=>`
+      <button class="cmp-hit${i===0?' first':''}" type="button" data-find="${p.id}">
+        <span class="cmp-hit-who">
+          ${p.image
+            ? `<img src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
+            : `<span class="crest crest-${p.team_id}"></span>`}
+          <b>${p.name}</b>
+          <span class="pos pos-${String(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
+        </span>
+        <span class="cmp-hit-num">${p.team_short||''} · ${p.is_mine?'tuyo':(p.owner||'libre')}
+          <b>${fmt(p.value)}</b></span>
+      </button>`).join('');
+    list.hidden=false;
+  };
+  input.addEventListener('input',()=>{ clearTimeout(timer); timer=setTimeout(run,180); });
+  input.addEventListener('keydown',(event)=>{
+    if(event.key==='Escape'){ input.value=''; hide(); input.blur(); }
+    if(event.key==='Enter'&&found.length) open(found[0].id);
+  });
+  list.addEventListener('click',(event)=>{
+    const hit=event.target.closest('button[data-find]');
+    if(hit) open(hit.dataset.find);
+  });
+  document.addEventListener('click',(event)=>{
+    if(!input.parentElement.contains(event.target)) hide();
+  });
+  document.addEventListener('keydown',(event)=>{
+    if(event.key!=='/'||event.metaKey||event.ctrlKey) return;
+    const at=document.activeElement;
+    if(at&&(at.tagName==='INPUT'||at.tagName==='TEXTAREA'||at.isContentEditable)) return;
+    event.preventDefault();
+    input.focus();
+  });
+}
+
 // ---- pestañas: una vista a la vez ------------------------------------------
 const TABS=[
   {id:'decidir', label:'Decidir', sections:['plan','acciones','caja','chollos']},
@@ -2145,6 +2290,7 @@ function showTab(id,{section=null,updateHash=true}={}){
     if(on) b.scrollIntoView({block:'nearest',inline:'center'});
   });
   try{ localStorage.setItem('fantasy-tab',tab.id); }catch(e){}
+  usage.tab(tab.id);
   applyFilters();
   if(updateHash){
     // replaceState, no assignment: no queremos una entrada de historial por clic ni
@@ -2160,6 +2306,7 @@ function showTab(id,{section=null,updateHash=true}={}){
 }
 
 function wireTabs(){
+  wireFindPlayer();
   const bar=document.getElementById('tabs');
   if(!bar||bar.dataset.wired) return;
   bar.dataset.wired='1';

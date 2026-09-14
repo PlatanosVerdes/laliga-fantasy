@@ -117,6 +117,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/lineup", s.lineup)
 	mux.HandleFunc("/api/session", s.session)
 	mux.HandleFunc("/api/favourite", s.favourite)
+	mux.HandleFunc("/api/usage", s.usage)
 	mux.HandleFunc("/favourite", s.favourite)
 	mux.HandleFunc("/api/always", s.always)
 	mux.HandleFunc("/api/raid", s.raid)
@@ -181,7 +182,10 @@ func logging(next http.Handler) http.Handler {
 		// Anything that changes something, anything that failed, and the page itself get an
 		// info line. Assets and polling do not: a log that records every GET buries the one
 		// line that mattered.
-		mutating := request.Method != http.MethodGet && request.Method != http.MethodHead
+		// The usage beacon is a POST that changes nothing but arrives every fifteen seconds,
+		// so counting it as mutating would bury the log it is filed next to.
+		mutating := request.Method != http.MethodGet && request.Method != http.MethodHead &&
+			request.URL.Path != "/api/usage"
 		interesting := mutating || wrapped.status >= 400 || request.URL.Path == "/"
 		level := slog.LevelDebug
 		if interesting {

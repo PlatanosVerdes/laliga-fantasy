@@ -507,6 +507,11 @@ func Header(generated, leagueName string, week int, kpis []string, withTabs bool
 		// signing is decided against what you already have, from wherever you are looking.
 		`<button class="head-btn" id="open-compare" type="button" ` +
 		`title="Comparar jugadores entre ellos y con tu plantilla">Comparador</button>` +
+		// The way into a player's card from anywhere. See wireFindPlayer.
+		`<div class="head-find"><input id="find" class="head-input" type="search" ` +
+		`autocomplete="off" spellcheck="false" placeholder="buscar jugador…" ` +
+		`aria-label="Buscar un jugador y abrir su ficha">` +
+		`<div class="cmp-results find-results" hidden></div></div>` +
 		`</header>` +
 		`<div class="kpis">` + strings.Join(kpis, "") + `</div>` + tabs
 }
@@ -805,9 +810,10 @@ func modeChip(mode string) string {
 	case "solo lectura", "informe":
 		class = "mode-read"
 	}
-	return fmt.Sprintf(`<span class="mode %s" title="Que puede hacer este servidor: `+
-		`auto ejecuta las instrucciones permanentes, manual solo lo que pulses, `+
-		`solo lectura nada">Mode: <b>%s</b></span>`, class, Esc(mode))
+	// data-mode is how the page knows it is being served rather than opened as a file.
+	return fmt.Sprintf(`<span class="mode %s" data-mode="%s" title="Que puede hacer este `+
+		`servidor: auto ejecuta las instrucciones permanentes, manual solo lo que pulses, `+
+		`solo lectura nada">Mode: <b>%s</b></span>`, class, Esc(mode), Esc(mode))
 }
 
 // outcomeStatus colours how a bid ended: a refusal is not a failure of the tool, and a lost

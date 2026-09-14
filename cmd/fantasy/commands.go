@@ -23,6 +23,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rewards"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/usage"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
 
@@ -419,6 +420,60 @@ func cmdPlayer(args []string) error {
 	for _, line := range lines {
 		fmt.Printf("  %-22s %s\n", line[0], line[1])
 	}
+	return nil
+}
+
+// cmdUsage prints what the usage package recorded.
+func cmdUsage(args []string) error {
+	flags := flag.NewFlagSet("usage", flag.ContinueOnError)
+	days := flags.Int("days", 7, "cuantos dias mirar")
+	top := flags.Int("top", 12, "cuantas filas por tabla")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	since := time.Now().AddDate(0, 0, -*days)
+	events, err := usage.Read(since)
+	if err != nil {
+		return err
+	}
+	summary := usage.Of(events)
+	cli.Heading("Uso de la pagina")
+	if summary.Events == 0 {
+		fmt.Printf("  Sin eventos en los ultimos %d dias. Se recogen solo con `serve`, "+
+			"y el fichero es %s\n", *days, config.UsageFile)
+		return nil
+	}
+	fmt.Printf("  %d eventos · del %s al %s · %d desde el movil\n\n", summary.Events,
+		summary.From.Local().Format("02/01"), summary.To.Local().Format("02/01 15:04"),
+		summary.Phone)
+
+	table := func(title string, rows []usage.Count, withTime bool) {
+		if len(rows) == 0 {
+			return
+		}
+		if len(rows) > *top {
+			rows = rows[:*top]
+		}
+		out := make([][]string, 0, len(rows))
+		for _, row := range rows {
+			line := []string{row.Name, fmt.Sprintf("%d", row.Times)}
+			if withTime {
+				line = append(line, usage.Duration(row.Seconds))
+			}
+			out = append(out, line)
+		}
+		head := []string{title, "veces"}
+		right := map[int]bool{1: true}
+		if withTime {
+			head = append(head, "tiempo")
+			right[2] = true
+		}
+		fmt.Println(cli.Table(head, out, right))
+		fmt.Println()
+	}
+	table("pestaña", summary.Tabs, true)
+	table("clic", summary.Clicks, false)
+	table("orden", summary.Sorts, false)
 	return nil
 }
 
