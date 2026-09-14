@@ -815,6 +815,14 @@ table.cmp td.cmp-cheap{font-weight:700}
   border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
 .head-btn:hover{border-color:var(--baseline);color:var(--ink)}
 
+/* The matchday points on a card: the same chips as a shirt on the pitch, on their own line
+   because here there is room for the whole season rather than the last five. */
+.card-weeks{display:flex;flex-wrap:wrap;align-items:center;gap:3px;margin:12px 0 4px}
+.card-weeks .wk-label{margin-right:3px}
+/* The game's own team of the week. It is the only mark on the strip, so it has to be a
+   ring and not another colour: the colours already mean how many points. */
+.wk-ideal{box-shadow:0 0 0 1.5px var(--accent)}
+
 /* The card search, next to it. Results drop downwards rather than up like the comparator's:
    that tray sits against the bottom edge, this one is in the header. */
 /* Back to the squad this card was opened from. Top of the drawer and quiet: it is a way out,

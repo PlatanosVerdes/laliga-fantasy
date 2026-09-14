@@ -812,6 +812,8 @@ func (d Document) raiseSection() string {
 			armed++
 		}
 	}
+	// The badge counts rows, as every other section's does. It used to count only the ones the
+	// plan reaches, so a table of twelve players wore a "1" and read as broken.
 
 	note := "El <strong>riesgo</strong> es una estimacion, no una frecuencia medida: sale de " +
 		"quien tiene caja para pagar la cláusula, de cuanto le renta por millon frente a lo " +
@@ -822,12 +824,16 @@ func (d Document) raiseSection() string {
 		"quitan, cuanto pierde tu mejor once</strong> — si es poco, defenderlo es tirar el " +
 		"dinero y la cláusula cobrada es mejor negocio."
 	if armed > 0 {
-		note += fmt.Sprintf(" Con tu caja llegas a <strong>%d</strong>, %s en total, y te "+
-			"quedarian %s.", armed, Money(asFloat(plan["spend"])),
+		subir := "subidas"
+		if armed == 1 {
+			subir = "subida"
+		}
+		note += fmt.Sprintf(" Con tu caja llegas a <strong>%d</strong> de esas %s, %s en "+
+			"total, y te quedarian %s.", armed, subir, Money(asFloat(plan["spend"])),
 			Money(asFloat(plan["cash_left"])))
 	}
 	table, _ := SectionTable("subir", entries)
-	return Section("Subir cláusulas", table, note, fmt.Sprintf("%d", armed), "subir")
+	return Section("Subir cláusulas", table, note, fmt.Sprintf("%d", len(entries)), "subir")
 }
 
 // signedMoney keeps the sign of a projection: "gana 1.20M" and "pierde 1.20M" are the same
@@ -1245,7 +1251,10 @@ func (d Document) marketSections() []string {
 	}
 	out = append(out, Section("Cláusulas pagables", table,
 		d.windowNote()+
-			"Jugadores de rivales con la cláusula desbloqueada y dentro de tu poder de compra.",
+			"Jugadores de rivales con la cláusula desbloqueada y dentro de tu poder de compra. "+
+			"<strong>¿Renta?</strong> compara los puntos por millon que sacas <em>pagando la "+
+			"cláusula</em> con la mediana de tu plantilla: si es peor que lo que ya tienes, "+
+			"sale <em>caro</em>, y que se pueda pagar no lo convierte en buena idea.",
 		fmt.Sprintf("%d", len(raids)), "clausulas"))
 
 	sells := rows(d.Advice["sells"])

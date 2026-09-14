@@ -638,6 +638,19 @@ function hierClass(rank){
   return rank>=50?'tit-hi':rank>=40?'tit-mid':rank>=30?'tit-lo':'tit-out';
 }
 
+// The points he scored, matchday by matchday. Built in the server, see detail.go.
+function weekStrip(weeks){
+  if(!weeks||!weeks.length) return '';
+  const chips=weeks.map(w=>{
+    const p=w.points;
+    const cls = p==null?'wk-none': p<0?'wk-neg': p>=8?'wk-hi': p>=4?'wk-mid':'wk-lo';
+    const when=`Jornada ${w.week}${w.rival?' · '+w.rival:''}${w.ideal?' · once ideal':''}`;
+    return `<span class="wk ${cls}${w.ideal?' wk-ideal':''}" title="${when}"
+      >${p==null?'\u2013':p}</span>`;
+  }).join('');
+  return `<div class="card-weeks"><span class="wk-label">J</span>${chips}</div>`;
+}
+
 function weekChip(w){
   const p=w.points;
   const cls = p==null?'wk-none': p<0?'wk-neg': p>=8?'wk-hi': p>=4?'wk-mid':'wk-lo';
@@ -1425,6 +1438,7 @@ async function openDetail(playerId){
         p.absence.since?' · '+p.absence.since:''}${
         p.absence.until?' · '+p.absence.until:''}</dd></div>`:''}
     </dl>
+    ${weekStrip(data.weeks||[])}
     ${sparkSvg(data.history||[])}
     <div class="drawer-actions">${(data.actions||[]).map(actionButton).join('')}</div>
     ${data.writes_enabled?'':'<p class="drawer-note">Servidor en modo solo lectura: '

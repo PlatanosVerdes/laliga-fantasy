@@ -174,6 +174,19 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 	}
 	sort.Strings(unlockDates)
 
+	// The reference for "is this clause worth paying" is your own squad: do these euros buy
+	// more points per million than what you already own? Benchmarking against today's market
+	// instead brands everything a bargain, because a bad market day drags the median down and
+	// says nothing about the player.
+	var squadPPM []float64
+	for _, player := range mine {
+		value, xpts := number(player["value"]), number(player["xpts"])
+		if value != 0 && xpts > 0 {
+			squadPPM = append(squadPPM, xpts/(value/1e6))
+		}
+	}
+	benchmark := median(squadPPM)
+
 	raids := []Row{}
 	for _, player := range rivalPlayers {
 		clause := number(player["clause"])
@@ -188,12 +201,22 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 		// Paying far over the market value is penalised rather than forbidden: it can still
 		// be the right move for a player you need.
 		over := math.Max(0, number(premiumOr(premium, 1.0))-1.5)
+		ppm := number(player["xpts"]) / (clause / 1e6)
+		var vsMarket any
+		if benchmark != 0 {
+			vsMarket = ppm / benchmark
+		}
 		raids = append(raids, merge(player, Row{
 			"entry_cost": clause, "route": "clausula", "clause_premium": premium,
 			"position_gap": need["gap"],
 			"priority": number(player["score"]) + 0.35*float64(need["gap"]) - 0.5*over,
+			// The list of clauses payable right now could not say whether any of them was
+			// worth paying. The ones that only open later always could.
+			"ppm_at_clause": ppm, "vs_market": vsMarket,
+			"verdict": RaidVerdict(ppm, benchmark, true, number(player["xpts"])),
 		}))
 	}
+	gradeRaids(raids)
 
 	sells := []Row{}
 	for _, player := range mine {
@@ -328,19 +351,6 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 		return number(left["vs_value"]) > number(right["vs_value"])
 	})
 
-	// The reference for "is this clause worth paying" is your own squad: do these euros buy
-	// more points per million than what you already own? Benchmarking against today's market
-	// instead brands everything a bargain, because a bad market day drags the median down and
-	// says nothing about the player.
-	var squadPPM []float64
-	for _, player := range mine {
-		value, xpts := number(player["value"]), number(player["xpts"])
-		if value != 0 && xpts > 0 {
-			squadPPM = append(squadPPM, xpts/(value/1e6))
-		}
-	}
-	benchmark := median(squadPPM)
-
 	clauses := mapOf(universe["clauses"])
 	// The same two numbers for the clauses that have not opened yet. Without them the page told
 	// you that you were exposed on every player whose lock was falling, with no way to tell the
@@ -380,27 +390,7 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 		}))
 	}
 
-	// Rank the ones that cleared the gate: a tag is only useful if it separates them.
-	var passed []Row
-	for _, row := range upcoming {
-		if text(row["verdict"]) == "" {
-			passed = append(passed, row)
-		}
-	}
-	sort.SliceStable(passed, func(i, j int) bool {
-		return number(passed[i]["ppm_at_clause"]) > number(passed[j]["ppm_at_clause"])
-	})
-	for index, row := range passed {
-		share := float64(index) / math.Max(1, float64(len(passed)-1))
-		switch {
-		case share <= 0.25:
-			row["verdict"] = "chollo"
-		case share <= 0.6:
-			row["verdict"] = "renta"
-		default:
-			row["verdict"] = "justo"
-		}
-	}
+	gradeRaids(upcoming)
 	// Every clause in a league tends to unlock at the same instant, so the time is usually a
 	// tie: break it by who is worth taking, not by squad order.
 	raidOrder := map[string]int{"chollo": 0, "renta": 1, "justo": 2, "caro": 3,
@@ -581,6 +571,33 @@ func clauseRisk(player Row, threats []Threat, margin float64) float64 {
 // Not against futbolfantasy's ceiling: the game sets clauses at roughly 1.5x market value,
 // so that comparison brands every raid expensive and tells you nothing. The question that
 // discriminates is whether these euros buy more points per million than what you own.
+// gradeRaids labels the ones RaidVerdict let through, which is where the difference between a
+// bargain and a fair price lives: it only exists against the other candidates. Each list is
+// graded against itself, so a "chollo" is the best of what you can do rather than of what you
+// cannot do until Sunday.
+func gradeRaids(candidates []Row) {
+	var passed []Row
+	for _, row := range candidates {
+		if text(row["verdict"]) == "" {
+			passed = append(passed, row)
+		}
+	}
+	sort.SliceStable(passed, func(i, j int) bool {
+		return number(passed[i]["ppm_at_clause"]) > number(passed[j]["ppm_at_clause"])
+	})
+	for index, row := range passed {
+		share := float64(index) / math.Max(1, float64(len(passed)-1))
+		switch {
+		case share <= 0.25:
+			row["verdict"] = "chollo"
+		case share <= 0.6:
+			row["verdict"] = "renta"
+		default:
+			row["verdict"] = "justo"
+		}
+	}
+}
+
 func RaidVerdict(ppmAtClause, benchmark float64, affordable bool, xpts float64) string {
 	if !affordable {
 		return "no te llega"

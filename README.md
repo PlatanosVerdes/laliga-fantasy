@@ -175,6 +175,23 @@ projected 7-day value change (0.20) and odds of starting (0.15).
 your spending power, your own worst holdings, and your good players whose clause sits close
 to their value.
 
+### Whether a clause is worth paying
+
+Two tables answer that, and until now only one of them could. Both rank rivals' clauses; the
+difference is the clock. **Cláusulas pagables** is what can be paid today, **Cláusulas de rivales
+que se abren** is what unlocks next, with the hour.
+
+The second one carried `¿Renta?`, which compares the points per million bought *by paying the
+clause* against the median of your own squad, and the first one did not: the list of clauses you
+could act on this minute said how much they cost and never whether they were worth it. It says
+both now, and the verdict is graded within each list, because a bargain has to mean the best of
+what you can actually do rather than the best of what you cannot do yet.
+
+The reference is your own squad on purpose. Benchmarking against the market brands everything a
+bargain, since a bad market day drags the median down and says nothing about the player. And the
+answer is often no: a 30.00M clause on a player worth 14.59M comes out at **0.9x** your squad's
+points per million, which is the number behind "paying over value buys protection, not points".
+
 ### Rival cash
 
 The API serves `/money` for your own team only — `teamMoney` is `null` for every other team,
