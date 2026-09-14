@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -59,6 +60,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 
 	// Neither the hierarchy nor, for some players, the starting probability is in the market list.
 	// Reading the page costs a request, so only the player being looked at gets one.
+	var ffMatches []map[string]any
 	if name := fallback(text(player["ff_name"]), text(player["name"])); name != "" {
 		if page, err := futbolfantasy.PlayerPageFor(matching.SlugifyFF(name),
 			text(player["ff_id"]), futbolfantasy.DetailTTL); err == nil {
@@ -66,6 +68,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 				player["hierarchy"] = text(rank)
 				player["hierarchy_rank"] = number(page["hierarchy_rank"])
 			}
+			ffMatches = listOf(page["matches"])
 			if chance := page["start_probability"]; chance != nil &&
 				player["start_probability"] == nil {
 				player["start_probability"] = number(chance)
@@ -83,6 +86,42 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	clause := number(player["clause"])
 	budget := s.budget()
 	actions := s.actions(player, rows, armed, listing, offers, clause, budget)
+
+	// Points matchday by matchday: an average of 9.8 hides whether it was five 9.8s or a 14 and
+	// three sevens, and the shape is what a card is opened for. The opponents come off the
+	// futbolfantasy page already read above, so they cost no request of their own.
+	weeks := []map[string]any{}
+	if s.opts.Client != nil {
+		if master, err := s.opts.Client.Player(id, 6*time.Hour); err == nil {
+			// The row lists both sides in the order they played, so at home the opponent is
+			// the second name and away it is the first.
+			rivals := map[float64]string{}
+			for _, match := range ffMatches {
+				teams, ok := match["teams"].([]string)
+				if !ok || len(teams) != 2 {
+					continue
+				}
+				if truthy(match["home"]) {
+					rivals[number(match["week"])] = teams[1]
+				} else {
+					rivals[number(match["week"])] = teams[0]
+				}
+			}
+			for _, week := range listOf(master["playerStats"]) {
+				row := map[string]any{"week": week["weekNumber"], "points": week["totalPoints"],
+					"ideal": truthy(week["isInIdealFormation"])}
+				if rival := rivals[number(week["weekNumber"])]; rival != "" {
+					row["rival"] = rival
+				}
+				weeks = append(weeks, row)
+			}
+			// The feed does not promise an order and does not always keep one: Espart came back
+			// as J2, J1, J3, and a strip read left to right has to be the season.
+			sort.SliceStable(weeks, func(i, j int) bool {
+				return number(weeks[i]["week"]) < number(weeks[j]["week"])
+			})
+		}
+	}
 
 	history := []map[string]any{}
 	if s.opts.Client != nil {
@@ -102,7 +141,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	s.json(writer, http.StatusOK, map[string]any{"player": player, "offers": offers,
-		"listing": listing, "actions": actions, "history": history,
+		"listing": listing, "actions": actions, "history": history, "weeks": weeks,
 		"writes_enabled": s.opts.AllowWrites})
 }
 

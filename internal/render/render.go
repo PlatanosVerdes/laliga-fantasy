@@ -2071,9 +2071,15 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		return TableIn(columns, rows, "Nadie ha puesto a nadie en venta", "", true), nil
 
 	case "clausulas":
+		// The same three the ones opening later carry: the question is not that a clause can be
+		// paid, it is whether paying it is worth it. See gradeRaids.
 		columns := insert(PlayerColumns("Cláusula"), 1,
 			Column{"Dueño", whole, "owner"})
 		columns = insert(columns, 4, Column{"x valor", field("clause_premium"), "num"})
+		columns = append(columns,
+			Column{"Pts/M pagando", field("ppm_at_clause"), "mag"},
+			Column{"Techo futbolfantasy", field("ideal_bid"), "ideal"})
+		columns = insert(columns, 0, Column{"¿Renta?", whole, "verdict_raid"})
 		columns = insert(columns, 0, Column{"Clausulazo", whole, "raid"})
 		return TableIn(columns, rows, "Ninguna cláusula a tu alcance", "", false), nil
 
@@ -2179,15 +2185,13 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 	case "subir":
 		// The defence of one player, in the order that matters: how likely he is to be taken,
 		// what losing him would do to the pitch, and only then what keeping him costs.
+		//
+		// The middle one is the column the note calls the one that decides, and it used to sit
+		// seventh, five columns from the risk it has to be read against.
 		columns := []Column{
 			{"", whole, "raise"},
 			{"Jugador", whole, "player"},
 			{"Riesgo", field("risk"), "risk_pct"},
-			{"Quien", field("top_threat"), "text"},
-			{"Le renta a", field("tempted"), "int"},
-			{"Cláusula", field("clause"), "money"},
-			{"x valor", field("clause_margin"), "num"},
-			{"Se puede pagar", whole, "clause_when"},
 			{"Si te lo quitan", func(row map[string]any) any {
 				drop := number(row["xi_drop"])
 				if drop <= 0 {
@@ -2195,6 +2199,11 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 				}
 				return "-" + Num(&drop, 2) + " xPts"
 			}, "text"},
+			{"Quien", field("top_threat"), "text"},
+			{"Le renta a", field("tempted"), "int"},
+			{"Cláusula", field("clause"), "money"},
+			{"x valor", field("clause_margin"), "num"},
+			{"Se puede pagar", whole, "clause_when"},
 			{"Pagas", field("pay"), "money"},
 			{"Queda en", field("target_clause"), "money"},
 			{"Que hago", whole, "raise_verdict"},

@@ -240,6 +240,15 @@ func (c *Client) PlayerMarketValue(playerID string, ttl time.Duration) ([]map[st
 	return series, err
 }
 
+// Player is the master record. Its playerStats is the points he scored matchday by matchday --
+// the squad payload calls the same series lastStats -- and this is the only public route to it.
+func (c *Client) Player(playerID string, ttl time.Duration) (map[string]any, error) {
+	var master map[string]any
+	err := c.get(fmt.Sprintf("%s/player/%s", config.CMP, playerID), false, ttl,
+		"player", false, &master)
+	return master, err
+}
+
 func (c *Client) TeamSquad(leagueID, teamID string, ttl time.Duration) (map[string]any, error) {
 	var squad map[string]any
 	err := c.get(fmt.Sprintf("%s/leagues/%s/teams/%s", config.CMP, leagueID, teamID),
