@@ -1,8 +1,8 @@
 // Comparing players side by side.
 //
-// The drawer answers "how good is he", but a signing is always "instead of whom": el que entra
-// se paga con el que sale, y esa pregunta necesita dos columnas. Sale del mundo que ya tenemos,
-// asi que comparar no cuesta ninguna peticion a LaLiga.
+// The drawer answers "how good is he", but a signing is always "instead of whom": the one
+// coming in is paid for by the one going out, and that question needs two columns. It comes off
+// the world already in memory, so comparing costs no request to LaLiga.
 package server
 
 import (

@@ -17,7 +17,7 @@ func TestSearchIgnoresAccentsAndCase(t *testing.T) {
 	if len(found) != 2 {
 		t.Fatalf("garcia deberia encontrar a los dos: %v", found)
 	}
-	// El que empieza por lo que escribes va primero, no el de mas score.
+	// The one starting with what you typed goes first, not the one with the higher score.
 	if text(found[0]["id"]) != "2" {
 		t.Errorf("el primero deberia ser el que empieza por García, salio %v", found[0]["id"])
 	}

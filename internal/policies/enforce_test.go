@@ -142,7 +142,7 @@ func TestRaidPlanSpendsTheBalanceOnceAcrossRaids(t *testing.T) {
 	if len(plan) != 2 {
 		t.Fatalf("esperaba una fila por clausulazo, dijo %v", plan)
 	}
-	// El barato rinde mas por millon, asi que va primero y se lleva el saldo.
+	// The cheap one returns more per million, so it goes first and takes the balance.
 	if text(plan[0]["name"]) != "el barato" || text(plan[0]["action"]) != "pagar_clausula" {
 		t.Errorf("primero deberia pagar al barato, dijo %v", plan[0])
 	}
@@ -150,7 +150,7 @@ func TestRaidPlanSpendsTheBalanceOnceAcrossRaids(t *testing.T) {
 		t.Errorf("el segundo ya no cabe y deberia decirlo, dijo %v", plan[1])
 	}
 
-	// Con saldo para los dos se pagan los dos, y el mejor por millon sigue yendo primero.
+	// With enough for both, both are paid, and the better one per million still goes first.
 	both := RaidPlan(players, armed, 40_000_000, nil)
 	for index, row := range both {
 		if text(row["action"]) != "pagar_clausula" {
@@ -162,8 +162,8 @@ func TestRaidPlanSpendsTheBalanceOnceAcrossRaids(t *testing.T) {
 	}
 }
 
-// Un jugador que ya es tuyo no es un clausulazo pendiente: el que fichaste tiene que
-// desaparecer de la seccion en vez de quedarse con un "ya es tuyo".
+// A player who is already yours is not a pending raid: the one you signed has to leave the
+// section rather than sit in it saying "already yours".
 func TestRaidPlanDropsPlayersAlreadyYours(t *testing.T) {
 	cap := 30_000_000.0
 	players := []Row{
@@ -178,15 +178,15 @@ func TestRaidPlanDropsPlayersAlreadyYours(t *testing.T) {
 		t.Fatalf("el fichado no deberia salir en el plan, dijo %v", plan)
 	}
 
-	// Y sin limite escrito tampoco: primero es tuyo, y despues ya se mira el cap.
+	// Nor with no ceiling written: being yours comes first, the cap is looked at after.
 	sinLimite := RaidPlan(players[:1], map[string]Policy{"1": {Raid: true}}, 90_000_000, nil)
 	if len(sinLimite) != 0 {
 		t.Errorf("un jugador tuyo no deberia salir ni sin limite, dijo %v", sinLimite)
 	}
 }
 
-// La otra mitad: la instruccion guardada tambien se desarma, porque si no revive el dia que
-// lo vendas y pagaria una clausula que nadie volvio a armar.
+// The other half: the stored instruction is disarmed too, or it comes back to life the day
+// you sell him and pays a clause nobody armed again.
 func TestSignedFindsTheRaidsThatAreDone(t *testing.T) {
 	cap := 30_000_000.0
 	armed := map[string]Policy{
@@ -201,7 +201,7 @@ func TestSignedFindsTheRaidsThatAreDone(t *testing.T) {
 		t.Fatalf("solo el clausulazo del que ya es tuyo esta hecho, dijo %v", done)
 	}
 
-	// Un jugador del que el mundo no dice nada se deja en paz: falta, no es que lo fichases.
+	// A player the world says nothing about is left alone: he is missing, not signed.
 	if quiet := Signed(map[string]bool{}, armed); len(quiet) != 0 {
 		t.Errorf("sin mundo no se desarma nada, dijo %v", quiet)
 	}
