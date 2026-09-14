@@ -37,9 +37,7 @@ body{margin:0;background:var(--plane);color:var(--ink);
 .wrap{max-width:1500px;margin:0 auto;padding:32px 20px 80px}
 header h1{font-size:27px;margin:0 0 4px;letter-spacing:-.015em}
 header p{margin:0;color:var(--ink-2);font-size:13px}
-/* Pegada arriba: es la unica tira que se queda en pantalla, asi que es donde vive el saldo.
-   El alto real lo mide el JS en --tabs-h, porque las pestañas se parten en dos lineas en
-   pantallas estrechas y las cabeceras de tabla se pegan justo debajo. */
+/* Pegada arriba: es la unica tira que se queda en pantalla, asi que es donde vive el saldo. */
 .tabs{display:flex;flex-wrap:wrap;gap:4px;margin:22px 0 0;border-bottom:1px solid var(--line);
   padding-bottom:0;position:sticky;top:0;z-index:6;background:var(--plane)}
 /* Como queda la caja despues de la operacion, en el mismo paso en que se escribe el importe. */
@@ -91,7 +89,9 @@ h2{font-size:17px;margin:0 0 6px;display:flex;align-items:center;gap:9px;letter-
 table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
 th,td{padding:9px 11px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
 tbody tr:last-child td{border-bottom:none}
-th{position:sticky;top:var(--tabs-h,0);z-index:1;background:var(--surface);cursor:pointer;font-size:11px;
+/* Pinned to its own table, not to the tab bar: .table-wrap carries overflow, so it is the
+   frame a sticky th sticks to, and any top pushes the header down inside it. */
+th{position:sticky;top:0;z-index:1;background:var(--surface);cursor:pointer;font-size:11px;
   font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
   user-select:none;border-bottom:1px solid var(--baseline)}
 th:hover{color:var(--ink)}
@@ -843,3 +843,106 @@ td .muted,span.muted{color:var(--muted)}
   color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:9px;
   padding:7px 10px;min-width:240px;cursor:pointer}
 .pick-bar select:focus{outline:none;border-color:var(--accent)}
+
+/* ---- phone --------------------------------------------------------------- */
+@media (max-width:760px){
+  .wrap{padding:14px 12px 56px}
+  header h1{font-size:19px;line-height:1.25}
+  header p{font-size:12px}
+  .head-btn{margin-left:0;margin-top:6px}
+  section{margin:28px 0}
+  h2{font-size:16px}
+  .note{font-size:12.5px}
+  footer{margin-top:40px}
+
+  .kpis{gap:8px;margin-top:14px}
+  .kpi{padding:10px 11px}
+  .kpi-value{font-size:18px}
+
+  /* Sticky inside the strip: the nine tabs scroll sideways, the balance never does. */
+  .tabs{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+    border-bottom:none;box-shadow:0 1px 0 var(--line);margin-top:16px}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:0 0 auto;padding:10px 11px;margin-bottom:0}
+  .tab-cash{position:sticky;right:0;z-index:1;margin-left:0;
+    background:color-mix(in srgb,var(--good) 16%,var(--plane));
+    box-shadow:-10px 0 10px -4px var(--plane)}
+
+  .wide-only{display:none}
+  th,td{padding:8px 9px}
+  table{font-size:12.5px}
+  td.bar{min-width:0}
+  .reasons{max-width:none}
+  .filters{gap:6px}
+  .filters input[type=search]{min-width:0;flex:1 1 150px}
+  .pick-bar{flex-wrap:wrap}
+  .pick-bar select{min-width:0;width:100%}
+
+  /* Safari zooms the page on focusing anything under 16px, and leaves it crooked. */
+  .filters select,.filters input,.pick-bar select,.pitch-bar select,.cmp-find,
+  .always-grid input,.bid-field input{font-size:16px}
+
+  button.bid,button.op-primary,button.raid-btn,button.ghost,button.danger{padding:7px 12px}
+  .star{font-size:18px;padding:3px 5px}
+  .cmp-add.small{width:24px;height:24px;font-size:14px}
+  .drawer-actions button{padding:13px 14px}
+
+  .modal{padding:12px}
+  .modal-card{padding:18px 16px;max-height:88vh;overflow-y:auto}
+  .modal-actions{flex-wrap:wrap;gap:8px}
+  .modal-actions button{flex:1 1 auto;min-height:44px;padding:11px 14px;font-size:14px}
+  /* Its own line: beside Confirmar, under a thumb, they are the same button. */
+  .modal-actions .bid-drop{order:9;flex:1 1 100%;margin-right:0}
+
+  .drawer-panel{padding:18px 16px}
+
+  .feed-row{flex-wrap:wrap;gap:4px 10px}
+  .feed-date,.feed-kind{flex:0 0 auto}
+  .feed-amount{min-width:0;margin-left:auto}
+  .feed-body{flex:1 1 100%;order:9}
+  .feed-then{flex:0 0 100%;order:10}
+  .ending{flex-wrap:wrap}
+  .ending-when{min-width:0}
+  .ending-body{flex:1 1 100%}
+  .match{flex-wrap:wrap}
+  .match-side{min-width:0}
+
+  .pitch{min-height:0;padding:16px 6px;gap:10px}
+  .pitch-line{gap:4px}
+  /* Capped, or a line of one leaves the goalkeeper the width of the pitch. */
+  .slot{width:auto;flex:1 1 0;max-width:112px;min-width:0;min-height:96px;padding:6px 3px}
+  .slot-face{width:32px;height:32px}
+  .slot-name{font-size:11px}
+  .slot-meta{font-size:9px;gap:3px}
+  .cal-day{flex:0 0 84%}
+  .always-grid{grid-template-columns:1fr}
+
+  .effect{left:10px;right:10px;max-width:none;bottom:calc(12px + env(safe-area-inset-bottom))}
+  .cmp-tray{left:10px;right:10px;transform:none;width:auto;max-width:none;
+    bottom:calc(10px + env(safe-area-inset-bottom))}
+  .cmp-find-wrap{flex:1 1 100%}
+  .cmp-find{width:100%}
+  .cmp-results{width:calc(100vw - 44px)}
+  .cmp-acts{margin-left:0;flex:1 1 100%}
+  .cmp-acts button{flex:1 1 auto}
+}
+
+/* Without a mouse a hover sticks from the previous tap and never comes off. */
+@media (hover:none){
+  tbody tr:hover{background:none}
+  .slot:hover{transform:none;box-shadow:none}
+  .slot:hover .slot-name{text-decoration:none}
+  [data-tip]{cursor:pointer}
+}
+
+/* The only way to move a player without a dragstart, so it is hidden where dragging works. */
+.slot-grip{position:absolute;left:4px;top:4px;z-index:2;width:26px;height:26px;padding:0;
+  border:0;border-radius:8px;cursor:pointer;font:inherit;font-size:13px;line-height:1;
+  background:color-mix(in srgb,#000 42%,transparent);color:#fff}
+.bench-item .slot-grip{position:static;width:24px;height:24px;flex:0 0 auto;
+  background:var(--mid);color:var(--ink-2)}
+.slot.lifted,.bench-item.lifted{box-shadow:inset 0 0 0 2px var(--accent)}
+.slot.lifted .slot-grip,.bench-item.lifted .slot-grip{background:var(--accent);color:#fff}
+.on-touch{display:none}
+@media (hover:hover){.slot-grip{display:none}}
+@media (hover:none){.on-mouse{display:none}.on-touch{display:inline}}
