@@ -427,9 +427,13 @@ func (s *State) forgetSold(universe *model.Universe) {
 		return
 	}
 	mine := make(map[string]bool, len(universe.Players))
+	owners := make(map[string]string, len(universe.Players))
 	yours := 0
 	for _, player := range universe.Players {
 		mine[player.ID] = player.IsMine
+		if player.Owner != nil {
+			owners[player.ID] = *player.Owner
+		}
 		if player.IsMine {
 			yours++
 		}
@@ -456,6 +460,16 @@ func (s *State) forgetSold(universe *model.Universe) {
 	}
 	for _, name := range signed {
 		slog.Info("scheduled raid disarmed", "player", name, "why", "already yours")
+	}
+
+	// And the third: a raid whose target now belongs to somebody else.
+	traded, err := policies.Disarm(policies.Traded(owners, mine, armed)...)
+	if err != nil {
+		slog.Error("could not disarm the raids of traded players", "reason", err.Error())
+		return
+	}
+	for _, name := range traded {
+		slog.Info("scheduled raid disarmed", "player", name, "why", "sold to somebody else")
 	}
 }
 

@@ -412,6 +412,15 @@ or shield the player at any moment, and paying is irreversible. So before the wr
 request re-reads that squad slot, and the raid stands down if the player is shielded, the
 clause is still locked, or it has risen above your `max_pay`.
 
+Standing down is not the same as still being armed, and one case ends the instruction rather
+than postponing it: the target changing hands. A clause belongs to a squad slot, so a sale
+hands the player a new one, at the buyer's price and locked for a fortnight, and the clause the
+raid was armed against no longer exists. So the raid records the manager it was aimed at, and it
+is disarmed the moment the player is somebody else's or back in the market, the same treatment a
+raid gets when the player becomes yours. Two things it will not disarm on: a player missing from a
+short read, which is not a sale, and an instruction armed before the owner was recorded, where
+there is nothing to compare.
+
 ## Measuring the page
 
 A layout argued from memory is an argument nobody can win, so the page records what it is used
