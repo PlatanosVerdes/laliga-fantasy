@@ -33,6 +33,9 @@ type Policy struct {
 	AutoSell    bool     `json:"auto_sell,omitempty"`
 	Raid        bool     `json:"raid,omitempty"`
 	MaxPay      *float64 `json:"max_pay,omitempty"`
+	// Owner is the manager the raid was armed against, and empty means armed before it was
+	// recorded, which disarms nothing. See Traded.
+	Owner string `json:"owner,omitempty"`
 	// Shield buys a 24h shield on one of your own players at ShieldAt. It is one-shot: the
 	// cover it buys is worth nothing outside the hours somebody could actually pay his clause,
 	// so the instruction is an appointment and not a state to keep.
@@ -736,6 +739,27 @@ func Signed(mine map[string]bool, policies map[string]Policy) []string {
 		done = append(done, id)
 	}
 	return done
+}
+
+// Traded is the ids whose scheduled raid has lost its target. A clause belongs to a squad slot,
+// so a sale hands the player a fresh one at the buyer's price, locked for a fortnight: the raid
+// is not waiting for anything, it is pointing at a world that is gone.
+//
+// Two things are not a sale, and both are left alone: a player the universe says nothing about
+// (a short read, the guard Sold and Signed use) and an instruction with no owner recorded.
+func Traded(owners map[string]string, known map[string]bool, policies map[string]Policy) []string {
+	var stale []string
+	for _, id := range SortedIDs(policies) {
+		policy := policies[id]
+		if !policy.Raid || policy.Owner == "" || !known[id] {
+			continue
+		}
+		if owners[id] == policy.Owner {
+			continue
+		}
+		stale = append(stale, id)
+	}
+	return stale
 }
 
 // Disarm drops the raid side of these instructions and reports the names it dropped. The sell

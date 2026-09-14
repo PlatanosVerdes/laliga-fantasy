@@ -808,6 +808,7 @@ func cmdRaid(args []string) error {
 	policy := armed[id]
 	policy.ID, policy.Name, policy.Raid = id, text(found["name"]), true
 	policy.MaxPay = &ceiling
+	policy.Owner = text(found["owner"])
 	armed[id] = policy
 	fmt.Println(cli.Green(fmt.Sprintf(
 		"%s: clausulazo programado, pago maximo %s. Se paga en cuanto se libere y solo si "+

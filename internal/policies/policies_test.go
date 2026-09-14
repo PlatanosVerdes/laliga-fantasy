@@ -223,3 +223,29 @@ func TestASecondSaleSeesTheSquadTheFirstOneLeaves(t *testing.T) {
 		t.Fatalf("%d sales authorised, want 1: the second leaves ten players", sales)
 	}
 }
+
+// What the pruner must not do: fire on a short read, or on an instruction from before owners
+// were recorded.
+func TestTraded(t *testing.T) {
+	armed := map[string]Policy{
+		"1": {ID: "1", Name: "Camello", Raid: true, MaxPay: amount(30_000_000),
+			Owner: "Millou912"},
+		"2": {ID: "2", Name: "Sivera", Raid: true, MaxPay: amount(50_000_000),
+			Owner: "Millou912"},
+		"3": {ID: "3", Name: "Vendido al mercado", Raid: true, MaxPay: amount(9_000_000),
+			Owner: "Villaone"},
+		"4": {ID: "4", Name: "Armado antes de guardar el dueño", Raid: true,
+			MaxPay: amount(4_000_000)},
+		"5": {ID: "5", Name: "Fuera de la lectura", Raid: true, MaxPay: amount(1_000_000),
+			Owner: "TheMessias"},
+		"6": {ID: "6", Name: "Solo venta", AlwaysList: true},
+	}
+	known := map[string]bool{"1": true, "2": true, "3": true, "4": true, "6": true}
+	owners := map[string]string{"1": "Millou912", "2": "LamineTheTuareg", "4": "JMjugon"}
+
+	got := Traded(owners, known, armed)
+	want := []string{"2", "3"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("Traded() = %v, want %v", got, want)
+	}
+}

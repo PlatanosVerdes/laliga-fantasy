@@ -256,10 +256,18 @@ func (s *Server) raid(writer http.ResponseWriter, request *http.Request) {
 			map[string]any{"error": "falta el id o el pago maximo"})
 		return
 	}
+	owner := ""
+	for _, row := range s.rows() {
+		if text(row["id"]) == id {
+			owner = text(row["owner"])
+			break
+		}
+	}
 	entry, err := policies.Set(id, func(policy *policies.Policy) {
 		policy.Name = text(body["name"])
 		policy.Raid = true
 		policy.MaxPay = &maxPay
+		policy.Owner = owner
 	})
 	if err != nil {
 		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
