@@ -596,6 +596,7 @@ function shirtHtml(player,line,index){
     data-index="${index}" data-player="${player.id}" data-pt="${player.player_team_id}"
     title="${player.name}${player.next_rival?(' · vs '+player.next_rival
       +(player.next_home?' (en casa)':' (fuera)')):''}">
+    ${gripHtml()}
     ${statusBadge(player)}
     ${faceHtml(player)}
     <span class="slot-name">${player.name}</span>
@@ -613,6 +614,7 @@ function benchHtml(player){
   const trend=player.projected_pct||0;
   return `<div class="bench-item${statusRing(player)}" draggable="true" data-player="${player.id}"
     data-pt="${player.player_team_id}" data-from="bench" title="${player.name}">
+    ${gripHtml()}
     ${faceHtml(player)}
     <span class="pos pos-${(LINE_LABEL[Object.keys(LINE_POS).find(k=>LINE_POS[k]===player.position_id)]||'ENT').toLowerCase()}">${
       {1:'POR',2:'DEF',3:'MED',4:'DEL'}[player.position_id]||'ENT'}</span>
@@ -711,12 +713,52 @@ function pitchAlert(){
 
 let justDragged=false;
 
+// A touchscreen emits no dragstart, so the grip lifts a player and the next tap drops him.
+// The body of a shirt still opens his card, which is what gets tapped nine times out of ten.
+let lifted=null;
+
+const gripHtml=()=>'<button class="slot-grip" type="button" title="Mover">⇅</button>';
+
+function lift(next){
+  lifted=next;
+  document.querySelectorAll('.lifted').forEach(n=>n.classList.remove('lifted'));
+  const status=document.getElementById('pitch-status');
+  if(!lifted){ if(status) status.textContent=''; return; }
+  const node=document.querySelector(`.slot[data-player="${lifted.id}"],`
+    +`.bench-item[data-player="${lifted.id}"]`);
+  if(node) node.classList.add('lifted');
+  if(status) status.textContent='Toca el hueco donde va';
+}
+
+function placeOn(node){
+  if(!lifted) return false;
+  dragged=lifted;
+  lift(null);
+  if(node.id==='bench') dropOnBench();
+  else dropOnSlot(node.dataset.line, +node.dataset.index);
+  dragged=null;
+  // dropOnSlot returns without repainting when the hole is the same one, and the player
+  // would stay marked as lifted.
+  renderPitch();
+  return true;
+}
+
 function wireDrag(){
   document.querySelectorAll('.slot[draggable], .bench-item[draggable]').forEach(node=>{
     // Arrastrar y clicar empiezan igual, asi que un drop no puede abrir la ficha.
-    node.addEventListener('click',()=>{
+    node.addEventListener('click',(event)=>{
+      if(event.target.closest('.slot-grip')) return;
+      if(placeOn(node)) return;
       if(justDragged) return;
       if(node.dataset.player) openDetail(node.dataset.player);
+    });
+    const grip=node.querySelector('.slot-grip');
+    if(grip) grip.addEventListener('click',(event)=>{
+      event.stopPropagation();
+      if(lifted&&lifted.id===node.dataset.player){ lift(null); return; }
+      lift({id:node.dataset.player, pt:node.dataset.pt,
+            from:node.dataset.from||'pitch',
+            line:node.dataset.line, index:+node.dataset.index});
     });
     node.addEventListener('dragstart',e=>{
       dragged={id:node.dataset.player, pt:node.dataset.pt,
@@ -734,6 +776,7 @@ function wireDrag(){
   const targets=[...document.querySelectorAll('.slot'), document.getElementById('bench')];
   targets.forEach(node=>{
     if(!node) return;
+    node.addEventListener('click',()=>{ placeOn(node); });
     node.addEventListener('dragover',e=>{ e.preventDefault(); node.classList.add('drop-target'); });
     node.addEventListener('dragleave',()=>node.classList.remove('drop-target'));
     node.addEventListener('drop',e=>{
@@ -743,6 +786,7 @@ function wireDrag(){
       else dropOnSlot(node.dataset.line, +node.dataset.index);
     });
   });
+  if(lifted) lift(lifted);
 }
 
 function takeFrom(source){
@@ -1633,6 +1677,12 @@ document.addEventListener('mouseover',(event)=>{
 document.addEventListener('mouseout',(event)=>{
   if(event.target.closest&&event.target.closest('[data-tip]')) hideTip();
 });
+// Without a mouse there is no hovering, so a tap opens it and the next one closes it.
+document.addEventListener('click',(event)=>{
+  if(!window.matchMedia('(hover:none)').matches) return;
+  const target=event.target.closest('[data-tip]');
+  if(target) showTip(target); else hideTip();
+});
 window.addEventListener('scroll',hideTip,{passive:true});
 
 // ---- comparador: un fichaje es siempre "en vez de quien" --------------------
@@ -2083,6 +2133,9 @@ function showTab(id,{section=null,updateHash=true}={}){
     const on=b.dataset.tab===tab.id;
     b.classList.toggle('on',on);
     b.setAttribute('aria-selected',on?'true':'false');
+    // The strip scrolls, so the tab that just lit up can be outside it. 'nearest' keeps
+    // the page itself where it was.
+    if(on) b.scrollIntoView({block:'nearest',inline:'center'});
   });
   try{ localStorage.setItem('fantasy-tab',tab.id); }catch(e){}
   applyFilters();
@@ -2097,14 +2150,6 @@ function showTab(id,{section=null,updateHash=true}={}){
     const node=document.getElementById(section);
     if(node) node.scrollIntoView({behavior:'smooth',block:'start'});
   }
-}
-
-// El alto real de la barra pegada: las pestañas se parten en dos lineas en pantallas
-// estrechas, asi que la cabecera de tabla no puede pegarse a un numero escrito a mano.
-function measureTabs(){
-  const bar=document.getElementById('tabs');
-  if(!bar) return;
-  document.documentElement.style.setProperty('--tabs-h', bar.offsetHeight+'px');
 }
 
 function wireTabs(){
@@ -2239,8 +2284,6 @@ function connect(){
 wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids();
 wireRaises(); wireManagers(); wireMatchdays();
 wireTabs(); tick(); drawTray();
-measureTabs();
-window.addEventListener('resize',measureTabs);
 {
   const stamped=document.getElementById('tab-cash');
   if(stamped&&stamped.dataset.cash) myCash=+stamped.dataset.cash;
