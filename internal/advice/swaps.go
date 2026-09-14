@@ -138,8 +138,8 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 		if len(moves) >= 4 {
 			break
 		}
-		// La norma de la liga manda sobre el plan: proponer lo que no se puede hacer es peor
-		// que no proponer nada.
+		// The league's own rule outranks the plan: proposing what cannot be done is worse
+		// than proposing nothing.
 		if truthy(out["sale_locked"]) {
 			continue
 		}

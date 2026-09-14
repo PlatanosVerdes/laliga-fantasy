@@ -41,7 +41,7 @@ func universeWithRivals() Document {
 func TestRivalSectionsOnePerRival(t *testing.T) {
 	document := universeWithRivals()
 	sections := document.rivalSections(rows(document.Universe["players"]))
-	// El selector primero, y una seccion por rival detras.
+	// The picker first, then one section per rival behind it.
 	if len(sections) != 3 {
 		t.Fatalf("selector y dos rivales, salieron %d secciones", len(sections))
 	}
@@ -53,7 +53,7 @@ func TestRivalSectionsOnePerRival(t *testing.T) {
 	if !strings.Contains(sections[1], `id="rival-300"`) {
 		t.Errorf("el segundo de la liga deberia ir primero: %.120s", sections[1])
 	}
-	// Y el desplegable los ofrece en el mismo orden.
+	// And the dropdown offers them in the same order.
 	if strings.Index(sections[0], "rival-300") > strings.Index(sections[0], "rival-200") {
 		t.Error("las opciones tienen que ir en orden de clasificacion")
 	}
@@ -71,7 +71,7 @@ func TestRivalSectionsExcludeMineAndFreeAgents(t *testing.T) {
 	document := universeWithRivals()
 	joined := strings.Join(document.rivalSections(rows(document.Universe["players"])), "")
 	// Por id de fila, no por nombre: el mio aparece de todas formas como referencia en la
-	// columna "Frente a lo tuyo", y ahi es correcto que salga.
+	// the "Frente a lo tuyo" column, where it is right for it to appear.
 	for _, absent := range []string{`data-cmp="1"`, `data-cmp="5"`, `id="rival-100"`} {
 		if strings.Contains(joined, absent) {
 			t.Errorf("%s no es de un rival y no deberia tener fila", absent)
@@ -290,7 +290,7 @@ func note(section string) string {
 	return section[start : start+end]
 }
 
-// Los clausulazos que no se pudieron hacer van en su propia subseccion: mezclados con los que
+// Raids that could not be made go in a subsection of their own: mixed in with the ones that
 // siguen en pie, la seccion se leia como si todos estuvieran a punto de pagarse.
 func TestRaidsSectionSeparatesTheOnesThatCouldNotRun(t *testing.T) {
 	document := Document{Raids: []map[string]any{
@@ -319,7 +319,7 @@ func TestRaidsSectionSeparatesTheOnesThatCouldNotRun(t *testing.T) {
 	}
 }
 
-// Y con todos caidos la tabla de arriba lo dice en vez de quedarse en "Sin datos".
+// And with every one of them down, the table above says so instead of sitting on "Sin datos".
 func TestRaidsSectionSaysNoneStandingWhenAllFell(t *testing.T) {
 	document := Document{Raids: []map[string]any{
 		{"player_id": "2", "name": "El blindado", "owner": "tete", "clause": 30_000_000.0,

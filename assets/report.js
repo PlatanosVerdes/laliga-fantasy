@@ -57,7 +57,7 @@ function sectionOf(node){
   return node?.closest?.('section[id]')?.id||'';
 }
 
-// ---- estado de filtros, para que sobreviva a un recambio de seccion --------
+// ---- filter state, so it survives a section being swapped out --------------
 const filterState = {pos:'all', price:'', text:''};
 
 function wireTables(root=document){
@@ -67,8 +67,8 @@ function wireTables(root=document){
     table.querySelectorAll('th').forEach((th,index)=>{
       th.addEventListener('click',()=>{
         const body=table.tBodies[0], rows=[...body.rows];
-        // Los de la jornada tambien: la clave de orden que traen es un numero, y sin estar
-        // aqui se ordenarian como texto (48 delante de 9).
+        // The matchday ones too: the sort key they carry is a number, and without being
+        // here they would sort as text (48 before 9).
         const numeric=['money','pct','num','num1','int','pct_plain','spark','verdict','mag',
                        'ideal','hours','ratio','live_points','waiting','projection']
                       .includes(th.dataset.kind);
@@ -111,9 +111,9 @@ function wireFilters(root=document){
     bar.dataset.wired='1';
     const pos=bar.querySelector('.f-pos'), price=bar.querySelector('.f-price'),
           text=bar.querySelector('.f-text'), reset=bar.querySelector('.f-reset');
-    // Sin sus controles no es una barra de filtros: una excepcion aqui se lleva por delante
-    // el resto del arranque (el resto de cables y la conexion en vivo), y la pagina entera
-    // se queda muerta sin poder pulsar nada.
+    // Without its controls it is not a filter bar: an exception here takes the rest of the
+    // start-up with it (the remaining wiring and the live connection), and the whole page is
+    // left dead with nothing clickable.
     if(!pos||!price||!text||!reset) return;
     pos.value=filterState.pos; price.value=filterState.price; text.value=filterState.text;
     const sync=()=>{ filterState.pos=pos.value; filterState.price=price.value;
@@ -152,7 +152,7 @@ function wireStars(root=document){
   });
 }
 
-// ---- cuentas atras en vivo -------------------------------------------------
+// ---- live countdowns -------------------------------------------------------
 function tick(){
   const now=Date.now();
   document.querySelectorAll('[data-deadline]').forEach(el=>{
@@ -165,29 +165,29 @@ function tick(){
     el.textContent = h>=24 ? Math.floor(h/24)+'d '+(h%24)+'h'
                    : h>0   ? h+'h '+String(m).padStart(2,'0')+'m'
                            : m+'m '+String(s).padStart(2,'0')+'s';
-    // El valor de un widget no es una pastilla: solo cambia el color, no la clase entera.
+    // A widget's value is not a pill: only the colour changes, not the whole class.
     if(plain) el.style.color = h<1 ? 'var(--critical)' : h<6 ? 'var(--warning)' : '';
     else el.className = h<1 ? 'pill-critical' : h<24 ? 'pill-warning' : 'pill-neutral';
   });
 }
 setInterval(tick,1000);
 
-// ---- puja con doble confirmacion ------------------------------------------
+// ---- bidding, confirmed twice ----------------------------------------------
 const modal=document.getElementById('bid-modal');
 let pending=null;
 
 const fmt=(n)=> n==null ? '—' :
   (Math.abs(n)>=1e6 ? (n/1e6).toFixed(2)+'M' : Math.abs(n)>=1e3 ? (n/1e3).toFixed(0)+'K' : String(n));
-// El importe se escribe con puntos de millar para que no haya que contar ceros.
+// The amount is typed with thousands separators so nobody has to count zeros.
 const group=(n)=> (n==null||isNaN(n)) ? '' : Number(n).toLocaleString('es-ES');
 const digits=(s)=> parseInt(String(s).replace(/[^0-9]/g,''),10);
 const exact=(n)=> n==null ? '—' : Number(n).toLocaleString('es-ES')+' €';
 
 function closeModal(){ modal.hidden=true; pending=null; }
 
-// Un unico sitio decide que paso se ve: antes los botones compartian clase con los
-// bloques y querySelector solo alcanzaba al primero, asi que el contenido avanzaba
-// y los botones se quedaban en el paso uno.
+// One place decides which step is shown: the buttons used to share a class with the blocks
+// and querySelector only reached the first, so the content moved on while the buttons stayed
+// on step one.
 function showStep(step,{confirmLabel='Aceptar'}={}){
   modal.querySelector('#bid-amount-step').hidden = step!==1;
   modal.querySelector('#bid-summary-step').hidden = step!==2;
@@ -199,9 +199,9 @@ function showStep(step,{confirmLabel='Aceptar'}={}){
 }
 
 function wireBids(root=document){
-  // :not([data-op]) porque el boton de aceptar una oferta lleva la clase .bid solo por el
-  // color, y se estaba quedando con este manejador: al pulsar Aceptar se abria el dialogo de
-  // pujar, con importe minimo NaN. El color no puede decidir que hace un boton.
+  // :not([data-op]) because the accept-an-offer button carries .bid for the colour alone, and
+  // it was catching this handler: pressing Aceptar opened the bid dialog with a minimum of NaN.
+  // Colour cannot decide what a button does.
   root.querySelectorAll('button.bid:not([data-op])').forEach(button=>{
     if(button.dataset.wired) return;
     button.dataset.wired='1';
@@ -210,14 +210,14 @@ function wireBids(root=document){
 }
 
 function openBid(data){
-  // El modal se reutiliza, asi que lo que escondio una subida de clausula hay que devolverlo.
+  // The modal is reused, so whatever a clause raise hid has to be given back.
   modal.querySelector('.bid-refs').hidden=false;
   modal.querySelector('#bid-clause').hidden=true;
   modal.querySelector('#bid-amount-label').textContent='Importe de la puja';
-  // Con una puja puesta la operacion es cambiarla: la API rechaza una segunda con un 400.
+  // With a bid already placed the operation is to change it: the API refuses a second with 400.
   const existing=data.bid||null;
-  // La operacion la manda el boton: por el mercado libre se puja y por la venta de un rival se
-  // oferta, y la API contesta 404 a la equivocada.
+  // The button dictates the operation: the free market takes a bid and a rival's listing takes
+  // an offer, and the API answers 404 to the wrong one.
   const operation=existing?'modify_bid':(data.operation||'bid');
   pending={market_id:data.market, player_id:data.player, name:data.name,
            min_bid:+data.min, ideal:+data.ideal||0, value:+data.value,
@@ -249,7 +249,7 @@ function showRivals(count, expires){
                             || pending.operation==='buy_offer' || !pending.operation);
   wrap.hidden = !isBid;
   if(!isBid) return;
-  // Una de esas pujas puede ser la tuya, y contarla como rival es contar mal: se dice.
+  // One of those bids can be yours, and counting it as a rival's is counting wrong: it says so.
   const mine = pending && pending.bid_id ? 1 : 0;
   const others = Math.max(0, count - mine);
   node.textContent = !count ? 'ninguna'
@@ -258,23 +258,25 @@ function showRivals(count, expires){
   node.className = 'bid-rivals'+(others?' rivals-on':'');
 }
 
-// Lo que se multiplica es la subida, no lo que pagas: pagas 8.555 y la clausula gana 17.110.
-// Vive aqui porque es la unica operacion en la que el importe que escribes no es lo que cambia.
+// What doubles is the rise, not what you pay: you pay 8,555 and the clause gains 17,110. It
+// lives here because it is the only operation where the amount you type is not what changes.
 const CLAUSE_FACTOR=2;
 
-// Cuando el dinero entra en vez de salir. Lo usan los dos pasos del dialogo, el de escribir el
-// importe y el de confirmarlo, para que no llamen a lo mismo de dos maneras: pagar una
-// clausula sale de la caja ya, y "si sale" era mentira en esa fila. Una venta no cobra hoy: cobra si alguien la compra,
-// y por eso la linea lo dice en vez de sumar y callarse.
+// When the money comes in rather than goes out. Both steps of the dialog read it, the one
+// where the amount is typed and the one where it is confirmed, so they cannot name the same
+// thing two ways: paying a clause leaves the bank now, and "si sale" was a lie in that row. A
+// sale pays nothing today, it pays if somebody buys, which is why the line says so instead of
+// adding it up in silence.
 const CASH_IN=new Set(['sell_to_market','accept_offer']);
-// Lo que todavia no ha pasado: una puja no descuenta hasta que se gana, y una oferta a un
-// rival no descuenta hasta que la acepta.
+// What has not happened yet: a bid takes nothing until it is won, and an offer to a rival
+// takes nothing until he accepts.
 const CASH_WHEN={bid:'si la ganas', modify_bid:'si la ganas', buy_offer:'si te la aceptan',
                  direct_offer:'si te la aceptan', sell_to_market:'si te lo compran',
                  accept_offer:'al aceptarla'};
 
-// Como queda el saldo, mientras se escribe el importe. Es la unica referencia que decide si la
-// operacion se puede hacer, y solo aparecia en el paso dos, cuando el importe ya estaba puesto.
+// How the balance ends up, while the amount is still being typed. It is the one reference that
+// decides whether the operation can happen at all, and it only appeared on step two, by which
+// point the amount was already decided.
 function showBalance(amount){
   const box=modal.querySelector('.bid-balance');
   if(!box) return;
@@ -296,8 +298,8 @@ function clauseSums(amount){
   const next=(pending.clause||0)+rise;
   const times=pending.value ? next/pending.value : 0;
   const safe=pending.safe||0;
-  // La misma linea que usa el consejo, dicha aqui mientras escribes: por encima de ella pagar
-  // la clausula es mal negocio para quien la paga, y eso es toda la defensa que compra.
+  // The same line the advice uses, said here while you type: above it, paying the clause is a
+  // bad deal for whoever pays it, and that is the whole of the defence it buys.
   let verdict='';
   if(safe && times){
     verdict = times>=safe
@@ -325,14 +327,15 @@ function checkAmount(){
     input.setSelectionRange(Math.max(0,caret+shift), Math.max(0,caret+shift));
   }
   let text='';
-  // Subir una clausula no tiene puja minima ni techo de futbolfantasy: ese techo es lo que
-  // renta pagar *por el jugador*, y aqui no se compra a nadie. Decia "no le ve rentabilidad".
+  // Raising a clause has no minimum bid and no futbolfantasy ceiling: that ceiling is what is
+  // worth paying *for the player*, and nobody is being bought here. It said "no le ve
+  // rentabilidad".
   showBalance(amount);
   if(pending.raise){
     clauseSums(amount);
     if(!amount){
       const now=pending.value ? (pending.clause||0)/pending.value : 0;
-      // Sugerir cero es una respuesta, no un hueco: la clausula ya esta donde tiene que estar.
+      // Suggesting zero is an answer, not a blank: the clause is already where it should be.
       text = pending.safe && now>=pending.safe
         ? `Ya esta a ${now.toFixed(2)}x su valor, por encima de ${pending.safe.toFixed(2)}x: `
           +'no hace falta subirla. Si aun asi quieres, escribe un importe.'
@@ -356,7 +359,7 @@ if(modal){
   modal.addEventListener('click',(e)=>{ if(e.target===modal) closeModal(); });
   document.addEventListener('keydown',(e)=>{ if(e.key==='Escape'&&!modal.hidden) closeModal(); });
 
-  // paso 1: pedir al servidor que valide y devuelva el resumen + token
+  // step 1: ask the server to validate and hand back the summary and a token
   modal.querySelector('.bid-next').addEventListener('click', async ()=>{
     const amount=digits(modal.querySelector('.bid-amount').value);
     modal.querySelector('.bid-error').textContent='';
@@ -392,7 +395,7 @@ if(modal){
     }
   });
 
-  // retirar una puja ya puesta, con el mismo doble paso
+  // withdrawing a bid already placed, through the same two steps
   modal.querySelector('.bid-drop').addEventListener('click', async ()=>{
     modal.querySelector('.bid-error').textContent='';
     try{
@@ -410,7 +413,7 @@ if(modal){
     }catch(err){ modal.querySelector('.bid-error').textContent=err.message; }
   });
 
-  // paso 2: confirmar de verdad
+  // step 2: actually confirm
   modal.querySelector('.bid-confirm').addEventListener('click', async ()=>{
     const button=modal.querySelector('.bid-confirm');
     button.disabled=true; button.textContent='Enviando…';
@@ -426,9 +429,9 @@ if(modal){
         `<p class="bid-ok">${done}${data.dry_run?' (simulacro)':''}.</p>`;
       modal.querySelector('.bid-confirm').hidden=true;
       modal.querySelector('.bid-cancel').textContent='Cerrar';
-      // El servidor ya lo ha hecho: la fila se va y el aviso sale ahora, sin esperar a que
-      // se reconstruya el mundo. Cuando llegue el refresco, la tabla ya coincide.
-      // En simulacro no se ha movido nada: el resumen se queda para poder leerlo.
+      // The server has already done it: the row goes and the notice appears now, without
+      // waiting for the world to be rebuilt. By the time the refresh lands the table agrees.
+      // In a dry run nothing moved, so the summary stays where it can be read.
       if(!data.dry_run){ settled(pending,done); closeModal(); }
     }catch(err){
       modal.querySelector('.bid-error').textContent=err.message;
@@ -438,15 +441,15 @@ if(modal){
   });
 }
 
-// Operaciones que terminan con la fila: la oferta aceptada o rechazada ya no existe, la puja
-// retirada tampoco. Poner en venta o pujar no borran nada, asi que ahi solo sale el aviso.
+// Operations that end the row: an offer accepted or refused no longer exists, nor does a bid
+// withdrawn. Listing or bidding delete nothing, so there only the notice appears.
 const OP_ENDS_ROW=new Set(['accept_offer','decline_offer','withdraw','cancel_bid',
                            'cancel_offer','pay_clause']);
 
 function settled(op,label){
   if(!op) return;
   if(OP_ENDS_ROW.has(op.operation)){
-    // La fila se busca por lo que la identifica, de lo mas concreto a lo menos: una oferta
+    // The row is found by what identifies it, most specific first: an offer
     // concreta, si no la entrada de mercado, si no el jugador.
     const key=op.offer_id?`[data-op-offer="${op.offer_id}"]`
       :(op.market_id?`[data-op-market="${op.market_id}"]`
@@ -460,7 +463,7 @@ function settled(op,label){
   flash(label,op.name);
 }
 
-// El mismo aviso que manda el servidor cuando algo se mueve, pero dicho aqui y al instante.
+// The same notice the server sends when something moves, but said here and at once.
 function flash(title,detail){
   const box=document.createElement('div');
   box.className='effect';
@@ -473,8 +476,8 @@ function flash(title,detail){
 }
 
 // ---- operaciones genericas (aceptar/rechazar oferta, retirar) --------------
-// Cada operacion se llama por su nombre en el boton final y en el resumen: "Pujas" y
-// "Saldo si ganas" no significan nada cuando lo que haces es vender.
+// Every operation is called by its own name on the final button and in the summary: "Pujas" and
+// "Saldo si ganas" means nothing when what you are doing is selling.
 const CONFIRM_LABEL={};   // el boton dice simplemente Aceptar
 const DONE_LABEL={bid:'Puja enviada',sell_to_market:'Puesto en venta',
   accept_offer:'Oferta aceptada',decline_offer:'Oferta rechazada',
@@ -499,9 +502,9 @@ function wireOps(root=document){
     button.dataset.wired='1';
     button.addEventListener('click', async ()=>{
       const d=button.dataset;
-      // Cancelar un clausulazo no es una operacion contra LaLiga: es borrar una instruccion
-      // nuestra, asi que no pasa por la confirmacion de dos pasos, que existe para el dinero.
-      // Quitar una instruccion permanente tampoco gasta: deja de hacerlo.
+      // Cancelling a raid is not an operation against LaLiga: it deletes an instruction of
+      // ours, so it skips the two-step confirmation, which exists for money. Dropping a
+      // standing instruction spends nothing either: it stops spending.
       if(d.op==='drop_always'){
         if(!confirm('Quitar '+d.opName+' de siempre-en-mercado?')) return;
         try{
@@ -511,7 +514,7 @@ function wireOps(root=document){
           const data=await res.json();
           if(!res.ok) throw new Error(data.error||res.status);
           if(data.always_listed){
-            // El toggle lo habria vuelto a poner: lo dejamos como estaba y lo decimos.
+            // The toggle would have put it back: leave it as it was and say so.
             await fetch('/api/always',{method:'POST',headers:{'Content-Type':'application/json'},
               body:JSON.stringify({id:d.opPlayer,name:d.opName})});
             throw new Error('no estaba armado');
@@ -539,9 +542,9 @@ function wireOps(root=document){
   });
 }
 
-// La confirmacion de dos pasos: el resumen que da el servidor, su token de un solo uso y el
-// boton final. Vive aparte porque la piden dos sitios, las tablas y el cajon, y el cajon no
-// tiene ningun boton de tabla del que colgarse.
+// The two-step confirmation: the summary the server gives, its single-use token and the final
+// button. It lives apart because two places ask for it, the tables and the drawer, and the
+// drawer has no table button to hang off.
 async function confirmOp(op){
   const name=op.name||'';
   pending={operation:op.op, market_id:op.market_id||'', offer_id:op.offer_id||'',
@@ -585,10 +588,10 @@ const LINE_POS={goalkeeper:1,defender:2,midfield:3,striker:4};
 let pitchState=null, pitchDirty=false, dragged=null;
 
 
-// Iconos de estado: tarjeta roja, botiquin, incognita. El motivo lo pone
-// futbolfantasy (la API solo da el codigo de estado) y sale al instante con un
-// tooltip propio, porque el title nativo tarda casi un segundo.
-// Glifos de texto, no SVG: a 12px un trazo fino no se ve, y una cruz de dos rects
+// Status icons: red card, first-aid kit, question mark. The reason comes from
+// futbolfantasy (the API gives only the status code) and appears instantly through a tooltip
+// of our own, because the native title takes nearly a second.
+// Text glyphs, not SVG: at 12px a thin stroke disappears, and a cross of two rects
 // o un caracter siempre salen.
 const ICON_CARD='';              // la propia insignia ES la tarjeta
 const ICON_KIT='<i class="kit"></i>';
@@ -625,7 +628,7 @@ function statusBadge(player){
   return `<span class="badge-status ${s.cls}" data-tip="${tip}">${s.icon}</span>`;
 }
 
-// Titularidad: el numero que decide si los xPts se van a materializar.
+// Odds of starting: the number that decides whether the xPts will materialise at all.
 function titClass(p){
   return p>=75?'tit-hi':p>=50?'tit-mid':p>=30?'tit-lo':'tit-out';
 }
@@ -641,8 +644,8 @@ function weekChip(w){
   return `<span class="wk ${cls}" title="Jornada ${w.week}">${p==null?'–':p}</span>`;
 }
 
-// La cara identifica mas rapido que el nombre; el escudo se queda en la esquina porque el
-// rival de la jornada se lee por equipo. Si la imagen no carga, queda el escudo solo.
+// The face identifies faster than the name; the crest stays in the corner because the
+// matchday's opponent is read by club. If the image fails to load, the crest is left alone.
 function faceHtml(player){
   const crest=`<span class="crest crest-${player.team_id}"></span>`;
   if(!player.image) return crest;
@@ -716,12 +719,13 @@ function renderPitch(){
 const LINE_WORD={goalkeeper:['portero','porteros'],defender:['defensa','defensas'],
                  midfield:['medio','medios'],striker:['delantero','delanteros']};
 
-// Un hueco en el once son puntos que no se juegan, asi que se dice arriba y con la salida
-// puesta: la formacion que si cuadra con los que pueden jugar, si alguna cuadra.
+// A hole in the eleven is points not played, so it is said at the top with the way out beside
+// it: the formation that does fit the players who can play, if any fits.
 //
-// Contar camisetas no vale. Once camisetas con un sancionado dentro son diez jugadores y una
-// plaza con nombre, y este aviso ofrecia el cambio de formacion que las junta como si eso
-// arreglara algo.
+// Counting shirts will not do. Eleven shirts with a suspended player among them are ten
+// players and one named hole, and this warning offered the formation change that lines them up
+// as if that
+// would fix anything.
 const cannotPlay=p=>{
   if(!p) return false;
   if(p.available===false) return true;
@@ -741,7 +745,7 @@ function pitchAlert(){
     missing+=empty;
     holes.push(`${empty} ${LINE_WORD[line][empty>1?1:0]}`);
   });
-  // Ni huecos ni nadie ahi puesto para nada: no hay nada que decir.
+  // No holes and nobody standing there for nothing: there is nothing to say.
   if(!missing&&!idle.length){ box.hidden=true; box.innerHTML=''; return; }
 
   const have={1:0,2:0,3:0,4:0}, can={1:0,2:0,3:0,4:0};
@@ -811,7 +815,7 @@ function placeOn(node){
 
 function wireDrag(){
   document.querySelectorAll('.slot[draggable], .bench-item[draggable]').forEach(node=>{
-    // Arrastrar y clicar empiezan igual, asi que un drop no puede abrir la ficha.
+    // Dragging and clicking start the same way, so a drop must not open the card.
     node.addEventListener('click',(event)=>{
       if(event.target.closest('.slot-grip')) return;
       if(placeOn(node)) return;
@@ -871,7 +875,7 @@ function dropOnSlot(line,index){
   const target=pitchState.lines[line][index]||null;
   const player=takeFrom(moving);
   if(!player) return;
-  // Una linea solo acepta su propia posicion; el portero es intransferible.
+  // A line takes only its own position; the keeper cannot be moved at all.
   if(player.position_id!==LINE_POS[line]){
     // devolver y avisar
     if(moving.from==='bench') pitchState.bench.push(player);
@@ -912,7 +916,7 @@ function applyFormation(text){
     while(arr.length<want[line]) arr.push(null);
     pitchState.lines[line]=arr;
   });
-  // rellenar huecos con reservas de esa posicion, el resto al banquillo
+  // fill the holes with reserves of that position, the rest to the bench
   LINE_ORDER.forEach(line=>{
     pitchState.lines[line]=pitchState.lines[line].map(slot=>{
       if(slot) return slot;
@@ -928,7 +932,7 @@ function applyFormation(text){
   });
   pitchState.bench=pitchState.bench.concat(spare);
   pitchState.formation=[d,m,s];
-  // El selector tambien se cambia desde el aviso, y tiene que quedar diciendo la verdad.
+  // The picker is changed from the warning too, and has to be left telling the truth.
   const select=document.getElementById('pitch-formation-select');
   if(select) select.value=text;
   pitchDirty=true; renderPitch();
@@ -980,8 +984,8 @@ async function savePitch(){
     const data=await res.json();
     if(!res.ok) throw new Error(data.error||res.status);
     pitchDirty=false;
-    // Los ids no cambian al guardar, asi que basta con repintar lo que ya tenemos:
-    // recargar del API es una vuelta entera para el mismo resultado.
+    // The ids do not change on save, so repainting what we already have is enough: reloading
+    // from the API is a whole round trip for the same result.
     pitchState.formation=data.formation||pitchState.formation;
     renderPitch();
     document.getElementById('pitch-status').textContent=
@@ -992,8 +996,8 @@ async function savePitch(){
 
 // ---- cajon de jugador: un nombre, todas sus acciones ----------------------
 const drawer=document.getElementById('drawer');
-// El modo lo pinta el servidor en la cabecera: leerlo de ahi evita una peticion y evita que el
-// aviso prometa algo que este servidor no hace.
+// The server paints the mode into the header: reading it from there saves a request and stops
+// the notice promising something this server does not do.
 const MODE=(document.querySelector('.mode b')||{}).textContent||'manual';
 
 // The drawer is a single space that gets rewritten whole, so opening a card from a squad
@@ -1003,17 +1007,17 @@ let drawerFrom=null;
 function closeDrawer(){
   if(!drawer) return;
   drawerFrom=null;
-  // Cerrar el comparador es haber terminado de comparar: la barra de abajo se va con el.
+  // Closing the comparator is being done comparing: the bar at the bottom goes with it.
   const wasComparing=!!drawer.querySelector('.cmp-view');
   drawer.hidden=true;
   panelWide(false);
   if(wasComparing&&typeof drawTray==='function'){ tray=[]; cmpSave(); drawTray(); }
 }
 
-// El primer valor lo escribe el navegador y tick() lo mantiene cada segundo: la cuenta atras
-// de una clausula es justo el dato que caduca mientras lo miras.
-// Cuanto lleva algo hecho, en las mismas unidades que la cuenta atras: un fichaje de hace tres
-// dias y uno de hace tres horas son decisiones distintas.
+// The browser writes the first value and tick() keeps it every second: the countdown
+// of a clause is precisely the figure that expires while you look at it.
+// How long ago something happened, in the same units as the countdown: a signing from three
+// days ago and one from three hours ago are different decisions.
 function since(stamp){
   const gone=Date.now()-new Date(stamp).getTime();
   if(isNaN(gone)||gone<0) return '—';
@@ -1023,7 +1027,7 @@ function since(stamp){
                : 'hace '+m+'m';
 }
 
-// El dia y la hora de una marca ISO, en local y sin año: es como se teclea y como se lee.
+// The day and time of an ISO stamp, local and without the year: how it is typed and read.
 function stampText(stamp){
   const when=new Date(stamp);
   if(isNaN(when.getTime())) return '';
@@ -1031,8 +1035,8 @@ function stampText(stamp){
   return `${pad(when.getDate())}/${pad(when.getMonth()+1)} ${pad(when.getHours())}:${pad(when.getMinutes())}`;
 }
 
-// Lo que se teclea en el prompt: "21:30" es la proxima vez que sean las 21:30, y "07/09 21:30"
-// ese momento del año en curso. Sale en ISO, que es lo que el servidor entiende.
+// What is typed into the prompt: "21:30" is the next time it is 21:30, and "07/09 21:30" that
+// moment of the current year. It comes out as ISO, which is what the server understands.
 function stampFrom(text,fallback){
   const value=(text||'').trim();
   if(!value) return fallback||'';
@@ -1064,8 +1068,8 @@ function leftUntil(stamp){
                                                         : m+'m';
 }
 
-// Una curva sin cifras solo dice "sube" o "baja". Con el cursor encima dice cuanto y que dia,
-// que es la pregunta que se hace mirandola.
+// A curve without figures says only "up" or "down". Under the cursor it says how much and on
+// what day, which is the question being asked of it.
 let chartDays=[];
 
 function sparkSvg(history){
@@ -1108,8 +1112,8 @@ function wireChart(root){
     const ratio=Math.min(1,Math.max(0,(event.clientX-box.left)/box.width));
     const index=Math.round(ratio*(values.length-1));
     const day=chartDays[index];
-    // El viewBox se estira con preserveAspectRatio="none", asi que la x en pantalla es la
-    // proporcion, no la del viewBox: el punto y la linea van en coordenadas del viewBox.
+    // The viewBox is stretched with preserveAspectRatio="none", so the x on screen is the
+    // proportion and not the viewBox's: the point and the line go in viewBox coordinates.
     const x=index*step, y=h-4-(values[index]-lo)/span*(h-12);
     cross.setAttribute('x1',x); cross.setAttribute('x2',x); cross.style.opacity='.6';
     dot.setAttribute('cx',x); dot.setAttribute('cy',y); dot.style.opacity='1';
@@ -1127,10 +1131,10 @@ function wireChart(root){
   });
 }
 
-// Las cuatro lineas de un equipo, en el orden en que se lee un campo: de atras hacia adelante.
+// A team's four lines, in the order a pitch is read: from the back forwards.
 const LINES=[{id:1,label:'POR'},{id:2,label:'DEF'},{id:3,label:'MED'},{id:4,label:'DEL'}];
 
-// Una plantilla se lee por lineas, no como una lista: agrupada asi se ve de un vistazo si a
+// A squad reads by lines rather than as a list: grouped this way it shows at a glance whether
 // alguien le falta un defensa o le sobran delanteros.
 function byLine(squad){
   return LINES.map(line=>({
@@ -1139,18 +1143,18 @@ function byLine(squad){
   })).filter(line=>line.players.length);
 }
 
-// La cara del jugador en pequeño, con el escudo detras si no hay foto.
+// The player's face in miniature, with the crest behind it when there is no photo.
 function chipFace(p){
   return p.image
     ? `<img class="chip-face" src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
     : `<span class="crest crest-${p.team_id}"></span>`;
 }
 
-// El campo en pequeño: las mismas cuatro lineas del once, de delantera a porteria, porque una
-// plantilla se reconoce por su forma antes que por sus nombres.
+// The pitch in miniature: the same four lines as the eleven, attack to keeper, because a squad
+// is recognised by its shape before its names.
 function miniPitch(m){
-  // El once que alineo, no la plantilla: un campo con dos porteros no es un campo. Cuando la
-  // alineacion de esa jornada no esta disponible se dice y se cae a la plantilla agrupada.
+  // The eleven he fielded, not the squad: a pitch with two keepers is not a pitch. When that
+  // matchday's lineup is unavailable it says so and falls back to the grouped squad.
   const fielded=m.lineup;
   if(!fielded){
     const lines=byLine(m.squad).slice().reverse();
@@ -1171,8 +1175,8 @@ function miniPitch(m){
   }).join('')}</div>` + benchStrip(m.bench);
 }
 
-// Las plazas que dejo vacias: un 4-4-2 con diez no es un 4-4-2, es un 4-4-2 al que le falta un
-// medio, y eso son puntos regalados.
+// The slots he left empty: a 4-4-2 with ten is not a 4-4-2, it is a 4-4-2 missing a midfielder,
+// and that is points given away.
 function gapNote(fielded){
   let put=0, slots=0;
   Object.keys(fielded||{}).forEach(line=>(fielded[line]||[]).forEach(p=>{
@@ -1188,7 +1192,7 @@ function slotChip(p,line,fielded){
     ${chipFace(p)}<span class="mini-name">${p.name}</span>${points}</button>`;
 }
 
-// El banquillo de esa jornada: lo que tenia y no puso, que es la otra mitad de la decision.
+// That matchday's bench: what he had and did not field, the other half of the decision.
 function benchStrip(bench){
   if(!bench || !bench.length) return '';
   return `<div class="mini-bench"><span class="mini-bench-label">banquillo</span>${
@@ -1196,8 +1200,8 @@ function benchStrip(bench){
       title="${p.name} · ${p.team_short||''}">${chipFace(p)}${p.name}</button>`).join('')}</div>`;
 }
 
-// Que tenia cada uno en una jornada. La API no guarda historia: esto sale de deshacer el log de
-// traspasos hasta el primer saque, asi que lo que se ve es lo que habia, no lo que hay.
+// What each one held on a given matchday. The API keeps no history: this comes from unwinding
+// the transfer log back to the first kick-off, so what is shown is what was, not what is.
 async function openMatchday(week){
   if(!drawer) return;
   drawer.hidden=false;
@@ -1256,8 +1260,8 @@ function wireManagers(root=document){
   });
 }
 
-// La plantilla de un rival. Sale del mundo que ya tenemos, asi que no cuesta ninguna peticion a
-// LaLiga: solo habia que poder preguntarlo.
+// A rival's squad. It comes off the world already in memory, so it costs no request to LaLiga:
+// it only had to be askable.
 async function openManager(teamId){
   if(!drawer) return;
   drawer.hidden=false;
@@ -1300,7 +1304,7 @@ async function openManager(teamId){
   tick();
 }
 
-// Una fila por jugador: lo que decide si se le puede llegar y por cuanto.
+// One row per player: what decides whether he can be reached, and for how much.
 function managerRow(p){
   const listing=p.market||{};
   const chips=[];
@@ -1354,16 +1358,16 @@ async function openDetail(playerId){
     return;
   }
   const p=data.player, l=data.listing||{};
-  // 🏠 en casa, ✈️ fuera: dos palabras repetidas en cada fila se leen como ruido.
+  // 🏠 home, ✈️ away: two words repeated on every row read as noise.
   const where=(home)=>home?'<span title="en casa">🏠</span>':'<span title="fuera">✈️</span>';
   const rival=p.next_rival?`${p.next_rival} ${where(p.next_home)}`:'—';
-  // El dueño es un enlace: lo que tiene el rival decide si su clausula se paga y si su oferta
-  // interesa, y hasta ahora era un nombre y nada mas.
+  // The owner is a link: what the rival holds decides whether his clause is worth paying and
+  // whether his offer is worth taking, and until now it was a name and nothing else.
   const owner=p.is_mine ? 'tu'
     : (p.owner && p.owner_team_id
         ? `<button class="p-name" type="button" data-manager="${p.owner_team_id}">${p.owner}</button>`
         : (p.owner||'libre'));
-  // La foto identifica antes que el nombre; si no hay, queda el escudo del equipo.
+  // The photo identifies before the name does; without one, the club's crest is left.
   const face=p.image
     ? `<img class="drawer-face" src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
     : `<span class="drawer-face crest crest-${p.team_id}"></span>`;
@@ -1433,8 +1437,8 @@ async function openDetail(playerId){
   drawTray();
 }
 
-// El pie del panel dice en palabras que va a pasar: cambiar de "no vende solo" a
-// "vendo desde X" es justo lo que hay que ver confirmado.
+// The panel's footer says in words what is about to happen: going from "no vende solo" to
+// "vendo desde X" is exactly what needs to be seen confirmed.
 function note(panel,data){
   const line=panel.querySelector('.always-foot p');
   line.innerHTML = data.accept_above
@@ -1494,8 +1498,8 @@ function wireAlways(scope,player){
 }
 
 function alwaysPanel(a){
-  // Vacio = no vender solo. Es la unica forma de decirlo, asi que el placeholder
-  // lo dice con palabras en vez de dejar un hueco que parece "sin limite".
+  // Empty means do not sell on your own. It is the only way to say it, so the placeholder says
+  // it in words instead of leaving a blank that looks like "no limit".
   const min=a.min_price?group(a.min_price):'';
   const acc=a.accept_above?group(a.accept_above):'';
   const floor=a.good_floor||0;
@@ -1591,8 +1595,8 @@ async function runAction(a,player){
     return;
   }
   if(a.op==='always'){
-    // Pintar antes de preguntar: el servidor confirma en milisegundos, pero volver a
-    // cargar la ficha entera hacia que el boton pareciera muerto.
+    // Paint before asking: the server confirms in milliseconds, but reloading the whole card
+    // made the button look dead.
     const button=[...document.querySelectorAll('.drawer-actions button')]
       .find(b=>b.textContent.includes('mercado'));
     const turningOn=!a.on;
@@ -1633,8 +1637,8 @@ async function runAction(a,player){
   }
 }
 
-// El modal de importe: puja, venta o subida de clausula. Lo piden el cajon y los botones de
-// las tablas, asi que vive aparte y recibe el jugador ya resuelto.
+// The amount modal: a bid, a sale or a clause raise. The drawer and the table buttons both ask
+// for it, so it lives apart and is handed the player already resolved.
 function openAmount(a,player){
   const raise=a.op==='raise_clause';
   pending={operation:a.op, market_id:a.market_id, player_id:a.player_id||player.id,
@@ -1645,7 +1649,7 @@ function openAmount(a,player){
   modal.hidden=false;
   modal.querySelector('.bid-action').textContent=a.label+' —';
   modal.querySelector('.bid-who').textContent=player.name;
-  // Un cero sugerido se deja en blanco a proposito: el aviso de debajo explica por que.
+  // A suggested zero is left blank on purpose: the note below explains why.
   modal.querySelector('.bid-amount').value =
     raise && !a.suggested ? '' : group(a.suggested||a.min||0);
   modal.querySelector('#bid-amount-label').textContent=
@@ -1653,7 +1657,7 @@ function openAmount(a,player){
           : a.op==='pay_clause' ? 'Importe de la clausula (se descuenta de tu saldo)'
           : a.op==='sell_to_market' ? 'Precio de venta'
           : 'Importe de la puja';
-  // Las referencias de puja no dicen nada de una clausula, y el techo de futbolfantasy es
+  // The bid references say nothing about a clause, and futbolfantasy's ceiling is
   // sobre comprar al jugador, no sobre proteger al tuyo.
   modal.querySelector('.bid-refs').hidden=raise;
   modal.querySelector('#bid-clause').hidden=!raise;
@@ -1667,8 +1671,8 @@ function openAmount(a,player){
   checkAmount();
 }
 
-// El boton de la tabla de subida de clausulas: el importe ya esta calculado, asi que abre el
-// modal con el puesto y con la clausula que quedaria a la vista.
+// The button in the clause-raise table: the amount is already worked out, so it opens the modal
+// with the figure filled in and the clause it would leave in plain sight.
 function wireRaises(root=document){
   root.querySelectorAll('button.raise[data-raise]').forEach(button=>{
     if(button.dataset.wired) return;
@@ -1714,7 +1718,7 @@ function wireRaids(root=document){
     button.dataset.wired='1';
     button.addEventListener('click',()=>scheduleRaid(button.dataset));
   });
-  // Tus propios chips del calendario no se clausulan: abren su ficha.
+  // Your own chips in the calendar are not raidable: they open the card.
   root.querySelectorAll('.cal-chip:not([data-raid])').forEach(chip=>{
     if(chip.dataset.wired) return;
     chip.dataset.wired='1';
@@ -1740,9 +1744,9 @@ function wireDetails(root=document){
 }
 
 // ---- tooltip propio: el title nativo tarda casi un segundo -------------------
-// Estos son datos que se leen de paso (un candado, un escudo, un "est."), y un segundo de
-// espera es justo lo que hace que no se lean. Flotante y pegado al body, no un ::after, que
-// dentro de una tabla con scroll se recortaria.
+// These are figures read in passing (a padlock, a crest, an "est."), and a second of waiting is
+// exactly what stops them being read. Floating and attached to the body rather than an ::after,
+// which would be clipped inside a scrolling table.
 let tipBox=null;
 function showTip(target){
   const message=target.dataset.tip;
@@ -1779,8 +1783,8 @@ document.addEventListener('click',(event)=>{
 window.addEventListener('scroll',hideTip,{passive:true});
 
 // ---- comparador: un fichaje es siempre "en vez de quien" --------------------
-// La bandeja vive en localStorage porque el panel se recambia solo en vivo, y perder la
-// comparacion a medias por un refresco haria que no se usase.
+// The tray lives in localStorage because the panel swaps itself out live, and losing a
+// half-built comparison to a refresh would mean nobody used it.
 const CMP_MAX=8, CMP_KEY='fantasy:compare';
 let tray=[];
 try{ tray=(JSON.parse(localStorage.getItem(CMP_KEY))||[]).slice(0,CMP_MAX); }catch(e){ tray=[]; }
@@ -1798,7 +1802,7 @@ function cmpAdd(id,name,pos){
 function cmpDrop(id){
   tray=tray.filter(p=>p.id!==String(id));
   cmpSave(); drawTray();
-  // Quitar a uno con la tabla delante tiene que quitarlo de la tabla, no solo de la barra.
+  // Dropping one with the table in front of you has to drop him from the table, not just the bar.
   if(comparing()){
     if(tray.length) openCompare();
     else closeDrawer();
@@ -1833,8 +1837,8 @@ function trayBox(){
   return box;
 }
 
-// El buscador de la bandeja. Sale de la misma peticion que el comparador, asi que no hace
-// falta ningun indice nuevo: el mundo entero ya esta en memoria en el servidor.
+// The tray's search. It comes off the same request the comparator uses, so no new index is
+// needed: the whole world is already in memory on the server.
 function wireFind(box){
   const input=box.querySelector('.cmp-find'), list=box.querySelector('.cmp-results');
   let timer=null, found=[];
@@ -1875,7 +1879,7 @@ function wireFind(box){
   input.addEventListener('input',()=>{ clearTimeout(timer); timer=setTimeout(run,180); });
   input.addEventListener('keydown',(event)=>{
     if(event.key==='Escape'){ input.value=''; hide(); input.blur(); }
-    // Enter añade el primero: teclear tres letras y pulsar Enter es el camino corto.
+    // Enter adds the first: three letters and Enter is the short way through.
     if(event.key==='Enter'&&found.length){
       event.preventDefault();
       const first=found[0];
@@ -1883,7 +1887,7 @@ function wireFind(box){
       input.value=''; hide();
     }
   });
-  // Al añadir desde la lista, el hueco se cierra solo: el click lo recoge el documento.
+  // Adding from the list closes it on its own: the document picks the click up.
   list.addEventListener('click',()=>{ input.value=''; setTimeout(hide,0); });
   document.addEventListener('click',(event)=>{
     if(!box.contains(event.target)) hide();
@@ -1896,8 +1900,8 @@ function trayMsg(text){
   setTimeout(()=>{ if(line.textContent===text) line.textContent=''; },4000);
 }
 
-// La linea comun de la bandeja: comparar un delantero con tus porteros no dice nada, asi que
-// el atajo a la plantilla solo se ofrece por posicion cuando todos coinciden.
+// The tray's common line: comparing a forward with your keepers says nothing, so the shortcut
+// to the squad is offered by position only when they all agree.
 function trayLine(){
   const lines=[...new Set(tray.map(p=>p.pos).filter(Boolean))];
   return lines.length===1?lines[0]:'';
@@ -1921,7 +1925,7 @@ function drawTray(){
   go.textContent=`Comparar (${tray.length})`;
   go.disabled=tray.length<2;
   wireDetails(box);
-  // El boton de la ficha tiene que decir en que estado esta: "+" invita, "✓" recuerda.
+  // The card's button has to say which state it is in: "+" invites, "✓" reminds.
   document.querySelectorAll('button[data-cmp]').forEach(button=>{
     const on=cmpHas(button.dataset.cmp), short=button.classList.contains('small');
     button.classList.toggle('on',on);
@@ -1930,8 +1934,8 @@ function drawTray(){
   });
 }
 
-// Los botones nacen en contenido que se recambia (fichas, plantillas, la propia bandeja), asi
-// que se escuchan en el documento y no hay que recablear nada nunca.
+// The buttons are born in content that gets swapped out (cards, squads, the tray itself), so
+// they are listened for on the document and nothing ever has to be rewired.
 document.addEventListener('click',(event)=>{
   const add=event.target.closest('button[data-cmp]');
   if(add){
@@ -1944,8 +1948,8 @@ document.addEventListener('click',(event)=>{
   if(drop){ event.stopPropagation(); cmpDrop(drop.dataset.cmpDrop); }
 });
 
-// Tu plantilla como menu: metes al que quieras, o los de esa linea de golpe. Mejor que un
-// boton que dice "+ mis MED" y decide por ti.
+// Your squad as a menu: add whoever you want, or that whole line at once. Better than a button
+// reading "+ mis MED" that decides for you.
 function wireMine(box){
   const button=box.querySelector('.cmp-mine'), list=box.querySelector('.cmp-mine-list');
   let squad=null;
@@ -2033,8 +2037,8 @@ function cmpChips(p){
   return chips.join('');
 }
 
-// Una tabla no decide nada por si sola: esta linea dice si el que miras mejora lo que tienes,
-// que es la unica razon para estar comparando.
+// A table decides nothing on its own: this line says whether the one you are looking at
+// improves on what you have, which is the only reason to be comparing.
 function cmpVerdict(list){
   const outside=list.filter(p=>!p.is_mine), ours=list.filter(p=>p.is_mine);
   const by=(arr,key)=>arr.slice().sort((a,b)=>(b[key]||0)-(a[key]||0));
@@ -2078,7 +2082,7 @@ async function openCompare(){
   drawer.hidden=false;
   panelWide(true);
   const body=drawer.querySelector('.drawer-body');
-  // Sin nadie dentro sigue siendo el comparador: se abre con el buscador esperando.
+  // With nobody in it, it is still the comparator: it opens with the search waiting.
   if(!tray.length){
     body.innerHTML=`<div class="cmp-view">
       <div class="drawer-head"><h3>Comparador</h3></div>
@@ -2124,7 +2128,7 @@ async function openCompare(){
       const numbers=values.filter(v=>v!=null&&isFinite(v)&&v!==0);
       if(numbers.length>1)
         target=row.best==='min'?Math.min(...numbers):Math.max(...numbers);
-      // Todos iguales no ensena nada: resaltar ahi solo mancha la tabla.
+      // All equal teaches nothing: highlighting there only stains the table.
       if(numbers.length&&numbers.every(v=>v===numbers[0])) target=null;
     }
     const cells=list.map((p,i)=>{
@@ -2219,23 +2223,23 @@ function wireFindPlayer(){
   });
 }
 
-// ---- pestañas: una vista a la vez ------------------------------------------
+// ---- tabs: one view at a time ---------------------------------------------
 const TABS=[
   {id:'decidir', label:'Decidir', sections:['plan','acciones','caja','chollos']},
   {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
-  // Lo que esta en marcha, en su propio sitio: lo que has puesto tu y lo que te han puesto a ti.
+  // What is under way, in its own place: what you put up and what was put to you.
   {id:'misofertas', label:'Mis ofertas', sections:['mispujas','ofertas','resueltas']},
   {id:'clausulas', label:'Cláusulas', sections:['subir','programados','calendario','vencimientos','oportunidades','clausulas']},
   {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
   {id:'partidos', label:'Partidos', sections:['jornada','partidos']},
-  // Lo de los demas en su sitio: sus plantillas enteras y lo que pueden pagar por las tuyas.
+  // Everyone else's in its place: their whole squads and what they can pay for yours.
   {id:'rivales', label:'Rivales', sections:['rivales']},
   {id:'liga', label:'Liga', sections:['movimientos','normas']},
   {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
 ];
 
-// Un hash puede ser una pestaña (#mercado) o una seccion (#oportunidades): lo
-// segundo es lo que hay en los enlaces, asi que hay que resolverlo a su pestaña.
+// A hash can be a tab (#mercado) or a section (#oportunidades), and the second is what the
+// links carry, so it has to be resolved to the tab that owns it.
 function resolveTarget(hash){
   const id=(hash||'').replace(/^#/,'');
   if(!id) return null;
@@ -2246,12 +2250,12 @@ function resolveTarget(hash){
   return owner ? {tab:owner.id, section:id} : null;
 }
 
-// Una plantilla rival a la vez: doce apiladas son mucho scroll para una pregunta sobre uno.
+// One rival squad at a time: twelve stacked is a lot of scrolling for a question about one.
 const RIVAL_KEY='fantasy:rival';
 function applyRivalPick(){
   const sections=[...document.querySelectorAll('section[data-tab="rivales"][id^="rival-"]')];
   if(!sections.length) return;
-  // Fuera de su pestaña manda showTab: aqui no se puede volver a ensenar nada.
+  // Outside its tab showTab is in charge: nothing can be shown again from here.
   const active=document.querySelector('.tab.on');
   if(!active||active.dataset.tab!=='rivales') return;
   const ids=sections.map(s=>s.id);
@@ -2277,8 +2281,8 @@ function showTab(id,{section=null,updateHash=true}={}){
     try{ localStorage.setItem(RIVAL_KEY,section); }catch(e){}
   }
   document.querySelectorAll('section[id]').forEach(s=>{
-    // Una seccion puede decir ella misma a que pestaña va: las que nacen en tiempo de
-    // ejecucion (una por rival) no pueden estar en una lista escrita aqui.
+    // A section can name its own tab: the ones born at runtime (one per rival) cannot be in
+    // a list written here.
     s.hidden = s.dataset.tab ? s.dataset.tab!==tab.id : !tab.sections.includes(s.id);
   });
   document.querySelectorAll('.tab').forEach(b=>{
@@ -2293,7 +2297,7 @@ function showTab(id,{section=null,updateHash=true}={}){
   usage.tab(tab.id);
   applyFilters();
   if(updateHash){
-    // replaceState, no assignment: no queremos una entrada de historial por clic ni
+    // replaceState, not assignment: we want neither a history entry per click nor
     // disparar hashchange sobre nosotros mismos.
     history.replaceState(null,'','#'+(section||tab.id));
   }
@@ -2323,16 +2327,16 @@ function wireTabs(){
   else showTab(saved||'decidir');
 }
 
-// ---- push: recambiar solo lo que cambia -----------------------------------
+// ---- push: swap out only what changed -------------------------------------
 let currentVersion=null;
 
-// Secciones cuyo contenido lo pinta el navegador, no el servidor: el fragmento que
-// llega es una carcasa vacia, asi que recambiarla borraria lo que hay dentro (y los
-// cambios de alineacion sin guardar).
+// Sections whose content the browser paints rather than the server: the fragment that arrives
+// is an empty shell, so swapping it in would wipe what is inside (and any unsaved lineup
+// changes).
 const CLIENT_OWNED=new Set(['once']);
 
-// El saldo esta en dos sitios y no puede decir dos cosas: la pastilla de la barra, que es la
-// que se ve siempre, y el widget de la cabecera, que ademas lleva el puesto en la liga.
+// The balance is in two places and cannot say two things: the chip in the bar, which is the
+// one always on screen, and the header widget, which also carries the place in the league.
 let myCash=null;
 
 function showCash(amount){
@@ -2350,13 +2354,13 @@ async function swap(){
   if(!res.ok) return;
   const data=await res.json();
   if(data.version===currentVersion) return;
-  // Una seccion que no existe todavia en esta pestaña no puede aparecer sola: el navegador
-  // tiene el HTML de antes (no hay donde meterla) y el JS de antes (no sabe a que pestaña va),
-  // asi que hasta ahora se ignoraba en silencio y no se veia hasta recargar a mano.
+  // A section that does not exist yet in this page cannot appear on its own: the browser has
+  // the old HTML (nowhere to put it) and the old JS (no idea which tab it belongs to), so until
+  // now it was ignored in silence and went unseen until a manual reload.
   const missing=Object.keys(data.sections)
     .filter(id=>!CLIENT_OWNED.has(id)&&!document.getElementById(id));
   if(missing.length){
-    // Salvo en mitad de una operacion: recargar con el dialogo abierto se lo llevaria por
+    // Except mid-operation: reloading with the dialog open would take it down
     // delante. Se reintenta en el siguiente aviso, y la version no se toca hasta entonces.
     if((drawer&&!drawer.hidden)||(modal&&!modal.hidden)) return;
     location.reload();
@@ -2392,7 +2396,7 @@ const OPERATION_LABELS={sell_to_market:'Puesto en venta',accept_offer:'Oferta ac
   vencimiento:'Ha vencido algo',refresco:'Actualizado'};
 
 function showEffect(message){
-  // Lo que una operacion mueve de verdad: el antes y el despues, no un "hecho".
+  // What an operation actually moves: the before and the after, not a "done".
   const rows=Object.entries(message.changed||{}).map(([key,change])=>{
     const money=key==='cash'||key==='squad_value';
     const fmt=(n)=> money?exact(n||0):String(n??0);

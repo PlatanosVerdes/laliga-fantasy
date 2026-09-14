@@ -37,10 +37,10 @@ body{margin:0;background:var(--plane);color:var(--ink);
 .wrap{max-width:1500px;margin:0 auto;padding:32px 20px 80px}
 header h1{font-size:27px;margin:0 0 4px;letter-spacing:-.015em}
 header p{margin:0;color:var(--ink-2);font-size:13px}
-/* Pegada arriba: es la unica tira que se queda en pantalla, asi que es donde vive el saldo. */
+/* Stuck to the top: the only strip that stays on screen, which is why the balance lives here. */
 .tabs{display:flex;flex-wrap:wrap;gap:4px;margin:22px 0 0;border-bottom:1px solid var(--line);
   padding-bottom:0;position:sticky;top:0;z-index:6;background:var(--plane)}
-/* Como queda la caja despues de la operacion, en el mismo paso en que se escribe el importe. */
+/* How the balance ends up after the operation, in the same step where the amount is typed. */
 .bid-balance{margin:10px 0 0;font-size:13px;color:var(--ink-2)}
 .bid-balance b{font-variant-numeric:tabular-nums;color:var(--ink)}
 .bid-balance b.balance-after{color:var(--ink)}
@@ -95,8 +95,8 @@ th{position:sticky;top:0;z-index:1;background:var(--surface);cursor:pointer;font
   font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
   user-select:none;border-bottom:1px solid var(--baseline)}
 th:hover{color:var(--ink)}
-/* La primera columna se queda quieta al desplazar la tabla: en las tablas anchas es donde
-   vive el boton (pujar, clausulazo) y un boton que se sale de la vista no existe. */
+/* The first column holds still while the table scrolls: in the wide tables that is where the
+   button lives (bid, raid), and a button that scrolls out of sight does not exist. */
 .table-wrap.sticky-first th:first-child,
 .table-wrap.sticky-first td:first-child{position:sticky;left:0;z-index:2;
   background:var(--surface);box-shadow:1px 0 0 var(--line)}
@@ -131,8 +131,8 @@ button.p-name:hover{color:var(--accent);border-bottom-color:var(--accent)}
 .flag-critical{color:#fff;background:var(--critical)}
 .flag-warning{color:#3a2c00;background:var(--warning)}
 .flag-muted{color:var(--muted);border:1px solid var(--line)}
-/* Las pildoras de veredicto. La insignia de estado de la plantilla no es una: su padding
-   dejaba la caja en 1px de ancho y la cruz se salia del circulo. */
+/* The verdict pills. The squad's status badge is not one: its padding left the box 1px wide
+   and the cross spilled out of the circle. */
 [class^="badge-"]:not(.badge-count):not(.badge-status){display:inline-flex;align-items:center;
   gap:5px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:3px 8px;border-radius:6px}
 .badge-icon{font-size:10px;line-height:1}
@@ -194,8 +194,8 @@ th.right{text-align:right}
   min-width:78px}
 .feed-then{font-size:11px;color:var(--muted);flex:0 0 auto;white-space:nowrap}
 .feed-then b{color:var(--ink-2);font-variant-numeric:tabular-nums}
-/* .op-primary se ve como una puja pero no lo es: el manejador de pujas engancha por .bid, y
-   un boton no puede heredar comportamiento del color. */
+/* .op-primary looks like a bid but is not one: the bid handler hooks on .bid, and a button
+   must not inherit behaviour from its colour. */
 button.bid,button.op-primary{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
   letter-spacing:.05em;color:#fff;background:var(--accent);border:none;border-radius:6px;
   padding:4px 10px;cursor:pointer}
@@ -240,24 +240,24 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .drawer-stats dd.tit-mid{color:var(--warning)}
 .drawer-stats dd.tit-lo{color:var(--serious)}
 .drawer-stats dd.tit-out{color:var(--critical)}
-/* La cabecera del cajon: foto a la izquierda del nombre, del tamano de la linea. */
+/* The drawer's header: photo to the left of the name, the size of the line. */
 .drawer-head{display:flex;align-items:center;gap:10px}
 .drawer-head h3{margin:0}
 .drawer-face{width:38px;height:38px;flex:0 0 auto;border-radius:50%;object-fit:cover;
   object-position:top center;background:color-mix(in srgb,#fff 8%,transparent);
   box-shadow:0 0 0 1px var(--line)}
-/* Los datos de un widget, uno por linea: leidos en fila con puntos no se distinguen. */
+/* A widget's figures, one per line: read in a row with dots they are indistinguishable. */
 .kpi-note{display:block;color:var(--muted);font-size:11px;line-height:1.45}
 
-/* El grafico contesta al cursor: valor y dia del punto que tiene debajo. */
+/* The chart answers the cursor: the value and the day of the point under it. */
 .chart-wrap{position:relative;margin-top:14px}
 .chart-wrap .drawer-chart{margin-top:0}
 .chart-tip{position:absolute;top:-6px;pointer-events:none;display:flex;flex-direction:column;
   gap:1px;padding:6px 9px;border-radius:8px;background:var(--surface);
   border:1px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.35);font-size:12px;
   min-width:120px;z-index:2}
-/* display:flex pisa el atributo hidden, asi que la pastilla vacia se pintaba hasta que el
-   cursor la rellenaba. El [hidden] tiene que ganar. */
+/* display:flex overrides the hidden attribute, so the empty pill was painted until the cursor
+   filled it. [hidden] has to win. */
 .chart-tip[hidden]{display:none}
 .chart-tip b{font-size:13px}
 .chart-tip span{color:var(--muted);font-size:11px}
@@ -331,7 +331,7 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--plane);
   color:var(--ink)}
 .bid-refs{display:flex;gap:14px;font-size:12px;color:var(--ink-2);margin:2px 0 0;flex-wrap:wrap}
-/* Igual que .pitch-alert: sin esto el display de arriba gana y el bloque no se oculta. */
+/* Same as .pitch-alert: without this the display above wins and the block never hides. */
 .bid-refs[hidden]{display:none}
 .bid-refs b{color:var(--ink);font-variant-numeric:tabular-nums}
 .bid-refs b.rivals-on{color:var(--warning)}
@@ -341,7 +341,7 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .bid-dl dt{color:var(--muted)}
 .bid-dl dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
 .bid-dl[hidden]{display:none}
-/* La cuenta de la clausula: lo que pagas no es lo que sube, asi que se ve entera. */
+/* The clause arithmetic: what you pay is not what it rises by, so it is shown in full. */
 .bid-clause{margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
 .bid-clause .clause-new{color:var(--good);font-weight:600}
 .bid-clause .clause-safe{color:var(--good);font-size:12px}
@@ -386,13 +386,13 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .pitch-bar button.primary{background:var(--accent);color:#fff;border-color:transparent}
 .pitch-bar button[disabled]{opacity:.45;cursor:not-allowed}
 #pitch-status{margin-left:auto}
-/* Un hueco en el once se dice arriba, con la formacion que lo arregla al lado. */
+/* A hole in the eleven is said at the top, with the formation that fixes it beside it. */
 .pitch-alert{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;
   padding:9px 12px;border-radius:9px;font-size:13px;color:var(--ink);
   background:color-mix(in srgb,var(--warning) 14%,transparent);
   box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warning) 45%,transparent)}
-/* Sin [hidden] el display:flex de arriba gana y queda una barra naranja vacia cuando no hay
-   nada que avisar, que es justo lo que pasaba al completar el once. */
+/* Without [hidden] the display:flex above wins and an empty orange bar is left when there is
+   nothing to warn about, which is exactly what happened on completing the eleven. */
 .pitch-alert[hidden]{display:none}
 .pitch-alert button{font:inherit;font-size:12px;font-weight:600;cursor:pointer;margin-left:auto;
   border-radius:7px;padding:5px 11px;border:1px solid var(--line);
@@ -428,7 +428,7 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .slot.empty.gap{color:color-mix(in srgb,var(--warning) 70%,#fff);line-height:1.5;
   box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warning) 55%,transparent)}
 .slot .crest{width:20px;height:20px}
-/* La cara identifica antes que el nombre; el escudo baja a la esquina. */
+/* The face identifies before the name does; the crest drops to the corner. */
 .slot-avatar{position:relative;display:inline-flex;align-items:center;justify-content:center}
 .slot-face{width:42px;height:42px;border-radius:50%;object-fit:cover;object-position:top center;
   background:color-mix(in srgb,#000 30%,transparent);
@@ -446,14 +446,14 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   font-variant-numeric:tabular-nums}
 .wk-hi{background:#0ca30c}.wk-mid{background:#2a78d6}.wk-lo{background:#8a5a00}
 .wk-neg{background:#d03b3b}.wk-none{background:rgba(255,255,255,.18)}
-/* Sin relleno: el relleno queda reservado a los puntos de cada jornada, para que un
-   80% no se lea como "80 puntos". */
+/* No fill: fill is reserved for each matchday's points, so that a
+   80% does not read as "80 points". */
 .tit{font-size:10px;font-weight:800;font-variant-numeric:tabular-nums}
 .tit-hi{color:#8ee6a8}
 .tit-mid{color:#ffd479}
 .tit-lo{color:#ffb98f}
 .tit-out{color:#ff9c92}
-/* La J solo cuando hay jornadas de verdad: "J sin jornadas" no se lee bien. */
+/* The J only when there are real matchdays: "J sin jornadas" does not read. */
 .slot-weeks .wk-label{font-size:9px;font-weight:700;align-self:center;margin-right:1px;
   color:color-mix(in srgb,#fff 55%,transparent)}
 .slot-trend{font-size:10px;font-weight:700;font-variant-numeric:tabular-nums}
@@ -468,10 +468,10 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .badge-status{position:absolute;top:5px;right:5px;width:16px;height:20px;border-radius:3px;
   display:flex;align-items:center;justify-content:center;z-index:2;font-weight:900;
   font-size:13px;line-height:1;box-shadow:0 1px 3px rgba(0,0,0,.5)}
-/* Tarjeta roja: la insignia misma, con proporcion de tarjeta. */
+/* Red card: the badge itself, in the proportions of a card. */
 .st-sancionado{background:#d03b3b}
-/* Lesion y duda no son tarjetas, asi que no llevan su forma: en un rectangulo de 16x20 la
-   cruz roja sobre blanco se leia como un boton de anadir. Circulo y cruz blanca. */
+/* Injury and doubt are not cards, so they do not take a card's shape: in a 16x20 rectangle the
+   a red cross on white read as an add button. Circle and white cross instead. */
 .st-lesionado,.st-duda{width:17px;height:17px;border-radius:50%}
 .st-lesionado{background:#d03b3b}
 .st-lesionado .kit{position:relative;display:block;width:9px;height:9px}
@@ -491,7 +491,7 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .bench-item.dragging{opacity:.35}
 .bench-item .crest{width:16px;height:16px}
 .bench-name{font-weight:600}
-/* En una fila la insignia va en la fila: flotando a la derecha se comia los xPts. */
+/* In a row the badge goes in the row: floated right it ate the xPts. */
 .bench-item .badge-status{position:static;flex:none}
 .bench-empty{color:var(--muted);font-size:12px;font-style:italic}
 .callout{background:color-mix(in srgb,var(--warning) 12%,transparent);
@@ -506,8 +506,8 @@ footer{margin-top:64px;color:var(--ink-2);font-size:12px;border-top:1px solid va
   padding-top:18px;max-width:90ch}
 footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11px}
 
-/* Calendario de partidos: mes a mes, jornada a jornada. Los partidos de los tuyos van
-   marcados porque es la unica razon para leer un calendario aqui. */
+/* Fixture calendar: month by month, matchday by matchday. Your players' fixtures are marked
+   because that is the only reason to read a calendar here. */
 .months{display:flex;flex-direction:column;gap:22px}
 .month>h4{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;
   color:var(--muted)}
@@ -528,7 +528,7 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
   box-shadow:inset 2px 0 0 var(--accent)}
 .match-mine-tag{font-size:11px;color:var(--accent);white-space:nowrap}
 
-/* El plan: parejas, no filas. Se lee una vez de arriba abajo y se actua. */
+/* The plan: pairs, not rows. Read once top to bottom, then acted on. */
 .plan-head{display:flex;flex-wrap:wrap;align-items:center;gap:18px;margin-bottom:14px;
   font-size:13px;color:var(--muted)}
 .plan-total b{color:var(--ink);font-size:15px}
@@ -542,7 +542,7 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .plan-side{display:flex;flex-direction:column;gap:3px;min-width:0}
 .plan-side.in{text-align:right;align-items:flex-end}
 .plan-who{display:inline-flex;align-items:center;gap:7px}
-/* La plaza que no cubre nadie: un hueco se dibuja como hueco. */
+/* The slot nobody fills: a hole is drawn as a hole. */
 .plan-empty{color:var(--muted);border:1px dashed var(--line);border-radius:6px;
   padding:1px 8px}
 .plan-why,.plan-money{font-size:11px;color:var(--muted)}
@@ -563,13 +563,13 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
   .plan-mid{flex-direction:row;gap:10px}
 }
 
-/* La jornada en curso: el puesto al que acabaria cada uno, cuando no es el que lleva ahora.
-   Es el unico dato de la tabla que contradice al orden en que esta ordenada. */
+/* The matchday under way: the place each one would end in, when it is not the one he holds
+   now. The only figure in the table that contradicts the order it is sorted in. */
 .seat-up{color:var(--pole-pos);font-size:11px;font-weight:600;white-space:nowrap}
 .seat-down{color:var(--pole-neg);font-size:11px;font-weight:600;white-space:nowrap}
 
-/* Quien pinta peor la jornada que viene: tres tarjetas y debajo la liga entera. La tarjeta
-   existe porque aqui la respuesta es un nombre, y el nombre necesita sitio para el porque. */
+/* Who looks worst next matchday: three cards and the whole league below. The card exists
+   because here the answer is a name, and a name needs room for the why. */
 .pinta{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;
   margin:0 0 16px}
 .pinta-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;
@@ -595,7 +595,7 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .pinta-why li::before{content:"·";position:absolute;left:2px;color:var(--muted);
   font-weight:700}
 
-/* Las normas de la liga: la que se aplica, marcada; las demas, para leerlas. */
+/* The league's rules: the one that is enforced, marked; the rest, to be read. */
 .rules{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px}
 .rules li{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.5;
   padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
@@ -605,16 +605,16 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .rule-social{background:var(--mid);color:var(--muted)}
 .rule-live{box-shadow:inset 2px 0 0 var(--pole-pos)}
 
-/* El candado de la norma interna, con el fondo amarillo entero: es la misma pastilla que el
-   resto de banderas, para que se lea como un estado y no como una decoracion del texto. */
+/* The house rule's padlock, on the full yellow ground: the same pill as every other flag, so
+   it reads as a state rather than as decoration on the text. */
 .flag-hold{background:var(--warning);border-radius:4px;padding:1px 5px;margin-left:6px;
   font-size:11px;line-height:1.5;cursor:help}
 
-/* Quien ofrece: una persona y la oferta automatica del juego no son la misma noticia. */
+/* Who is offering: a person and the game's automatic offer are not the same news. */
 .from-rival{color:var(--ink);font-weight:600}
 .from-market{color:var(--muted);font-weight:400}
 
-/* La plantilla de un rival: una fila por jugador, con lo que decide si se le puede llegar. */
+/* A rival's squad: one row per player, with what decides whether he can be reached. */
 .squad-list{display:flex;flex-direction:column;gap:2px;margin-top:6px}
 .squad-row{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;
   padding:7px 8px;border-radius:8px;background:color-mix(in srgb,var(--mid) 45%,transparent)}
@@ -629,16 +629,16 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .chip-warn{color:var(--warning);background:color-mix(in srgb,var(--warning) 16%,transparent)}
 .chip-bad{color:var(--critical);background:color-mix(in srgb,var(--critical) 16%,transparent)}
 
-/* Los partidos jugados se quedan, porque la racha se lee mejor entera, pero dan un paso atras:
-   el ojo tiene que caer en lo que falta por jugar. */
+/* Played fixtures stay, because the run reads better whole, but they step back: the eye has to
+   land on what is still to be played. */
 .match-done{opacity:.42}
 .match-done .match-when{font-variant-numeric:tabular-nums;color:var(--ink-2)}
-/* Una jornada entera jugada apaga su cabecera; los partidos ya se apagan solos. */
+/* A matchday played in full dims its header; the fixtures already dim themselves. */
 .jornada-done .j-head{opacity:.6}
 .j-done{margin-left:auto;font-size:10px;text-transform:uppercase;letter-spacing:.05em;
   color:var(--muted)}
 
-/* Las plantillas de una jornada: quien tenia a quien cuando rodo el balon. */
+/* A matchday's squads: who had whom when the ball rolled. */
 .j-squads{margin-left:10px;font:inherit;font-size:10px;text-transform:uppercase;
   letter-spacing:.05em;color:var(--accent);background:transparent;border:0;cursor:pointer;
   padding:0}
@@ -656,18 +656,18 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .md-player .crest{width:14px;height:14px}
 .md-out{opacity:.45}
 
-/* El modo: lo primero que hay que saber es si esto puede actuar solo. */
+/* The mode: the first thing to know is whether this can act on its own. */
 .mode{margin-left:10px;font-size:11px;padding:2px 8px;border-radius:5px;background:var(--mid);
   color:var(--muted);cursor:help}
 .mode b{font-weight:700}
 .mode-auto{color:var(--pole-pos);background:color-mix(in srgb,var(--pole-pos) 14%,transparent)}
 .mode-manual{color:var(--warning);background:color-mix(in srgb,var(--warning) 14%,transparent)}
 .mode-read{color:var(--muted)}
-/* La version del binario: esta para consultarla, no para leerla, asi que va sin pildora. */
+/* The binary's version: there to be looked up, not read, so it goes without a pill. */
 .build{margin-left:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;
   letter-spacing:0;color:var(--baseline);opacity:.7;cursor:help}
 
-/* Una plantilla se lee por lineas, como un campo: portero, defensa, medio, delantera. */
+/* A squad reads by lines, like a pitch: keeper, defence, midfield, attack. */
 .md-line,.squad-line{display:grid;grid-template-columns:38px 1fr;gap:8px;align-items:start;
   margin-top:6px}
 .md-line-label,.squad-line-label{justify-self:start;font-size:10px;padding:2px 5px}
@@ -676,12 +676,12 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
   background:color-mix(in srgb,#fff 8%,transparent)}
 .squad-who .chip-face{width:22px;height:22px}
 
-/* Una fila que acaba de dejar de existir: se apaga hasta el siguiente repintado. */
+/* A row that has just stopped existing: dimmed until the next repaint. */
 .row-gone{opacity:.4;pointer-events:none}
 .mine-bid{font-size:11px;color:var(--accent);white-space:nowrap}
 
-/* El campo en pequeño de una jornada pasada: la misma forma que el once, a un tercio de tamaño.
-   Una plantilla se reconoce por su forma antes que por sus nombres. */
+/* A past matchday's pitch in miniature: the same shape as the eleven, at a third of the size.
+   A squad is recognised by its shape before its names. */
 .mini-pitch{display:flex;flex-direction:column;justify-content:space-between;gap:6px;
   padding:10px 8px;border-radius:10px;
   background:repeating-linear-gradient(180deg,
@@ -697,14 +697,14 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .mini-slot .chip-face,.mini-slot .crest{width:22px;height:22px}
 .mini-name{max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mini-out{opacity:.4}
-/* La plaza que ese manager no cubrio: si no se ve, los diez parecen once. */
+/* The slot that manager did not fill: unseen, ten look like eleven. */
 .mini-hole{display:inline-flex;align-items:center;justify-content:center;font-size:11px;
   min-width:36px;height:36px;border-radius:8px;
   color:color-mix(in srgb,var(--warning) 75%,#fff);
   box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warning) 50%,transparent)}
 .md-gap{color:var(--warning)}
 
-/* Los puntos de cada uno en esa jornada, en la esquina de su ficha. */
+/* Each one's points that matchday, in the corner of his card. */
 .mini-points{position:absolute;top:-4px;right:-4px;font-size:9px;font-weight:700;
   min-width:15px;padding:1px 3px;border-radius:5px;background:var(--accent);color:#0b0d10}
 .mini-slot{position:relative}
@@ -716,7 +716,7 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .mini-benched .chip-face,.mini-benched .crest{width:16px;height:16px}
 .mini-pitch.is-squad{opacity:.9}
 
-/* Como acabo cada puja: la fecha, el veredicto y quien lo dijo. */
+/* How each bid ended: the date, the verdict and who said it. */
 .endings{display:flex;flex-direction:column;gap:4px}
 .ending{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;
   background:color-mix(in srgb,var(--mid) 45%,transparent);font-size:13px}
@@ -726,7 +726,7 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .ending-body{min-width:0}
 
 /* ---- comparador ---------------------------------------------------------- */
-/* El de la ficha lleva texto (hay sitio y dice que hace); el de las plantillas es un circulo
+/* The card's carries text (there is room and it says what it does); the squads' is a circle
    porque va uno por fila. */
 .cmp-add{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
   padding:3px 9px;border:1px solid var(--line);border-radius:20px;background:var(--surface);
@@ -737,7 +737,7 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .cmp-add.small{width:19px;height:19px;padding:0;border-radius:50%;font-size:12px;
   letter-spacing:0;margin-left:2px;line-height:1}
 
-/* Una barra flotante, no un pie pegado a los bordes: tapa menos y se lee como algo aparte. */
+/* A floating bar, not a footer glued to the edges: it covers less and reads as something apart. */
 .cmp-tray{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:70;
   width:max-content;max-width:calc(100% - 28px);display:flex;align-items:center;gap:10px;
   flex-wrap:wrap;padding:9px 12px;background:var(--surface);border:1px solid var(--line);
@@ -778,8 +778,8 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .cmp-acts button[disabled]{opacity:.45;cursor:not-allowed}
 body.tray-on .drawer-panel{padding-bottom:84px}
 
-/* La tabla: el th global de la pagina es de tabla ordenable (mayusculas, sticky, cursor de
-   mano) y aqui es una cabecera de jugador, asi que se deshace. */
+/* The table: the page's global th is a sortable-table one (caps, sticky, hand cursor) and here
+   it is a player's header, so it is undone. */
 .drawer-panel.wide{width:min(980px,100%)}
 .cmp-wrap{overflow-x:auto;margin:0 0 14px}
 table.cmp{border-collapse:collapse;width:100%;font-size:13px}
@@ -799,17 +799,17 @@ table.cmp td.cmp-cheap{font-weight:700}
 .cmp-name{display:inline-flex;align-items:center;gap:2px}
 .cmp-sub{font-size:11px;color:var(--muted);font-weight:400;display:inline-flex;
   align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end;text-transform:none}
-/* Un chip por linea: en fila se cortan a mitad de palabra. */
+/* One chip per line: in a row they break mid-word. */
 .cmp-state{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
 .cmp-state .chip{white-space:nowrap}
 .cmp-quiet{color:var(--muted);font-size:11px}
 .cmp-verdict{font-size:13px;line-height:1.45;margin:0 0 14px;padding:9px 11px;border-radius:9px;
   border:1px solid var(--line);background:color-mix(in srgb,var(--accent) 8%,transparent)}
 
-/* El aviso local de una operacion: el mismo cuadro que manda el servidor, con una linea. */
+/* An operation's local notice: the same box the server sends, with one line. */
 .effect-line{margin:0;font-size:12.5px;color:var(--ink-2)}
 
-/* Entrada al comparador desde la cabecera, junto al modo. */
+/* The way into the comparator from the header, next to the mode. */
 .head-btn{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
   letter-spacing:.05em;margin-left:8px;padding:3px 10px;border-radius:20px;cursor:pointer;
   border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
@@ -831,18 +831,18 @@ table.cmp td.cmp-cheap{font-weight:700}
 .head-input,.head-input:focus{transition:width .12s ease}
 .find-results{bottom:auto;top:calc(100% + 6px);z-index:60}
 
-/* El menu de tu plantilla, con la misma pinta que los resultados del buscador. */
+/* Your squad as a menu, looking the same as the search results. */
 .cmp-mine-wrap{position:relative}
 .cmp-mine-list{left:auto;right:0;width:300px}
 .cmp-group{margin:6px 8px 2px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;
   color:var(--muted)}
 .cmp-all{justify-content:center;font-weight:700;color:var(--accent)}
 
-/* Mejora a lo que tengo / no llega: en la tabla de quien tiene que. */
+/* Better than what I have / falls short: in the table of who holds whom. */
 .vs-up{color:var(--good);font-weight:700}
 td .muted,span.muted{color:var(--muted)}
 
-/* Tooltip propio, flotante: instantaneo y sin recortes dentro de una tabla con scroll. */
+/* Our own tooltip, floating: instant and never clipped inside a scrolling table. */
 .tip-float{position:fixed;z-index:90;max-width:250px;padding:6px 9px;border-radius:8px;
   background:#0b0b0b;color:#fff;font-size:11.5px;font-weight:500;line-height:1.4;
   letter-spacing:0;text-transform:none;pointer-events:none;
@@ -850,8 +850,8 @@ td .muted,span.muted{color:var(--muted)}
 .tip-float[hidden]{display:none}
 [data-tip]{cursor:help}
 
-/* El desplegable de rivales es la cabecera de su pestaña, no una barra de filtros: comparte
-   pinta pero no controles, y llevar su clase hacia que wireFilters petase con la pagina viva. */
+/* The rival picker is its tab's header rather than a filter bar: it shares
+   the look but not the controls, and carrying its class made wireFilters blow up on the live page. */
 .pick-bar{display:flex;align-items:center;gap:10px;margin:0 0 4px}
 .pick-bar label{display:inline-flex;align-items:center;gap:7px;font-size:11px;
   text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}

@@ -877,8 +877,8 @@ func Feed(events []map[string]any) string {
 
 	withAmount := make([]map[string]any, 0, len(moves))
 	for _, event := range moves {
-		// El premio de jornada no es una operacion: 4,8 M de recompensa arriba de la lista
-		// taparia el fichaje del que va la seccion.
+		// The matchday prize is not an operation: 4.8M of reward at the top of the list would
+		// bury the signing the section is about.
 		if text(event["kind"]) == "recompensa" {
 			continue
 		}
@@ -1052,8 +1052,8 @@ func RaidVerdict(row map[string]any) string {
 	}
 	note := ""
 	if ratio := asFloat(row["vs_market"]); ratio != nil && *ratio != 0 {
-		// "5.0x tu plantilla" no dice de que: el titulo lo escribe entero, con las dos
-		// cifras que se estan comparando.
+		// "5.0x tu plantilla" does not say of what, so the title spells it out with both of
+		// the figures being compared.
 		ppm := number(row["ppm_at_clause"])
 		explain := fmt.Sprintf("Pagando su clausula sacas %.2f pts/M; la mediana de tu "+
 			"plantilla es %.2f pts/M, asi que rinde %.1f veces mas por cada millon.",
@@ -2307,8 +2307,8 @@ func TableIn(columns []Column, rows []map[string]any, empty, section string,
 			if price == 0 {
 				price = number(row["value"])
 			}
-			// El dueño entra en lo buscable: escribir "cristian" tiene que sacar lo que
-			// tiene cristian, no obligar a recordar los nombres de sus jugadores.
+			// The owner is searchable too: typing "cristian" has to bring up what cristian
+			// holds rather than demanding you remember his players' names.
 			searchable := strings.ToLower(text(row["name"]))
 			for _, extra := range []string{text(row["owner"]), text(row["seller"])} {
 				if extra != "" {
