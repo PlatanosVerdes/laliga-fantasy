@@ -57,20 +57,21 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 		}
 	}
 
-	// The starting probability comes from the market list, and that list simply omits it for some
-	// players -- Berenguer was one, and his own page said 30% all along. Read there when it is
-	// missing: one request, cached, and only for the player being looked at, because doing it for
-	// everybody would be a page fetch per player on every rebuild.
-	if player["start_probability"] == nil {
-		if name := fallback(text(player["ff_name"]), text(player["name"])); name != "" {
-			if page, err := futbolfantasy.PlayerPage(matching.SlugifyFF(name),
-				futbolfantasy.DetailTTL); err == nil {
-				if chance := page["start_probability"]; chance != nil {
-					player["start_probability"] = number(chance)
-					player["start_probability_source"] = "ficha"
-					if week := page["start_week"]; week != nil {
-						player["start_week"] = number(week)
-					}
+	// Neither the hierarchy nor, for some players, the starting probability is in the market list.
+	// Reading the page costs a request, so only the player being looked at gets one.
+	if name := fallback(text(player["ff_name"]), text(player["name"])); name != "" {
+		if page, err := futbolfantasy.PlayerPageFor(matching.SlugifyFF(name),
+			text(player["ff_id"]), futbolfantasy.DetailTTL); err == nil {
+			if rank := page["hierarchy"]; rank != nil {
+				player["hierarchy"] = text(rank)
+				player["hierarchy_rank"] = number(page["hierarchy_rank"])
+			}
+			if chance := page["start_probability"]; chance != nil &&
+				player["start_probability"] == nil {
+				player["start_probability"] = number(chance)
+				player["start_probability_source"] = "ficha"
+				if week := page["start_week"]; week != nil {
+					player["start_week"] = number(week)
 				}
 			}
 		}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"sort"
 	"strconv"
@@ -385,6 +386,23 @@ func cmdPlayer(args []string) error {
 	}
 	if probability, ok := asFloatValue(found["start_probability"]); ok {
 		lines = append(lines, [2]string{"Probabilidad titular", fmt.Sprintf("%.0f%%", probability)})
+	}
+	// The hierarchy is only on the player's own page, so it costs a request: one, cached, and only
+	// for the player asked about.
+	if name := fallbackText(text(found["ff_name"]), text(found["name"])); name != "" {
+		page, err := futbolfantasy.PlayerPageFor(matching.SlugifyFF(name), text(found["ff_id"]),
+			futbolfantasy.DetailTTL)
+		if err != nil {
+			slog.Debug("sin ficha de futbolfantasy", "player", name, "reason", err.Error())
+		} else if rank := text(page["hierarchy"]); rank != "" {
+			lines = append(lines, [2]string{"Jerarquia en su equipo", rank})
+			if _, ok := asFloatValue(found["start_probability"]); !ok {
+				if chance, ok := asFloatValue(page["start_probability"]); ok {
+					lines = append(lines, [2]string{"Probabilidad titular",
+						fmt.Sprintf("%.0f%% (de su ficha)", chance)})
+				}
+			}
+		}
 	}
 	if clause := number(found["clause"]); clause != 0 {
 		state := "abierta"
