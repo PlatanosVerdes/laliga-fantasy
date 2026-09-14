@@ -14,6 +14,7 @@
 package futbolfantasy
 
 import (
+	"fmt"
 	"html"
 	"regexp"
 	"sort"
@@ -324,6 +325,9 @@ var (
 	// prob- class, but not for everybody: Berenguer was one of the few without it, and the page
 	// had it all along.
 	titularWidget = regexp.MustCompile(`(?s)Titular\s+J(\d+).{0,400}?>\s*(\d+)\s*%`)
+	pageID        = regexp.MustCompile(`data-jugador="(\d+)"`)
+	hierarchyWord = regexp.MustCompile(`jerarquia-value[^>]*>\s*([^<]+?)\s*<`)
+	hierarchyRank = regexp.MustCompile(`jerarquia-box\s+jerarquia-(\d+)`)
 	roleAttr     = regexp.MustCompile(`data-posicion-laliga-fantasy="([^"]*)"`)
 	weekCell     = regexp.MustCompile(`jorn-td">\s*(\d+)`)
 	teamImage    = regexp.MustCompile(`<img class="img"[^>]*alt="([^"]+)"`)
@@ -443,16 +447,44 @@ func ParsePlayerPage(page string) map[string]any {
 		"name": name, "matches": matches, "games_played": played,
 		"total_points": total, "avg_points": nil,
 		"start_probability": nil, "start_week": nil,
+		"hierarchy": nil, "hierarchy_rank": nil, "ff_id": nil,
+	}
+	if found := pageID.FindStringSubmatch(page); found != nil {
+		out["ff_id"] = nilString(found[1])
 	}
 	if found := titularWidget.FindStringSubmatch(page); found != nil {
 		out["start_week"] = intOf(found[1])
 		out["start_probability"] = intOf(found[2])
+	}
+	if found := hierarchyWord.FindStringSubmatch(page); found != nil {
+		out["hierarchy"] = nilString(html.UnescapeString(found[1]))
+	}
+	if found := hierarchyRank.FindStringSubmatch(page); found != nil {
+		out["hierarchy_rank"] = intOf(found[1])
 	}
 	if played > 0 {
 		average := total / float64(played)
 		out["avg_points"] = &average
 	}
 	return out
+}
+
+// PlayerPageFor is PlayerPage with the identity checked. The slug is built from a name and can
+// land on a stranger -- "angel-perez" is a Segunda player, not the Alaves one -- so a page that
+// states a different id is no answer.
+func PlayerPageFor(slug, ffID string, ttl time.Duration) (map[string]any, error) {
+	page, err := PlayerPage(slug, ttl)
+	if err != nil {
+		return nil, err
+	}
+	theirs := ""
+	if id, ok := page["ff_id"].(*string); ok && id != nil {
+		theirs = *id
+	}
+	if ffID != "" && theirs != "" && ffID != theirs {
+		return nil, fmt.Errorf("la ficha %s es del jugador %s, no del %s", slug, theirs, ffID)
+	}
+	return page, nil
 }
 
 func PlayerPage(slug string, ttl time.Duration) (map[string]any, error) {

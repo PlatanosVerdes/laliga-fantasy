@@ -569,6 +569,11 @@ function titClass(p){
   return p>=75?'tit-hi':p>=50?'tit-mid':p>=30?'tit-lo':'tit-out';
 }
 
+// The thresholds are futbolfantasy's own scale, not chosen here: Clave 50, Importante 40, Rotacion 30.
+function hierClass(rank){
+  return rank>=50?'tit-hi':rank>=40?'tit-mid':rank>=30?'tit-lo':'tit-out';
+}
+
 function weekChip(w){
   const p=w.points;
   const cls = p==null?'wk-none': p<0?'wk-neg': p>=8?'wk-hi': p>=4?'wk-mid':'wk-lo';
@@ -1297,6 +1302,8 @@ async function openDetail(playerId){
           p.start_probability_source==='ficha'
             ? `<span style="color:var(--muted);font-weight:400"> · J${p.start_week||''} en su ficha</span>`
             : ''}</dd></div>
+      ${p.hierarchy?`<div><dt>Jerarquia</dt><dd class="${hierClass(p.hierarchy_rank)}"
+        >${p.hierarchy}<span style="color:var(--muted);font-weight:400"> · en su equipo</span></dd></div>`:''}
       <div><dt>Proximo rival</dt><dd>${rival}</dd></div>
       <div><dt>Valor 7d</dt><dd style="color:var(--${(p.projected_pct||0)>=0?'pole-pos':'pole-neg'})"
         >${(p.projected_pct||0)>=0?'+':''}${(p.projected_pct||0).toFixed(2)}%</dd></div>

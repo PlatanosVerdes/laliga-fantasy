@@ -8,7 +8,7 @@ It merges two sources:
 | Source | What it gives | Auth |
 |---|---|---|
 | `fantasy-api.llt-services.com` (official API) | 733 players with price, status, last-season points, live points; teams; calendar; daily market-value history; **your league, squad, cash, rivals' squads and clauses** | Bearer, league data only |
-| `futbolfantasy.com` (HTML scrape) | value deltas over 1/2/3/7/14/30 days, trend, acceleration, next fixture, **odds of starting it**, "puja máxima rentable", per-matchday points and injury history | none |
+| `futbolfantasy.com` (HTML scrape) | value deltas over 1/2/3/7/14/30 days, trend, acceleration, next fixture, **odds of starting it**, "puja máxima rentable", per-matchday points, injury history and the **jerarquía** each player holds in his own squad | none |
 
 It can also act: bid, sell, accept an offer, pay a clause, shield one of your own players,
 save a lineup. Nothing moves
@@ -269,6 +269,33 @@ Two things it does not know, and says so on the page. What a rival will actually
 this is only the best eleven he *could* field: he can do worse, never better. And the odds of
 somebody getting injured, which nobody publishes: what exists is who is out, until when, and the
 odds of starting, which is where the risk of not playing lives.
+
+### Jerarquia
+
+The odds of starting answer "will he play on Saturday". They do not answer "is this a footballer
+his coach builds around", and those are different questions: a 70% can be a starter nobody would
+drop or a rotation man whose turn it happens to be. futbolfantasy publishes the second answer as
+**jerarquia**, its verdict on where a player stands in his own squad, and it sorts:
+
+| | |
+|---|---:|
+| Dios | 60 |
+| Clave | 50 |
+| Importante | 40 |
+| Rotacion | 30 |
+| Suplente | below |
+
+It separates players the rest of the numbers put side by side. Camello and Berenguer were both
+70% to start the same weekend; Camello is Importante and Berenguer is Rotacion. Xavi Espart, whose
+value had gone from 703K to 23.88M in a month, is Rotacion at 30%.
+
+It lives only on the player's own page, never in the market listing, so it costs a request per
+player and is read only for the one being looked at: the `player` command and the web card, both
+cached. The page is reached by a slug built from the name, and a slug can land on a stranger
+(`angel-perez` is a Segunda player, not the Alaves one), so nothing is read from a page whose own
+`data-jugador` id disagrees with the player asked about. That guard also covers the starting
+probability, which the same page has been filling in since the market listing started omitting it
+for some players.
 
 ### Caveats
 
