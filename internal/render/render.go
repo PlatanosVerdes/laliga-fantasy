@@ -900,13 +900,14 @@ func Feed(events []map[string]any) string {
 		for _, event := range withAmount {
 			blocks.WriteString(FeedRow(event))
 		}
-		blocks.WriteString(`</div><h3 class="kpi-label" style="margin-top:20px">Lo ultimo</h3>`)
+		blocks.WriteString(fmt.Sprintf(
+			`</div><h3 class="kpi-label" style="margin-top:20px">Lo ultimo · %d movimientos`+
+				`</h3>`, len(moves)))
 	}
-	blocks.WriteString(`<div class="feed">`)
-	for index, event := range moves {
-		if index >= 20 {
-			break
-		}
+	// The whole log, inside a rail that scrolls: cut at twenty it answered "what happened
+	// today" and nothing else, and the season is what the section is for.
+	blocks.WriteString(`<div class="feed feed-rail">`)
+	for _, event := range moves {
 		blocks.WriteString(FeedRow(event))
 	}
 	blocks.WriteString(`</div>`)
