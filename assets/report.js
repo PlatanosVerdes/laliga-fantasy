@@ -648,7 +648,19 @@ function weekStrip(weeks){
     return `<span class="wk ${cls}${w.ideal?' wk-ideal':''}" title="${when}"
       >${p==null?'\u2013':p}</span>`;
   }).join('');
-  return `<div class="card-weeks"><span class="wk-label">J</span>${chips}</div>`;
+  return `<div class="card-weeks"><span class="wk-label">J</span>
+    <div class="card-weeks-rail">${chips}</div></div>`;
+}
+
+// The strip opens on the newest: "how is he doing" is a question about the last few weeks, and
+// on a line read left to right the answer is at the far end.
+function wireWeeks(root){
+  const rail=root.querySelector('.card-weeks-rail');
+  if(!rail) return;
+  const edge=()=>rail.classList.toggle('has-more', rail.scrollLeft > 2);
+  rail.scrollLeft=rail.scrollWidth;
+  edge();
+  rail.addEventListener('scroll',edge,{passive:true});
 }
 
 function weekChip(w){
@@ -1446,6 +1458,7 @@ async function openDetail(playerId){
   body.querySelectorAll('button[data-action]').forEach(button=>
     button.addEventListener('click',()=>runAction(JSON.parse(button.dataset.action),p)));
   wireAlways(body,p);
+  wireWeeks(body);
   wireChart(body);
   wireManagers(body);
   drawTray();
