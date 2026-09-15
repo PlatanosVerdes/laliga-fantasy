@@ -465,8 +465,9 @@ Three rules it follows, because each of them is a way the measurement would lie:
   is noise in somebody's console rather than a measurement. The page knows by the `data-mode` the
   server stamps in the header.
 
-`fantasy usage --days 7` prints it. The file is JSON lines and it ends in `.log`, so Vector tails
-it into VictoriaLogs with the rest and nothing new had to be configured.
+`fantasy usage --days 7` prints it from the file. Every event also goes to the log, because the
+file sits in the container's volume where nothing collecting logs off the host can reach it:
+`container:laliga-fantasy AND _msg:usage` is the deployed copy.
 
 Nothing is sent anywhere else. A hosted analytics tool would have meant shipping a page carrying
 your balance, your league and buttons that spend money to somebody else's server, and the only
