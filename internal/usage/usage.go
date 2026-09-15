@@ -16,6 +16,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
@@ -92,6 +93,10 @@ func Append(events []Event) (int, error) {
 		}
 		writer.Write(line)
 		writer.WriteByte('\n')
+		// And to the log stream, which is the only one that leaves the machine: this file sits
+		// in the container's volume, where nothing collecting logs off the host can see it.
+		slog.Info("usage", "kind", event.Kind, "what", event.What, "where", event.Where,
+			"label", event.Label, "seconds", event.Seconds, "phone", event.Phone)
 	}
 	if err := writer.Flush(); err != nil {
 		return 0, err
