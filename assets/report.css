@@ -817,8 +817,16 @@ table.cmp td.cmp-cheap{font-weight:700}
 
 /* The matchday points on a card: the same chips as a shirt on the pitch, on their own line
    because here there is room for the whole season rather than the last five. */
-.card-weeks{display:flex;flex-wrap:wrap;align-items:center;gap:3px;margin:12px 0 4px}
-.card-weeks .wk-label{margin-right:3px}
+.card-weeks{display:flex;align-items:center;gap:3px;margin:12px 0 4px}
+.card-weeks .wk-label{flex:0 0 auto;margin-right:3px}
+/* min-width:0 is load-bearing: a flex child does not shrink below its content, so without it the
+   rail widens the card instead of scrolling and a full season never overflows at all. */
+.card-weeks-rail{display:flex;align-items:center;gap:3px;overflow-x:auto;scrollbar-width:none;
+  min-width:0;padding-bottom:1px}
+.card-weeks-rail::-webkit-scrollbar{display:none}
+.card-weeks-rail .wk{flex:0 0 auto}
+/* The only hint there is more to the left: the rail carries no scrollbar. */
+.card-weeks-rail.has-more{mask-image:linear-gradient(to right,transparent,#000 18px)}
 /* The game's own team of the week. It is the only mark on the strip, so it has to be a
    ring and not another colour: the colours already mean how many points. */
 .wk-ideal{box-shadow:0 0 0 1.5px var(--accent)}
