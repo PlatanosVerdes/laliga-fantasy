@@ -963,6 +963,80 @@ function applyFormation(text){
   pitchDirty=true; renderPitch();
 }
 
+// ---- la liga jornada a jornada --------------------------------------------
+// One line per manager over the finished matchdays: the place each of them held after each one.
+// The server rebuilds it from the elevens, so it is asked for once, when the tab is opened.
+let seasonData=null, seasonAsked=false;
+
+async function loadSeason(){
+  const box=document.querySelector('.evo');
+  if(!box) return;
+  if(seasonData){ box.innerHTML=seasonChart(seasonData,box.clientWidth); return; }
+  if(seasonAsked) return;
+  seasonAsked=true;
+  box.innerHTML='<p class="empty">Reconstruyendo la clasificacion…</p>';
+  try{
+    const res=await fetch('/api/season');
+    if(!res.ok) throw new Error(res.status);
+    seasonData=await res.json();
+    box.innerHTML=seasonChart(seasonData,box.clientWidth);
+  }catch(e){
+    seasonAsked=false;
+    box.innerHTML='<p class="empty">No he podido reconstruir la clasificacion.</p>';
+  }
+}
+
+// Drawn at the width it has, so turning the phone has to redraw it.
+let seasonRedraw;
+window.addEventListener('resize',()=>{
+  if(!seasonData) return;
+  clearTimeout(seasonRedraw);
+  seasonRedraw=setTimeout(loadSeason,200);
+});
+
+function seasonChart(d,width){
+  const weeks=d.weeks||[];
+  const managers=(d.managers||[]).filter(m=>(m.place||[]).some(p=>p!=null));
+  if(weeks.length<1||!managers.length) return '<p class="empty">Aun no hay jornadas terminadas.</p>';
+  // At phone width the names do not fit beside the lines, so they are cut rather than dropped:
+  // the shape of the line is the answer and the name only says whose it is.
+  const w=Math.max(300,width||760), narrow=w<560;
+  const padL=narrow?22:30, padR=narrow?78:150, padT=14, padB=24;
+  const rows=managers.length, h=padT+padB+(rows-1)*(narrow?18:22);
+  const step=weeks.length>1?(w-padL-padR)/(weeks.length-1):0;
+  const x=i=>padL+step*i;
+  const y=p=>padT+(h-padT-padB)*(rows>1?(p-1)/(rows-1):0);
+  const cut=(name)=>narrow&&name.length>9?name.slice(0,9)+'…':name;
+
+  let grid='';
+  weeks.forEach((week,i)=>{
+    grid+=`<line class="evo-grid" x1="${x(i)}" y1="${padT-6}" x2="${x(i)}" y2="${h-padB+4}"></line>`
+      +`<text class="evo-axis" x="${x(i)}" y="${h-padB+16}" text-anchor="middle">J${week}</text>`;
+  });
+  [1,rows].forEach(place=>{
+    grid+=`<text class="evo-axis" x="${padL-8}" y="${y(place)+3}" text-anchor="end">${place}º</text>`;
+  });
+
+  const lines=managers.map(m=>{
+    const points=[];
+    (m.place||[]).forEach((place,i)=>{ if(place!=null) points.push([x(i),y(place),i,place]); });
+    if(!points.length) return '';
+    const last=points[points.length-1];
+    const dots=points.map(([px,py,i,place])=>
+      `<circle class="evo-dot" cx="${px}" cy="${py}" r="3"><title>J${weeks[i]} · ${place}º · `
+      +`${Math.round(m.points[i]||0)} pts · ${Math.round(m.total[i]||0)} acumulados</title></circle>`
+    ).join('');
+    return `<g class="evo-row${m.is_me?' evo-me':''}">
+      <polyline class="evo-line" points="${points.map(p=>p[0]+','+p[1]).join(' ')}"></polyline>
+      ${dots}
+      <text class="evo-name" x="${last[0]+8}" y="${last[1]+3.5}">${cut(m.manager)}</text>
+    </g>`;
+  }).join('');
+
+  return `<svg class="evo-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"
+    role="img" aria-label="Puesto de cada manager jornada a jornada">${grid}${lines}</svg>`;
+}
+
 async function loadPitch(){
   const pitch=document.getElementById('pitch');
   if(!pitch) return;
@@ -1248,10 +1322,12 @@ async function openMatchday(week){
     ${(d.managers||[]).map(m=>`
       <div class="md-manager${m.is_me?' md-mine':''}">
         <div class="md-head">
+          ${m.week_rank!=null?`<span class="md-rank${m.week_rank<=3?' md-podium':''}"
+            >${m.week_rank}º</span>`:''}
           <button class="p-name" type="button" data-manager="${m.team_id}">${m.manager}</button>
           <span class="md-count">${m.lineup
-            ? (m.formation||[]).join('-')+gapNote(m.lineup)
-              +(m.week_points!=null?` · ${Math.round(m.week_points)} pts`:'')
+            ? (m.week_points!=null?`<b>${Math.round(m.week_points)} pts</b> · `:'')
+              +(m.formation||[]).join('-')+gapNote(m.lineup)
             : `${m.playing} de ${m.players} jugaron`}</span>
         </div>
         ${miniPitch(m)}
@@ -2261,7 +2337,7 @@ const TABS=[
   {id:'partidos', label:'Partidos', sections:['jornada','partidos']},
   // Everyone else's in its place: their whole squads and what they can pay for yours.
   {id:'rivales', label:'Rivales', sections:['rivales']},
-  {id:'liga', label:'Liga', sections:['movimientos','normas']},
+  {id:'liga', label:'Liga', sections:['evolucion','movimientos','normas']},
   {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
 ];
 
@@ -2330,6 +2406,7 @@ function showTab(id,{section=null,updateHash=true}={}){
   }
   applyRivalPick();
   if(tab.sections.includes('once') && !pitchState) loadPitch();
+  if(tab.sections.includes('evolucion')) loadSeason();
   if(section){
     const node=document.getElementById(section);
     if(node) node.scrollIntoView({behavior:'smooth',block:'start'});
@@ -2403,6 +2480,8 @@ async function swap(){
   wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids();
   wireRaises();
   wireManagers(); wireMatchdays(); tick();
+  // The chart is the client's, and the rebuild has just put the empty frame back in its place.
+  if(seasonData) loadSeason();
   showTab(document.querySelector('.tab.on')?.dataset.tab||'decidir',
           {updateHash:false});
   const stamp=document.getElementById('live-stamp');

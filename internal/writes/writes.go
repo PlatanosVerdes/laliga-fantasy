@@ -512,8 +512,10 @@ func (g *Guard) Confirm(token string, allowWrites, dryRun bool) (map[string]any,
 	slog.Info("write done", "operation", entry.name, "player", entry.summary.PlayerName,
 		"amount", entry.args.Amount, "method", call.Method, "path", call.Path,
 		"cash_before", entry.summary.CashBefore, "cache_dropped", dropped)
+	// The args travel back because the page sends nothing but the token: whoever has to patch
+	// the world with what this did cannot know which offer it was otherwise.
 	return map[string]any{"ok": true, "operation": entry.name, "summary": entry.summary,
-		"response": answer}, nil
+		"args": entry.args, "response": answer}, nil
 }
 
 // check is the validation, kept as one function so the rules are read together. Refusals

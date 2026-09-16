@@ -119,6 +119,7 @@ func (d Document) HTML() string {
 		sections = append(sections, d.raidsSection())
 		sections = append(sections, d.offersSection())
 	}
+	sections = append(sections, d.seasonSection())
 	sections = append(sections, d.feedSection())
 	if hasAdvice {
 		sections = append(sections, Pitch)
@@ -1106,6 +1107,17 @@ func (d Document) managerTeams() map[string]string {
 		}
 	}
 	return out
+}
+
+// seasonSection is only the frame: the line of every manager across the season is thirteen
+// lineups per matchday, so it is asked for when the tab is opened and not on every rebuild.
+func (d Document) seasonSection() string {
+	note := "En que puesto acabo cada uno cada jornada. La clasificacion oficial solo publica " +
+		"la de hoy, asi que el recorrido se suma de los onces que alineo cada uno: el total " +
+		"que sale es exactamente el de la tabla."
+	return Section("La liga jornada a jornada",
+		`<div class="evo" data-season="1"><p class="empty">Cargando…</p></div>`,
+		note, "", "evolucion")
 }
 
 func (d Document) feedSection() string {

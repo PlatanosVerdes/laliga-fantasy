@@ -405,8 +405,10 @@ func (s *Server) confirm(writer http.ResponseWriter, request *http.Request) {
 		cause = "write"
 	}
 	// Say what just happened before going to ask: the rebuild takes about five seconds against
-	// the API and the person is looking at the screen waiting for the one thing they did.
-	s.applied(cause, body)
+	// the API and the person is looking at the screen waiting for the one thing they did. What
+	// it did is read off the token, which is the only thing the page sends at this point.
+	args, _ := result["args"].(writes.Args)
+	s.applied(cause, args)
 	s.settle(cause)
 	s.json(writer, http.StatusOK, result)
 }
@@ -415,52 +417,52 @@ func (s *Server) confirm(writer http.ResponseWriter, request *http.Request) {
 // rather than in five seconds. Only the effects that are certain without asking the API: an
 // offer that is gone is gone, a bid that changed is that amount. Everything else waits for the
 // rebuild, which is the authority.
-func (s *Server) applied(operation string, body map[string]any) {
-	offerID := text(body["offer_id"])
-	marketID := text(body["market_id"])
-	amount, _ := amountOf(body["amount"])
-
+func (s *Server) applied(operation string, args writes.Args) {
 	s.state.Patch(operation, func(universe *model.Universe) bool {
-		changed := false
-		for index := range universe.Players {
-			player := &universe.Players[index]
-			switch operation {
-			case "accept_offer", "decline_offer":
-				if offerID == "" {
+		return patch(universe, operation, args)
+	})
+}
+
+func patch(universe *model.Universe, operation string, args writes.Args) bool {
+	changed := false
+	for index := range universe.Players {
+		player := &universe.Players[index]
+		switch operation {
+		case "accept_offer", "decline_offer":
+			if args.OfferID == "" {
+				continue
+			}
+			kept := player.Offers[:0]
+			for _, offer := range player.Offers {
+				if text(offer["id"]) == args.OfferID {
+					changed = true
 					continue
 				}
-				kept := player.Offers[:0]
-				for _, offer := range player.Offers {
-					if text(offer["id"]) == offerID {
-						changed = true
-						continue
-					}
-					kept = append(kept, offer)
-				}
-				player.Offers = kept
+				kept = append(kept, offer)
+			}
+			player.Offers = kept
 
-			case "withdraw":
-				if listing := player.MarketEntry; listing != nil && listing.MarketID == marketID {
-					player.MarketEntry = nil
-					changed = true
-				}
+		case "withdraw":
+			if listing := player.MarketEntry; listing != nil && listing.MarketID == args.MarketID {
+				player.MarketEntry = nil
+				changed = true
+			}
 
-			case "modify_bid":
-				if listing := player.MarketEntry; listing != nil && listing.MarketID == marketID {
-					value := amount
-					listing.MyBid = &value
-					changed = true
-				}
+		case "modify_bid":
+			if listing := player.MarketEntry; listing != nil && listing.MarketID == args.MarketID {
+				value := float64(args.Amount)
+				listing.MyBid = &value
+				changed = true
+			}
 
-			case "cancel_bid":
-				if listing := player.MarketEntry; listing != nil && listing.MarketID == marketID {
-					listing.MyBidID, listing.MyBid, listing.MyBidStatus = nil, nil, nil
-					changed = true
-				}
+		case "cancel_bid":
+			if listing := player.MarketEntry; listing != nil && listing.MarketID == args.MarketID {
+				listing.MyBidID, listing.MyBid, listing.MyBidStatus = nil, nil, nil
+				changed = true
 			}
 		}
-		return changed
-	})
+	}
+	return changed
 }
 
 // playerFor is the context the confirmation dialog quotes: what he is worth, what the listing

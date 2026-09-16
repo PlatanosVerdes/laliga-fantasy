@@ -66,6 +66,7 @@ type Server struct {
 	pageMu  sync.Mutex
 	pageKey string
 	page    string
+	season  season
 }
 
 // render returns the current page, rendering it only when the world has moved since the last
@@ -113,6 +114,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/manager/", s.manager)
 	mux.HandleFunc("/api/compare", s.compare)
 	mux.HandleFunc("/api/matchday/", s.matchday)
+	mux.HandleFunc("/api/season", s.seasonTable)
 	mux.HandleFunc("/api/fragments", s.fragments)
 	mux.HandleFunc("/api/lineup", s.lineup)
 	mux.HandleFunc("/api/session", s.session)
