@@ -805,7 +805,7 @@ func Traded(owners map[string]string, known map[string]bool, policies map[string
 //
 // Not only tidying: an armed raid left on a player of yours would come back to life the day you
 // sell him and pay a clause nobody armed again.
-func Disarm(ids ...string) ([]string, error) {
+func Disarm(ids ...string) ([]Dropped, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -813,7 +813,7 @@ func Disarm(ids ...string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var gone []string
+	var gone []Dropped
 	for _, id := range ids {
 		entry, found := armed[id]
 		if !found || !entry.Raid {
@@ -823,7 +823,7 @@ func Disarm(ids ...string) ([]string, error) {
 		if name == "" {
 			name = id
 		}
-		gone = append(gone, name)
+		gone = append(gone, Dropped{ID: id, Name: name, Amount: entry.MaxPay})
 		entry.Raid, entry.MaxPay = false, nil
 		if entry.silent() {
 			delete(armed, id)
@@ -837,9 +837,17 @@ func Disarm(ids ...string) ([]string, error) {
 	return gone, Save(armed)
 }
 
+// Dropped is an instruction that was taken down, carrying enough to write it into a log: an id
+// alone is not a name, and a name alone is not a link to the player.
+type Dropped struct {
+	ID     string
+	Name   string
+	Amount *float64
+}
+
 // Forget drops the sell side of these instructions and reports the names it dropped. A
 // scheduled raid on the same player survives, because that one is still about to happen.
-func Forget(ids ...string) ([]string, error) {
+func Forget(ids ...string) ([]Dropped, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -847,7 +855,7 @@ func Forget(ids ...string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var gone []string
+	var gone []Dropped
 	for _, id := range ids {
 		entry, found := armed[id]
 		if !found {
@@ -857,7 +865,7 @@ func Forget(ids ...string) ([]string, error) {
 		if name == "" {
 			name = id
 		}
-		gone = append(gone, name)
+		gone = append(gone, Dropped{ID: id, Name: name})
 		if !entry.Raid {
 			delete(armed, id)
 			continue

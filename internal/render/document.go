@@ -38,6 +38,10 @@ type Document struct {
 	Swaps map[string]any
 	// Mode is what the server running this page may do: auto, manual or solo lectura.
 	Mode string
+	// Orders is what happened to the standing instructions: cancelled, paid, spent. Kept for
+	// the same reason Endings is — the game has no idea they ever existed.
+	Orders []map[string]any
+
 	// Endings is how my previous bids and offers finished, read from where they were saved.
 	Endings []map[string]any
 	// MineByWeek is how many of my players each team had on a past matchday, keyed by week.
@@ -724,7 +728,9 @@ var raidsStandingDown = map[string]bool{
 }
 
 func (d Document) raidsSection() string {
-	if len(d.Raids) == 0 {
+	// The log outlives the orders it is about: with nothing armed and a history to read, the
+	// section is the history.
+	if len(d.Raids) == 0 && len(d.Orders) == 0 {
 		return ""
 	}
 	armed := 0
@@ -752,9 +758,16 @@ func (d Document) raidsSection() string {
 		body += `<h3 class="kpi-label" style="margin-top:22px">No se pudieron hacer</h3>` +
 			RaidLog(stood)
 		note += " Debajo, los que <strong>no se pudieron hacer</strong> y por que: " +
-			"siguen armados, asi que si la cláusula vuelve a bajar de tu limite se pagan. " +
-			"Los que ya no pueden hacerse nunca — el jugador no es de nadie, o ya es tuyo — " +
-			"se cancelan solos."
+			"siguen armados, asi que si la cláusula vuelve a bajar de tu limite se pagan."
+	}
+	// And what became of the ones that are no longer here at all. Without it the section can
+	// only ever show what is pending, which is the one thing already on the screen.
+	if len(d.Orders) > 0 {
+		body += `<h3 class="kpi-label" style="margin-top:22px">Lo que ha pasado con tus ` +
+			`ordenes</h3>` + OrderLog(d.Orders)
+		note += " Al final, el <strong>registro</strong>: las que se pagaron y las que se " +
+			"cancelaron, con la fecha. Las que ya no pueden hacerse nunca — el jugador no es " +
+			"de nadie, o ya es tuyo — se cancelan solas y aparecen ahi."
 	}
 
 	badge := fmt.Sprintf("%d", len(live))

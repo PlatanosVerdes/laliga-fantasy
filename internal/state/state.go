@@ -448,9 +448,7 @@ func (s *State) forgetSold(universe *model.Universe) {
 		slog.Error("could not forget the instructions of sold players", "reason", err.Error())
 		return
 	}
-	for _, name := range gone {
-		slog.Info("standing instruction forgotten", "player", name, "why", "no longer yours")
-	}
+	record(gone, "siempre en mercado", "ya no es tuyo")
 
 	// The mirror image on the buy side: a raid on somebody who is now yours is done.
 	signed, err := policies.Disarm(policies.Signed(mine, armed)...)
@@ -458,18 +456,36 @@ func (s *State) forgetSold(universe *model.Universe) {
 		slog.Error("could not disarm the raids of signed players", "reason", err.Error())
 		return
 	}
-	for _, name := range signed {
-		slog.Info("scheduled raid disarmed", "player", name, "why", "already yours")
-	}
+	record(signed, "clausulazo", "ya es tuyo")
 
-	// And the third: a raid whose target now belongs to somebody else.
+	// And the third: a raid whose target changed hands, or has no owner to pay a clause to.
 	traded, err := policies.Disarm(policies.Traded(owners, mine, armed)...)
 	if err != nil {
 		slog.Error("could not disarm the raids of traded players", "reason", err.Error())
 		return
 	}
-	for _, name := range traded {
-		slog.Info("scheduled raid disarmed", "player", name, "why", "sold to somebody else")
+	record(traded, "clausulazo", "el jugador ya no esta donde estaba")
+}
+
+// record writes what was taken down where the page can read it afterwards. The game keeps no
+// trace of an instruction of ours, so an order cancelled in the background is a thing that
+// simply stopped existing unless it is written here.
+func record(dropped []policies.Dropped, kind, why string) {
+	if len(dropped) == 0 {
+		return
+	}
+	endings := make([]outcomes.Order, 0, len(dropped))
+	for _, one := range dropped {
+		slog.Info("standing instruction dropped", "player", one.Name, "kind", kind, "why", why)
+		ending := outcomes.Order{PlayerID: one.ID, Player: one.Name, Kind: kind,
+			Outcome: "cancelada", Why: why}
+		if one.Amount != nil {
+			ending.Amount = *one.Amount
+		}
+		endings = append(endings, ending)
+	}
+	if err := outcomes.AppendOrders(endings...); err != nil {
+		slog.Warn("instruction endings not saved", "reason", err.Error())
 	}
 }
 

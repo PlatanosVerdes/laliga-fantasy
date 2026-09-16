@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/favourites"
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/outcomes"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
@@ -239,6 +239,16 @@ func (s *Server) cancelRaid(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	slog.Info("raid cancelled", "player_id", id, "player", text(body["name"]))
+	// Written down for the same reason the automatic ones are: the game never knew the order
+	// existed, so cancelling it leaves nothing behind unless the panel keeps it.
+	ending := outcomes.Order{PlayerID: id, Player: fallback(text(body["name"]), entry.Name),
+		Kind: "clausulazo", Outcome: "cancelada", Why: "la cancelaste tu"}
+	if entry.MaxPay != nil {
+		ending.Amount = *entry.MaxPay
+	}
+	if err := outcomes.AppendOrders(ending); err != nil {
+		slog.Warn("instruction ending not saved", "reason", err.Error())
+	}
 	s.settle("raid")
 	s.json(writer, http.StatusOK, map[string]any{"id": id, "raid": false})
 }
