@@ -197,6 +197,18 @@ func rank(managers []map[string]any) {
 	}
 }
 
+// scoredIn is what he made on that matchday. The master's own `points` is the whole season, and
+// reading it put a 47 on a shirt in a matchday his eleven made 57 between the lot of them. A
+// matchday he is not listed for is a matchday he scored nothing in.
+func scoredIn(master map[string]any, week int) float64 {
+	for _, row := range oneRowPerWeek(listOf(master["lastStats"])) {
+		if int(number(row["weekNumber"])) == week {
+			return number(row["totalPoints"])
+		}
+	}
+	return 0
+}
+
 // lineupOf is the eleven a team fielded that week, by line, plus its shape and what it scored.
 func (s *Server) lineupOf(teamID string, week int,
 	ttl time.Duration) (map[string][]map[string]any, []int, float64, error) {
@@ -229,7 +241,7 @@ func (s *Server) lineupOf(teamID string, week int,
 				"position_id": int(number(master["positionId"])),
 				"team_id":     text(master["teamId"]),
 				"image":       text(nested(master, "images", "transparent", "256x256")),
-				"points":      number(master["points"]),
+				"points":      scoredIn(master, week),
 				"team_short":  text(extra["team_short"]),
 			})
 		}

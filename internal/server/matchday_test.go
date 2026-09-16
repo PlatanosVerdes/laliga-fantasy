@@ -68,3 +68,21 @@ func TestRankSharesTheLevelPlace(t *testing.T) {
 		t.Error("a matchday with no lineup to read has no place")
 	}
 }
+
+// Dmitrovic on matchday five, as the feed publishes him: 47 points of season and 13 of that
+// matchday. The shirt used to wear the 47, in an eleven that made 57 between the lot of them.
+func TestScoredInIsThatMatchdayAndNotTheSeason(t *testing.T) {
+	master := map[string]any{"points": 47.0, "lastStats": []map[string]any{
+		week(1, 11, 90), week(2, 5, 90), week(3, 7, 90), week(4, 8, 90), week(5, 13, 90),
+		// The live matchday comes back four times, once played and three times empty.
+		week(6, 3, 90), week(6, 0, 0), week(6, 0, 0), week(6, 0, 0),
+	}}
+	for _, one := range []struct {
+		week int
+		want float64
+	}{{5, 13}, {6, 3}, {1, 11}, {7, 0}} {
+		if got := scoredIn(master, one.week); got != one.want {
+			t.Errorf("J%d: %.0f points, want %.0f", one.week, got, one.want)
+		}
+	}
+}
