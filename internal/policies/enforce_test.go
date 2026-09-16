@@ -290,3 +290,34 @@ func TestShieldPlanDoesNotBuyWhatIsAlreadyThere(t *testing.T) {
 		t.Errorf("un jugador que ya no es tuyo no se blinda, dijo %v", sold[0])
 	}
 }
+
+// Two things hold a raid at once and only one of them is the answer. Agoumé was reported as
+// waiting for the clause window, "reabre el domingo a las 21:00", while his own clause was
+// locked until the Tuesday: the row named an hour at which nothing was going to happen.
+func TestRaidPlanNamesWhicheverHoldEndsLast(t *testing.T) {
+	cap := 12_050_000.0
+	armed := map[string]Policy{"1": {Raid: true, MaxPay: &cap}}
+	player := func(hoursLeft float64) []Row {
+		return []Row{{"id": "1", "name": "Agoumé", "owner": "cristian1206",
+			"clause": 10_042_184.0, "clause_locked": true, "clause_hours_left": hoursLeft}}
+	}
+	soon := &schedule.Window{Open: false,
+		OpensAt: time.Now().Add(8 * time.Hour).Format(time.RFC3339)}
+
+	long := RaidPlan(player(152), armed, 90_000_000, soon)
+	if why := text(long[0]["why"]); !strings.Contains(why, "clausula bloqueada") {
+		t.Errorf("seis dias de bloqueo mandan sobre ocho horas de ventana: %q", why)
+	}
+	short := RaidPlan(player(2), armed, 90_000_000, soon)
+	if why := text(short[0]["why"]); !strings.Contains(why, "ventana") {
+		t.Errorf("dos horas de bloqueo no mandan sobre ocho de ventana: %q", why)
+	}
+	// And with the window open it is the lock alone, which is the state after the window fix.
+	only := RaidPlan(player(152), armed, 90_000_000, &schedule.Window{Open: true})
+	if why := text(only[0]["why"]); !strings.Contains(why, "se abre en 152h") {
+		t.Errorf("con la ventana abierta queda el bloqueo del jugador: %q", why)
+	}
+	if text(only[0]["action"]) != "esperando" {
+		t.Errorf("y sigue siendo una espera, no un pago: %v", only[0]["action"])
+	}
+}
