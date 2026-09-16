@@ -334,3 +334,33 @@ func TestRaidsSectionSaysNoneStandingWhenAllFell(t *testing.T) {
 		t.Errorf("el contador no cuadra: %.200s", section)
 	}
 }
+
+// The ones standing down are a log, not a second table: a header row and seven columns for what
+// is usually one line read as a whole second section of work to do.
+func TestRaidsStandingDownAreALog(t *testing.T) {
+	document := Document{Raids: []map[string]any{
+		{"player_id": "1", "name": "El que espera", "owner": "cristian", "clause": 10_042_184.0,
+			"max_pay": 12_050_620.0, "action": "esperando", "why": "clausula bloqueada"},
+		{"player_id": "2", "name": "El que subio", "owner": "tete", "clause": 30_129_276.0,
+			"max_pay": 17_155_131.0, "action": "cancelada", "why": "la clausula subio"},
+	}}
+	section := document.raidsSection()
+	cut := strings.Index(section, "No se pudieron hacer")
+	if cut < 0 {
+		t.Fatalf("falta el bloque de abajo: %.200s", section)
+	}
+	below := section[cut:]
+	if strings.Contains(below, "<table") {
+		t.Error("abajo va un log, no otra tabla")
+	}
+	if !strings.Contains(below, `class="endings raid-log"`) {
+		t.Errorf("y el log scrollea: %.300s", below)
+	}
+	// The line still carries its numbers and its way out.
+	for _, want := range []string{"30.13M", "tope 17.16M", "cancelada", "la clausula subio",
+		`data-op="cancel_raid"`} {
+		if !strings.Contains(below, want) {
+			t.Errorf("la linea tiene que llevar %q: %.300s", want, below)
+		}
+	}
+}
