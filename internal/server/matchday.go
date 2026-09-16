@@ -154,8 +154,19 @@ func (s *Server) matchday(writer http.ResponseWriter, request *http.Request) {
 		}
 		managers = append(managers, entry)
 	}
-	// Mine first, then by how many of theirs played: that is the comparison being made.
+	// A finished matchday is a result, so it is read as one: by what each of them scored, with
+	// the place written down. Mine is found by its own colour, not by being first. Without the
+	// lineups there is no result to order, and then it is still mine first and who had most
+	// players on the pitch.
+	rank(managers)
 	sort.SliceStable(managers, func(one, two int) bool {
+		if first, second := managers[one]["week_rank"], managers[two]["week_rank"]; first != nil ||
+			second != nil {
+			if first == nil || second == nil {
+				return first != nil
+			}
+			return number(first) < number(second)
+		}
 		if truthy(managers[one]["is_me"]) != truthy(managers[two]["is_me"]) {
 			return truthy(managers[one]["is_me"])
 		}
@@ -166,6 +177,24 @@ func (s *Server) matchday(writer http.ResponseWriter, request *http.Request) {
 		"week": week, "kickoff": kickoff.Format(time.RFC3339),
 		"reconstructed": true, "managers": managers,
 	})
+}
+
+// rank writes down the place each manager finished the matchday in. Two managers on the same
+// points finished level, so they share the place and the next one skips it.
+func rank(managers []map[string]any) {
+	for _, manager := range managers {
+		points, scored := manager["week_points"]
+		if !scored {
+			continue
+		}
+		place := 1
+		for _, other := range managers {
+			if above, ok := other["week_points"]; ok && number(above) > number(points) {
+				place++
+			}
+		}
+		manager["week_rank"] = place
+	}
 }
 
 // lineupOf is the eleven a team fielded that week, by line, plus its shape and what it scored.
