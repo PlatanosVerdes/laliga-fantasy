@@ -469,6 +469,18 @@ func cmdServe(args []string) error {
 					slog.Warn("shield instruction not cleared", "reason", err.Error())
 				}
 			}
+			// A clausulazo that went through is the one ending worth keeping: the instruction
+			// disappears on the next sweep, and with nothing written the section would show
+			// only that he is suddenly yours.
+			if text(action["operation"]) == "pay_clause" && truthyValue(action["ok"]) {
+				if err := outcomes.AppendOrders(outcomes.Order{
+					PlayerID: text(action["player_id"]), Player: text(action["name"]),
+					Kind: "clausulazo", Outcome: "pagada", Amount: number(action["amount"]),
+					Why: "se libero la clausula y seguia por debajo de tu limite",
+				}); err != nil {
+					slog.Warn("instruction ending not saved", "reason", err.Error())
+				}
+			}
 		}
 		// The world moved because we moved it: rebuild so the page tells the truth.
 		if err := world.RefreshWith("automatico", true); err != nil {
@@ -1274,6 +1286,27 @@ func untilNextInstant(rows []map[string]any,
 
 // endingRows is how my bids and offers ended, as the generic rows the page reads. Read at render
 // time rather than kept in memory: it is a file precisely so that a restart does not lose it.
+// orderRows is the log of what became of the standing instructions, in the same shape the page
+// reads everything else in.
+func orderRows() []map[string]any {
+	saved := outcomes.LoadOrders()
+	if len(saved) == 0 {
+		return nil
+	}
+	if len(saved) > 20 {
+		saved = saved[:20]
+	}
+	blob, err := json.Marshal(saved)
+	if err != nil {
+		return nil
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(blob, &rows); err != nil {
+		return nil
+	}
+	return rows
+}
+
 func endingRows() []map[string]any {
 	saved := outcomes.Load()
 	if len(saved) == 0 {
@@ -1490,6 +1523,7 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 	document := render.Document{
 		Universe: generic, Advice: buckets, Generated: stamp, LeagueName: league,
 		MineByWeek: mineByWeek(universe), Mode: mode, Endings: endingRows(),
+		Orders: orderRows(),
 		// The plan reads the same buckets the tables do, so what it proposes and what they
 		// list can never disagree.
 		Swaps:          advice.Swaps(generic, buckets, cash),

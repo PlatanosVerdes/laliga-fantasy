@@ -118,3 +118,68 @@ func Classify(before Pending, after Now, when time.Time) *Ending {
 	}
 	return &ending
 }
+
+// --- standing instructions --------------------------------------------------
+
+// KeepOrders is how many instruction endings are kept. Fewer than the bids: there are far fewer
+// of them, and the ones worth reading are this week's.
+const KeepOrders = 100
+
+// Order is how one of your standing instructions ended.
+//
+// The game does not know these exist — a scheduled clausulazo lives in this panel and nowhere
+// else — so when one is cancelled, by you or by the world moving, it leaves no trace at all
+// unless it is written down here. Without it the section could only ever show what is pending,
+// which is the one thing that is already on the screen.
+type Order struct {
+	At       string `json:"at"`
+	PlayerID string `json:"player_id"`
+	Player   string `json:"player"`
+	// Kind is which instruction it was: "clausulazo", "siempre en mercado", "blindaje".
+	Kind string `json:"kind"`
+	// Outcome is one of: pagada, cancelada, cumplida.
+	Outcome string  `json:"outcome"`
+	Why     string  `json:"why,omitempty"`
+	Amount  float64 `json:"amount,omitempty"`
+}
+
+func ordersPath() string { return filepath.Join(config.StateDir, "order_endings.json") }
+
+func LoadOrders() []Order {
+	body, err := os.ReadFile(ordersPath())
+	if err != nil {
+		return nil
+	}
+	var out []Order
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil
+	}
+	sort.SliceStable(out, func(one, two int) bool { return out[one].At > out[two].At })
+	return out
+}
+
+// AppendOrders writes new endings, newest first, keeping the file bounded. The stamp is filled
+// in here so no caller has to remember to.
+func AppendOrders(fresh ...Order) error {
+	if len(fresh) == 0 {
+		return nil
+	}
+	if err := config.EnsureDirs(); err != nil {
+		return err
+	}
+	now := time.Now().Format(time.RFC3339)
+	for index := range fresh {
+		if fresh[index].At == "" {
+			fresh[index].At = now
+		}
+	}
+	all := append(fresh, LoadOrders()...)
+	if len(all) > KeepOrders {
+		all = all[:KeepOrders]
+	}
+	blob, err := json.MarshalIndent(all, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(ordersPath(), blob, 0o600)
+}

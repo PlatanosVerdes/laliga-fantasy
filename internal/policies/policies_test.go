@@ -50,8 +50,12 @@ func TestForgetKeepsTheRaid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("forget: %v", err)
 	}
-	if len(gone) != 2 || gone[0] != "Camavinga" || gone[1] != "Youssef" {
+	if len(gone) != 2 || gone[0].Name != "Camavinga" || gone[1].Name != "Youssef" {
 		t.Fatalf("gone = %v, want [Camavinga Youssef]", gone)
+	}
+	// The id travels with the name: a log line without it cannot link to the player.
+	if gone[0].ID != "1" || gone[1].ID != "2" {
+		t.Errorf("gone = %v, want los ids 1 y 2", gone)
 	}
 
 	left, err := Load()

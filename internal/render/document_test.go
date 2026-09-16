@@ -364,3 +364,61 @@ func TestRaidsStandingDownAreALog(t *testing.T) {
 		}
 	}
 }
+
+// The half of the section nobody could see. An order cancelled in the background left the page
+// with one row fewer and no explanation, and the game keeps no record of it: as far as the game
+// is concerned, the order never existed.
+func TestRaidsSectionLogsWhatBecameOfTheOrders(t *testing.T) {
+	document := Document{
+		Raids: []map[string]any{
+			{"player_id": "1", "name": "Agoumé", "owner": "cristian", "clause": 10_042_184.0,
+				"max_pay": 12_050_620.0, "action": "esperando", "why": "clausula bloqueada"},
+		},
+		Orders: []map[string]any{
+			{"at": "2026-09-16T13:05:15Z", "player_id": "9", "player": "Mandi",
+				"kind": "clausulazo", "outcome": "cancelada", "why": "la cancelaste tu",
+				"amount": 15_600_000.0},
+			{"at": "2026-09-14T19:02:00Z", "player_id": "8", "player": "Fofana",
+				"kind": "clausulazo", "outcome": "pagada", "amount": 15_240_000.0,
+				"why": "se libero la clausula"},
+		},
+	}
+	section := document.raidsSection()
+	cut := strings.Index(section, "Lo que ha pasado con tus ordenes")
+	if cut < 0 {
+		t.Fatalf("falta el registro: %.300s", section)
+	}
+	log := section[cut:]
+	for _, want := range []string{"Mandi", "la cancelaste tu", "Fofana", "pagada", "15.24M",
+		"2026-09-16 13:05", `class="endings raid-log"`} {
+		if !strings.Contains(log, want) {
+			t.Errorf("el registro tiene que llevar %q: %.400s", want, log)
+		}
+	}
+	// It is the last thing in the section: what is pending is read first.
+	if strings.Index(section, "Agoumé") > cut {
+		t.Error("lo que sigue en pie va antes que el registro")
+	}
+}
+
+// Nothing to tell yet is no heading: an empty log is a promise, not information.
+func TestRaidsSectionWithoutOrdersShowsNoLog(t *testing.T) {
+	document := Document{Raids: []map[string]any{
+		{"player_id": "1", "name": "Agoumé", "action": "esperando", "why": "bloqueada"},
+	}}
+	if strings.Contains(document.raidsSection(), "Lo que ha pasado") {
+		t.Error("sin registro no hay cabecera")
+	}
+}
+
+// With nothing armed and a history to read, the section is the history.
+func TestRaidsSectionIsJustTheLogWhenNothingIsArmed(t *testing.T) {
+	document := Document{Orders: []map[string]any{
+		{"at": "2026-09-16T13:05:15Z", "player_id": "9", "player": "Mandi",
+			"kind": "clausulazo", "outcome": "cancelada", "why": "la cancelaste tu"},
+	}}
+	section := document.raidsSection()
+	if !strings.Contains(section, "Mandi") {
+		t.Errorf("el registro se queda aunque no haya ordenes vivas: %.300s", section)
+	}
+}

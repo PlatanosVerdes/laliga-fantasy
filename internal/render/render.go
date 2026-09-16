@@ -826,6 +826,46 @@ var outcomeStatus = map[string]string{
 //
 // It is a table because the useful reading is comparative: what you offered, who said no, and what
 // it took to beat you when somebody did.
+// orderStatus colours what became of an instruction. A cancelled one is not a failure: most of
+// them are cancelled because the world moved, and one of them is a signing.
+var orderStatus = map[string]string{"pagada": "good", "cancelada": "neutral",
+	"cumplida": "good"}
+
+// OrderLog is what happened to the standing instructions that are no longer armed. It is the
+// half of the section nobody could see: an order cancelled in the background left the page with
+// one row fewer and no explanation, and the game keeps no record of it because as far as the
+// game is concerned the order never existed.
+func OrderLog(rows []map[string]any) string {
+	if len(rows) == 0 {
+		return ""
+	}
+	var body strings.Builder
+	for _, order := range rows {
+		when := text(order["at"])
+		if len(when) > 16 {
+			when = strings.ReplaceAll(when[:16], "T", " ")
+		}
+		status := orderStatus[text(order["outcome"])]
+		if status == "" {
+			status = "neutral"
+		}
+		tail := ""
+		if why := text(order["why"]); why != "" {
+			tail = ` <span class="ending-kind">` + Esc(why) + `</span>`
+		}
+		amount := ""
+		if paid := asFloat(order["amount"]); paid != nil && *paid > 0 {
+			amount = ` <span class="ending-kind">` + Esc(text(order["kind"])) + ` de</span> ` +
+				`<strong>` + Esc(Money(paid)) + `</strong>`
+		}
+		fmt.Fprintf(&body, `<div class="ending"><span class="ending-when">%s</span>`+
+			`<span class="pill-%s">%s</span><span class="ending-body">%s%s%s</span></div>`,
+			Esc(when), status, Esc(text(order["outcome"])),
+			PlayerLink(text(order["player"]), text(order["player_id"])), amount, tail)
+	}
+	return `<div class="endings raid-log">` + body.String() + `</div>`
+}
+
 // RaidLog is the scheduled raids that are not going to happen as they are, written as a log and
 // not as a table: a second table with its own header and its own columns, for what is usually
 // one line, read as a whole second section of things to do.
