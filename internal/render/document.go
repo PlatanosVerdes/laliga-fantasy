@@ -853,10 +853,13 @@ func (d Document) bargainsSection() string {
 	if len(found) == 0 {
 		return ""
 	}
-	reach := 0
+	reach, raids := 0, 0
 	for _, row := range found {
 		if truthy(row["affordable"]) {
 			reach++
+			if text(row["route"]) == "clausula" {
+				raids++
+			}
 		}
 	}
 	note := "<strong>Lo que piden no es lo que cuesta</strong>: aqui nadie acepta una oferta " +
@@ -872,9 +875,17 @@ func (d Document) bargainsSection() string {
 		"Y la via cambia quien decide: una <strong>cláusula</strong> se paga y nadie puede " +
 		"negarse, una <strong>oferta al dueño</strong> la acepta el si quiere, y una " +
 		"<strong>puja libre</strong> es el minimo de una subasta que hay que ganar. Los " +
-		"fichajes recientes de rivales no salen: la norma de la liga tampoco les deja venderlos."
+		"fichajes recientes de rivales no salen: la norma de la liga tampoco les deja venderlos. " +
+		d.windowNote()
+	// The clausulazo is the move you cannot be refused, so which of these are one and payable
+	// today is a question of its own, and it was being answered by reading 82 rows.
+	head := ""
+	if raids > 0 {
+		head = fmt.Sprintf(`<button class="head-btn" type="button" data-only="clausula" `+
+			`data-only-count="%d">Clausulazo que pagas · %d</button>`, raids, raids)
+	}
 	table, _ := SectionTable("chollos", found)
-	return Section("Fichar: lo que cuesta de verdad", table, note,
+	return Section("Fichar: lo que cuesta de verdad", head+table, note,
 		fmt.Sprintf("%d", len(found)), "chollos")
 }
 

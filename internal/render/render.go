@@ -2358,8 +2358,16 @@ func TableIn(columns []Column, rows []map[string]any, empty, section string,
 					searchable += " " + strings.ToLower(extra)
 				}
 			}
-			attrs = fmt.Sprintf(` data-position="%s" data-price="%.0f" data-name="%s"`,
-				Esc(text(row["position"])), price, Esc(searchable))
+			// The route and whether the money is there, so a section can narrow itself to one
+			// kind of move without asking the server for the same rows again.
+			paid := "0"
+			if truthy(row["affordable"]) {
+				paid = "1"
+			}
+			attrs = fmt.Sprintf(` data-position="%s" data-price="%.0f" data-name="%s"`+
+				` data-route="%s" data-afford="%s"`,
+				Esc(text(row["position"])), price, Esc(searchable),
+				Esc(text(row["route"])), paid)
 		}
 		body.WriteString("<tr" + classes + attrs + ">")
 		for _, column := range columns {
