@@ -346,11 +346,11 @@ func RaidPlan(players []Row, policies map[string]Policy, cash float64,
 		// were not going to clause, which is the opposite of what it is for.
 		case truthy(player["is_mine"]):
 			continue
-		// Nobody can pay a clause while the matchday is within a day of starting, us included.
-		// Without this the instruction fired into a 030.01.17 every two minutes all weekend and
-		// the page reported it as a failure rather than as a wait.
+		// Nobody can pay a clause in the day before a matchday starts, us included. Without
+		// this the instruction fired into a 030.01.17 every two minutes and the page reported
+		// it as a failure rather than as a wait.
 		case window != nil && !window.Open:
-			why := "la ventana de clausulas esta cerrada, la jornada esta en marcha"
+			why := "la ventana de clausulas esta cerrada, la jornada esta a punto de empezar"
 			if window.OpensAt != "" {
 				why += ", reabre " + shortWhen(window.OpensAt)
 			}

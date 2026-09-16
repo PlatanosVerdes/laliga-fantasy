@@ -135,7 +135,7 @@ func (s *State) ClauseWindow(now time.Time) schedule.Window {
 	}
 	fixtures := make([]schedule.Fixture, 0, len(universe.Schedule))
 	for _, fixture := range universe.Schedule {
-		fixtures = append(fixtures, schedule.Fixture{Kickoff: fixture.Kickoff})
+		fixtures = append(fixtures, schedule.Fixture{Week: fixture.Week, Kickoff: fixture.Kickoff})
 	}
 	return schedule.Clauses(fixtures, now)
 }
