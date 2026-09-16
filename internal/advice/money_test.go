@@ -190,3 +190,43 @@ func TestMoneyDropsSigningsThatChangeNothing(t *testing.T) {
 		}
 	}
 }
+
+// Two routes at the same price are one operation. A listing's floor is the owner's own clause,
+// so whenever it binds, "oferta al dueño" and "clausula" came out as two rows for the same
+// player and the same money -- thirteen of them on screen at once -- and one of the two could
+// be turned down. They stay apart only while the prices differ.
+func TestMoneyBargainKeepsOneRowPerPrice(t *testing.T) {
+	world := Row{
+		"fixtures": []any{Row{"kickoff": "2026-09-07T21:30:00+02:00",
+			"local_id": "20", "visitor_id": "21"}},
+		"players": []any{
+			Row{"id": "1", "name": "C. Soler", "is_mine": true, "team_id": "21",
+				"value": 30_520_000.0, "xpts": 4.21},
+			// Asking less than his clause, so the clause is what a yes costs: one row.
+			Row{"id": "2", "name": "Sivera", "owner": "Millou912", "value": 55_000_000.0,
+				"xpts": 4.0, "clause": 50_000_000.0,
+				"market": Row{"market_id": "m2", "min_bid": 42_690_000.0}},
+			// Asking over his clause: two prices, two routes, both worth reading.
+			Row{"id": "3", "name": "Gueye", "owner": "Millou912", "value": 60_000_000.0,
+				"xpts": 4.0, "clause": 40_000_000.0,
+				"market": Row{"market_id": "m3", "min_bid": 48_040_000.0}},
+		},
+	}
+	found := rowsOf(Money(world, 100_000_000,
+		time.Date(2026, 9, 7, 11, 0, 0, 0, time.UTC))["bargains"])
+
+	byPlayer := map[string][]Row{}
+	for _, row := range found {
+		byPlayer[text(row["name"])] = append(byPlayer[text(row["name"])], row)
+	}
+	if rows := byPlayer["Sivera"]; len(rows) != 1 {
+		t.Fatalf("Sivera es una sola operacion de 50M: %d filas", len(rows))
+	} else if text(rows[0]["route"]) != "clausula" {
+		t.Errorf("y por la via que nadie puede rechazar, no %q", rows[0]["route"])
+	} else if number(rows[0]["entry_cost"]) != 50_000_000 {
+		t.Errorf("a su clausula: %v", rows[0]["entry_cost"])
+	}
+	if rows := byPlayer["Gueye"]; len(rows) != 2 {
+		t.Fatalf("48.04M al dueño o 40M de clausula son dos precios: %d filas", len(rows))
+	}
+}

@@ -138,11 +138,13 @@ func bargains(players, mine []Row, cash, xiNow float64) []Row {
 		if value <= 0 {
 			continue
 		}
-		add := func(cost float64, route, floor string) {
+		// add returns where the row landed, or -1 when there was no row to write: two routes at
+		// the same price are one operation, and the second has to find the first to say so.
+		add := func(cost float64, route, floor string) int {
 			// A price over value is normal now; what is never worth a row is a signing that
 			// costs money and leaves the eleven exactly as it was.
 			if cost <= 0 {
-				return
+				return -1
 			}
 			// What his clause becomes the moment he is yours, measured over nine signings in
 			// this league: max(price, value) with a floor of a million, locked for exactly 14
@@ -152,7 +154,7 @@ func bargains(players, mine []Row, cash, xiNow float64) []Row {
 			clause := math.Max(math.Max(cost, value), ClauseFloor)
 			with, shape, _ := bestEleven(append(append([]Row{}, mine...), player))
 			if with-xiNow <= 0 && cost >= value {
-				return
+				return -1
 			}
 			out = append(out, merge(player, Row{
 				"entry_cost": cost, "route": route, "gap": value - cost,
@@ -164,9 +166,11 @@ func bargains(players, mine []Row, cash, xiNow float64) []Row {
 				"clause_after": clause, "margin_after": clause / value,
 				"safe_until":   ClauseGrace.Hours(),
 			}))
+			return len(out) - 1
 		}
 
 		listing := mapOf(player["market"])
+		listed := -1
 		if truthy(listing["market_id"]) {
 			route := "puja libre"
 			cost, floor := RealCost(player)
@@ -180,15 +184,24 @@ func bargains(players, mine []Row, cash, xiNow float64) []Row {
 				}
 			}
 			if route != "" {
-				add(cost, route, floor)
+				listed = add(cost, route, floor)
 			}
 		}
 		// A clause is only a route while it is unlocked and nobody has shielded him.
 		if text(player["owner"]) != "" && !truthy(player["shielded"]) &&
 			!truthy(player["clause_locked"]) {
+			clause := number(player["clause"])
 			// The one route nobody can refuse, which is what makes it worth its own row even
-			// when it costs more than the listing.
-			add(number(player["clause"]), "clausula", "")
+			// when it costs more than the listing. At the same price it is not another row at
+			// all: the listing's floor is his own clause, so both lines were the same money for
+			// the same player, and one of them could be turned down. Sivera, Isco, Redondo,
+			// Buchanan and Rubén García were all on screen twice for this.
+			if listed >= 0 && math.Abs(clause-number(out[listed]["entry_cost"])) < 1 {
+				out[listed]["route"] = "clausula"
+				out[listed]["cost_floor"] = ""
+			} else {
+				add(clause, "clausula", "")
+			}
 		}
 	}
 	// By what it does for the pitch, and the gap only breaks ties: 1.9M of paper profit on a
