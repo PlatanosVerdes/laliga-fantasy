@@ -1,7 +1,7 @@
 # The clause window
 
-A buyout clause cannot be paid whenever you like. The game refuses it while the matchday is
-under way, and the refusal is this:
+A buyout clause cannot be paid whenever you like. The game shuts the window in the 24 hours
+before a matchday starts, and the refusal on the way in is this:
 
 ```
 POST /v1/competition/1/league/{league}/buyout/{slot}/pay
@@ -10,38 +10,48 @@ POST /v1/competition/1/league/{league}/buyout/{slot}/pay
                   less that one day"}
 ```
 
+The message is only half the rule, and reading it alone cost a whole season of weekends (see
+below). The other half is in the game's own FAQ:
+
+> The window to purchase players by paying their release clause **closes 24 hours before a
+> matchday begins and reopens once the matchday starts.**
+> — [LALIGA Fantasy FAQ, Rulebook](https://laligafantasy.zendesk.com/hc/en-us/articles/360025679853-Rulebook)
+
 So the rule is the calendar's, not the market's, and it is the same for everybody: while the
 window is shut no rival can raid you either. What the clause itself is worth, and what it
-becomes when a player changes hands, is in [clauses.md](clauses.md). That is worth knowing before spending anything,
-because a shield bought inside those hours protects against nothing
-([shield.md](shield.md)).
+becomes when a player changes hands, is in [clauses.md](clauses.md). That is worth knowing
+before spending anything, because a shield bought inside the shut hours covers hours in which
+nobody could raid you anyway ([shield.md](shield.md)); the hour it starts earning its price is
+the first kick-off.
 
 ## When it is shut
 
-Shut whenever a fixture kicks off within the next 24 hours. Matchday 4 is the shape of it:
+Shut in the 24 hours before a **matchday's first kick-off**, and open from that kick-off on.
+Matchday 4 is the shape of it:
 
 | Kick-off | |
 | :--- | :--- |
-| vie 21:00 | the window shuts at 21:00 **thursday** |
-| sáb 16:15, 18:30, 21:00 | |
-| dom 16:15, 18:30, 21:00 | |
-| lun 19:00, 21:30 | |
-| next matchday, fri 21:00 | the window is open again from mon 21:30 to thu 21:00 |
+| vie 21:00 | the window shuts at 21:00 **thursday**, and opens again here |
+| sáb 16:15, 18:30, 21:00 | open: these are the same matchday, not a new one |
+| dom 16:15, 18:30, 21:00 | open |
+| lun 19:00, 21:30 | open |
+| next matchday, fri 21:00 | shuts again at 21:00 thursday |
 
-No two kick-offs in a matchday are a day apart, so the whole weekend is closed in one piece.
-It opens again **when the last match of the matchday starts**, not when it ends: from that
-kick-off on, no new fixture begins within the day. That reading is what the rule says word for
-word; if the game measures from the final whistle instead, the real reopening is a couple of
-hours later than the one computed here.
+Only the first kick-off of a matchday counts, which is why the fixtures reach `schedule.Clauses`
+carrying their matchday. Reading every kick-off as one of these instead was the bug: no two
+kick-offs inside a matchday are a day apart, so the window came out shut from Thursday night to
+Monday night, every weekend, and the panel spent them saying no clausulazo was possible while
+the league was clausulazoing away. A fixture with no matchday on it counts as a matchday of its
+own, which errs towards a window that shuts too often rather than one that promises a payment
+the game refuses.
 
 ## Where it is computed
 
 `schedule.Clauses(fixtures, now)` in [internal/schedule/window.go](../internal/schedule/window.go),
-from the whole known calendar rather than this matchday's — when it opens again is the next
-matchday's business. It answers three things: whether it is open, the kick-off that keeps it
-shut, and the instant it opens or shuts next. Any of them can be empty, and empty means nobody
-knows: with the calendar ending inside the matchday there is no gap to find, and inventing an
-hour would stand a raid down until a moment that does not exist.
+from the whole known calendar, past fixtures included: a matchday already under way is
+recognised by its first kick-off, which is behind us. It answers three things: whether it is
+open, the kick-off that keeps it shut, and the instant it opens or shuts next. Any of them can
+be empty, and empty means nobody knows — with no calendar at all there is no opinion to give.
 
 Three places read it:
 
@@ -49,7 +59,8 @@ Three places read it:
   instead of arriving from the API in English and without one. An unknown window is no
   opinion — refusing on it would stop every payment there is.
 - **`policies.RaidPlan`**, so a scheduled raid *waits* instead of firing into the same refusal
-  every two minutes all weekend. It used to be reported as a failed action; it is a wait.
+  every two minutes. It used to be reported as a failed action; it is a wait — and it is a wait
+  of hours now, not of a weekend.
 - **The two clause sections of the page**, as a line with a live countdown.
 
 `030.01.17` is still translated in `writes.explain`, for the case where nothing has told the
