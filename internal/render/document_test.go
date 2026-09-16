@@ -384,7 +384,7 @@ func TestRaidsSectionLogsWhatBecameOfTheOrders(t *testing.T) {
 		},
 	}
 	section := document.raidsSection()
-	cut := strings.Index(section, "Lo que ha pasado con tus ordenes")
+	cut := strings.Index(section, "Historial de tus ordenes")
 	if cut < 0 {
 		t.Fatalf("falta el registro: %.300s", section)
 	}
@@ -401,13 +401,19 @@ func TestRaidsSectionLogsWhatBecameOfTheOrders(t *testing.T) {
 	}
 }
 
-// Nothing to tell yet is no heading: an empty log is a promise, not information.
-func TestRaidsSectionWithoutOrdersShowsNoLog(t *testing.T) {
+// The empty history is drawn anyway, the way "Como acabaron" is: one that appears only once it
+// has content cannot be found by somebody looking for where it will appear, and this one fills
+// days after it is switched on.
+func TestRaidsSectionDrawsTheHistoryBeforeItHasAny(t *testing.T) {
 	document := Document{Raids: []map[string]any{
 		{"player_id": "1", "name": "Agoumé", "action": "esperando", "why": "bloqueada"},
 	}}
-	if strings.Contains(document.raidsSection(), "Lo que ha pasado") {
-		t.Error("sin registro no hay cabecera")
+	section := document.raidsSection()
+	if !strings.Contains(section, "Historial de tus ordenes") {
+		t.Errorf("la cabecera va aunque no haya nada: %.300s", section)
+	}
+	if !strings.Contains(section, "Todavia no le ha pasado nada") {
+		t.Error("y dice que esta vacio, en vez de dejar un hueco")
 	}
 }
 
