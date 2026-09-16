@@ -1633,6 +1633,18 @@ func insert(columns []Column, at int, column Column) []Column {
 	return append(out, columns[at:]...)
 }
 
+// replace swaps a shared column for the section's own version of it, keeping it where the eye
+// already looks instead of repeating the same magnitude at the far right of the table.
+func replace(columns []Column, header string, column Column) []Column {
+	for index, existing := range columns {
+		if existing.Header == header {
+			columns[index] = column
+			break
+		}
+	}
+	return columns
+}
+
 func field(name string) func(map[string]any) any {
 	return func(row map[string]any) any { return row[name] }
 }
@@ -2165,8 +2177,10 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 		columns = insert(columns, 0, Column{"¿Renta?", whole, "verdict_raid"})
 		columns = append(columns,
 			Column{"x valor", field("clause_premium"), "num"},
-			Column{"Pts/M pagando", field("ppm_at_clause"), "mag"},
 			Column{"Techo futbolfantasy", field("ideal_bid"), "ideal"})
+		// What you pay here is the clause, so the rate in the table is the rate at the clause.
+		columns = replace(columns, "Pts/M",
+			Column{"Pts/M pagando", field("ppm_at_clause"), "mag"})
 		columns = insert(columns, 0, Column{"Clausulazo", whole, "raid"})
 		return TableIn(columns, rows,
 			"Ninguna cláusula interesante se abre en los proximos 10 dias.", "", false), nil
@@ -2189,8 +2203,9 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 			Column{"Dueño", whole, "owner"})
 		columns = insert(columns, 4, Column{"x valor", field("clause_premium"), "num"})
 		columns = append(columns,
-			Column{"Pts/M pagando", field("ppm_at_clause"), "mag"},
 			Column{"Techo futbolfantasy", field("ideal_bid"), "ideal"})
+		columns = replace(columns, "Pts/M",
+			Column{"Pts/M pagando", field("ppm_at_clause"), "mag"})
 		columns = insert(columns, 0, Column{"¿Renta?", whole, "verdict_raid"})
 		columns = insert(columns, 0, Column{"Clausulazo", whole, "raid"})
 		return TableIn(columns, rows, "Ninguna cláusula a tu alcance", "", false), nil

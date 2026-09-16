@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 )
@@ -72,15 +73,28 @@ func (d Document) windowNote() string {
 			"el juego no acepta pagos de cláusula, ni tuyos ni de nadie"
 		if d.Window.OpensAt != "" {
 			note += `, vuelve a abrirse con el primer partido, en ` +
-				`<span data-deadline="` + Esc(d.Window.OpensAt) + `">…</span>`
+				`<span data-deadline="` + Esc(d.Window.OpensAt) + `">…</span>` +
+				exactHour(d.Window.OpensAt)
 		}
 		return note + ". "
 	}
 	if d.Window.ClosesAt != "" {
 		return `Ventana abierta, se cierra en <span data-deadline="` +
-			Esc(d.Window.ClosesAt) + `">…</span>. `
+			Esc(d.Window.ClosesAt) + `">…</span>` + exactHour(d.Window.ClosesAt) + ". "
 	}
 	return ""
+}
+
+// exactHour is the hour beside the countdown. "1d 6h" says how long is left, which is not the
+// same question as when to be back at the screen, and the answer to that one is a day and an
+// hour somebody can put in a calendar.
+func exactHour(stamp string) string {
+	when, err := time.Parse(time.RFC3339, stamp)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf(` <span class="pill-note">%s %d, %02d:%02d</span>`,
+		dayNames[int(when.Weekday())], when.Day(), when.Hour(), when.Minute())
 }
 
 func rows(source any) []map[string]any {
