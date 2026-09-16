@@ -878,6 +878,11 @@ table.cmp td.cmp-cheap{font-weight:700}
   letter-spacing:.05em;margin-left:8px;padding:3px 10px;border-radius:20px;cursor:pointer;
   border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
 .head-btn:hover{border-color:var(--baseline);color:var(--ink)}
+/* A narrowed table looks like a short table, so the switch that narrowed it has to be lit. */
+.head-btn.on{color:var(--accent);border-color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 12%,transparent)}
+/* Above its own table rather than beside a heading, which is where the others sit. */
+button[data-only]{margin:0 0 10px}
 
 /* The matchday points on a card: the same chips as a shirt on the pitch, on their own line
    because here there is room for the whole season rather than the last five. */

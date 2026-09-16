@@ -64,3 +64,38 @@ func TestFinishedMatchdayKeepsItsSquadsButton(t *testing.T) {
 		t.Error("one still running keeps it too: " + running)
 	}
 }
+
+// Which of these is a clausulazo you can pay today was a question answered by reading every row
+// of the table, and the clausulazo is the move nobody can refuse.
+func TestBargainsOfferTheClausulazosYouCanPay(t *testing.T) {
+	row := func(name, route string, affordable bool) map[string]any {
+		return map[string]any{"id": name, "name": name, "route": route, "value": 10_000_000.0,
+			"entry_cost": 9_000_000.0, "position": "MED", "affordable": affordable}
+	}
+	document := Document{Money: map[string]any{"bargains": []any{
+		row("Camello", "clausula", true),
+		row("Pepelu", "clausula", true),
+		row("Bartra", "clausula", false),
+		row("Gueye", "oferta al dueño", true),
+	}}}
+	built := document.bargainsSection()
+
+	if !strings.Contains(built, `data-only="clausula" data-only-count="2"`) {
+		t.Errorf("dos clausulazos pagables, no mas: %s", built)
+	}
+	if !strings.Contains(built, `data-route="clausula" data-afford="1"`) ||
+		!strings.Contains(built, `data-route="oferta al dueño" data-afford="1"`) {
+		t.Error("cada fila dice por que via va y si el dinero esta")
+	}
+}
+
+// Nothing to offer is no button: a switch that narrows a table to nothing is a dead end.
+func TestBargainsWithoutAffordableClausulazosOffersNothing(t *testing.T) {
+	document := Document{Money: map[string]any{"bargains": []any{
+		map[string]any{"id": "1", "name": "Bartra", "route": "clausula", "value": 10_000_000.0,
+			"entry_cost": 90_000_000.0, "affordable": false},
+	}}}
+	if built := document.bargainsSection(); strings.Contains(built, "data-only=") {
+		t.Errorf("sin ninguno que puedas pagar no hay boton: %s", built)
+	}
+}

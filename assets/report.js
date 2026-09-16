@@ -105,6 +105,40 @@ function applyFilters(){
   });
 }
 
+// One section narrowing itself to one kind of move. It owns `hidden` on its own rows, which is
+// safe because the sections with a filter bar are other ones, and it is remembered: a rebuild
+// puts the full table back and the answer you were reading should not disappear with it.
+const ONLY_KEY='fantasy:only';
+function onlyState(){
+  try{ return localStorage.getItem(ONLY_KEY)||''; }catch(e){ return ''; }
+}
+
+function applyOnly(root=document){
+  root.querySelectorAll('button[data-only]').forEach(button=>{
+    const on=onlyState()===button.dataset.only;
+    const scope=button.closest('section');
+    button.classList.toggle('on',on);
+    if(!scope) return;
+    scope.querySelectorAll('tr[data-route]').forEach(row=>{
+      row.hidden = on && !(row.dataset.route===button.dataset.only && row.dataset.afford==='1');
+    });
+  });
+}
+
+function wireOnly(root=document){
+  root.querySelectorAll('button[data-only]').forEach(button=>{
+    if(button.dataset.wired) return;
+    button.dataset.wired='1';
+    button.addEventListener('click',()=>{
+      const next=onlyState()===button.dataset.only?'':button.dataset.only;
+      try{ localStorage.setItem(ONLY_KEY,next); }catch(e){}
+      usage.click('chollos',next?'solo '+next:'todas las vias');
+      applyOnly();
+    });
+  });
+  applyOnly(root);
+}
+
 function wireFilters(root=document){
   root.querySelectorAll('.filters').forEach(bar=>{
     if(bar.dataset.wired) return;
@@ -2490,7 +2524,8 @@ async function swap(){
     const node=document.getElementById(id);
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });
-  wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids();
+  wireTables(); wireFilters(); wireOnly(); wireStars(); wireBids(); wireOps();
+  wireDetails(); wireRaids();
   wireRaises();
   wireManagers(); wireMatchdays(); tick();
   // The chart is the client's, and the rebuild has just put the empty frame back in its place.
@@ -2558,7 +2593,8 @@ function connect(){
   };
 }
 
-wireTables(); wireFilters(); wireStars(); wireBids(); wireOps(); wireDetails(); wireRaids();
+wireTables(); wireFilters(); wireOnly(); wireStars(); wireBids(); wireOps();
+wireDetails(); wireRaids();
 wireRaises(); wireManagers(); wireMatchdays();
 wireTabs(); tick(); drawTray();
 {
