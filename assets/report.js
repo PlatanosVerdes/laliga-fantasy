@@ -1017,19 +1017,32 @@ function seasonChart(d,width){
     grid+=`<text class="evo-axis" x="${padL-8}" y="${y(place)+3}" text-anchor="end">${place}º</text>`;
   });
 
-  const lines=managers.map(m=>{
+  // Eight hues, in fixed order, yours first: nine colours that tell each other apart do not
+  // exist, so the ninth line down the table keeps the grey and its name at the end of it.
+  const slot=new Map();
+  [...managers].sort((a,b)=>(b.is_me?1:0)-(a.is_me?1:0))
+    .forEach((m,i)=>{ if(i<8) slot.set(m,i+1); });
+
+  // Grey underneath, colour over it, yours on top: where two lines cross, the one being
+  // followed has to be the one that is whole.
+  const painted=[...managers].sort((a,b)=>
+    ((slot.has(a)?1:0)-(slot.has(b)?1:0))||((a.is_me?1:0)-(b.is_me?1:0)));
+
+  const lines=painted.map(m=>{
     const points=[];
     (m.place||[]).forEach((place,i)=>{ if(place!=null) points.push([x(i),y(place),i,place]); });
     if(!points.length) return '';
     const last=points[points.length-1];
     const dots=points.map(([px,py,i,place])=>
-      `<circle class="evo-dot" cx="${px}" cy="${py}" r="3"><title>J${weeks[i]} · ${place}º · `
-      +`${Math.round(m.points[i]||0)} pts · ${Math.round(m.total[i]||0)} acumulados</title></circle>`
+      `<circle class="evo-dot" cx="${px}" cy="${py}" r="4"><title>${m.manager} · J${weeks[i]} · `
+      +`${place}º · ${Math.round(m.points[i]||0)} pts · ${Math.round(m.total[i]||0)} acumulados`
+      +`</title></circle>`
     ).join('');
-    return `<g class="evo-row${m.is_me?' evo-me':''}">
+    const colour=slot.has(m)?' evo-s'+slot.get(m):' evo-grey';
+    return `<g class="evo-row${colour}${m.is_me?' evo-me':''}">
       <polyline class="evo-line" points="${points.map(p=>p[0]+','+p[1]).join(' ')}"></polyline>
       ${dots}
-      <text class="evo-name" x="${last[0]+8}" y="${last[1]+3.5}">${cut(m.manager)}</text>
+      <text class="evo-name" x="${last[0]+9}" y="${last[1]+3.5}">${cut(m.manager)}</text>
     </g>`;
   }).join('');
 

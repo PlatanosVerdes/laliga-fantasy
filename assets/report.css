@@ -9,6 +9,10 @@
   --seq-2:#86b6ef; --seq-4:#2a78d6; --seq-6:#184f95;
   --pos-por:#eb6834; --pos-def:#4a3aa7; --pos-med:#1baf7a; --pos-del:#eda100;
   --pitch-green:#1f6b3f;
+  /* The categorical slots, in the order that keeps each pair apart for a colourblind eye.
+     Taken in order and never cycled: past the eighth a line stays grey. */
+  --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a; --series-4:#eda100;
+  --series-5:#e87ba4; --series-6:#008300; --series-7:#4a3aa7; --series-8:#e34948;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -19,6 +23,8 @@
     --seq-2:#184f95; --seq-4:#3987e5; --seq-6:#9ec5f4;
     --pos-por:#d95926; --pos-def:#9085e9; --pos-med:#199e70; --pos-del:#c98500;
     --pitch-green:#17492d;
+    --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --series-4:#c98500;
+    --series-5:#d55181; --series-6:#008300; --series-7:#9085e9; --series-8:#e66767;
   }
 }
 :root[data-theme="dark"]{
@@ -29,8 +35,20 @@
   --seq-2:#184f95; --seq-4:#3987e5; --seq-6:#9ec5f4;
   --pos-por:#d95926; --pos-def:#9085e9; --pos-med:#199e70; --pos-del:#c98500;
   --pitch-green:#17492d;
+  --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --series-4:#c98500;
+  --series-5:#d55181; --series-6:#008300; --series-7:#9085e9; --series-8:#e66767;
 }
 *{box-sizing:border-box}
+/* The browser paints its scrollbars for a white page, so on this one they arrive as a bright
+   bar down the side of a dark panel. Both properties are inherited, which is the point: every
+   rail on the page gets it, and the two that hide their scrollbar say so themselves. The
+   webkit pseudo-elements are the same thing for the Safaris that predate the standard ones. */
+:root{scrollbar-width:thin;scrollbar-color:var(--baseline) transparent}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--baseline);border:3px solid transparent;
+  border-radius:8px;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:var(--muted);background-clip:padding-box}
 body{margin:0;background:var(--plane);color:var(--ink);
   font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   -webkit-font-smoothing:antialiased}
@@ -193,16 +211,29 @@ th.right{text-align:right}
 .evo-svg{display:block}
 .evo-grid{stroke:var(--line);stroke-width:1}
 .evo-axis{fill:var(--muted);font-size:10px}
-.evo-line{fill:none;stroke:var(--baseline);stroke-width:1.5;stroke-linejoin:round;
-  stroke-linecap:round;opacity:.75}
-.evo-dot{fill:var(--surface);stroke:var(--baseline);stroke-width:1.2}
-.evo-name{fill:var(--muted);font-size:10.5px}
-.evo-row:hover .evo-line{stroke:var(--ink);opacity:1;stroke-width:2.5}
-.evo-row:hover .evo-dot{stroke:var(--ink)}
+/* --c is the line's own colour, set by its slot class. The ninth line and beyond have no slot
+   and stay grey: the hues are taken in fixed order and never cycled, because a made-up ninth
+   hue lands next to one of the eight and stops being a different colour. */
+.evo-row{--c:var(--baseline)}
+.evo-line{fill:none;stroke:var(--c);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.evo-dot{fill:var(--surface);stroke:var(--c);stroke-width:1.6}
+/* The name is the label of a line, not a second copy of its colour: identity is never colour
+   alone, and on the light surface three of the hues are too pale to read as text. */
+.evo-name{fill:var(--ink-2);font-size:10.5px}
+.evo-grey .evo-line,.evo-grey .evo-dot{opacity:.85}
+.evo-grey .evo-name{fill:var(--muted)}
+/* Hovering thickens the line rather than repainting it: the colour is the identity, so the one
+   being followed cannot change colour to say so. The grey ones have none to keep. */
+.evo-row:hover .evo-line{stroke-width:3.5}
 .evo-row:hover .evo-name{fill:var(--ink);font-weight:700}
-.evo-me .evo-line{stroke:var(--accent);opacity:1;stroke-width:2.5}
-.evo-me .evo-dot{stroke:var(--accent)}
-.evo-me .evo-name{fill:var(--accent);font-weight:700}
+.evo-grey:hover{--c:var(--ink)}
+.evo-grey:hover .evo-line,.evo-grey:hover .evo-dot{opacity:1}
+.evo-me .evo-line{stroke-width:3}
+.evo-me .evo-name{font-weight:700;fill:var(--ink)}
+.evo-s1{--c:var(--series-1)} .evo-s2{--c:var(--series-2)}
+.evo-s3{--c:var(--series-3)} .evo-s4{--c:var(--series-4)}
+.evo-s5{--c:var(--series-5)} .evo-s6{--c:var(--series-6)}
+.evo-s7{--c:var(--series-7)} .evo-s8{--c:var(--series-8)}
 .feed-row{display:flex;gap:12px;align-items:baseline;padding:10px 14px;
   border-bottom:1px solid var(--line);font-size:13px}
 .feed-row:last-child{border-bottom:none}
