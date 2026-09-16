@@ -1017,16 +1017,17 @@ function seasonChart(d,width){
     grid+=`<text class="evo-axis" x="${padL-8}" y="${y(place)+3}" text-anchor="end">${place}º</text>`;
   });
 
-  // Eight hues, in fixed order, yours first: nine colours that tell each other apart do not
-  // exist, so the ninth line down the table keeps the grey and its name at the end of it.
-  const slot=new Map();
-  [...managers].sort((a,b)=>(b.is_me?1:0)-(a.is_me?1:0))
-    .forEach((m,i)=>{ if(i<8) slot.set(m,i+1); });
+  // Eight hues, in fixed order, yours first. There is no ninth colour that tells itself apart
+  // from those eight, so the ninth line takes the first hue again and a broken stroke: the
+  // pair hue+stroke is what names it, and thirteen of those do exist.
+  const rank=new Map();
+  [...managers].sort((a,b)=>(b.is_me?1:0)-(a.is_me?1:0)).forEach((m,i)=>rank.set(m,i));
+  const shade=m=>`evo-s${rank.get(m)%8+1}${rank.get(m)>=8?' evo-dash':''}`;
 
-  // Grey underneath, colour over it, yours on top: where two lines cross, the one being
-  // followed has to be the one that is whole.
+  // Broken strokes underneath, solid over them, yours on top: where two lines cross, the one
+  // being followed has to be the one that is whole.
   const painted=[...managers].sort((a,b)=>
-    ((slot.has(a)?1:0)-(slot.has(b)?1:0))||((a.is_me?1:0)-(b.is_me?1:0)));
+    ((rank.get(a)<8?1:0)-(rank.get(b)<8?1:0))||((a.is_me?1:0)-(b.is_me?1:0)));
 
   const lines=painted.map(m=>{
     const points=[];
@@ -1038,8 +1039,7 @@ function seasonChart(d,width){
       +`${place}º · ${Math.round(m.points[i]||0)} pts · ${Math.round(m.total[i]||0)} acumulados`
       +`</title></circle>`
     ).join('');
-    const colour=slot.has(m)?' evo-s'+slot.get(m):' evo-grey';
-    return `<g class="evo-row${colour}${m.is_me?' evo-me':''}">
+    return `<g class="evo-row ${shade(m)}${m.is_me?' evo-me':''}">
       <polyline class="evo-line" points="${points.map(p=>p[0]+','+p[1]).join(' ')}"></polyline>
       ${dots}
       <text class="evo-name" x="${last[0]+9}" y="${last[1]+3.5}">${cut(m.manager)}</text>
