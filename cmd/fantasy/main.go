@@ -1303,7 +1303,7 @@ func clauseWindow(fixtures []model.Fixture) *schedule.Window {
 	}
 	narrow := make([]schedule.Fixture, 0, len(fixtures))
 	for _, fixture := range fixtures {
-		narrow = append(narrow, schedule.Fixture{Kickoff: fixture.Kickoff})
+		narrow = append(narrow, schedule.Fixture{Week: fixture.Week, Kickoff: fixture.Kickoff})
 	}
 	window := schedule.Clauses(narrow, time.Now())
 	return &window

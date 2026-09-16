@@ -346,15 +346,6 @@ func RaidPlan(players []Row, policies map[string]Policy, cash float64,
 		// were not going to clause, which is the opposite of what it is for.
 		case truthy(player["is_mine"]):
 			continue
-		// Nobody can pay a clause while the matchday is within a day of starting, us included.
-		// Without this the instruction fired into a 030.01.17 every two minutes all weekend and
-		// the page reported it as a failure rather than as a wait.
-		case window != nil && !window.Open:
-			why := "la ventana de clausulas esta cerrada, la jornada esta en marcha"
-			if window.OpensAt != "" {
-				why += ", reabre " + shortWhen(window.OpensAt)
-			}
-			actions = append(actions, merge(row, Row{"action": "esperando", "why": why}))
 		// No cap, no automatic payment. The page always demands an amount when arming a raid, but
 		// a policies.json edited by hand does not, and "pay whatever it costs" is not something
 		// anybody authorised: without this the ceiling of zero skipped its own check and the only
@@ -368,12 +359,13 @@ func RaidPlan(players []Row, policies map[string]Policy, cash float64,
 		case truthy(player["shielded"]):
 			actions = append(actions, merge(row, Row{"action": "bloqueada",
 				"why": fmt.Sprintf("%s lo ha blindado", text(player["owner"]))}))
-		case truthy(player["clause_locked"]):
-			why := "clausula bloqueada"
-			if hours := number(player["clause_hours_left"]); hours != 0 {
-				why += fmt.Sprintf(", se abre en %.0fh", hours)
-			}
-			actions = append(actions, merge(row, Row{"action": "esperando", "why": why}))
+		// Two things hold a raid and they hold it at once: the window, which is the whole
+		// league's, and the player's own 14-day lock. The one worth naming is the one that ends
+		// last, because the other promises an hour at which nothing is going to happen — Agoumé
+		// read "reabre el domingo a las 21:00" while his clause was locked until the Tuesday.
+		case truthy(player["clause_locked"]) || (window != nil && !window.Open):
+			actions = append(actions, merge(row, Row{"action": "esperando",
+				"why": holdingUp(player, window)}))
 		case ceiling != 0 && clause > float64(ceiling):
 			actions = append(actions, merge(row, Row{"action": "cancelada",
 				"why": fmt.Sprintf("la clausula subio a %s, tu limite es %s",
@@ -389,6 +381,46 @@ func RaidPlan(players []Row, policies map[string]Policy, cash float64,
 
 // shortWhen is a stamp inside a sentence: "el lun 07/09 a las 21:30", and nothing at all for
 // anything unparseable, so a reason never carries half a date.
+// holdingUp says what a raid is actually waiting for. Both reasons can be live at once, and the
+// one that binds is whichever ends later: the clause lock is in hours off the player's own row,
+// the window is an instant off the calendar.
+func holdingUp(player Row, window *schedule.Window) string {
+	locked, hours := truthy(player["clause_locked"]), number(player["clause_hours_left"])
+	shut := window != nil && !window.Open
+
+	clauseWhy := "clausula bloqueada"
+	if hours != 0 {
+		clauseWhy += fmt.Sprintf(", se abre en %.0fh", hours)
+	}
+	windowWhy := "la ventana de clausulas esta cerrada, la jornada esta a punto de empezar"
+	if shut && window.OpensAt != "" {
+		windowWhy += ", reabre " + shortWhen(window.OpensAt)
+	}
+
+	switch {
+	case locked && shut:
+		// Without an hour on one of the two there is nothing to compare, so the player's own
+		// lock wins: it is the one that outlasts a matchday's build-up nearly every time.
+		opens, ok := parseWhen(window.OpensAt)
+		if hours == 0 || !ok {
+			return clauseWhy
+		}
+		if time.Until(opens).Hours() > hours {
+			return windowWhy
+		}
+		return clauseWhy
+	case locked:
+		return clauseWhy
+	default:
+		return windowWhy
+	}
+}
+
+func parseWhen(stamp string) (time.Time, bool) {
+	when, err := time.Parse(time.RFC3339, stamp)
+	return when, err == nil
+}
+
 func shortWhen(stamp string) string {
 	when, err := time.Parse(time.RFC3339, stamp)
 	if err != nil {

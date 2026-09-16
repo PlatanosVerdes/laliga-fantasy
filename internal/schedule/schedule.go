@@ -89,6 +89,9 @@ type Offer struct {
 }
 
 type Fixture struct {
+	// Week is which matchday it belongs to: the clause window turns on the matchday's first
+	// kick-off, so without it there is no way to tell one from the rest of its weekend.
+	Week      int    `json:"week"`
 	Kickoff   string `json:"kickoff"`
 	State     int    `json:"state"`
 	LocalID   string `json:"local_id"`

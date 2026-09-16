@@ -64,10 +64,11 @@ func (d Document) windowNote() string {
 		return ""
 	}
 	if !d.Window.Open {
-		note := "<strong>Ventana cerrada</strong>: con un partido a menos de un dia el juego " +
-			"no acepta pagos de cláusula, ni tuyos ni de nadie"
+		note := "<strong>Ventana cerrada</strong>: en las 24h antes de que arranque la jornada " +
+			"el juego no acepta pagos de cláusula, ni tuyos ni de nadie"
 		if d.Window.OpensAt != "" {
-			note += `, reabre en <span data-deadline="` + Esc(d.Window.OpensAt) + `">…</span>`
+			note += `, vuelve a abrirse con el primer partido, en ` +
+				`<span data-deadline="` + Esc(d.Window.OpensAt) + `">…</span>`
 		}
 		return note + ". "
 	}

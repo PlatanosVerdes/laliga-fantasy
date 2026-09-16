@@ -54,9 +54,10 @@ also answers 405, so anything under `buyout/` proves nothing on its own. `zzzz/p
 ## Scheduling it
 
 The 24 hours are the whole problem: they are worth nothing during the hours nobody can pay a
-clause anyway, and the matchday closes that window for three days at a time
-([clause-window.md](clause-window.md)). Buying the shield on the Friday of a matchday spends an
-advert on hours in which no rival could have touched the player.
+clause anyway, which are the ones before a matchday kicks off
+([clause-window.md](clause-window.md)). Buying the shield on the Thursday of a matchday spends
+a chunk of its cover on hours in which no rival could have touched the player; from the first
+kick-off on, everybody can, and that is the stretch worth covering.
 
 So the shield is an appointment. `policies.Policy` carries `shield` and `shield_at`, the page
 suggests the instant the window reopens, and `policies.ShieldPlan` acts on the hour:

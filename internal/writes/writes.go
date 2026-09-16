@@ -279,8 +279,8 @@ func explain(err error) error {
 	// The clause window, which the API states in English and without saying when it reopens.
 	// Reached only when nothing told the guard the calendar; otherwise this never fires.
 	case "030.01.17":
-		return errors.New("no se pueden pagar clausulas con la jornada a menos de un dia: " +
-			"reabre al empezar el ultimo partido")
+		return errors.New("no se pueden pagar clausulas en las 24h antes de que arranque la " +
+			"jornada: reabre con el primer partido")
 	}
 	return errors.New(message)
 }
