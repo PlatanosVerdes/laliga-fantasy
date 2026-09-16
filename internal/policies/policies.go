@@ -777,16 +777,22 @@ func Signed(mine map[string]bool, policies map[string]Policy) []string {
 // so a sale hands the player a fresh one at the buyer's price, locked for a fortnight: the raid
 // is not waiting for anything, it is pointing at a world that is gone.
 //
-// Two things are not a sale, and both are left alone: a player the universe says nothing about
-// (a short read, the guard Sold and Signed use) and an instruction with no owner recorded.
+// A player the universe says nothing about is left alone: that is a short read, the same guard
+// Sold and Signed use. Nobody owning him at all counts as lost even when the instruction never
+// recorded an owner — there is no clause to pay on a player who belongs to no one, so the order
+// is not waiting for anything either.
 func Traded(owners map[string]string, known map[string]bool, policies map[string]Policy) []string {
 	var stale []string
 	for _, id := range SortedIDs(policies) {
 		policy := policies[id]
-		if !policy.Raid || policy.Owner == "" || !known[id] {
+		if !policy.Raid || !known[id] {
 			continue
 		}
-		if owners[id] == policy.Owner {
+		if owners[id] == "" {
+			stale = append(stale, id)
+			continue
+		}
+		if policy.Owner == "" || owners[id] == policy.Owner {
 			continue
 		}
 		stale = append(stale, id)
