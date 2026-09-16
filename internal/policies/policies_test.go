@@ -239,12 +239,16 @@ func TestTraded(t *testing.T) {
 		"5": {ID: "5", Name: "Fuera de la lectura", Raid: true, MaxPay: amount(1_000_000),
 			Owner: "TheMessias"},
 		"6": {ID: "6", Name: "Solo venta", AlwaysList: true},
+		// Mandi: armed without an owner, and now nobody has him. There is no clause to pay on
+		// a player who belongs to no one, so the order is not waiting, it is dead — and it sat
+		// in the section under "no se pudieron hacer" until it was cancelled by hand.
+		"7": {ID: "7", Name: "Mandi", Raid: true, MaxPay: amount(15_600_000)},
 	}
-	known := map[string]bool{"1": true, "2": true, "3": true, "4": true, "6": true}
+	known := map[string]bool{"1": true, "2": true, "3": true, "4": true, "6": true, "7": true}
 	owners := map[string]string{"1": "Millou912", "2": "LamineTheTuareg", "4": "JMjugon"}
 
 	got := Traded(owners, known, armed)
-	want := []string{"2", "3"}
+	want := []string{"2", "3", "7"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("Traded() = %v, want %v", got, want)
 	}

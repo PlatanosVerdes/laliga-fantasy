@@ -749,12 +749,12 @@ func (d Document) raidsSection() string {
 
 	body, _ := SectionTable("programados", live)
 	if len(stood) > 0 {
-		table, _ := SectionTable("programados", stood)
-		body += `<h3 class="kpi-label" style="margin-top:26px">No se pudieron hacer</h3>` +
-			table
+		body += `<h3 class="kpi-label" style="margin-top:22px">No se pudieron hacer</h3>` +
+			RaidLog(stood)
 		note += " Debajo, los que <strong>no se pudieron hacer</strong> y por que: " +
 			"siguen armados, asi que si la cláusula vuelve a bajar de tu limite se pagan. " +
-			"Si ya no lo quieres, cancelalos."
+			"Los que ya no pueden hacerse nunca — el jugador no es de nadie, o ya es tuyo — " +
+			"se cancelan solos."
 	}
 
 	badge := fmt.Sprintf("%d", len(live))

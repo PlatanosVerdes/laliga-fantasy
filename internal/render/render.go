@@ -826,6 +826,43 @@ var outcomeStatus = map[string]string{
 //
 // It is a table because the useful reading is comparative: what you offered, who said no, and what
 // it took to beat you when somebody did.
+// RaidLog is the scheduled raids that are not going to happen as they are, written as a log and
+// not as a table: a second table with its own header and its own columns, for what is usually
+// one line, read as a whole second section of things to do.
+//
+// It scrolls at five, which is the point at which the list stops being a glance.
+func RaidLog(rows []map[string]any) string {
+	if len(rows) == 0 {
+		return ""
+	}
+	var body strings.Builder
+	for _, raid := range rows {
+		action := text(raid["action"])
+		status := raidPlanStatus[action]
+		if status == "" {
+			status = "neutral"
+		}
+		// The action is a key, and sin_saldo is not how anybody writes it.
+		label := strings.ReplaceAll(action, "_", " ")
+		price := ""
+		if clause := asFloat(raid["clause"]); clause != nil && *clause > 0 {
+			price = Money(clause)
+			if limit := asFloat(raid["max_pay"]); limit != nil && *limit > 0 {
+				price += " · tope " + Money(limit)
+			}
+		}
+		fmt.Fprintf(&body, `<div class="ending"><span class="ending-when">%s</span>`+
+			`<span class="pill-%s">%s</span>`+
+			`<span class="ending-body">%s <span class="ending-kind">%s</span></span>`+
+			`<button class="op danger raid-drop" data-op="cancel_raid" data-op-player="%s" `+
+			`data-op-name="%s" type="button">Cancelar</button></div>`,
+			Esc(price), status, Esc(label),
+			PlayerLink(text(raid["name"]), text(raid["player_id"])), Esc(text(raid["why"])),
+			Esc(text(raid["player_id"])), Esc(text(raid["name"])))
+	}
+	return `<div class="endings raid-log">` + body.String() + `</div>`
+}
+
 func Endings(rows []map[string]any) string {
 	if len(rows) == 0 {
 		return `<p class="empty">Todavia no se ha resuelto ninguna.</p>`
