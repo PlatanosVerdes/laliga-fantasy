@@ -43,3 +43,24 @@ func TestAskingStepsAtValue(t *testing.T) {
 		}
 	}
 }
+
+// A matchday over is the only one whose squads are worth reconstructing, and it was the one
+// that lost the way in: the "jugada" line overwrote the button instead of joining it.
+func TestFinishedMatchdayKeepsItsSquadsButton(t *testing.T) {
+	fixture := func(week int, state int) map[string]any {
+		return map[string]any{"week": float64(week), "state": float64(state),
+			"kickoff": "2026-08-15T19:00:00+02:00", "local": "ALA", "visitor": "GET",
+			"local_id": "1", "visitor_id": "2", "local_score": 3.0, "visitor_score": 0.0}
+	}
+	done := MatchCalendar([]map[string]any{fixture(1, FinishedMatch)}, nil, nil)
+	if !strings.Contains(done, `data-matchday="1"`) {
+		t.Error("a finished matchday can still be opened: " + done)
+	}
+	if !strings.Contains(done, "jugada") {
+		t.Error("and it still says it is over")
+	}
+	running := MatchCalendar([]map[string]any{fixture(2, FinishedMatch), fixture(2, 0)}, nil, nil)
+	if !strings.Contains(running, `data-matchday="2"`) {
+		t.Error("one still running keeps it too: " + running)
+	}
+}

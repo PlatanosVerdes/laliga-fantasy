@@ -211,23 +211,20 @@ th.right{text-align:right}
 .evo-svg{display:block}
 .evo-grid{stroke:var(--line);stroke-width:1}
 .evo-axis{fill:var(--muted);font-size:10px}
-/* --c is the line's own colour, set by its slot class. The ninth line and beyond have no slot
-   and stay grey: the hues are taken in fixed order and never cycled, because a made-up ninth
-   hue lands next to one of the eight and stops being a different colour. */
+/* --c is the line's own colour, set by its slot class. Past the eighth the hues start again
+   with a broken stroke instead of a made-up ninth hue, which would land next to one of the
+   eight and stop being a different colour: what names a line is the pair, hue and stroke. */
 .evo-row{--c:var(--baseline)}
+.evo-dash .evo-line{stroke-dasharray:7 4}
 .evo-line{fill:none;stroke:var(--c);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
 .evo-dot{fill:var(--surface);stroke:var(--c);stroke-width:1.6}
 /* The name is the label of a line, not a second copy of its colour: identity is never colour
    alone, and on the light surface three of the hues are too pale to read as text. */
 .evo-name{fill:var(--ink-2);font-size:10.5px}
-.evo-grey .evo-line,.evo-grey .evo-dot{opacity:.85}
-.evo-grey .evo-name{fill:var(--muted)}
 /* Hovering thickens the line rather than repainting it: the colour is the identity, so the one
    being followed cannot change colour to say so. The grey ones have none to keep. */
 .evo-row:hover .evo-line{stroke-width:3.5}
 .evo-row:hover .evo-name{fill:var(--ink);font-weight:700}
-.evo-grey:hover{--c:var(--ink)}
-.evo-grey:hover .evo-line,.evo-grey:hover .evo-dot{opacity:1}
 .evo-me .evo-line{stroke-width:3}
 .evo-me .evo-name{font-weight:700;fill:var(--ink)}
 .evo-s1{--c:var(--series-1)} .evo-s2{--c:var(--series-2)}
@@ -258,6 +255,13 @@ button.raid-btn{font:inherit;font-size:11px;font-weight:700;text-transform:upper
   border:1px solid color-mix(in srgb,var(--warning) 50%,transparent);padding:3px 9px;
   cursor:pointer}
 button.raid-btn:hover{background:color-mix(in srgb,var(--warning) 14%,transparent)}
+/* Raising a clause is the defensive twin of the clausulazo, so it wears the same shape in the
+   accent. It had no rule at all and was arriving as the browser's own grey box. */
+button.raise{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--accent);background:transparent;border-radius:6px;
+  border:1px solid color-mix(in srgb,var(--accent) 50%,transparent);padding:3px 9px;
+  cursor:pointer}
+button.raise:hover{background:color-mix(in srgb,var(--accent) 14%,transparent)}
 button.ghost{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
   letter-spacing:.05em;color:var(--ink-2);background:transparent;border:1px solid var(--line);
   border-radius:6px;padding:3px 9px;cursor:pointer;margin-left:5px}
@@ -687,7 +691,9 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .match-done{opacity:.42}
 .match-done .match-when{font-variant-numeric:tabular-nums;color:var(--ink-2)}
 /* A matchday played in full dims its header; the fixtures already dim themselves. */
-.jornada-done .j-head{opacity:.6}
+/* The matchday dims, its way in does not: opacity on the whole head is a group, and a child
+   cannot climb back out of it. */
+.jornada-done .j-num,.jornada-done .j-when{opacity:.6}
 .j-done{margin-left:auto;font-size:10px;text-transform:uppercase;letter-spacing:.05em;
   color:var(--muted)}
 
@@ -977,7 +983,7 @@ td .muted,span.muted{color:var(--muted)}
   .filters select,.filters input,.pick-bar select,.pitch-bar select,.cmp-find,
   .always-grid input,.bid-field input{font-size:16px}
 
-  button.bid,button.op-primary,button.raid-btn,button.ghost,button.danger{padding:7px 12px}
+  button.bid,button.op-primary,button.raid-btn,button.raise,button.ghost,button.danger{padding:7px 12px}
   .star{font-size:18px;padding:3px 5px}
   .cmp-add.small{width:24px;height:24px;font-size:14px}
   .drawer-actions button{padding:13px 14px}

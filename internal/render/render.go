@@ -1691,14 +1691,17 @@ func MatchCalendar(fixtures []map[string]any, mine map[string]int,
 			note = fmt.Sprintf(`<span class="j-mine">%d de los tuyos %s</span>`, yours, verb)
 		}
 		// Every matchday can be opened to see what everybody had when the ball rolled.
-		note += fmt.Sprintf(`<button class="j-squads" type="button" data-matchday="%d" `+
+		squads := fmt.Sprintf(`<button class="j-squads" type="button" data-matchday="%d" `+
 			`title="Que plantilla tenia cada uno en esta jornada">plantillas</button>`, block.week)
+		note += squads
 		// A whole matchday behind us dims with its matches; one still running does not, because
-		// the half that has not kicked off is the part being read.
+		// the half that has not kicked off is the part being read. The finished one keeps its
+		// way in: a matchday over is the only one whose squads are worth reconstructing, and
+		// overwriting the line with "jugada" was taking the button away exactly there.
 		wrap := "jornada"
 		if played == len(block.rows) {
 			wrap += " jornada-done"
-			note = `<span class="j-done">jugada</span>`
+			note = `<span class="j-done">jugada</span>` + squads
 		}
 		fmt.Fprintf(&out, `<div class="%s"><div class="j-head"><span class="j-num">J%d</span>`+
 			`<span class="j-when">desde %s %d %s</span>%s</div>%s</div>`,
