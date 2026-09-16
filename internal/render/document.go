@@ -762,12 +762,17 @@ func (d Document) raidsSection() string {
 	}
 	// And what became of the ones that are no longer here at all. Without it the section can
 	// only ever show what is pending, which is the one thing already on the screen.
-	if len(d.Orders) > 0 {
-		body += `<h3 class="kpi-label" style="margin-top:22px">Lo que ha pasado con tus ` +
-			`ordenes</h3>` + OrderLog(d.Orders)
-		note += " Al final, el <strong>registro</strong>: las que se pagaron y las que se " +
-			"cancelaron, con la fecha. Las que ya no pueden hacerse nunca — el jugador no es " +
-			"de nadie, o ya es tuyo — se cancelan solas y aparecen ahi."
+	//
+	// Drawn even when there is nothing in it yet, the way "Como acabaron" is: a history that
+	// only exists once it has content cannot be found by somebody looking for where it will
+	// appear, and this one fills days after it is switched on.
+	body += `<h3 class="kpi-label" style="margin-top:22px">Historial de tus ordenes</h3>` +
+		OrderLog(d.Orders)
+	note += " Al final, el <strong>historial</strong>: las que se pagaron y las que se " +
+		"cancelaron, con la fecha. Las que ya no pueden hacerse nunca — el jugador no es " +
+		"de nadie, o ya es tuyo — se cancelan solas y aparecen ahi."
+	if len(d.Orders) == 0 {
+		note += " Todavia esta vacio: guarda desde que se encendio, no lo de antes."
 	}
 
 	badge := fmt.Sprintf("%d", len(live))

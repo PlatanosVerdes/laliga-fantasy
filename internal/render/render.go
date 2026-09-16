@@ -837,7 +837,8 @@ var orderStatus = map[string]string{"pagada": "good", "cancelada": "neutral",
 // game is concerned the order never existed.
 func OrderLog(rows []map[string]any) string {
 	if len(rows) == 0 {
-		return ""
+		return `<p class="empty">Todavia no le ha pasado nada a ninguna orden. Aqui iran las ` +
+			`que se paguen y las que se cancelen, con su fecha.</p>`
 	}
 	var body strings.Builder
 	for _, order := range rows {
