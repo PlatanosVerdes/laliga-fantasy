@@ -1356,18 +1356,33 @@ func Countdown(row map[string]any) string {
 	return fmt.Sprintf(`<span class="pill-%s"%s>%s</span>`, status, stamp, label)
 }
 
+// Side is which end of a price you are standing on.
+type Side int
+
+const (
+	// Paying is what he would cost you.
+	Paying Side = iota
+	// Offered is what somebody has put on the table for one of yours.
+	Offered
+	// Asking is the price you yourself put on one of yours.
+	Asking
+)
+
 // RatioBadge is a price against market value, named as well as coloured.
 //
-// The same multiple means opposite things depending on which side of it you are: paying
-// 1.30x is expensive, being *paid* 1.30x is a gift. `selling` flips the scale, and the
-// name is written out so the colour is never the only reading.
-func RatioBadge(ratio *float64, selling bool) string {
+// The same multiple means opposite things depending on the side: 0.95x is a bargain to whoever
+// buys and a player being given away to whoever is selling. Reading your own listings on the
+// buyer's scale had the table calling them bargains in the same breath as the note above it
+// warned they were under market value. The name is written out so the colour is never the only
+// reading.
+func RatioBadge(ratio *float64, side Side) string {
 	if ratio == nil {
 		return Missing
 	}
 	value := *ratio
 	var status, label string
-	if selling {
+	switch side {
+	case Offered:
 		switch {
 		case value >= 1.15:
 			status, label = "good", "te pagan de mas"
@@ -1380,7 +1395,22 @@ func RatioBadge(ratio *float64, selling bool) string {
 		default:
 			status, label = "critical", "te lowballean"
 		}
-	} else {
+	case Asking:
+		// The step is at 1.00 exactly, which is where the section's own warning is: a listing
+		// flagged as under market value cannot read "a valor" in the column beside it.
+		switch {
+		case value >= 1.15:
+			status, label = "good", "por encima"
+		case value >= 1.02:
+			status, label = "good", "con margen"
+		case value >= 1:
+			status, label = "neutral", "a valor"
+		case value >= 0.9:
+			status, label = "warning", "por debajo"
+		default:
+			status, label = "critical", "lo regalas"
+		}
+	default:
 		switch {
 		case value <= 0.98:
 			status, label = "good", "chollo"
@@ -1882,7 +1912,7 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 			{"Jugador", whole, "player"},
 			{"Pides", field("entry_cost"), "money"},
 			{"Valor", field("value"), "money"},
-			{"Sobre valor", field("ask_ratio"), "ratio"},
+			{"Sobre valor", field("ask_ratio"), "ratio_ask"},
 			{"Ofertas", whole, "offer_tally"},
 			{"Mejor", whole, "best_offer"},
 			{"Cierra", whole, "listing_until"},
@@ -2423,9 +2453,11 @@ func CellIn(value any, kind string, section string) (string, string) {
 	case "pct_plain":
 		return Esc(Pct(amount)), sortKey(amount)
 	case "ratio":
-		return RatioBadge(amount, false), sortKey(amount)
+		return RatioBadge(amount, Paying), sortKey(amount)
 	case "ratio_sell":
-		return RatioBadge(amount, true), sortKey(amount)
+		return RatioBadge(amount, Offered), sortKey(amount)
+	case "ratio_ask":
+		return RatioBadge(amount, Asking), sortKey(amount)
 	case "bid":
 		row, _ := value.(map[string]any)
 		listing, _ := row["market"].(map[string]any)
