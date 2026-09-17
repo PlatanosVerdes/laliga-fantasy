@@ -1325,6 +1325,17 @@ func (d Document) marketSections() []string {
 	return out
 }
 
+// today is the generated stamp as a plain date, so the clause calendar can drop the days that
+// are behind us without reading the clock, which is what keeps two runs of the same page
+// comparable. Empty when the stamp is not a date, and then the calendar shows every day it has.
+func (d Document) today() string {
+	when, err := time.Parse("02/01/2006 15:04", d.Generated)
+	if err != nil {
+		return ""
+	}
+	return when.Format("2006-01-02")
+}
+
 func (d Document) clauseSections() []string {
 	var out []string
 
@@ -1344,7 +1355,7 @@ func (d Document) clauseSections() []string {
 	clauses := mapOf(d.Universe["clauses"])
 	entries := append(rows(clauses["mine"]), rows(clauses["rivals"])...)
 	out = append(out, Section("Calendario de clausulazos",
-		Calendar(entries, number(d.Advice["spending_power"])),
+		Calendar(entries, number(d.Advice["spending_power"]), d.today()),
 		"Cuando se abre cada cláusula. Los tuyos van marcados: ese dia quedas "+
 			"expuesto y a la vez puedes atacar. Al arrancar la temporada se abren todas "+
 			"de golpe, asi que el dia importa mas que la hora.", "", "calendario"))
