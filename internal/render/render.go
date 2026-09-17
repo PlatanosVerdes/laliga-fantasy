@@ -1819,7 +1819,7 @@ func plural(count int) string {
 	return "s"
 }
 
-func Calendar(entries []map[string]any, spending float64) string {
+func Calendar(entries []map[string]any, spending float64, today string) string {
 	if len(entries) == 0 {
 		return `<p class="empty">Sin cláusulas con fecha conocida.</p>`
 	}
@@ -1832,9 +1832,18 @@ func Calendar(entries []map[string]any, spending float64) string {
 			byDay[day] = append(byDay[day], row)
 		}
 	}
+	// Days already gone are dropped: every clause in the league opened the same day the
+	// season started, so without this the eight cards are all spent on that one August
+	// morning and a date you could still act on never reaches the page.
 	days := make([]string, 0, len(byDay))
 	for day := range byDay {
+		if day < today {
+			continue
+		}
 		days = append(days, day)
+	}
+	if len(days) == 0 {
+		return `<p class="empty">Sin cláusulas que se abran de hoy en adelante.</p>`
 	}
 	sort.Strings(days)
 	if len(days) > 8 {

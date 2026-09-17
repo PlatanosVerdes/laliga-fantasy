@@ -1009,7 +1009,7 @@ func cmdSection(args []string) error {
 			}
 			spending = parsed
 		}
-		fmt.Print(render.Calendar(rows, spending))
+		fmt.Print(render.Calendar(rows, spending, time.Now().Format("2006-01-02")))
 		return nil
 	case "movimientos":
 		fmt.Print(render.Feed(rows))

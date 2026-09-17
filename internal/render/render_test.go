@@ -99,3 +99,40 @@ func TestBargainsWithoutAffordableClausulazosOffersNothing(t *testing.T) {
 		t.Errorf("sin ninguno que puedas pagar no hay boton: %s", built)
 	}
 }
+
+// At the start of the season every clause in the league opens the same morning, so that one day
+// filled all eight cards and the calendar never reached a date anybody could still act on.
+func TestCalendarStartsAtTheCurrentDay(t *testing.T) {
+	entry := func(name, unlock string) map[string]any {
+		return map[string]any{"id": name, "name": name, "unlock_at": unlock,
+			"clause": 5_000_000.0, "position": "MED"}
+	}
+	entries := []map[string]any{}
+	for _, day := range []string{"25", "26", "27", "28", "29", "30", "31"} {
+		entries = append(entries, entry("agosto"+day, "2026-08-"+day+"T19:00:00+02:00"))
+	}
+	entries = append(entries,
+		entry("Hoy", "2026-09-17T19:02:00+02:00"),
+		entry("Quagliata", "2026-09-24T13:37:00+02:00"))
+
+	built := Calendar(entries, 10_000_000, "2026-09-17")
+	if strings.Contains(built, "agosto25") {
+		t.Errorf("un dia ya pasado no ocupa una tarjeta: %s", built)
+	}
+	if !strings.Contains(built, "Hoy") || !strings.Contains(built, "Quagliata") {
+		t.Errorf("hoy y lo que viene despues si: %s", built)
+	}
+	if !strings.Contains(built, "17 sep") {
+		t.Errorf("y la primera tarjeta es la de hoy: %s", built)
+	}
+}
+
+// With no day to compare against, the calendar is better showing every date it knows than
+// deciding on its own that none of them counts.
+func TestCalendarWithoutADayShowsEverything(t *testing.T) {
+	entries := []map[string]any{{"id": "1", "name": "Bartra",
+		"unlock_at": "2026-08-25T19:00:00+02:00", "clause": 5_000_000.0, "position": "DEF"}}
+	if built := Calendar(entries, 10_000_000, ""); !strings.Contains(built, "Bartra") {
+		t.Errorf("sin fecha de corte se pinta todo: %s", built)
+	}
+}
