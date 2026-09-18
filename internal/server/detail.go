@@ -424,6 +424,21 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 	}
 	padLines(lines, shapeOf(formation["tacticalFormation"]))
 
+	// The lineup payload carries the points series only for the eleven on the pitch; the squad
+	// payload carries it for the whole squad, and it is what gives a reserve his form back.
+	masters := map[string]map[string]any{}
+	if squad, err := s.opts.Client.TeamSquad(s.opts.LeagueID, s.opts.MyTeamID,
+		30*time.Minute); err == nil {
+		for _, key := range []string{"players", "playersTeams", "teamPlayers"} {
+			for _, held := range listOf(squad[key]) {
+				master := mapOf(held["playerMaster"])
+				if id := text(master["id"]); id != "" {
+					masters[id] = master
+				}
+			}
+		}
+	}
+
 	// The payload's bench comes back empty, so the reserves are simply the rest of the
 	// squad, rebuilt into the same shirt shape as the starters.
 	bench := []map[string]any{}
@@ -431,13 +446,19 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 		if !truthy(row["is_mine"]) || starters[text(row["id"])] {
 			continue
 		}
+		master := map[string]any{
+			"id": row["id"], "nickname": row["name"], "positionId": row["position_id"],
+			"teamId": row["team_id"], "marketValue": row["value"],
+			"playerStatus": row["status"], "lastStats": []any{},
+		}
+		if held := masters[text(row["id"])]; held != nil {
+			master["lastStats"] = held["lastStats"]
+			master["averagePoints"] = held["averagePoints"]
+			master["lastSeasonPoints"] = held["lastSeasonPoints"]
+		}
 		bench = append(bench, shirtOf(map[string]any{
 			"playerTeamId": row["player_team_id"],
-			"playerMaster": map[string]any{
-				"id": row["id"], "nickname": row["name"], "positionId": row["position_id"],
-				"teamId": row["team_id"], "marketValue": row["value"],
-				"playerStatus": row["status"], "lastStats": []any{},
-			}}, known))
+			"playerMaster": master}, known))
 	}
 
 	s.json(writer, http.StatusOK, map[string]any{"lines": lines, "bench": bench,
@@ -512,8 +533,8 @@ func shirtOf(slot map[string]any, known map[string]map[string]any) map[string]an
 		total += number(week["totalPoints"])
 	}
 	// The feed's own average divides by the rows it published, so a matchday sent four times
-	// drags it down: Unai López came back as 3.9 instead of 5.8. The bench is rebuilt without
-	// the series, and there the feed's number is all there is.
+	// drags it down: Unai López came back as 3.9 instead of 5.8. Its number is the fallback for
+	// a shirt whose series never arrived.
 	average := master["averagePoints"]
 	if len(played) > 0 {
 		average = total / float64(len(played))
