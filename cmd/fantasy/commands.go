@@ -499,14 +499,11 @@ func cmdReward(args []string) error {
 	if err != nil {
 		return err
 	}
-	limit := 1
 	for _, reward := range catalogue {
 		fmt.Printf("  %-8s %12s  ·  %d al dia\n", reward.LeagueType,
 			cli.Money(reward.Money), reward.DailyLimit)
-		if reward.LeagueType == "private" && reward.DailyLimit > 0 {
-			limit = reward.DailyLimit
-		}
 	}
+	limit := api.DailyLimit(catalogue)
 
 	status, err := client.DailyRewardStatus(leagueID, teamID)
 	if errors.Is(err, api.ErrRewardTaken) {

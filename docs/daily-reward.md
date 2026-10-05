@@ -1,7 +1,8 @@
 # The daily reward
 
-LaLiga Fantasy hands out a fixed amount once a day, per league, after watching an advert:
-100.000 in a public or private league, 200.000 with premium. Over a season that is real money
+LaLiga Fantasy hands out a fixed amount a few times a day, per league, after watching an advert:
+100.000 in a public or private league, 200.000 with premium, as many times as the catalogue's
+`dailyLimit` says (one in August 2026, two by October). Over a season that is real money
 in a game where the whole point is having cash on the right morning, so the engine claims it.
 
 Captured from the phone with Proxyman on 2026-08-24, which is the only reason any of this is
@@ -51,8 +52,9 @@ The order is check, claim, stamp:
   travels inside the binary (`_ "time/tzdata"`), which is not optional: the runtime image is
   alpine and has no `/usr/share/zoneinfo`, so `LoadLocation` failed, the day fell back to
   UTC's, and the claim landed at 02:08 Madrid instead of just after midnight.
-- `check-daily-reward` decides. A 400 or a counter above zero stamps the day and stops:
-  claiming from the phone must not have the engine asking again every two minutes.
+- `check-daily-reward` decides against the catalogue's `dailyLimit` for a private league. A
+  400 or a counter at the limit stamps the day and stops: claiming from the phone must not have
+  the engine asking again every two minutes. Below it, one claim per reward left, then the stamp.
 - the amount is not in the response, so it is the difference in `/money` around the claim, and
   that is what goes in the log line.
 
