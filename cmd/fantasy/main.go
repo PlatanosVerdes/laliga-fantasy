@@ -291,6 +291,12 @@ func cmdServe(args []string) error {
 		if err != nil || rewards.ClaimedToday(league) {
 			return
 		}
+		catalogue, err := client.DailyRewards(time.Hour)
+		if err != nil {
+			slog.Warn("daily reward catalogue unreadable", "reason", err.Error())
+			return
+		}
+		limit := api.DailyLimit(catalogue)
 		status, err := client.DailyRewardStatus(league, team)
 		switch {
 		case errors.Is(err, api.ErrRewardTaken):
@@ -302,8 +308,7 @@ func cmdServe(args []string) error {
 		case err != nil:
 			slog.Warn("daily reward unreadable", "reason", err.Error())
 			return
-		// The catalogue says one a day in every kind of league, so anything above zero is done.
-		case status.Redeemed > 0:
+		case status.Redeemed >= limit:
 			if err := rewards.Stamp(league); err != nil {
 				slog.Warn("daily reward stamp failed", "reason", err.Error())
 			}
@@ -314,11 +319,15 @@ func cmdServe(args []string) error {
 		if money, err := client.Money(team, 0); err == nil {
 			before = money.TeamMoney
 		}
-		if _, err := guard.Automatic("claim_daily_reward",
-			writes.Args{LeagueID: league, TeamID: team},
-			writes.Player{Name: "recompensa diaria"}, allowWrites); err != nil {
-			slog.Warn("daily reward not claimed", "reason", err.Error())
-			return
+		// One attempt per reward left, then the stamp: a claim that answers 200 without moving
+		// the counter must not be repeated every cycle.
+		for claimed := status.Redeemed; claimed < limit; claimed++ {
+			if _, err := guard.Automatic("claim_daily_reward",
+				writes.Args{LeagueID: league, TeamID: team},
+				writes.Player{Name: "recompensa diaria"}, allowWrites); err != nil {
+				slog.Warn("daily reward not claimed", "reason", err.Error())
+				return
+			}
 		}
 		if err := rewards.Stamp(league); err != nil {
 			slog.Warn("daily reward stamp failed", "reason", err.Error())

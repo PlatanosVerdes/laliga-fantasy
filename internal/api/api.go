@@ -185,6 +185,17 @@ func (c *Client) DailyRewards(ttl time.Duration) ([]DailyReward, error) {
 	return rewards, err
 }
 
+// DailyLimit is how many rewards a private league may claim a day; one when the catalogue
+// does not say.
+func DailyLimit(catalogue []DailyReward) int {
+	for _, reward := range catalogue {
+		if reward.LeagueType == "private" && reward.DailyLimit > 0 {
+			return reward.DailyLimit
+		}
+	}
+	return 1
+}
+
 // ErrRewardTaken is today's reward already claimed. The check does not answer a counter of one
 // in that case, it answers 400 with this code, so the absence of a body is the answer.
 var ErrRewardTaken = errors.New("la recompensa de hoy ya esta cobrada")
