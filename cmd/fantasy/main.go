@@ -442,6 +442,13 @@ func cmdServe(args []string) error {
 					row["clause_locked"] = hours > 0
 				}
 			}
+			// Same for a shield: one scheduled for the minute the last one lapses would read the
+			// old one as still on and stand down.
+			if until := text(row["shielded_until"]); until != "" {
+				if when, err := time.Parse(time.RFC3339, until); err == nil {
+					row["shielded"] = when.After(now)
+				}
+			}
 		}
 
 		// The guard checks a write against the player, and unattended writes have to be checked
