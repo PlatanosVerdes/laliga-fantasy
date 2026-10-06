@@ -30,3 +30,27 @@
     <p class="modal-note">Se comprueba contra tu saldo antes de ejecutar.</p>
   </div>
 </div>
+<div class="modal" id="shield-modal" hidden role="dialog" aria-modal="true"
+     aria-label="Blindar jugador">
+  <div class="modal-card">
+    <h3>Blindar a <span class="shield-who"></span></h3>
+    <p class="shield-help"></p>
+    <div class="shield-when">
+      <div class="bid-field">
+        <label for="shield-day">Dia</label>
+        <input id="shield-day" type="date">
+      </div>
+      <div class="bid-field">
+        <label for="shield-time">Hora</label>
+        <input id="shield-time" type="time" step="60">
+      </div>
+    </div>
+    <p class="bid-error shield-error"></p>
+    <div class="modal-actions">
+      <button class="shield-cancel" type="button">Cancelar</button>
+      <button class="shield-now" type="button">Ahora</button>
+      <button class="shield-save bid-next" type="button">Programar</button>
+    </div>
+    <p class="modal-note">Dura 24h desde la hora que elijas y caduca solo.</p>
+  </div>
+</div>
