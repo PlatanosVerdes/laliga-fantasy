@@ -29,6 +29,10 @@ var activityTypes = map[int]activitySpec{
 // what each manager scored.
 const RewardType = 6
 
+// ShieldType is a shield bought, by user1 on playerMasterId. Not in activityTypes because it
+// moves no cash; it is read to count the two shields a matchday allows.
+const ShieldType = 4
+
 // Every manager starts on the same cash; the daily reward is the only drip that cannot
 // be reconstructed from the log. Both are fallbacks only: when the session can read its
 // own /money we anchor on that instead.

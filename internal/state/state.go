@@ -140,6 +140,52 @@ func (s *State) ClauseWindow(now time.Time) schedule.Window {
 	return schedule.Clauses(fixtures, now)
 }
 
+// ShieldUse is one shield already bought, as the league log recorded it.
+type ShieldUse struct {
+	Player string    `json:"player"`
+	At     time.Time `json:"at"`
+}
+
+// ShieldQuota is the matchday a shield bought at that instant counts against, and the shields
+// of ours already in it. False when there is no world or no calendar to tell.
+func (s *State) ShieldQuota(at time.Time) (schedule.Round, []ShieldUse, bool) {
+	s.mu.RLock()
+	universe := s.universe
+	s.mu.RUnlock()
+	if universe == nil || universe.MyTeamID == nil {
+		return schedule.Round{}, nil, false
+	}
+	fixtures := make([]schedule.Fixture, 0, len(universe.Schedule))
+	for _, fixture := range universe.Schedule {
+		fixtures = append(fixtures, schedule.Fixture{Week: fixture.Week, Kickoff: fixture.Kickoff})
+	}
+	round, ok := schedule.ShieldRound(fixtures, at)
+	if !ok {
+		return schedule.Round{}, nil, false
+	}
+	me := ""
+	if team := universe.LeagueTeams[*universe.MyTeamID]; team != nil {
+		me = team.UserID
+	}
+	used := []ShieldUse{}
+	for _, event := range universe.Activity {
+		if event.TypeID != model.ShieldType || event.User1 != me || me == "" {
+			continue
+		}
+		stamp, _ := event.Raw["createdAt"].(string)
+		when, err := time.Parse(time.RFC3339, stamp)
+		if err != nil || !round.Contains(when) {
+			continue
+		}
+		name := ""
+		if event.Player != nil {
+			name = *event.Player
+		}
+		used = append(used, ShieldUse{Player: name, At: when})
+	}
+	return round, used, true
+}
+
 // SchedulePayload is the narrow view the scheduler reads.
 func (s *State) SchedulePayload() schedule.Payload {
 	s.mu.RLock()

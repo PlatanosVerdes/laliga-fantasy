@@ -257,3 +257,35 @@ func TestTraded(t *testing.T) {
 		t.Fatalf("Traded() = %v, want %v", got, want)
 	}
 }
+
+// Shields are booked in any order and fire soonest first; each one bought moves the next up,
+// and the last one takes the instruction with it.
+func TestShieldQueue(t *testing.T) {
+	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
+	friday, wednesday := "2026-10-09T21:00:00+02:00", "2026-10-07T19:57:00+02:00"
+	for _, at := range []string{friday, wednesday, friday} {
+		if _, err := BookShield("1", "Ángel Pérez", at); err != nil {
+			t.Fatalf("book: %v", err)
+		}
+	}
+	armed, _ := Load()
+	if times := armed["1"].ShieldTimes(); len(times) != 2 || times[0] != wednesday {
+		t.Fatalf("times = %v, want [%s %s]", times, wednesday, friday)
+	}
+
+	if err := AdvanceShield("1"); err != nil {
+		t.Fatalf("advance: %v", err)
+	}
+	armed, _ = Load()
+	if at := armed["1"].ShieldAt; at == nil || *at != friday || len(armed["1"].ShieldQueue) != 0 {
+		t.Fatalf("after the first, %+v", armed["1"])
+	}
+
+	if err := AdvanceShield("1"); err != nil {
+		t.Fatalf("advance: %v", err)
+	}
+	armed, _ = Load()
+	if _, left := armed["1"]; left {
+		t.Errorf("the last one bought leaves nothing behind, got %+v", armed["1"])
+	}
+}

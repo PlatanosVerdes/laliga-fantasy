@@ -1173,8 +1173,8 @@ function since(stamp){
                : 'hace '+m+'m';
 }
 
-// The shield form: a day and an hour, prefilled with the moment clauses reopen when they are
-// shut, or with now when they are open. "Ahora" goes through the two-step confirmation.
+// The shield form: a day and an hour, prefilled with when the cover is worth starting, and the
+// matchday's two shields counted. "Ahora" goes through the two-step confirmation.
 function shieldDialog(a,player){
   const box=document.getElementById('shield-modal');
   const day=box.querySelector('#shield-day'), hour=box.querySelector('#shield-time');
@@ -1183,10 +1183,24 @@ function shieldDialog(a,player){
   const start=a.suggested?new Date(a.suggested):new Date();
   const today=new Date();
   box.querySelector('.shield-who').textContent=player.name;
-  box.querySelector('.shield-help').textContent=a.suggested
-    ?'Las clausulas estan cerradas hasta '+stampText(a.suggested)+': te propongo esa hora, '
-      +'antes no protege de nada.'
+  box.querySelector('.shield-help').textContent=
+    a.because==='shield'?'Su blindaje acaba el '+stampText(a.suggested)+': te propongo esa hora '
+      +'para encadenar el siguiente.'
+    :a.suggested?'Las clausulas estan cerradas hasta '+stampText(a.suggested)+': te propongo '
+      +'esa hora, antes no protege de nada.'
     :'Las clausulas se pueden pagar ahora mismo: blindarlo ya protege.';
+  const quota=box.querySelector('.shield-quota'), budget=a.budget||{};
+  quota.textContent='';
+  quota.classList.remove('full');
+  if(budget.known){
+    const left=budget.limit-(budget.used||[]).length-(budget.booked||[]).length;
+    const who=[...(budget.used||[]).map(u=>u.player+' '+stampText(u.at)),
+               ...(budget.booked||[]).map(u=>u.player+' '+stampText(u.at)+' programado')];
+    quota.textContent=`Jornada ${budget.round.week}: te quedan ${Math.max(left,0)} de ${budget.limit}`
+      +(who.length?' ('+who.join(', ')+')':'');
+    quota.classList.toggle('full',left<=0);
+  }
+  box.querySelector('.shield-now').hidden=!a.now_allowed;
   day.min=`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
   day.value=`${start.getFullYear()}-${pad(start.getMonth()+1)}-${pad(start.getDate())}`;
   hour.value=`${pad(start.getHours())}:${pad(start.getMinutes())}`;
@@ -1210,7 +1224,11 @@ function shieldDialog(a,player){
     const res=await fetch('/api/shield',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({id:player.id,name:player.name,at:when.toISOString()})});
-    if(!res.ok){ error.textContent='No he podido programarlo.'; return; }
+    if(!res.ok){
+      const data=await res.json().catch(()=>({}));
+      error.textContent=data.error||'No he podido programarlo.';
+      return;
+    }
     close();
     openDetail(player.id);
   };
@@ -1735,10 +1753,10 @@ async function runAction(a,player){
     return;
   }
   if(a.op==='cancel_shield'){
-    if(!confirm('Cancelar el blindaje programado de '+player.name+'?')) return;
+    if(!confirm('Cancelar el blindaje de '+player.name+' del '+stampText(a.at)+'?')) return;
     const res=await fetch('/api/shield/cancel',{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({id:player.id})});
+      body:JSON.stringify({id:player.id,at:a.at})});
     if(!res.ok){ alert('No he podido cancelarlo.'); return; }
     openDetail(player.id);
     return;

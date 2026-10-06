@@ -245,7 +245,7 @@ func TestShieldPlanKeepsItsHour(t *testing.T) {
 		"player_team_id": "42111060"}}
 	armed := map[string]Policy{"1": {Shield: true, ShieldAt: &hour}}
 
-	early := ShieldPlan(players, armed, now)
+	early := ShieldPlan(players, armed, now, nil)
 	if len(early) != 1 || text(early[0]["action"]) != "esperando" {
 		t.Fatalf("antes de su hora espera, dijo %v", early)
 	}
@@ -253,7 +253,7 @@ func TestShieldPlanKeepsItsHour(t *testing.T) {
 		t.Error("esperando no se ejecuta")
 	}
 
-	ready := ShieldPlan(players, armed, now.Add(time.Hour))
+	ready := ShieldPlan(players, armed, now.Add(time.Hour), nil)
 	if text(ready[0]["action"]) != "blindar" {
 		t.Fatalf("a su hora se blinda, dijo %v", text(ready[0]["action"]))
 	}
@@ -264,9 +264,31 @@ func TestShieldPlanKeepsItsHour(t *testing.T) {
 		t.Error("la API blinda por la ficha, no por el jugador")
 	}
 
-	late := ShieldPlan(players, armed, now.Add(ShieldGrace+2*time.Hour))
+	late := ShieldPlan(players, armed, now.Add(ShieldGrace+2*time.Hour), nil)
 	if text(late[0]["action"]) != "cancelada" {
 		t.Errorf("muy tarde se cae en vez de blindar a ciegas, dijo %v", text(late[0]["action"]))
+	}
+}
+
+// A matchday allows two shields: a third is refused by the game, so the plan stands down and
+// says why instead of spending a cycle on it.
+func TestShieldPlanStandsDownWhenTheRoundIsSpent(t *testing.T) {
+	now := time.Date(2026, 10, 7, 17, 57, 0, 0, time.UTC)
+	hour := now.Format(time.RFC3339)
+	players := []Row{{"id": "1", "name": "Ángel Pérez", "is_mine": true}}
+	armed := map[string]Policy{"1": {Shield: true, ShieldAt: &hour}}
+
+	spent := ShieldPlan(players, armed, now, func(time.Time) (int, bool) { return 8, true })
+	if text(spent[0]["action"]) != "sin_cupo" || !strings.Contains(text(spent[0]["why"]), "8") {
+		t.Fatalf("sin cupo no se blinda y lo explica, dijo %v", spent[0])
+	}
+	if _, doable := Doable[text(spent[0]["action"])]; doable {
+		t.Error("sin_cupo no se ejecuta")
+	}
+
+	left := ShieldPlan(players, armed, now, func(time.Time) (int, bool) { return 8, false })
+	if text(left[0]["action"]) != "blindar" {
+		t.Errorf("con cupo se blinda, dijo %v", left[0])
 	}
 }
 
@@ -277,7 +299,7 @@ func TestShieldPlanDoesNotBuyWhatIsAlreadyThere(t *testing.T) {
 	armed := map[string]Policy{"1": {Shield: true, ShieldAt: &hour}}
 
 	shielded := ShieldPlan([]Row{{"id": "1", "name": "M. Dituro", "is_mine": true,
-		"shielded": true, "shielded_until": "2026-09-08T22:00:00+02:00"}}, armed, now)
+		"shielded": true, "shielded_until": "2026-09-08T22:00:00+02:00"}}, armed, now, nil)
 	if text(shielded[0]["action"]) != "ninguna" {
 		t.Errorf("ya blindado no se vuelve a blindar, dijo %v", shielded[0])
 	}
@@ -285,7 +307,7 @@ func TestShieldPlanDoesNotBuyWhatIsAlreadyThere(t *testing.T) {
 		t.Errorf("el motivo tiene que decirlo: %q", text(shielded[0]["why"]))
 	}
 
-	sold := ShieldPlan([]Row{{"id": "1", "name": "M. Dituro", "is_mine": false}}, armed, now)
+	sold := ShieldPlan([]Row{{"id": "1", "name": "M. Dituro", "is_mine": false}}, armed, now, nil)
 	if text(sold[0]["action"]) != "ninguna" {
 		t.Errorf("un jugador que ya no es tuyo no se blinda, dijo %v", sold[0])
 	}
