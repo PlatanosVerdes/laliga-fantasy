@@ -8,6 +8,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/outcomes"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
 
@@ -303,26 +305,24 @@ func (s *Server) shield(writer http.ResponseWriter, request *http.Request) {
 		s.json(writer, http.StatusBadRequest, map[string]any{"error": "falta el id"})
 		return
 	}
-	at := strings.TrimSpace(text(body["at"]))
-	if at != "" {
-		when, err := time.Parse(time.RFC3339, at)
+	when := time.Now()
+	if at := strings.TrimSpace(text(body["at"])); at != "" {
+		parsed, err := time.Parse(time.RFC3339, at)
 		if err != nil {
 			s.json(writer, http.StatusBadRequest,
 				map[string]any{"error": "no entiendo esa fecha: " + at})
 			return
 		}
-		at = when.Format(time.RFC3339)
+		when = parsed
 	}
-	entry, err := policies.Set(id, func(policy *policies.Policy) {
-		policy.Name = text(body["name"])
-		policy.Shield = true
-		if at == "" {
-			policy.ShieldAt = nil
-			return
-		}
-		stamp := at
-		policy.ShieldAt = &stamp
-	})
+	at := when.Format(time.RFC3339)
+	if budget := s.shieldBudget(when); budget.Known && budget.Left() <= 0 {
+		s.json(writer, http.StatusConflict, map[string]any{"error": fmt.Sprintf(
+			"la jornada %d ya tiene sus %d blindajes (%s): el juego rechazaria este",
+			budget.Round.Week, schedule.ShieldsPerRound, budget.Describe())})
+		return
+	}
+	entry, err := policies.BookShield(id, text(body["name"]), at)
 	if err != nil {
 		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
@@ -339,12 +339,17 @@ func (s *Server) cancelShield(writer http.ResponseWriter, request *http.Request)
 		s.json(writer, http.StatusMethodNotAllowed, map[string]any{"error": "solo POST"})
 		return
 	}
-	id := text(s.body(request)["id"])
+	body := s.body(request)
+	id := text(body["id"])
 	if id == "" {
 		s.json(writer, http.StatusBadRequest, map[string]any{"error": "falta el id"})
 		return
 	}
-	if err := policies.Clear(id, "shield"); err != nil {
+	drop := func() error { return policies.Clear(id, "shield") }
+	if at := text(body["at"]); at != "" {
+		drop = func() error { return policies.UnbookShield(id, at) }
+	}
+	if err := drop(); err != nil {
 		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
 	}

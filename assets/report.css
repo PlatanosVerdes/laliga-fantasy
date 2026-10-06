@@ -413,6 +413,8 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .modal-note{font-size:11px;color:var(--muted);margin:14px 0 0}
 .shield-help{font-size:13px;color:var(--ink-2);margin:8px 0 0}
 .shield-when{display:flex;gap:12px}
+.shield-quota{font-size:13px;margin:10px 0 0;color:var(--ink-2)}
+.shield-quota.full{color:var(--warning)}
 .shield-when .bid-field{flex:1 1 0;min-width:0}
 .shield-when input{font-size:16px}
 .cal{display:flex;gap:12px;overflow-x:auto;padding-bottom:6px}

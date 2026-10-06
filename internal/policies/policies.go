@@ -41,6 +41,9 @@ type Policy struct {
 	// so the instruction is an appointment and not a state to keep.
 	Shield   bool    `json:"shield,omitempty"`
 	ShieldAt *string `json:"shield_at,omitempty"`
+	// ShieldQueue is the shields booked after ShieldAt, soonest first. Each one moves up into
+	// ShieldAt when the one before it is bought or goes stale.
+	ShieldQueue []string `json:"shield_queue,omitempty"`
 }
 
 // What counts as a good offer, when you would rather not pick a number: the highest of three
@@ -443,7 +446,11 @@ const ShieldGrace = 2 * time.Hour
 //
 // Waiting is the normal state here, and the reason says which hour it is waiting for: a shield
 // spent while nobody can pay a clause anyway buys nothing.
-func ShieldPlan(players []Row, policies map[string]Policy, now time.Time) []Row {
+// RoundFull says whether the matchday a shield bought at that instant counts against has
+// already spent its shields, and which matchday that is.
+type RoundFull func(at time.Time) (week int, full bool)
+
+func ShieldPlan(players []Row, policies map[string]Policy, now time.Time, full RoundFull) []Row {
 	actions := []Row{}
 	for _, player := range players {
 		policy, armed := policies[text(player["id"])]
@@ -454,6 +461,10 @@ func ShieldPlan(players []Row, policies map[string]Policy, now time.Time) []Row 
 			"player_team_id": player["player_team_id"], "shield_at": policy.ShieldAt}
 
 		when, hasHour := parseStamp(policy.ShieldAt)
+		week, spent := 0, false
+		if full != nil {
+			week, spent = full(now)
+		}
 		switch {
 		case !truthy(player["is_mine"]):
 			actions = append(actions, merge(row, Row{"action": "ninguna",
@@ -464,6 +475,9 @@ func ShieldPlan(players []Row, policies map[string]Policy, now time.Time) []Row 
 				why += ", acaba " + until
 			}
 			actions = append(actions, merge(row, Row{"action": "ninguna", "why": why}))
+		case spent && (!hasHour || !now.Before(when)):
+			actions = append(actions, merge(row, Row{"action": "sin_cupo",
+				"why": fmt.Sprintf("la jornada %d ya tiene sus dos blindajes", week)}))
 		case !hasHour:
 			actions = append(actions, merge(row, Row{"action": "blindar",
 				"why": "sin hora: lo blindo en cuanto lo veo"}))
@@ -704,7 +718,7 @@ func Clear(id, what string) error {
 	case "raid":
 		entry.Raid, entry.MaxPay = false, nil
 	case "shield":
-		entry.Shield, entry.ShieldAt = false, nil
+		entry.Shield, entry.ShieldAt, entry.ShieldQueue = false, nil, nil
 	case "listing":
 		entry.AlwaysList, entry.AutoSell = false, false
 		entry.MinPrice, entry.AcceptAbove = nil, nil
@@ -722,7 +736,75 @@ func Clear(id, what string) error {
 // silent is an entry that no longer asks for anything.
 func (p Policy) silent() bool {
 	return !p.AlwaysList && p.MinPrice == nil && p.AcceptAbove == nil && !p.AutoSell &&
-		!p.Raid && p.MaxPay == nil && !p.Shield && p.ShieldAt == nil
+		!p.Raid && p.MaxPay == nil && !p.Shield && p.ShieldAt == nil && len(p.ShieldQueue) == 0
+}
+
+// ShieldTimes is every shield booked on the player, soonest first.
+func (p Policy) ShieldTimes() []string {
+	if !p.Shield || p.ShieldAt == nil {
+		return nil
+	}
+	return append([]string{*p.ShieldAt}, p.ShieldQueue...)
+}
+
+// BookShield adds one hour to the player's shields, keeping them in order and without repeats.
+func BookShield(id, name, at string) (Policy, error) {
+	return Set(id, func(policy *Policy) {
+		policy.Name = name
+		times := policy.ShieldTimes()
+		for _, booked := range times {
+			if booked == at {
+				return
+			}
+		}
+		times = append(times, at)
+		sort.Slice(times, func(i, j int) bool { return stampBefore(times[i], times[j]) })
+		policy.Shield = true
+		policy.ShieldAt, policy.ShieldQueue = &times[0], times[1:]
+	})
+}
+
+// UnbookShield drops one booked hour, and the whole instruction with the last one.
+func UnbookShield(id, at string) error {
+	armed, err := Load()
+	if err != nil {
+		return err
+	}
+	kept := []string{}
+	for _, booked := range armed[id].ShieldTimes() {
+		if booked != at {
+			kept = append(kept, booked)
+		}
+	}
+	if len(kept) == 0 {
+		return Clear(id, "shield")
+	}
+	_, err = Set(id, func(policy *Policy) {
+		policy.ShieldAt, policy.ShieldQueue = &kept[0], kept[1:]
+	})
+	return err
+}
+
+// AdvanceShield moves the next booked shield up once the current one is bought or stale.
+func AdvanceShield(id string) error {
+	armed, err := Load()
+	if err != nil {
+		return err
+	}
+	times := armed[id].ShieldTimes()
+	if len(times) <= 1 {
+		return Clear(id, "shield")
+	}
+	return UnbookShield(id, times[0])
+}
+
+func stampBefore(one, two string) bool {
+	first, errOne := time.Parse(time.RFC3339, one)
+	second, errTwo := time.Parse(time.RFC3339, two)
+	if errOne != nil || errTwo != nil {
+		return one < two
+	}
+	return first.Before(second)
 }
 
 func Remove(id string) error {

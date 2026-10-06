@@ -411,6 +411,18 @@ func cmdServe(args []string) error {
 		if err != nil || len(armed) == 0 {
 			return
 		}
+		// A booked shield whose hour went by unbought would hold up the ones queued behind it.
+		for id, policy := range armed {
+			if when, err := time.Parse(time.RFC3339, text(policy.ShieldAt)); err == nil &&
+				time.Since(when) > policies.ShieldGrace {
+				if err := policies.AdvanceShield(id); err != nil {
+					slog.Warn("stale shield not dropped", "reason", err.Error())
+				}
+			}
+		}
+		if armed, err = policies.Load(); err != nil || len(armed) == 0 {
+			return
+		}
 		league, team, err := ensureLeague()
 		if err != nil {
 			return
@@ -463,7 +475,10 @@ func cmdServe(args []string) error {
 		// used to be applied to these rows here, where only the acting half could see it.
 		done := policies.Enforce(policies.Plan(rows, armed, now),
 			policies.RaidPlan(rows, armed, cash, clauseWindow(universe.Schedule)),
-			policies.ShieldPlan(rows, armed, now),
+			policies.ShieldPlan(rows, armed, now, func(at time.Time) (int, bool) {
+				round, used, ok := world.ShieldQuota(at)
+				return round.Week, ok && len(used) >= schedule.ShieldsPerRound
+			}),
 			func(operation string, action policies.Row) error {
 				args := automaticArgs(action, league, team)
 				who := automaticPlayer(byID[text(action["player_id"])], house.HoldExceptions)
@@ -478,10 +493,10 @@ func cmdServe(args []string) error {
 		}
 		for _, action := range done {
 			slog.Info("automatic action", "detail", policies.Describe(action), "cause", cause)
-			// The shield is an appointment, not a state: leaving it armed would buy another one
-			// tomorrow, when the hours it covers are somebody else's problem.
+			// The shield is an appointment, not a state: once bought it makes way for the next
+			// one booked, and left armed it would be bought again on the next cycle.
 			if text(action["operation"]) == "shield_player" && truthyValue(action["ok"]) {
-				if err := policies.Clear(text(action["player_id"]), "shield"); err != nil {
+				if err := policies.AdvanceShield(text(action["player_id"])); err != nil {
 					slog.Warn("shield instruction not cleared", "reason", err.Error())
 				}
 			}
