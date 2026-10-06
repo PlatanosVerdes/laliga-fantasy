@@ -16,6 +16,7 @@ func TestUntilNextInstant(t *testing.T) {
 	armed := map[string]policies.Policy{
 		"a": {Raid: true}, "b": {Raid: true}, "c": {Raid: true}, "d": {},
 		"e": {AlwaysList: true}, "f": {},
+		"g": {Shield: true, ShieldAt: &soon}, "h": {Shield: true, ShieldAt: &later},
 	}
 
 	cases := []struct {
@@ -37,6 +38,10 @@ func TestUntilNextInstant(t *testing.T) {
 			[]map[string]any{{"id": "e", "market": map[string]any{"expires": soon}}}, true},
 		{"the same listing without the instruction is not",
 			[]map[string]any{{"id": "f", "market": map[string]any{"expires": soon}}}, false},
+		{"a shield due in seconds is waited for",
+			[]map[string]any{{"id": "g"}}, true},
+		{"one due in a minute and a half is not",
+			[]map[string]any{{"id": "h"}}, false},
 	}
 	for _, test := range cases {
 		got, _ := untilNextInstant(test.rows, armed)

@@ -106,7 +106,8 @@ type Week struct {
 }
 
 type Policy struct {
-	Raid bool `json:"raid"`
+	Raid     bool    `json:"raid"`
+	ShieldAt *string `json:"shield_at,omitempty"`
 }
 
 // parse is epoch from whatever shape the API used for this particular date.
@@ -174,9 +175,12 @@ func Deadlines(payload Payload, now time.Time, after time.Time) []Deadline {
 	}
 
 	for _, player := range payload.Players {
-		if policy, ok := payload.Policies[player.ID]; ok && policy.Raid {
-			if when, ok := parse(player.ClauseUntil); ok {
+		if policy, ok := payload.Policies[player.ID]; ok {
+			if when, ok := parse(player.ClauseUntil); ok && policy.Raid {
 				add(when, "se libera la clausula de "+player.Name)
+			}
+			if when, ok := parse(policy.ShieldAt); ok {
+				add(when, "toca blindar a "+player.Name)
 			}
 		}
 		for _, offer := range player.Offers {

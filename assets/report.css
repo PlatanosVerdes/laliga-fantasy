@@ -411,6 +411,10 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   border-color:transparent;font-weight:600}
 .modal-actions .bid-drop{color:var(--critical);border-color:color-mix(in srgb,var(--critical) 45%,transparent);margin-right:auto}
 .modal-note{font-size:11px;color:var(--muted);margin:14px 0 0}
+.shield-help{font-size:13px;color:var(--ink-2);margin:8px 0 0}
+.shield-when{display:flex;gap:12px}
+.shield-when .bid-field{flex:1 1 0;min-width:0}
+.shield-when input{font-size:16px}
 .cal{display:flex;gap:12px;overflow-x:auto;padding-bottom:6px}
 .cal-day{flex:0 0 300px;background:var(--surface);border:1px solid var(--line);
   border-radius:10px;padding:12px 13px}

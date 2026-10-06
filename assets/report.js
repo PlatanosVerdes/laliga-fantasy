@@ -1173,36 +1173,55 @@ function since(stamp){
                : 'hace '+m+'m';
 }
 
+// The shield form: a day and an hour, prefilled with the moment clauses reopen when they are
+// shut, or with now when they are open. "Ahora" goes through the two-step confirmation.
+function shieldDialog(a,player){
+  const box=document.getElementById('shield-modal');
+  const day=box.querySelector('#shield-day'), hour=box.querySelector('#shield-time');
+  const error=box.querySelector('.shield-error');
+  const pad=n=>String(n).padStart(2,'0');
+  const start=a.suggested?new Date(a.suggested):new Date();
+  const today=new Date();
+  box.querySelector('.shield-who').textContent=player.name;
+  box.querySelector('.shield-help').textContent=a.suggested
+    ?'Las clausulas estan cerradas hasta '+stampText(a.suggested)+': te propongo esa hora, '
+      +'antes no protege de nada.'
+    :'Las clausulas se pueden pagar ahora mismo: blindarlo ya protege.';
+  day.min=`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+  day.value=`${start.getFullYear()}-${pad(start.getMonth()+1)}-${pad(start.getDate())}`;
+  hour.value=`${pad(start.getHours())}:${pad(start.getMinutes())}`;
+  error.textContent='';
+  box.hidden=false;
+
+  const close=()=>{ box.hidden=true; box.onclick=null; document.removeEventListener('keydown',onKey); };
+  const onKey=(e)=>{ if(e.key==='Escape') close(); };
+  document.addEventListener('keydown',onKey);
+  box.onclick=async(e)=>{
+    if(e.target===box||e.target.closest('.shield-cancel')){ close(); return; }
+    if(e.target.closest('.shield-now')){
+      close(); closeDrawer();
+      confirmOp({op:'shield_player', name:player.name, player_id:player.id});
+      return;
+    }
+    if(!e.target.closest('.shield-save')) return;
+    const when=new Date(`${day.value}T${hour.value}`);
+    if(!day.value||!hour.value||isNaN(when.getTime())){ error.textContent='Elige dia y hora.'; return; }
+    if(when<=new Date()){ error.textContent='Esa hora ya ha pasado: usa "Ahora".'; return; }
+    const res=await fetch('/api/shield',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:player.id,name:player.name,at:when.toISOString()})});
+    if(!res.ok){ error.textContent='No he podido programarlo.'; return; }
+    close();
+    openDetail(player.id);
+  };
+}
+
 // The day and time of an ISO stamp, local and without the year: how it is typed and read.
 function stampText(stamp){
   const when=new Date(stamp);
   if(isNaN(when.getTime())) return '';
   const pad=n=>String(n).padStart(2,'0');
   return `${pad(when.getDate())}/${pad(when.getMonth()+1)} ${pad(when.getHours())}:${pad(when.getMinutes())}`;
-}
-
-// What is typed into the prompt: "21:30" is the next time it is 21:30, and "07/09 21:30" that
-// moment of the current year. It comes out as ISO, which is what the server understands.
-function stampFrom(text,fallback){
-  const value=(text||'').trim();
-  if(!value) return fallback||'';
-  const now=new Date();
-  let match=/^(\d{1,2})[\/-](\d{1,2})[ ,]+(\d{1,2}):(\d{2})$/.exec(value);
-  if(match){
-    const when=new Date(now.getFullYear(),+match[2]-1,+match[1],+match[3],+match[4]);
-    if(when<now) when.setFullYear(now.getFullYear()+1);
-    return when.toISOString();
-  }
-  match=/^(\d{1,2}):(\d{2})$/.exec(value);
-  if(match){
-    const when=new Date(now);
-    when.setSeconds(0,0);
-    when.setHours(+match[1],+match[2]);
-    if(when<=now) when.setDate(when.getDate()+1);
-    return when.toISOString();
-  }
-  const parsed=new Date(value);
-  return isNaN(parsed.getTime()) ? '' : parsed.toISOString();
 }
 
 function leftUntil(stamp){
@@ -1712,27 +1731,7 @@ async function runAction(a,player){
     return;
   }
   if(a.op==='shield'){
-    const suggested=a.suggested?stampText(a.suggested):'';
-    const answer=prompt('Blindar a '+player.name+'.\n\n'
-      +'Dura 24h y caduca solo, asi que lo unico que se decide es cuando empiezan. Mientras la '
-      +'jornada esta en marcha nadie puede pagar clausulas, y un blindaje gastado en esas horas '
-      +'no protege de nada.\n\n'
-      +(suggested?'Te sugiero '+suggested+', que es cuando reabre la ventana.\n\n'
-                 :'La ventana esta abierta, asi que ahora mismo ya protege.\n\n')
-      +'Escribe "ahora", o una hora ("21:30" o "07/09 21:30"):', suggested||'ahora');
-    if(answer===null) return;
-    if(/^\s*(ahora|ya|now)\s*$/i.test(answer)){
-      closeDrawer();
-      confirmOp({op:'shield_player', name:player.name, player_id:player.id});
-      return;
-    }
-    const at=stampFrom(answer,a.suggested);
-    if(!at){ alert('No he entendido esa hora.'); return; }
-    const res=await fetch('/api/shield',{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({id:player.id,name:player.name,at})});
-    if(!res.ok){ alert('No he podido programarlo.'); return; }
-    openDetail(player.id);
+    shieldDialog(a,player);
     return;
   }
   if(a.op==='cancel_shield'){

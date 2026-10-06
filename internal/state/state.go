@@ -168,8 +168,11 @@ func (s *State) SchedulePayload() schedule.Payload {
 	if armed, err := policies.Load(); err == nil {
 		payload.Policies = make(map[string]schedule.Policy, len(armed))
 		for id, policy := range armed {
-			// Only Raid matters here: it is what turns a clause unlock into a deadline.
-			payload.Policies[id] = schedule.Policy{Raid: policy.Raid}
+			entry := schedule.Policy{Raid: policy.Raid}
+			if policy.Shield {
+				entry.ShieldAt = policy.ShieldAt
+			}
+			payload.Policies[id] = entry
 		}
 	} else {
 		slog.Warn("policies unreadable for the scheduler", "reason", err.Error())

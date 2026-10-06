@@ -1251,8 +1251,8 @@ const (
 )
 
 // untilNextInstant is how long to wait for the next instant an instruction is waiting on, and
-// what it is. Two of them exist: a clause opening, which is a race, and one of my own listings
-// expiring, which is when a "siempre en mercado" player has to be listed again.
+// what it is: a clause opening, which is a race; one of my own listings expiring, which is when a
+// "siempre en mercado" player has to be listed again; and the hour a shield was scheduled for.
 //
 // Only instants about to happen count. Waiting for one that opens tomorrow would stop the loop.
 func untilNextInstant(rows []map[string]any,
@@ -1288,6 +1288,9 @@ func untilNextInstant(rows []map[string]any,
 		if policy.AlwaysList {
 			consider(text(mapFrom(row["market"])["expires"]),
 				"vence el anuncio de "+text(row["name"]))
+		}
+		if policy.Shield && policy.ShieldAt != nil {
+			consider(*policy.ShieldAt, "toca blindar a "+text(row["name"]))
 		}
 	}
 	return wait, why
