@@ -1451,6 +1451,8 @@ async function openForecast(week){
   const diff=(real,planned)=>real==null?'<span class="fc-diff">—</span>'
     :`<span class="fc-diff ${real>=planned?'fc-up':'fc-down'}">${real>=planned?'+':''}${one(real-planned)}</span>`;
   const managers=[...(d.managers||[])].sort((a,b)=>b.actual-a.actual||b.planned-a.planned);
+  // Level on points is level on the place, the way the game ranks a matchday.
+  managers.forEach(m=>{ m.place=1+managers.filter(o=>o.actual>m.actual).length; });
   const chip=(real,scale)=>{
     if(real==null) return '<span>—</span>';
     const p=real/scale;
@@ -1464,17 +1466,19 @@ async function openForecast(week){
     return ` style="--fc-tint:color-mix(in srgb,var(${gap>=0?'--good':'--critical'}) ${
       Math.round(strength)}%,transparent)"`;
   };
-  const row=(name,planned,real,forecast,scale)=>`<span class="fc-name">${name}</span>
+  const row=(name,planned,real,forecast,scale,place)=>`<span class="fc-place">${
+    place?place+'º':''}</span><span class="fc-name">${name}</span>
     <span>${one(planned)}</span>${chip(real,scale)}${diff(real,forecast)}`;
   body.innerHTML=`
     <div class="drawer-head"><h3>Jornada ${d.week} · prevision</h3></div>
     <p class="sub">${d.complete?'terminada':'en juego: el real solo cuenta a quien ya ha jugado'}</p>
-    <div class="fc-row fc-head"><span class="fc-name">Manager</span><span>Previsto</span>
+    <div class="fc-row fc-head"><span class="fc-place">#</span><span class="fc-name">Manager</span><span>Previsto</span>
       <span>Real</span><span>Dif.</span></div>
     <div class="fc-rows">${managers.map(m=>`
       <details class="fc-team${m.is_me?' fc-me':''}">
         <summary class="fc-row fc-tinted"${tint(m.counted?m.actual:null,m.forecast)}>${
-          row(m.manager,m.planned,m.counted?m.actual:null,m.forecast,Math.max(m.counted,1))}</summary>
+          row(m.manager,m.planned,m.counted?m.actual:null,m.forecast,Math.max(m.counted,1),
+            m.counted?m.place:null)}</summary>
         ${(m.players||[]).map(p=>`<button class="fc-row fc-player fc-tinted" type="button"
           data-detail="${p.id}"${tint(p.points,p.forecast)}>${
           row(p.name,p.forecast,p.points,p.forecast,1)}</button>`).join('')}
