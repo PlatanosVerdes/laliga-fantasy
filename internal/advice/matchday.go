@@ -17,10 +17,9 @@ import (
 // against the per-manager totals the week-scoped lineup route serves: all thirteen agree to the
 // point.
 //
-// What is still to come is the honest weak spot, and it is a ceiling rather than a forecast: a
-// rival's saved eleven is not readable without a request per manager, so the players counted are
-// every one of his whose match has not kicked off, and only eleven of them can score. Injured and
-// suspended men are left out, because they are not coming either.
+// What is still to come is the xPts of the men in each manager's saved eleven whose match has not
+// kicked off. Only for a manager whose lineup could not be read does it fall back to a ceiling:
+// the best eleven of his squad still to play, injured and suspended men left out.
 func Matchday(universe Row, now time.Time) Row {
 	week := mapOf(universe["week"])
 	current := int(number(week["weekNumber"]))
@@ -54,6 +53,31 @@ func Matchday(universe Row, now time.Time) Row {
 	}
 	mine := text(universe["my_team_id"])
 
+	byID := map[string]Row{}
+	for _, player := range rowsOf(universe["players"]) {
+		byID[text(player["id"])] = player
+	}
+	fielded := map[string][]Row{}
+	for teamID, value := range mapOf(universe["lineups"]) {
+		shirts := rowsOf(value)
+		if len(shirts) == 0 {
+			continue
+		}
+		fielded[teamID] = []Row{}
+		for _, shirt := range shirts {
+			if !pendingClub[text(shirt["team_id"])] {
+				continue
+			}
+			// An injured man in the eleven stays: his xPts already says he will score next to
+			// nothing, and he still takes the place.
+			player := Row{"id": shirt["id"], "name": shirt["name"], "xpts": 0.0}
+			if known := byID[text(shirt["id"])]; known != nil {
+				player["xpts"] = known["xpts"]
+			}
+			fielded[teamID] = append(fielded[teamID], player)
+		}
+	}
+
 	waiting := map[string][]Row{}
 	for _, player := range rowsOf(universe["players"]) {
 		owner := text(player["owner_team_id"])
@@ -78,7 +102,13 @@ func Matchday(universe Row, now time.Time) Row {
 		if teamID == "" {
 			teamID = key
 		}
-		managers = append(managers, standing(team, teamID, teamID == mine, waiting[teamID]))
+		if lineup, known := fielded[teamID]; known {
+			managers = append(managers, standing(team, teamID, teamID == mine, lineup,
+				"alineacion"))
+			continue
+		}
+		managers = append(managers, standing(team, teamID, teamID == mine, waiting[teamID],
+			"techo"))
 	}
 
 	rank(managers, "points")
@@ -103,8 +133,9 @@ func Matchday(universe Row, now time.Time) Row {
 }
 
 // standing is one manager's afternoon: what he has scored, who he has left, and where the two
-// together would leave him.
-func standing(team Row, teamID string, isMine bool, waiting []Row) Row {
+// together would leave him. The source says whether who he has left is his saved eleven or the
+// ceiling of his squad.
+func standing(team Row, teamID string, isMine bool, waiting []Row, source string) Row {
 	sort.SliceStable(waiting, func(one, two int) bool {
 		first, second := number(waiting[one]["xpts"]), number(waiting[two]["xpts"])
 		if first != second {
@@ -113,7 +144,7 @@ func standing(team Row, teamID string, isMine bool, waiting []Row) Row {
 		return text(waiting[one]["id"]) < text(waiting[two]["id"])
 	})
 	// Only eleven score, so eleven is as far as the ceiling can reach however deep the squad.
-	if len(waiting) > 11 {
+	if source == "techo" && len(waiting) > 11 {
 		waiting = waiting[:11]
 	}
 
@@ -145,7 +176,7 @@ func standing(team Row, teamID string, isMine bool, waiting []Row) Row {
 		"position": team["position"], "season_points": team["points"],
 		"points": points, "reported": reported,
 		"waiting": len(waiting), "to_come": toCome, "waiting_names": names,
-		"projection": points + toCome,
+		"projection": points + toCome, "source": source,
 		// Nobody left to play: his matchday is over whatever the rest of the league still does.
 		"done": len(waiting) == 0,
 	}

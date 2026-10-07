@@ -1016,11 +1016,15 @@ func (d Document) matchdaySection() string {
 	// The columns that explain themselves are gone once the matchday is over, and so is the
 	// paragraph that explained them.
 	if live {
-		note += " <strong>Por sumar</strong> son los xPts de los jugadores de cada uno cuyo " +
-			"partido no ha empezado todavia, y es un <em>techo</em>, no una prevision: la " +
-			"alineacion de un rival no se puede leer sin una peticion por manager, asi que " +
-			"cuento a todos los que le quedan y solo puntuan once. Los lesionados y " +
-			"sancionados no entran, que tampoco van a jugar."
+		note += " <strong>Por sumar</strong> son los xPts de los jugadores de la alineacion " +
+			"guardada de cada uno cuyo partido no ha empezado todavia."
+		for _, row := range managers {
+			if text(row["source"]) == "techo" {
+				note += " Donde pone <em>techo</em> no se pudo leer su alineacion, y cuento " +
+					"los once mejores de su plantilla que quedan por jugar."
+				break
+			}
+		}
 	}
 
 	table, err := SectionTable("jornada", managers)
@@ -1032,7 +1036,51 @@ func (d Document) matchdaySection() string {
 	if !live {
 		badge = "terminada"
 	}
-	return Section(title, table, note, badge, "jornada")
+	return Section(title, table+d.forecastReview(), note, badge, "jornada")
+}
+
+// forecastReview is how the xPts of the last matchday played compared with what the elevens
+// scored: my total in one sentence, the league's error per player beside it, and my players
+// folded away underneath.
+func (d Document) forecastReview() string {
+	last := mapOf(mapOf(d.Universe["forecast_review"])["last"])
+	if number(last["counted"]) == 0 {
+		return ""
+	}
+	sentence := fmt.Sprintf("<strong>Asi acerto la prevision</strong> en la J%d: ",
+		int(number(last["week"])))
+	if mine := mapOf(last["mine"]); number(mine["counted"]) > 0 {
+		forecast, actual := number(mine["forecast"]), number(mine["actual"])
+		sentence += fmt.Sprintf("previsto %.1f · real %s (%+.1f). ", forecast, scored(actual),
+			actual-forecast)
+	}
+	sentence += fmt.Sprintf("En toda la liga fallo %.1f puntos por jugador, de media.",
+		number(last["mean_abs_error"]))
+
+	lines := ""
+	for _, player := range rows(last["players"]) {
+		actual, diff := Missing, Missing
+		if player["points"] != nil {
+			actual = scored(number(player["points"]))
+			diff = fmt.Sprintf("%+.1f", number(player["diff"]))
+		}
+		lines += fmt.Sprintf("<tr><td>%s</td><td>%.1f</td><td>%s</td><td>%s</td></tr>",
+			Esc(text(player["name"])), number(player["forecast"]), actual, diff)
+	}
+	if lines == "" {
+		return `<p class="note">` + sentence + `</p>`
+	}
+	return `<p class="note">` + sentence + `</p><details><summary>Tus jugadores</summary>` +
+		`<table><thead><tr><th>Jugador</th><th>Previsto</th><th>Real</th><th>Diferencia</th>` +
+		`</tr></thead><tbody>` + lines + `</tbody></table></details>`
+}
+
+// scored is a points figure without the ".0" the game never has.
+func scored(points float64) string {
+	if points == math.Trunc(points) {
+		return fmt.Sprintf("%.0f", points)
+	}
+	return fmt.Sprintf("%.1f", points)
 }
 
 // counted is a number with its noun. The package already has a plural() for the "s" that goes on

@@ -26,6 +26,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/engine"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/forecast"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
@@ -261,6 +262,14 @@ func cmdServe(args []string) error {
 			if model.DeepEnrich(shortlist, 20, 2*time.Hour) > 0 {
 				model.ApplyScores(universe.Players)
 			}
+		}
+		now := time.Now()
+		forecasts, err := forecast.Record(universe, now)
+		if err != nil {
+			slog.Warn("forecast log not written", "reason", err.Error())
+		}
+		if review := forecast.Summarize(forecasts, universe, now); review != nil {
+			universe.ForecastReview = review
 		}
 		return universe, nil
 	})

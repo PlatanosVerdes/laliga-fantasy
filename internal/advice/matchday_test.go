@@ -215,3 +215,104 @@ func TestNoFixturesIsNoBoard(t *testing.T) {
 		t.Errorf("Matchday = %v, want nada sin calendario", got)
 	}
 }
+
+func shirt(id, club string) Row {
+	return Row{"id": id, "name": "j" + id, "team_id": club, "points": nil}
+}
+
+func lineups(universe Row, byTeam map[string][]Row) Row {
+	out := Row{}
+	for teamID, shirts := range byTeam {
+		asAny := make([]any, 0, len(shirts))
+		for _, one := range shirts {
+			asAny = append(asAny, one)
+		}
+		out[teamID] = asAny
+	}
+	universe["lineups"] = out
+	return universe
+}
+
+// Owning two keepers is not fielding two: with the saved eleven readable, only the one in it is
+// still to score, and a lined-up man whose match already started is not waiting either.
+func TestTheSavedElevenIsWhoIsWaiting(t *testing.T) {
+	now := kickoffs
+	universe := board(
+		[]Row{manager("a", "Ana", 10.0)},
+		[]Row{
+			owned("1", "20", "a", 4, true), // keeper in the eleven
+			owned("2", "20", "a", 3, true), // keeper on the bench
+			owned("3", "10", "a", 6, true), // in the eleven, already kicked off
+			owned("4", "20", "a", 0, false),
+		},
+		[]Row{
+			match("10", "11", now.Add(-time.Hour), 1),
+			match("20", "21", now.Add(time.Hour), 1),
+		})
+	lineups(universe, map[string][]Row{"a": {shirt("1", "20"), shirt("3", "10"),
+		shirt("4", "20")}})
+
+	ana := find(rowsOf(Matchday(universe, now)["managers"]), "Ana")
+	if got := text(ana["source"]); got != "alineacion" {
+		t.Errorf("source = %q, want alineacion", got)
+	}
+	// The injured man is in the eleven, so he is waiting, with the nothing his xPts says.
+	if got := int(number(ana["waiting"])); got != 2 {
+		t.Errorf("waiting = %d, want 2: j1 y el lesionado alineado", got)
+	}
+	if got := number(ana["to_come"]); got != 4 {
+		t.Errorf("to_come = %v, want 4: solo el portero alineado", got)
+	}
+	names := ana["waiting_names"].([]string)
+	for _, name := range names {
+		if name == "j2" || name == "j3" {
+			t.Errorf("waiting_names = %v: ni el suplente ni el que ya jugo", names)
+		}
+	}
+}
+
+// The ceiling stops at eleven because only eleven score; a saved eleven is already that, and
+// whatever it holds is counted as it is.
+func TestTheSavedElevenIsNotCapped(t *testing.T) {
+	now := kickoffs
+	players := []Row{}
+	shirts := []Row{}
+	for index := 0; index < 12; index++ {
+		id := string(rune('a' + index))
+		players = append(players, owned(id, "20", "a", 1, true))
+		shirts = append(shirts, shirt(id, "20"))
+	}
+	universe := lineups(board([]Row{manager("a", "Ana", 0.0)}, players,
+		[]Row{match("20", "21", now.Add(time.Hour), 1)}), map[string][]Row{"a": shirts})
+
+	ana := find(rowsOf(Matchday(universe, now)["managers"]), "Ana")
+	if got := number(ana["to_come"]); got != 12 {
+		t.Errorf("to_come = %v, want 12", got)
+	}
+}
+
+// A manager whose lineup could not be read keeps the ceiling, and the row says so.
+func TestNoLineupFallsBackToTheCeiling(t *testing.T) {
+	now := kickoffs
+	universe := board(
+		[]Row{manager("a", "Ana", 10.0), manager("b", "Bea", 10.0)},
+		[]Row{
+			owned("1", "20", "a", 4, true),
+			owned("2", "20", "b", 3, true),
+			owned("3", "20", "b", 5, true),
+		},
+		[]Row{match("20", "21", now.Add(time.Hour), 1)})
+	lineups(universe, map[string][]Row{"a": {shirt("1", "20")}})
+
+	managers := rowsOf(Matchday(universe, now)["managers"])
+	bea := find(managers, "Bea")
+	if got := text(bea["source"]); got != "techo" {
+		t.Errorf("source = %q, want techo", got)
+	}
+	if got := number(bea["to_come"]); got != 8 {
+		t.Errorf("to_come = %v, want 8: todos los suyos por jugar", got)
+	}
+	if got := text(find(managers, "Ana")["source"]); got != "alineacion" {
+		t.Errorf("Ana source = %q, want alineacion", got)
+	}
+}

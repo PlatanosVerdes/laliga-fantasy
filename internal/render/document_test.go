@@ -205,6 +205,51 @@ func TestMatchdaySectionCollapsesWhenItIsOver(t *testing.T) {
 	}
 }
 
+// A row whose lineup could not be read is a ceiling, and it says so without a column of its own.
+func TestMatchdaySectionMarksTheCeiling(t *testing.T) {
+	document := matchdayDocument(true)
+	plain := document.matchdaySection()
+	if strings.Contains(plain, ">techo</span>") {
+		t.Error("con todas las alineaciones leidas no hay ningun techo")
+	}
+	managers := rows(mapOf(document.Advice["matchday"])["managers"])
+	managers[0]["source"] = "techo"
+	section := document.matchdaySection()
+	if got := strings.Count(section, ">techo</span>"); got != 1 {
+		t.Errorf("%d marcas de techo, want 1", got)
+	}
+	if !strings.Contains(section, "no se pudo leer su alineacion") {
+		t.Errorf("la nota tiene que explicar el techo: %s", note(section))
+	}
+}
+
+// The forecast against the result: my total in one sentence and my players folded away.
+func TestMatchdaySectionReviewsTheLastForecast(t *testing.T) {
+	document := matchdayDocument(true)
+	if strings.Contains(document.matchdaySection(), "Asi acerto") {
+		t.Error("sin nada apuntado no se dice nada")
+	}
+	document.Universe = map[string]any{"forecast_review": map[string]any{"last": map[string]any{
+		"week": 7.0, "counted": 20.0, "mean_abs_error": 2.94,
+		"mine": map[string]any{"forecast": 48.2, "actual": 55.0, "counted": 11.0},
+		"players": []any{
+			map[string]any{"name": "Djene", "forecast": 6.1, "points": 9.0, "diff": 2.9},
+			map[string]any{"name": "Marc Bernal", "forecast": 4.0, "points": nil},
+		},
+	}}}
+	section := document.matchdaySection()
+	if !strings.Contains(section, "J7: previsto 48.2 · real 55 (+6.8)") {
+		t.Errorf("falta la frase de la prevision: %s", section)
+	}
+	if !strings.Contains(section, "fallo 2.9 puntos por jugador") {
+		t.Error("falta el error medio de la liga")
+	}
+	if !strings.Contains(section, "<details><summary>Tus jugadores</summary>") ||
+		!strings.Contains(section, "<td>Djene</td><td>6.1</td><td>9</td><td>+2.9</td>") {
+		t.Errorf("faltan mis jugadores plegados: %s", section)
+	}
+}
+
 func TestMatchdaySectionWithoutABoard(t *testing.T) {
 	if got := (Document{}).matchdaySection(); got != "" {
 		t.Errorf("sin datos no hay seccion, salio %.80s", got)

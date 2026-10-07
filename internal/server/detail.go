@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
@@ -107,7 +107,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 					rivals[number(match["week"])] = teams[0]
 				}
 			}
-			for _, week := range oneRowPerWeek(listOf(master["playerStats"])) {
+			for _, week := range model.OneRowPerWeek(listOf(master["playerStats"])) {
 				row := map[string]any{"week": week["weekNumber"], "points": week["totalPoints"],
 					"ideal": truthy(week["isInIdealFormation"])}
 				if rival := rivals[number(week["weekNumber"])]; rival != "" {
@@ -488,50 +488,11 @@ func nested(source map[string]any, keys ...string) any {
 	return current
 }
 
-// The season as it was played: one row per matchday, oldest first. The live matchday can come
-// back several times and only one copy is the match, so the copies are told apart by minutes
-// and not by points, because a matchday on the bench is a real row of zeros. The feed does not
-// promise an order either: Espart came back as J2, J1, J3.
-func oneRowPerWeek(stats []map[string]any) []map[string]any {
-	best := map[float64]map[string]any{}
-	for _, stat := range stats {
-		week := number(stat["weekNumber"])
-		if current, seen := best[week]; seen && !fuller(stat, current) {
-			continue
-		}
-		best[week] = stat
-	}
-	out := make([]map[string]any, 0, len(best))
-	for _, stat := range best {
-		out = append(out, stat)
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		return number(out[i]["weekNumber"]) < number(out[j]["weekNumber"])
-	})
-	return out
-}
-
-func fuller(candidate, current map[string]any) bool {
-	if played, before := minutesIn(candidate), minutesIn(current); played != before {
-		return played > before
-	}
-	return number(current["totalPoints"]) == 0 && number(candidate["totalPoints"]) != 0
-}
-
-// Every stat is a pair: what he did and what it scored.
-func minutesIn(stat map[string]any) float64 {
-	pair, ok := mapOf(stat["stats"])["mins_played"].([]any)
-	if !ok || len(pair) == 0 {
-		return 0
-	}
-	return number(pair[0])
-}
-
 func shirtOf(slot map[string]any, known map[string]map[string]any) map[string]any {
 	master := mapOf(slot["playerMaster"])
 	id := text(master["id"])
 	extra := known[id]
-	played := oneRowPerWeek(listOf(master["lastStats"]))
+	played := model.OneRowPerWeek(listOf(master["lastStats"]))
 	weeks := []map[string]any{}
 	total := 0.0
 	for _, week := range played {
