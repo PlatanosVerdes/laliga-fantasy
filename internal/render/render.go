@@ -2861,6 +2861,11 @@ func CellIn(value any, kind string, section string) (string, string) {
 		if waiting == 0 {
 			return `<span class="pill-neutral">cerrado</span>`, "0"
 		}
+		if text(row["source"]) == "techo" {
+			return fmt.Sprintf(`%d <span class="muted" title="Sin alineacion legible: `+
+				`los once mejores de su plantilla por jugar">techo</span>`, waiting),
+				fmt.Sprintf("%d", waiting)
+		}
 		return fmt.Sprintf(`%d`, waiting), fmt.Sprintf("%d", waiting)
 
 	case "projection":

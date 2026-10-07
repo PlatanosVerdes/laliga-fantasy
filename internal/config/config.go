@@ -49,6 +49,7 @@ var (
 	ReportFile     string
 	LogFile        string
 	UsageFile      string
+	ForecastFile   string
 )
 
 // APIHeaders are what the official app sends. x-app: 2 is not optional.
@@ -109,6 +110,9 @@ func init() {
 	// and the .log suffix is load-bearing: Vector tails *.log, so it reaches VictoriaLogs
 	// with no configuration, exactly like fantasy.log.
 	UsageFile = filepath.Join(StateDir, "usage.log")
+	// What was forecast for each saved eleven before kick-off: once the ball rolls it cannot be
+	// asked again, so losing the file loses that history.
+	ForecastFile = filepath.Join(StateDir, "forecasts.json")
 }
 
 // resolveDirs honours one override and the XDG spec, in the same order as Python.

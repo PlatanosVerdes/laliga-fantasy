@@ -162,6 +162,11 @@ type Universe struct {
 	Schedule        []Fixture          `json:"schedule"`
 	CashModel       CashModel          `json:"cash_model"`
 	Clauses         map[string]any     `json:"clauses"`
+	// Every manager's saved eleven for the matchday in play, keyed by team id.
+	Lineups map[string][]LineupPlayer `json:"lineups"`
+	// How the forecasts of a past matchday compared with what was scored. Filled outside the
+	// model, because it reads a file of its own.
+	ForecastReview any `json:"forecast_review,omitempty"`
 }
 
 // Positions as the API numbers them, with the names the report uses.
@@ -507,6 +512,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 			names[player.ID] = player.Name
 		}
 		universe.Activity = loadActivity(client, leagueID, managers, names)
+		universe.Lineups = loadLineups(client, universe.LeagueTeams, week.WeekNumber)
 
 		var myCash *float64
 		if myTeamID != "" {
