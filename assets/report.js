@@ -1159,7 +1159,63 @@ const MODE=(document.querySelector('.mode b')||{}).textContent||'manual';
 // destroyed the squad. This is the way back.
 let drawerFrom=null;
 
+// ---- direcciones: cada vista abierta tiene la suya --------------------------
+// "#<tab>/<view>/<arg>": the tab part is what showTab already understood; the rest is the drawer.
+// Every drawer opened is a history entry, so Back closes it instead of leaving the page.
+const VIEWS={
+  jugador: id=>openDetail(id),
+  manager: id=>openManager(id),
+  plantillas: week=>openMatchday(week),
+  prevision: week=>typeof openForecast==='function'&&openForecast(week),
+  comparar: ()=>openCompare(),
+};
+let routing=false, routed=null;
+
+function hashParts(hash=location.hash){
+  const [base,view,arg]=(hash||'').replace(/^#/,'').split('/');
+  return {base:base||'', view:view||'', arg:arg||''};
+}
+
+function markView(view,arg=''){
+  if(routing) return;
+  const base=hashParts().base||(document.querySelector('.tab.on')||{dataset:{}}).dataset.tab||'decidir';
+  const target='#'+base+'/'+view+(arg!==''?'/'+arg:'');
+  if(location.hash===target) return;
+  const depth=(history.state&&history.state.depth)||0;
+  history.pushState({depth:depth+1},'',target);
+  routed=target;
+}
+
+// Back, forward, a pasted link: whatever the address says is what the page shows.
+function route(){
+  // Back fires both popstate and hashchange: the second one must not reload the drawer.
+  if(routed===location.hash) return;
+  routed=location.hash;
+  const {base,view,arg}=hashParts();
+  const target=resolveTarget('#'+base);
+  if(target){
+    const active=document.querySelector('.tab.on');
+    if(!active||active.dataset.tab!==target.tab||target.section)
+      showTab(target.tab,{section:target.section,updateHash:false});
+  }
+  routing=true;
+  try{
+    if(view&&VIEWS[view]) VIEWS[view](arg);
+    else if(drawer&&!drawer.hidden) shutDrawer();
+  }finally{ routing=false; }
+}
+
 function closeDrawer(){
+  const depth=(history.state&&history.state.depth)||0;
+  // Opened from this page: step back to where it was. Opened from a pasted link: there is no
+  // page behind it, so the address is rewritten instead.
+  if(depth>0){ history.go(-depth); return; }
+  if(hashParts().view) history.replaceState(null,'','#'+(hashParts().base||'decidir'));
+  routed=location.hash;
+  shutDrawer();
+}
+
+function shutDrawer(){
   if(!drawer) return;
   drawerFrom=null;
   // Closing the comparator is being done comparing: the bar at the bottom goes with it.
@@ -1396,6 +1452,7 @@ function benchStrip(bench){
 // the transfer log back to the first kick-off, so what is shown is what was, not what is.
 async function openMatchday(week){
   if(!drawer) return;
+  markView('plantillas',week);
   drawer.hidden=false;
   panelWide(false);
   const body=drawer.querySelector('.drawer-body');
@@ -1523,6 +1580,7 @@ function wireManagers(root=document){
 // it only had to be askable.
 async function openManager(teamId){
   if(!drawer) return;
+  markView('manager',teamId);
   drawer.hidden=false;
   panelWide(false);
   const body=drawer.querySelector('.drawer-body');
@@ -1596,6 +1654,7 @@ function managerRow(p){
 
 async function openDetail(playerId){
   if(!drawer) return;
+  markView('jugador',playerId);
   usage.click('ficha','abrir ficha',String(playerId));
   const body=drawer.querySelector('.drawer-body');
   // Read before writing: the drawer is the only thing that knows what was in it.
@@ -2320,6 +2379,7 @@ function panelWide(on){
 
 async function openCompare(){
   if(!drawer) return;
+  markView('comparar');
   drawer.hidden=false;
   panelWide(true);
   const body=drawer.querySelector('.drawer-body');
@@ -2557,15 +2617,18 @@ function wireTabs(){
   if(!bar||bar.dataset.wired) return;
   bar.dataset.wired='1';
   bar.querySelectorAll('.tab').forEach(b=>
-    b.addEventListener('click',()=>showTab(b.dataset.tab)));
-  window.addEventListener('hashchange',()=>{
-    const target=resolveTarget(location.hash);
-    if(target) showTab(target.tab,{section:target.section,updateHash:false});
-  });
+    b.addEventListener('click',()=>{
+      if(drawer&&!drawer.hidden) shutDrawer();
+      history.pushState(null,'','#'+b.dataset.tab);
+      routed=location.hash;
+      showTab(b.dataset.tab,{updateHash:false});
+    }));
+  window.addEventListener('popstate',route);
+  // A plain <a href="#..."> link moves the hash without popstate in some browsers.
+  window.addEventListener('hashchange',route);
   let saved=null;
   try{ saved=localStorage.getItem('fantasy-tab'); }catch(e){}
-  const target=resolveTarget(location.hash);
-  if(target) showTab(target.tab,{section:target.section,updateHash:false});
+  if(resolveTarget('#'+hashParts().base)) route();
   else showTab(saved||'decidir');
 }
 
