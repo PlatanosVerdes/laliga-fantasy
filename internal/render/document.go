@@ -181,24 +181,31 @@ var Pitch, Filters string
 // --- widgets ---------------------------------------------------------------------------
 
 func (d Document) widgets(week map[string]any, players []map[string]any) []string {
-	// The one number on this card that keeps changing is how long is left, so that is the
-	// number, ticking every second. What state the week is in becomes the small print.
-	state := "cerrada"
-	if truthy(week["isLive"]) {
-		state = "en juego"
+	// The one number on this card that keeps changing is how long is left: to the first
+	// kick-off, then to the last one, then to the close the game stamps hours after it.
+	closing, opening := text(week["closingWeekDate"]), text(week["openingWeekDate"])
+	last := d.lastKickoff(opening)
+	now := time.Now()
+	state, deadline := "hasta que se cierra la alineacion", opening
+	if when, ok := parseStamp(opening); !ok || !now.Before(when) || truthy(week["isLive"]) {
+		state, deadline = "en juego, hasta el ultimo partido", last
+		if when, ok := parseStamp(last); !ok || !now.Before(when) {
+			state, deadline = "acabando, se cierra", closing
+		}
 	}
-	closing := text(week["closingWeekDate"])
 	value := state
-	deadline := ""
-	if closing != "" {
-		value = LeftUntil(closing)
-		deadline = closing
+	if deadline != "" {
+		value = LeftUntil(deadline)
 	}
 	notes := []string{}
-	if closes := whenLabel(closing); closes != "" {
-		notes = append(notes, "cierra "+closes)
+	if starts := whenLabel(opening); starts != "" && deadline == opening {
+		notes = append(notes, "empieza "+starts)
 	}
-	if nextOpens := whenLabel(text(d.Universe["next_week_opens"])); nextOpens != "" {
+	if ends := whenLabel(last); ends != "" {
+		notes = append(notes, "ultimo partido "+ends)
+	}
+	if nextOpens := whenLabel(text(d.Universe["next_week_opens"])); nextOpens != "" &&
+		deadline != opening {
 		notes = append(notes, fmt.Sprintf("J%d desde %s", int(number(week["nextWeek"])), nextOpens))
 	}
 
@@ -208,6 +215,9 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 		Deadline: deadline,
 		// The widget states which matchday it is; the section says how it is going.
 		Hint: state, Notes: notes, Status: "neutral", Tab: "jornada"})}
+	if clauses, ok := d.clauseWidget(); ok {
+		kpis = append(kpis, Widget(clauses))
+	}
 
 	if len(d.Advice) == 0 {
 		kpis = append(kpis,
@@ -311,6 +321,46 @@ func whenLabel(value string) string {
 	}
 	return fmt.Sprintf("%s %d %s %02d:%02d", weekdays[(int(when.Weekday())+6)%7],
 		when.Day(), months[int(when.Month())], when.Hour(), when.Minute())
+}
+
+// lastKickoff is the matchday's last match, leaving out any moved weeks away from the rest.
+func (d Document) lastKickoff(opening string) string {
+	fixtures := []schedule.Fixture{}
+	for _, fixture := range rows(d.Universe["fixtures"]) {
+		fixtures = append(fixtures, schedule.Fixture{Week: 1, Kickoff: text(fixture["kickoff"])})
+	}
+	when, ok := parseStamp(opening)
+	if !ok {
+		return ""
+	}
+	round, ok := schedule.ShieldRound(fixtures, when)
+	if !ok {
+		return ""
+	}
+	return round.End.Add(-schedule.RoundTail).Format(time.RFC3339)
+}
+
+// clauseWidget counts down to the next change of the clause window: the game shuts it the day
+// before a matchday and reopens it at the first kick-off, for you and for every rival.
+func (d Document) clauseWidget() (KPI, bool) {
+	fixtures := []schedule.Fixture{}
+	for _, fixture := range rows(d.Universe["schedule"]) {
+		fixtures = append(fixtures, schedule.Fixture{Week: int(number(fixture["week"])),
+			Kickoff: text(fixture["kickoff"])})
+	}
+	if len(fixtures) == 0 {
+		return KPI{}, false
+	}
+	window := schedule.Clauses(fixtures, time.Now())
+	hint, deadline, note := "abiertas, se cierran en", window.ClosesAt, "cierran "
+	if !window.Open {
+		hint, deadline, note = "cerradas, se abren en", window.OpensAt, "abren "
+	}
+	if deadline == "" {
+		return KPI{}, false
+	}
+	return KPI{Label: "Clausulazos", Value: LeftUntil(deadline), Deadline: deadline, Hint: hint,
+		Notes: []string{note + whenLabel(deadline)}, Status: "neutral"}, true
 }
 
 // --- the sections ----------------------------------------------------------------------
