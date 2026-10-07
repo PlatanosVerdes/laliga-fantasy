@@ -181,24 +181,34 @@ var Pitch, Filters string
 // --- widgets ---------------------------------------------------------------------------
 
 func (d Document) widgets(week map[string]any, players []map[string]any) []string {
-	// The one number on this card that keeps changing is how long is left, so that is the
-	// number, ticking every second. What state the week is in becomes the small print.
-	state := "cerrada"
-	if truthy(week["isLive"]) {
-		state = "en juego"
+	// The one number on this card that keeps changing is how long is left: to the first
+	// kick-off, then to the last one, then to the close the game stamps hours after it.
+	closing, opening := text(week["closingWeekDate"]), text(week["openingWeekDate"])
+	last := d.lastKickoff(opening)
+	now := time.Now()
+	state, deadline := "hasta el primer partido", opening
+	if when, ok := parseStamp(opening); !ok || !now.Before(when) || truthy(week["isLive"]) {
+		state, deadline = "en juego, hasta el ultimo partido", last
+		if when, ok := parseStamp(last); !ok || !now.Before(when) {
+			state, deadline = "acabando, se cierra", closing
+		}
 	}
-	closing := text(week["closingWeekDate"])
 	value := state
-	deadline := ""
-	if closing != "" {
-		value = LeftUntil(closing)
-		deadline = closing
+	if deadline != "" {
+		value = LeftUntil(deadline)
 	}
 	notes := []string{}
-	if closes := whenLabel(closing); closes != "" {
-		notes = append(notes, "cierra "+closes)
+	if starts := whenLabel(opening); starts != "" && deadline == opening {
+		notes = append(notes, "empieza "+starts)
 	}
-	if nextOpens := whenLabel(text(d.Universe["next_week_opens"])); nextOpens != "" {
+	if ends := whenLabel(last); ends != "" {
+		notes = append(notes, "ultimo partido "+ends)
+	}
+	if line := d.clauseWindowNote(); line != "" {
+		notes = append(notes, line)
+	}
+	if nextOpens := whenLabel(text(d.Universe["next_week_opens"])); nextOpens != "" &&
+		deadline != opening {
 		notes = append(notes, fmt.Sprintf("J%d desde %s", int(number(week["nextWeek"])), nextOpens))
 	}
 
@@ -311,6 +321,47 @@ func whenLabel(value string) string {
 	}
 	return fmt.Sprintf("%s %d %s %02d:%02d", weekdays[(int(when.Weekday())+6)%7],
 		when.Day(), months[int(when.Month())], when.Hour(), when.Minute())
+}
+
+// lastKickoff is the matchday's last match, leaving out any moved weeks away from the rest.
+func (d Document) lastKickoff(opening string) string {
+	fixtures := []schedule.Fixture{}
+	for _, fixture := range rows(d.Universe["fixtures"]) {
+		fixtures = append(fixtures, schedule.Fixture{Week: 1, Kickoff: text(fixture["kickoff"])})
+	}
+	when, ok := parseStamp(opening)
+	if !ok {
+		return ""
+	}
+	round, ok := schedule.ShieldRound(fixtures, when)
+	if !ok {
+		return ""
+	}
+	return round.End.Add(-schedule.RoundTail).Format(time.RFC3339)
+}
+
+// clauseWindowNote is the one line on when clauses can be paid: the game shuts them the day
+// before a matchday and reopens them at its first kick-off, for you and for every rival.
+func (d Document) clauseWindowNote() string {
+	fixtures := []schedule.Fixture{}
+	for _, fixture := range rows(d.Universe["schedule"]) {
+		fixtures = append(fixtures, schedule.Fixture{Week: int(number(fixture["week"])),
+			Kickoff: text(fixture["kickoff"])})
+	}
+	if len(fixtures) == 0 {
+		return ""
+	}
+	window := schedule.Clauses(fixtures, time.Now())
+	if !window.Open {
+		if opens := whenLabel(window.OpensAt); opens != "" {
+			return "clausulas cerradas hasta " + opens
+		}
+		return "clausulas cerradas"
+	}
+	if closes := whenLabel(window.ClosesAt); closes != "" {
+		return "clausulas abiertas hasta " + closes
+	}
+	return ""
 }
 
 // --- the sections ----------------------------------------------------------------------
