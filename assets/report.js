@@ -673,16 +673,25 @@ function hierClass(rank){
 }
 
 // The points he scored, matchday by matchday. Built in the server, see detail.go.
+// With a forecast on record, each matchday stacks what he made over what was expected of him.
 function weekStrip(weeks){
   if(!weeks||!weeks.length) return '';
+  const forecasts=weeks.some(w=>w.forecast!=null);
   const chips=weeks.map(w=>{
     const p=w.points;
     const cls = p==null?'wk-none': p<0?'wk-neg': p>=8?'wk-hi': p>=4?'wk-mid':'wk-lo';
-    const when=`Jornada ${w.week}${w.rival?' · '+w.rival:''}${w.ideal?' · once ideal':''}`;
-    return `<span class="wk ${cls}${w.ideal?' wk-ideal':''}" title="${when}"
+    const expected=w.forecast!=null?' · previsto '+(Math.round(w.forecast*10)/10):'';
+    const when=`Jornada ${w.week}${w.rival?' · '+w.rival:''}${w.ideal?' · once ideal':''}${expected}`;
+    const chip=`<span class="wk ${cls}${w.ideal?' wk-ideal':''}" title="${when}"
       >${p==null?'\u2013':p}</span>`;
+    if(!forecasts) return chip;
+    return `<span class="wk-col" title="${when}">${chip}<small class="wk-fc">${
+      w.forecast!=null?(Math.round(w.forecast*10)/10):''}</small></span>`;
   }).join('');
-  return `<div class="card-weeks"><span class="wk-label">J</span>
+  const label=forecasts
+    ? '<span class="wk-label wk-col"><span>J</span><small class="wk-fc">prev</small></span>'
+    : '<span class="wk-label">J</span>';
+  return `<div class="card-weeks">${label}
     <div class="card-weeks-rail">${chips}</div></div>`;
 }
 
@@ -1421,11 +1430,72 @@ async function openMatchday(week){
   wireDetails(body); wireManagers(body);
 }
 
+// What was expected of each eleven on a matchday and what it made. Recorded player by player
+// before each kick-off, so the forecast is the one that stood when the ball rolled.
+async function openForecast(week){
+  if(!drawer) return;
+  drawer.hidden=false;
+  panelWide(false);
+  const body=drawer.querySelector('.drawer-body');
+  body.innerHTML='<p class="empty">Cargando…</p>';
+  let d;
+  try{
+    const res=await fetch('/api/forecast/'+week);
+    if(!res.ok) throw new Error(res.status);
+    d=await res.json();
+  }catch(e){
+    body.innerHTML='<p class="empty">No guarde la prevision de esa jornada.</p>';
+    return;
+  }
+  const one=v=>v==null?'—':(Math.round(v*10)/10).toString();
+  const diff=(real,planned)=>real==null?'<span class="fc-diff">—</span>'
+    :`<span class="fc-diff ${real>=planned?'fc-up':'fc-down'}">${real>=planned?'+':''}${one(real-planned)}</span>`;
+  const managers=[...(d.managers||[])].sort((a,b)=>b.actual-a.actual||b.planned-a.planned);
+  const chip=(real,scale)=>{
+    if(real==null) return '<span>—</span>';
+    const p=real/scale;
+    const cls=p<0?'wk-neg':p>=8?'wk-hi':p>=4?'wk-mid':'wk-lo';
+    return `<span><span class="wk ${cls}">${one(real)}</span></span>`;
+  };
+  // The fill says how far from the forecast, the chip how much: one glance per row.
+  const tint=(real,forecast)=>{
+    if(real==null) return '';
+    const gap=real-forecast, strength=Math.min(Math.abs(gap)/10,1)*22+4;
+    return ` style="--fc-tint:color-mix(in srgb,var(${gap>=0?'--good':'--critical'}) ${
+      Math.round(strength)}%,transparent)"`;
+  };
+  const row=(name,planned,real,forecast,scale)=>`<span class="fc-name">${name}</span>
+    <span>${one(planned)}</span>${chip(real,scale)}${diff(real,forecast)}`;
+  body.innerHTML=`
+    <div class="drawer-head"><h3>Jornada ${d.week} · prevision</h3></div>
+    <p class="sub">${d.complete?'terminada':'en juego: el real solo cuenta a quien ya ha jugado'}</p>
+    <div class="fc-row fc-head"><span class="fc-name">Manager</span><span>Previsto</span>
+      <span>Real</span><span>Dif.</span></div>
+    <div class="fc-rows">${managers.map(m=>`
+      <details class="fc-team${m.is_me?' fc-me':''}">
+        <summary class="fc-row fc-tinted"${tint(m.counted?m.actual:null,m.forecast)}>${
+          row(m.manager,m.planned,m.counted?m.actual:null,m.forecast,Math.max(m.counted,1))}</summary>
+        ${(m.players||[]).map(p=>`<button class="fc-row fc-player fc-tinted" type="button"
+          data-detail="${p.id}"${tint(p.points,p.forecast)}>${
+          row(p.name,p.forecast,p.points,p.forecast,1)}</button>`).join('')}
+      </details>`).join('')}
+    </div>
+    <p class="drawer-note">Pulsa un manager para ver a sus jugadores. La prevision de cada uno es
+      la que tenia justo antes de su partido.${d.counted?` De media se fallo por
+      ${one(d.mean_abs_error)} puntos por jugador.`:''}</p>`;
+  wireDetails(body);
+}
+
 function wireMatchdays(root=document){
   root.querySelectorAll('button[data-matchday]').forEach(button=>{
     if(button.dataset.wired) return;
     button.dataset.wired='1';
     button.addEventListener('click',()=>openMatchday(button.dataset.matchday));
+  });
+  root.querySelectorAll('button[data-forecast]').forEach(button=>{
+    if(button.dataset.wired) return;
+    button.dataset.wired='1';
+    button.addEventListener('click',()=>openForecast(button.dataset.forecast));
   });
 }
 

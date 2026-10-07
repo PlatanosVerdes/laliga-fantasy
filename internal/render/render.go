@@ -1684,8 +1684,9 @@ var dayNames = []string{"dom", "lun", "mar", "mie", "jue", "vie", "sab"}
 // MatchCalendar draws the fixtures ahead and behind. `mine` is how many of yours each team has
 // today; `mineByWeek` is the same thing as it was on a past matchday, because a squad two weeks
 // old is not this one and counting yesterday's fixtures with today's players is a lie.
+// `forecastWeeks` are the matchdays whose forecast was recorded, which get a button for it.
 func MatchCalendar(fixtures []map[string]any, mine map[string]int,
-	mineByWeek map[int]map[string]int) string {
+	mineByWeek map[int]map[string]int, forecastWeeks map[int]bool) string {
 	if len(fixtures) == 0 {
 		return `<p class="empty">Sin calendario disponible.</p>`
 	}
@@ -1783,6 +1784,11 @@ func MatchCalendar(fixtures []map[string]any, mine map[string]int,
 		// Every matchday can be opened to see what everybody had when the ball rolled.
 		squads := fmt.Sprintf(`<button class="j-squads" type="button" data-matchday="%d" `+
 			`title="Que plantilla tenia cada uno en esta jornada">plantillas</button>`, block.week)
+		if forecastWeeks[block.week] {
+			squads += fmt.Sprintf(`<button class="j-squads" type="button" `+
+				`data-forecast="%d" title="Lo que se preveia de cada once y lo que hizo">`+
+				`prevision</button>`, block.week)
+		}
 		note += squads
 		// A whole matchday behind us dims with its matches; one still running does not, because
 		// the half that has not kicked off is the part being read. The finished one keeps its

@@ -244,9 +244,20 @@ func TestMatchdaySectionReviewsTheLastForecast(t *testing.T) {
 	if !strings.Contains(section, "fallo 2.9 puntos por jugador") {
 		t.Error("falta el error medio de la liga")
 	}
-	if !strings.Contains(section, "<details><summary>Tus jugadores</summary>") ||
-		!strings.Contains(section, "<td>Djene</td><td>6.1</td><td>9</td><td>+2.9</td>") {
-		t.Errorf("faltan mis jugadores plegados: %s", section)
+	if !strings.Contains(section, "<em>prevision</em>") {
+		t.Errorf("tiene que decir donde esta el detalle: %s", section)
+	}
+}
+
+// Only a matchday with a forecast on record offers its button.
+func TestCalendarOffersTheForecastOfRecordedWeeks(t *testing.T) {
+	fixtures := []map[string]any{
+		{"week": 7, "kickoff": "2026-09-18T21:00:00+02:00", "state": 7, "local": "A", "visitor": "B"},
+		{"week": 8, "kickoff": "2026-10-09T21:00:00+02:00", "state": 1, "local": "C", "visitor": "D"},
+	}
+	page := MatchCalendar(fixtures, nil, nil, map[int]bool{8: true})
+	if !strings.Contains(page, `data-forecast="8"`) || strings.Contains(page, `data-forecast="7"`) {
+		t.Errorf("el boton de prevision solo en la J8: %s", page)
 	}
 }
 

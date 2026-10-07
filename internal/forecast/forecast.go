@@ -202,6 +202,9 @@ type Total struct {
 	Forecast float64 `json:"forecast"`
 	Actual   float64 `json:"actual"`
 	Counted  int     `json:"counted"`
+	// Planned is the whole eleven's forecast, played or not.
+	Planned float64 `json:"planned"`
+	Players []Line  `json:"players"`
 }
 
 // Week is how the forecast of one matchday went.
@@ -220,6 +223,21 @@ type Week struct {
 type Review struct {
 	Last    *Week `json:"last"`
 	Current *Week `json:"current"`
+	// Weeks is every matchday with a forecast on record, for the calendar to offer.
+	Weeks []int `json:"weeks"`
+}
+
+// ReviewWeek is one matchday's forecast against its result. Nil when nothing was recorded.
+func ReviewWeek(log Log, universe *model.Universe, week int, now time.Time) *Week {
+	teams, recorded := log[week]
+	if !recorded {
+		return nil
+	}
+	mine := ""
+	if universe.MyTeamID != nil {
+		mine = *universe.MyTeamID
+	}
+	return summarizeWeek(week, teams, mine, over(universe, week, now))
 }
 
 // Settled is how long after the last kick-off a matchday counts as played.
@@ -240,7 +258,7 @@ func Summarize(log Log, universe *model.Universe, now time.Time) *Review {
 	}
 	sort.Sort(sort.Reverse(sort.IntSlice(weeks)))
 
-	review := &Review{}
+	review := &Review{Weeks: weeks}
 	for _, week := range weeks {
 		complete := over(universe, week, now)
 		if !complete {
@@ -251,9 +269,6 @@ func Summarize(log Log, universe *model.Universe, now time.Time) *Review {
 		}
 		review.Last = summarizeWeek(week, log[week], mine, true)
 		break
-	}
-	if review.Last == nil && review.Current == nil {
-		return nil
 	}
 	return review
 }
@@ -292,6 +307,7 @@ func summarizeWeek(week int, teams map[string]*Team, mine string, complete bool)
 		team := teams[teamID]
 		total := Total{TeamID: teamID, Manager: team.Manager, IsMe: teamID == mine}
 		for id, pick := range team.Players {
+			total.Planned += pick.XPts
 			// A played matchday with no row for him is a matchday he scored nothing in; while it
 			// runs, only who already has points can be compared.
 			points, known := 0.0, pick.Points != nil
@@ -305,15 +321,17 @@ func summarizeWeek(week int, teams map[string]*Team, mine string, complete bool)
 				errorSum += math.Abs(points - pick.XPts)
 				out.Counted++
 			}
-			if total.IsMe {
-				line := Line{ID: id, Name: pick.Name, Forecast: pick.XPts, Points: pick.Points}
-				if known || complete {
-					scored := points
-					diff := scored - pick.XPts
-					line.Points, line.Diff = &scored, &diff
-				}
-				out.Players = append(out.Players, line)
+			line := Line{ID: id, Name: pick.Name, Forecast: pick.XPts, Points: pick.Points}
+			if known || complete {
+				scored := points
+				diff := scored - pick.XPts
+				line.Points, line.Diff = &scored, &diff
 			}
+			total.Players = append(total.Players, line)
+		}
+		byForecast(total.Players)
+		if total.IsMe {
+			out.Players = total.Players
 		}
 		out.Managers = append(out.Managers, total)
 		if total.IsMe {
@@ -324,11 +342,14 @@ func summarizeWeek(week int, teams map[string]*Team, mine string, complete bool)
 	if out.Counted > 0 {
 		out.MeanAbsError = errorSum / float64(out.Counted)
 	}
-	sort.SliceStable(out.Players, func(one, two int) bool {
-		if out.Players[one].Forecast != out.Players[two].Forecast {
-			return out.Players[one].Forecast > out.Players[two].Forecast
-		}
-		return out.Players[one].ID < out.Players[two].ID
-	})
 	return out
+}
+
+func byForecast(lines []Line) {
+	sort.SliceStable(lines, func(one, two int) bool {
+		if lines[one].Forecast != lines[two].Forecast {
+			return lines[one].Forecast > lines[two].Forecast
+		}
+		return lines[one].ID < lines[two].ID
+	})
 }

@@ -114,6 +114,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/manager/", s.manager)
 	mux.HandleFunc("/api/compare", s.compare)
 	mux.HandleFunc("/api/matchday/", s.matchday)
+	mux.HandleFunc("/api/forecast/", s.forecastWeek)
 	mux.HandleFunc("/api/season", s.seasonTable)
 	mux.HandleFunc("/api/fragments", s.fragments)
 	mux.HandleFunc("/api/lineup", s.lineup)
