@@ -186,7 +186,7 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 	closing, opening := text(week["closingWeekDate"]), text(week["openingWeekDate"])
 	last := d.lastKickoff(opening)
 	now := time.Now()
-	state, deadline := "hasta el primer partido", opening
+	state, deadline := "hasta que se cierra la alineacion", opening
 	if when, ok := parseStamp(opening); !ok || !now.Before(when) || truthy(week["isLive"]) {
 		state, deadline = "en juego, hasta el ultimo partido", last
 		if when, ok := parseStamp(last); !ok || !now.Before(when) {
@@ -204,9 +204,6 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 	if ends := whenLabel(last); ends != "" {
 		notes = append(notes, "ultimo partido "+ends)
 	}
-	if line := d.clauseWindowNote(); line != "" {
-		notes = append(notes, line)
-	}
 	if nextOpens := whenLabel(text(d.Universe["next_week_opens"])); nextOpens != "" &&
 		deadline != opening {
 		notes = append(notes, fmt.Sprintf("J%d desde %s", int(number(week["nextWeek"])), nextOpens))
@@ -218,6 +215,9 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 		Deadline: deadline,
 		// The widget states which matchday it is; the section says how it is going.
 		Hint: state, Notes: notes, Status: "neutral", Tab: "jornada"})}
+	if clauses, ok := d.clauseWidget(); ok {
+		kpis = append(kpis, Widget(clauses))
+	}
 
 	if len(d.Advice) == 0 {
 		kpis = append(kpis,
@@ -340,28 +340,27 @@ func (d Document) lastKickoff(opening string) string {
 	return round.End.Add(-schedule.RoundTail).Format(time.RFC3339)
 }
 
-// clauseWindowNote is the one line on when clauses can be paid: the game shuts them the day
-// before a matchday and reopens them at its first kick-off, for you and for every rival.
-func (d Document) clauseWindowNote() string {
+// clauseWidget counts down to the next change of the clause window: the game shuts it the day
+// before a matchday and reopens it at the first kick-off, for you and for every rival.
+func (d Document) clauseWidget() (KPI, bool) {
 	fixtures := []schedule.Fixture{}
 	for _, fixture := range rows(d.Universe["schedule"]) {
 		fixtures = append(fixtures, schedule.Fixture{Week: int(number(fixture["week"])),
 			Kickoff: text(fixture["kickoff"])})
 	}
 	if len(fixtures) == 0 {
-		return ""
+		return KPI{}, false
 	}
 	window := schedule.Clauses(fixtures, time.Now())
+	hint, deadline, note := "abiertas, se cierran en", window.ClosesAt, "cierran "
 	if !window.Open {
-		if opens := whenLabel(window.OpensAt); opens != "" {
-			return "clausulas cerradas hasta " + opens
-		}
-		return "clausulas cerradas"
+		hint, deadline, note = "cerradas, se abren en", window.OpensAt, "abren "
 	}
-	if closes := whenLabel(window.ClosesAt); closes != "" {
-		return "clausulas abiertas hasta " + closes
+	if deadline == "" {
+		return KPI{}, false
 	}
-	return ""
+	return KPI{Label: "Clausulazos", Value: LeftUntil(deadline), Deadline: deadline, Hint: hint,
+		Notes: []string{note + whenLabel(deadline)}, Status: "neutral"}, true
 }
 
 // --- the sections ----------------------------------------------------------------------
