@@ -1434,6 +1434,7 @@ async function openMatchday(week){
 // before each kick-off, so the forecast is the one that stood when the ball rolled.
 async function openForecast(week){
   if(!drawer) return;
+  if(typeof markView==='function') markView('prevision',week);
   drawer.hidden=false;
   panelWide(false);
   const body=drawer.querySelector('.drawer-body');
