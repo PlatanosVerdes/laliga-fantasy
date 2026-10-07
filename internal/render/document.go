@@ -1090,8 +1090,7 @@ func (d Document) matchdaySection() string {
 }
 
 // forecastReview is how the xPts of the last matchday played compared with what the elevens
-// scored: my total in one sentence, the league's error per player beside it, and my players
-// folded away underneath.
+// scored: my total in one sentence and the league's error per player beside it.
 func (d Document) forecastReview() string {
 	last := mapOf(mapOf(d.Universe["forecast_review"])["last"])
 	if number(last["counted"]) == 0 {
@@ -1107,22 +1106,8 @@ func (d Document) forecastReview() string {
 	sentence += fmt.Sprintf("En toda la liga fallo %.1f puntos por jugador, de media.",
 		number(last["mean_abs_error"]))
 
-	lines := ""
-	for _, player := range rows(last["players"]) {
-		actual, diff := Missing, Missing
-		if player["points"] != nil {
-			actual = scored(number(player["points"]))
-			diff = fmt.Sprintf("%+.1f", number(player["diff"]))
-		}
-		lines += fmt.Sprintf("<tr><td>%s</td><td>%.1f</td><td>%s</td><td>%s</td></tr>",
-			Esc(text(player["name"])), number(player["forecast"]), actual, diff)
-	}
-	if lines == "" {
-		return `<p class="note">` + sentence + `</p>`
-	}
-	return `<p class="note">` + sentence + `</p><details><summary>Tus jugadores</summary>` +
-		`<table><thead><tr><th>Jugador</th><th>Previsto</th><th>Real</th><th>Diferencia</th>` +
-		`</tr></thead><tbody>` + lines + `</tbody></table></details>`
+	return `<p class="note">` + sentence + ` El detalle, en el boton <em>prevision</em> de ` +
+		`cada jornada del calendario.</p>`
 }
 
 // scored is a points figure without the ".0" the game never has.
@@ -1184,12 +1169,17 @@ func (d Document) scheduleSection(players []map[string]any) string {
 		return text(played[one]["kickoff"]) < text(played[two]["kickoff"])
 	})
 
-	body := MatchCalendar(upcoming, mine, d.MineByWeek)
+	recorded := map[int]bool{}
+	weeks, _ := mapOf(d.Universe["forecast_review"])["weeks"].([]any)
+	for _, week := range weeks {
+		recorded[int(number(week))] = true
+	}
+	body := MatchCalendar(upcoming, mine, d.MineByWeek, recorded)
 	note := "Las proximas jornadas, con los partidos de tus jugadores marcados. " +
 		"Una racha buena o mala se ve aqui antes que en el precio."
 	if len(played) > 0 {
 		body += `<h3 class="kpi-label" style="margin-top:26px">Jornadas terminadas</h3>` +
-			MatchCalendar(played, mine, d.MineByWeek)
+			MatchCalendar(played, mine, d.MineByWeek, recorded)
 		note += " Debajo, las jornadas <strong>terminadas</strong> con sus resultados, de la " +
 			"mas reciente hacia atras, y con los jugadores que tenias <strong>entonces</strong>. " +
 			"Mientras a una jornada le quede un solo partido sigue arriba: los que ya se " +

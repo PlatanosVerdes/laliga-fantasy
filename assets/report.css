@@ -1063,3 +1063,33 @@ td .muted,span.muted{color:var(--muted)}
 .on-touch{display:none}
 @media (hover:hover){.slot-grip{display:none}}
 @media (hover:none){.on-mouse{display:none}.on-touch{display:inline}}
+
+/* The forecast drawer: previsto, real and the difference, one row per player or manager. */
+.fc-rows{display:flex;flex-direction:column;gap:2px}
+.fc-row{display:grid;grid-template-columns:26px 1fr 52px 52px 60px;gap:8px;align-items:center;
+  padding:6px 8px;border-radius:6px;font:inherit;font-size:13px;text-align:right;
+  font-variant-numeric:tabular-nums;background:transparent;border:0;color:var(--ink)}
+button.fc-row{cursor:pointer;width:100%}
+.fc-team>summary:focus{outline:none}
+.fc-team>summary:focus-visible{outline:2px solid var(--accent)}
+.fc-row .fc-name{text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fc-me>summary{box-shadow:inset 3px 0 0 var(--accent);font-weight:700}
+.fc-head{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.fc-team>summary{cursor:pointer;list-style:none}
+.fc-team>summary::-webkit-details-marker{display:none}
+.fc-team>summary .fc-name::before{content:"\25B8";display:inline-block;width:14px;
+  color:var(--muted);transition:transform .15s}
+.fc-team[open]>summary .fc-name::before{transform:rotate(90deg)}
+.fc-team>summary:hover,button.fc-row:hover{filter:brightness(1.15)}
+.fc-player{color:var(--ink-2);font-size:12px}
+.fc-tinted{background:var(--fc-tint,transparent);margin-bottom:2px}
+.fc-row .wk{font-size:12px;padding:1px 6px}
+.fc-player .wk{font-size:11px}
+.fc-player .fc-name{padding-left:14px}
+.fc-place{text-align:left;color:var(--muted);font-weight:700}
+.fc-team[open]{margin-bottom:6px}
+.fc-up{color:var(--good)}
+.fc-down{color:var(--critical)}
+.wk-col{display:inline-flex;flex-direction:column;align-items:center;gap:2px;flex:0 0 auto}
+.wk-fc{font-size:9px;line-height:1;color:var(--muted);font-variant-numeric:tabular-nums;
+  min-height:9px}

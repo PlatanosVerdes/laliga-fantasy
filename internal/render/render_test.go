@@ -52,14 +52,14 @@ func TestFinishedMatchdayKeepsItsSquadsButton(t *testing.T) {
 			"kickoff": "2026-08-15T19:00:00+02:00", "local": "ALA", "visitor": "GET",
 			"local_id": "1", "visitor_id": "2", "local_score": 3.0, "visitor_score": 0.0}
 	}
-	done := MatchCalendar([]map[string]any{fixture(1, FinishedMatch)}, nil, nil)
+	done := MatchCalendar([]map[string]any{fixture(1, FinishedMatch)}, nil, nil, nil)
 	if !strings.Contains(done, `data-matchday="1"`) {
 		t.Error("a finished matchday can still be opened: " + done)
 	}
 	if !strings.Contains(done, "jugada") {
 		t.Error("and it still says it is over")
 	}
-	running := MatchCalendar([]map[string]any{fixture(2, FinishedMatch), fixture(2, 0)}, nil, nil)
+	running := MatchCalendar([]map[string]any{fixture(2, FinishedMatch), fixture(2, 0)}, nil, nil, nil)
 	if !strings.Contains(running, `data-matchday="2"`) {
 		t.Error("one still running keeps it too: " + running)
 	}

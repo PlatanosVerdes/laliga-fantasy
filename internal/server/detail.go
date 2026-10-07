@@ -117,6 +117,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 			}
 		}
 	}
+	weeks = addForecasts(id, weeks)
 
 	history := []map[string]any{}
 	if s.opts.Client != nil {
