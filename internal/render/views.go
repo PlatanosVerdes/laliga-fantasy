@@ -378,8 +378,14 @@ func (d Document) elevenAside() string {
 		`<button type="button" data-goto="clausulas">Cláusulas</button>` +
 		`<button type="button" data-goto="comprar">Comprar</button>` +
 		`<button type="button" data-goto="vender">Vender</button></nav>`
+	finish := ""
+	if week, place := d.myFinish(); place > 0 {
+		finish = fmt.Sprintf(`<p class="mk-note finish">Tu puesto previsto en la J%d: `+
+			`<button class="linkish" type="button" data-goto="partidos"><b>%dº</b></button></p>`,
+			week, place)
+	}
 	return block("Tu once", `<div class="pitchlist">`+summary+elevenChips(lines, arriving)+legend+
-		`</div>`, Esc(shape), -1) + more
+		`</div>`+finish, Esc(shape), -1) + more
 }
 
 // --- Comprar ---------------------------------------------------------------------------
@@ -1117,7 +1123,7 @@ func (d Document) matchesView() string {
 	teams := mapOf(d.Universe["league_teams"])
 	me := mapOf(teams[text(d.Universe["my_team_id"])])
 
-	main := ""
+	main := d.matchdayBoard()
 	if len(fixtures) > 0 {
 		first, last := fixtures[0], fixtures[len(fixtures)-1]
 		match := func(fixture map[string]any) string {
@@ -1175,7 +1181,7 @@ func (d Document) matchesView() string {
 		main += block(fmt.Sprintf("Tus jugadores en la J%d", weekNumber), body,
 			"en gris, los del banquillo", -1)
 	} else {
-		main = empty("Sin partidos de esta jornada en el calendario.")
+		main += empty("Sin partidos de esta jornada en el calendario.")
 	}
 	aside := block("Previsto vs real", fmt.Sprintf(`<ul class="history" id="pv-history" `+
 		`data-week="%d" data-planned="%.2f"><li class="mk-note">Cargando…</li></ul>`+

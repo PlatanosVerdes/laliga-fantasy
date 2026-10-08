@@ -235,3 +235,95 @@ func (d Document) rankingView(byScore, byValue []map[string]any) string {
 		"xPts por millón: manda cuando vas justo", len(byValue))
 	return view("v-ranking", "ranking", main, aside)
 }
+
+// --- Partidos: who finishes where ------------------------------------------------------
+
+// matchdayBoard is the matchday's table as it would end: what each one has, what his saved
+// eleven still has to play, and the place that leaves him in.
+func (d Document) matchdayBoard() string {
+	matchday := mapOf(d.Advice["matchday"])
+	managers := rows(matchday["managers"])
+	if len(managers) == 0 {
+		return ""
+	}
+	week := int(number(matchday["week"]))
+	played := int(number(matchday["played"]))
+	started := played > 0
+	for _, manager := range managers {
+		if number(manager["points"]) != 0 {
+			started = true
+		}
+	}
+	sort.SliceStable(managers, func(one, two int) bool {
+		return number(managers[one]["projection_rank"]) < number(managers[two]["projection_rank"])
+	})
+	var items []string
+	for _, manager := range managers {
+		finish, now := int(number(manager["projection_rank"])), int(number(manager["points_rank"]))
+		names := asStrings(manager["waiting_names"])
+		waiting := int(number(manager["waiting"]))
+		left := "ya no le queda nadie"
+		if waiting > 0 {
+			shown := names
+			if len(shown) > 4 {
+				shown = shown[:4]
+			}
+			left = "le quedan " + counted(waiting, "jugador", "jugadores")
+			if len(shown) > 0 {
+				left += ": " + Esc(strings.Join(shown, ", "))
+				if len(names) > len(shown) {
+					left += fmt.Sprintf(" +%d", len(names)-len(shown))
+				}
+			}
+		}
+		meta := fmt.Sprintf(`<span class="meta">%.0f pts · ahora %dº</span><span class="meta">%s</span>`,
+			number(manager["points"]), now, left)
+		if !started {
+			meta = fmt.Sprintf(`<span class="meta">%.0f pts en la temporada</span><span class="meta">%s</span>`,
+				number(manager["season_points"]), left)
+		}
+		if text(manager["source"]) == "techo" {
+			meta += `<span class="meta">sin su alineación: cuento su mejor once</span>`
+		}
+		chip := ""
+		if started && finish != now {
+			if finish < now {
+				chip = tag(fmt.Sprintf("▲ %d", now-finish), "ok")
+			} else {
+				chip = tag(fmt.Sprintf("▼ %d", finish-now), "soon")
+			}
+		}
+		tone := ""
+		if truthy(manager["is_me"]) {
+			tone = "accent me"
+		}
+		if finish <= 3 {
+			tone += fmt.Sprintf(" podium p%d", finish)
+		}
+		note := fmt.Sprintf("%.0f + %s por sumar", number(manager["points"]),
+			esNum(number(manager["to_come"]), 1))
+		items = append(items, teamRow(text(manager["team_id"]), fmt.Sprintf("%dº", finish),
+			text(manager["manager"]), meta, esNum(number(manager["projection"]), 1)+" pts", note,
+			chip, "", tone))
+	}
+	title := fmt.Sprintf("Cómo acabaría la J%d", week)
+	sub := "por lo que le queda a cada once guardado"
+	if !truthy(matchday["live"]) {
+		title, sub = fmt.Sprintf("Cómo acabó la J%d", week), "terminada"
+	} else if started {
+		sub = fmt.Sprintf("%d de %d partidos jugados · %s", played,
+			int(number(matchday["matches"])), sub)
+	}
+	return block(title, `<ul class="rows board">`+strings.Join(items, "")+`</ul>`, sub, -1)
+}
+
+// myFinish is the place my saved eleven would finish the matchday in, or 0.
+func (d Document) myFinish() (int, int) {
+	matchday := mapOf(d.Advice["matchday"])
+	for _, manager := range rows(matchday["managers"]) {
+		if truthy(manager["is_me"]) {
+			return int(number(matchday["week"])), int(number(manager["projection_rank"]))
+		}
+	}
+	return 0, 0
+}

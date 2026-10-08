@@ -1580,3 +1580,9 @@ table.cmp tr:last-child td{border-bottom:0}
 }
 .mk .evo,.mk .feed{max-width:none}
 .mk .side .ract .star{padding:0 4px}
+.mk .board .r.me{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.mk .board .podium .rank-dot{color:#1a1a19;font-weight:800}
+.mk .board .p1 .rank-dot{background:#e8c25a} .mk .board .p2 .rank-dot{background:#c9ccd1}
+.mk .board .p3 .rank-dot{background:#c99063}
+.mk .finish{margin-top:8px}
+.mk .finish b{font-size:14px}
