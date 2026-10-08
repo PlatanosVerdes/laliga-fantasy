@@ -1215,14 +1215,9 @@ func (d Document) rulesSection() string {
 	if d.HoldDays == 0 && len(d.RuleNotes) == 0 {
 		return ""
 	}
-	count := ""
-	if total := len(d.RuleNotes) + map[bool]int{true: 1, false: 0}[d.HoldDays > 0]; total > 0 {
-		count = fmt.Sprintf("%d normas", total)
-	}
-	_ = count
 	return mkSection("normas", "liga", "Normas de la liga",
 		`<div class="mk-box">`+HouseRules(d.HoldDays, d.HoldExceptions, d.RuleNotes)+`</div>`,
-		"lo que el juego no sabe", len(d.RuleNotes)+map[bool]int{true: 1, false: 0}[d.HoldDays > 0])
+		"", len(d.RuleNotes)+map[bool]int{true: 1, false: 0}[d.HoldDays > 0])
 }
 
 // managerTeams is the user-id to team-id map the feed needs to make its names clickable. Built
@@ -1250,13 +1245,9 @@ func (d Document) managerTeams() map[string]string {
 // seasonSection is only the frame: the line of every manager across the season is thirteen
 // lineups per matchday, so it is asked for when the tab is opened and not on every rebuild.
 func (d Document) seasonSection() string {
-	note := "En que puesto acabo cada uno cada jornada. La clasificacion oficial solo publica " +
-		"la de hoy, asi que el recorrido se suma de los onces que alineo cada uno: el total " +
-		"que sale es exactamente el de la tabla."
-	_ = note
 	return mkSection("evolucion", "liga", "La liga jornada a jornada",
 		`<div class="evo" data-season="1"><p class="empty">Cargando…</p></div>`,
-		"el puesto de cada uno tras cada jornada", -1)
+		"", -1)
 }
 
 // feedMarks is which players of the log concern me, strongest first: mine (now, or bought or
@@ -1334,7 +1325,7 @@ func (d Document) feedSection() string {
 	ManagerTeams = d.managerTeams()
 	FeedMarks, FeedMe = d.feedMarks()
 	return mkSection("movimientos", "liga", "Movimientos de la liga", Feed(events),
-		"quién ficha y vende, y por cuánto", moves)
+		"", moves)
 }
 
 func (d Document) squadSection() string {
@@ -1728,7 +1719,7 @@ func (d Document) rivalSections(players []map[string]any) []string {
 		strings.Join(options, "") +
 		`<option value="all">todos a la vez</option></select></label></div>`
 	head := mkSection("rivalpick", "rivales", "Plantillas rivales", picker,
-		"una a la vez; el + la mete en el comparador", len(ordered))
+		"", len(ordered))
 	return append([]string{head}, out...)
 }
 

@@ -105,8 +105,7 @@ func (d Document) rivalsView() string {
 		items = append(items, teamRow(text(team["team_id"]), place, manager, meta, esMoney(cash),
 			note, chip, action, tone))
 	}
-	main := block("Rivales", rowList(items, false), "su caja es una estimación del historial",
-		len(items))
+	main := block("Rivales", rowList(items, false), "", len(items))
 	return view("v-rivales", "rivales", main, d.outlookAside())
 }
 
@@ -130,7 +129,7 @@ func (d Document) outlookAside() string {
 			fmt.Sprintf("%.0fº de la liga", number(row["position"])), "", "", ""))
 	}
 	return block(fmt.Sprintf("Quién pinta peor la J%d", week), rowList(items, true),
-		"su mejor once posible", -1)
+		"", -1)
 }
 
 // rivalSquad is one rival's squad as compact rows, the full table folded under it.
@@ -229,10 +228,10 @@ func rankList(players []map[string]any, shown int, withChip bool) string {
 
 func (d Document) rankingView(byScore, byValue []map[string]any) string {
 	main := `<div class="mk-filters">` + Filters + `</div>` +
-		block("Ranking global", rankList(byScore, 10, true), "los mejores de LaLiga por score",
+		block("Ranking global", rankList(byScore, 10, true), "",
 			len(byScore))
 	aside := block("Mejor rentabilidad", rankList(byValue, 10, false),
-		"xPts por millón: manda cuando vas justo", len(byValue))
+		"", len(byValue))
 	return view("v-ranking", "ranking", main, aside)
 }
 
@@ -307,12 +306,11 @@ func (d Document) matchdayBoard() string {
 			chip, "", tone))
 	}
 	title := fmt.Sprintf("Cómo acabaría la J%d", week)
-	sub := "por lo que le queda a cada once guardado"
+	sub := ""
 	if !truthy(matchday["live"]) {
-		title, sub = fmt.Sprintf("Cómo acabó la J%d", week), "terminada"
+		title = fmt.Sprintf("Cómo acabó la J%d", week)
 	} else if started {
-		sub = fmt.Sprintf("%d de %d partidos jugados · %s", played,
-			int(number(matchday["matches"])), sub)
+		sub = fmt.Sprintf("%d de %d partidos jugados", played, int(number(matchday["matches"])))
 	}
 	return block(title, `<ul class="rows board">`+strings.Join(items, "")+`</ul>`, sub, -1)
 }

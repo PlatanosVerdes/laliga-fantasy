@@ -248,7 +248,7 @@ func (d Document) decideSection() string {
 		shown = shown[:MaxCards]
 	}
 	var main strings.Builder
-	main.WriteString(`<div class="sec-head"><h2>Qué hacer ahora</h2><p>en este orden</p></div>`)
+	main.WriteString(`<div class="sec-head"><h2>Qué hacer ahora</h2></div>`)
 	if len(shown) == 0 {
 		main.WriteString(empty("Nada que decidir ahora: ninguna oferta que cobrar, ninguna " +
 			"cláusula que subir y ningún fichaje que mejore tu once a su precio."))
@@ -511,18 +511,11 @@ func (d Document) buyOptions() (clauses, offers, free []map[string]any) {
 func (d Document) buyView() string {
 	window := d.window()
 	clauses, offers, free := d.buyOptions()
-	clauseSub := "segura: nadie puede negarse"
-	if window.open && window.closes != "" {
-		clauseSub += " · hasta " + esWhen(window.closes)
-	} else if window.opens != "" {
-		clauseSub += " · se abren " + esWhen(window.opens)
-	}
 	main := `<p class="lead">Ordenado por lo que gana <b>tu once</b> cada jornada, no por el ` +
 		`descuento.</p>` +
-		d.buyBlock("🔓 Cláusulas que puedes pagar", clauseSub, clauses, window) +
-		d.buyBlock("🤝 En venta por rivales", "decide el dueño; nunca acepta por debajo de su "+
-			"cláusula", offers, window) +
-		d.buyBlock("🔨 Mercado libre", "subasta: se puede perder", free, window)
+		d.buyBlock("🔓 Cláusulas que puedes pagar", "", clauses, window) +
+		d.buyBlock("🤝 En venta por rivales", "", offers, window) +
+		d.buyBlock("🔨 Mercado libre", "", free, window)
 
 	var bids []string
 	for _, bid := range rows(d.Advice["my_bids"]) {
@@ -589,8 +582,6 @@ func (d Document) endingsAside() string {
 	if len(visible) > 0 {
 		body = `<ul class="reslist">` + strings.Join(visible, "") + `</ul>`
 	}
-	body += `<p class="mk-note">Una puja se puede perder; una cláusula no. ` +
-		`<button class="linkish" type="button" data-goto="clausulas">Ver cláusulas →</button></p>`
 	if len(rest) > 0 {
 		body += folded(fmt.Sprintf("%d anteriores", len(rest)),
 			`<ul class="reslist">`+strings.Join(rest, "")+`</ul>`)
@@ -619,7 +610,7 @@ func (d Document) starredAside() string {
 			Esc(text(player["id"])), face(player, "xs"), Esc(text(player["name"])), Esc(owner),
 			xptsClass(number(player["xpts"])), esNum(number(player["xpts"]), 1))
 	}
-	return block("☆ Siguiendo", `<ul class="stars">`+items.String()+`</ul>`, "xPts por jornada",
+	return block("☆ Siguiendo", `<ul class="stars">`+items.String()+`</ul>`, "",
 		len(starred))
 }
 
@@ -637,15 +628,11 @@ func (d Document) sellView() string {
 			planned[text(out["id"])] = text(in["name"])
 		}
 	}
-	earliest := ""
 	var items []string
 	for _, offer := range offers {
 		amount, value := number(offer["offer_amount"]), number(offer["value"])
 		ratio := number(offer["vs_value"])
 		expires := text(offer["offer_expires"])
-		if earliest == "" || expires < earliest {
-			earliest = expires
-		}
 		common := fmt.Sprintf(` data-op-market="%s" data-op-offer="%s" data-op-player="%s" `+
 			`data-op-name="%s" data-op-amount="%d"`, Esc(text(offer["market_id"])),
 			Esc(text(offer["offer_id"])), Esc(text(offer["id"])), Esc(text(offer["name"])),
@@ -676,9 +663,6 @@ func (d Document) sellView() string {
 			clock(expires, "caduca"), actions, tone))
 	}
 	sub := ""
-	if earliest != "" {
-		sub = "la primera caduca " + esWhen(earliest)
-	}
 	body := empty("Ninguna oferta ahora mismo.")
 	if len(items) > 0 {
 		body = rowList(items, false)
@@ -691,7 +675,6 @@ func (d Document) sellView() string {
 			text(mapOf(listings[two]["market"])["expires"])
 	})
 	var listed []string
-	cheap := false
 	for _, player := range listings {
 		listing := mapOf(player["market"])
 		asking, value := number(listing["min_bid"]), number(player["value"])
@@ -699,7 +682,6 @@ func (d Document) sellView() string {
 		if value > 0 {
 			ratio = asking / value
 		}
-		cheap = cheap || ratio < 1
 		best := 0.0
 		for _, offer := range rows(player["offers"]) {
 			best = math.Max(best, number(offer["money"]))
@@ -716,10 +698,6 @@ func (d Document) sellView() string {
 	body = empty("No tienes a nadie en venta.")
 	if len(listed) > 0 {
 		body = rowList(listed, false)
-		if cheap {
-			body += `<p class="mk-note">▼ Pides menos de lo que valen: cualquiera que llegue a ese ` +
-				`precio te obliga a decidir.</p>`
-		}
 	}
 	main += block("En venta ahora", body, "", len(listed))
 
@@ -766,10 +744,7 @@ func (d Document) idleAside() string {
 			esNum(number(player["xpts"]), 1)+" xPts", "vale "+esMoney(number(player["value"])),
 			"", action, ""))
 	}
-	sub := "fuera de tu once"
-	if d.HoldDays > 0 {
-		sub += fmt.Sprintf(" · norma: %d días sin vender un fichaje", d.HoldDays)
-	}
+	sub := ""
 	if len(items) == 0 {
 		return block("No juegan", empty("Juegan todos."), sub, 0)
 	}
@@ -867,7 +842,7 @@ func (d Document) clauseView() string {
 		body += folded(fmt.Sprintf("%d que no merece la pena subir", len(rest)),
 			`<ul class="always">`+lines.String()+`</ul>`)
 	}
-	main := block("Sube solo estas", body, "pagas la mitad de lo que sube", len(items))
+	main := block("Sube solo estas", body, "", len(items))
 
 	byID := d.playersByID()
 	var scheduled []string
@@ -914,13 +889,7 @@ func (d Document) clauseView() string {
 	}
 	body += `<p class="mk-note"><button class="linkish" type="button" data-goto="comprar">` +
 		`Todas en Comprar →</button></p>`
-	sub := ""
-	if window.open && window.closes != "" {
-		sub = "hasta " + esWhen(window.closes)
-	} else if window.opens != "" {
-		sub = "se abren " + esWhen(window.opens)
-	}
-	main += block("Pagables hoy que mejoran tu once", body, sub, -1)
+	main += block("Pagables hoy que mejoran tu once", body, "", -1)
 	return view("v-clausulas", "clausulas", main, d.unlockCalendar())
 }
 
@@ -997,7 +966,7 @@ func (d Document) unlockCalendar() string {
 		body = `<ul class="calendar">` + out.String() + `</ul><p class="mk-note">🛡 tuyas que se ` +
 			`abren · en gris, las de rivales que más suman a tu once (xPts)</p>`
 	}
-	return block("Próximos 7 días", body, "cuándo se abre cada cláusula", -1)
+	return block("Próximos 7 días", body, "", -1)
 }
 
 // --- Plantilla -------------------------------------------------------------------------
@@ -1053,7 +1022,7 @@ func (d Document) squadView() string {
 			Esc(text(player["id"])), face(player, "xs"), Esc(text(player["name"])),
 			esNum(number(player["xpts"]), 1))
 	}
-	main += block("Banquillo", `<div class="chips">`+chips.String()+`</div>`, "no puntúan",
+	main += block("Banquillo", `<div class="chips">`+chips.String()+`</div>`, "",
 		len(bench))
 
 	value, clauses, rise := 0.0, 0.0, 0.0
@@ -1087,7 +1056,7 @@ func (d Document) squadView() string {
 	}
 	if len(sell) > 0 {
 		aside += block("Para vender", rowList(sell, true)+`<p class="mk-note"><button class="linkish" `+
-			`type="button" data-goto="vender">Ir a Vender →</button></p>`, "no juegan o juegan poco",
+			`type="button" data-goto="vender">Ir a Vender →</button></p>`, "",
 			-1)
 	}
 	return view("v-plantilla", "plantilla", main, aside)
@@ -1123,7 +1092,7 @@ func (d Document) matchesView() string {
 	teams := mapOf(d.Universe["league_teams"])
 	me := mapOf(teams[text(d.Universe["my_team_id"])])
 
-	main := d.matchdayBoard()
+	card, players := "", ""
 	if len(fixtures) > 0 {
 		first, last := fixtures[0], fixtures[len(fixtures)-1]
 		match := func(fixture map[string]any) string {
@@ -1134,7 +1103,7 @@ func (d Document) matchesView() string {
 			average = fmt.Sprintf("media real %s pts/jornada",
 				esNum(number(me["points"])/float64(weekNumber-1), 1))
 		}
-		main += fmt.Sprintf(`<div class="block"><div class="matchday">`+
+		card = fmt.Sprintf(`<div class="block"><div class="matchday">`+
 			`<div><span class="k">Primer partido · se cierra tu alineación</span>`+
 			`<span class="v" data-deadline="%s" data-plain="1">%s</span><span class="s">%s · %s</span></div>`+
 			`<div><span class="k">Último partido</span><span class="v">%s</span>`+
@@ -1178,11 +1147,12 @@ func (d Document) matchesView() string {
 			body += folded(fmt.Sprintf("%d partidos sin tuyos", len(idle)),
 				`<p class="mk-note">`+strings.Join(idle, " · ")+`</p>`)
 		}
-		main += block(fmt.Sprintf("Tus jugadores en la J%d", weekNumber), body,
+		players = block(fmt.Sprintf("Tus jugadores en la J%d", weekNumber), body,
 			"en gris, los del banquillo", -1)
 	} else {
-		main += empty("Sin partidos de esta jornada en el calendario.")
+		players = empty("Sin partidos de esta jornada en el calendario.")
 	}
+	main := players + d.matchdayBoard() + card
 	aside := block("Previsto vs real", fmt.Sprintf(`<ul class="history" id="pv-history" `+
 		`data-week="%d" data-planned="%.2f"><li class="mk-note">Cargando…</li></ul>`+
 		`<p class="mk-legend"><span class="sw real"></span>tus puntos y puesto · `+

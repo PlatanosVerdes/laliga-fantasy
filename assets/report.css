@@ -1586,3 +1586,6 @@ table.cmp tr:last-child td{border-bottom:0}
 .mk .board .p3 .rank-dot{background:#c99063}
 .mk .finish{margin-top:8px}
 .mk .finish b{font-size:14px}
+.cmp-tray .cmp-close{font:inherit;font-size:14px;line-height:1;width:32px;height:32px;flex:none;border-radius:50%;
+  border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center}
+.cmp-tray .cmp-close:hover{color:var(--ink);border-color:var(--baseline)}

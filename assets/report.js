@@ -2211,9 +2211,11 @@ function trayBox(){
         <div class="cmp-results cmp-mine-list" hidden></div>
       </div>
       <button type="button" class="cmp-go primary"></button>
+      <button type="button" class="cmp-close" title="Quitar todos" aria-label="Quitar todos">✕</button>
     </div>`;
   document.body.appendChild(box);
   box.querySelector('.cmp-go').addEventListener('click',openCompare);
+  box.querySelector('.cmp-close').addEventListener('click',clearCompare);
   wireFind(box);
   wireMine(box);
   return box;
@@ -2567,14 +2569,17 @@ async function renderCompare(){
 }
 
 
+function clearCompare(){
+  tray=[]; cmpSave(); drawTray();
+  if(comparing()) renderCompare();
+}
+
 function wireCompareSection(section){
   if(section.dataset.wired) return;
   section.dataset.wired='1';
   wireFind(section);
   wireMine(section);
-  section.querySelector('.cmp-clear').addEventListener('click',()=>{
-    tray=[]; cmpSave(); drawTray(); renderCompare();
-  });
+  section.querySelector('.cmp-clear').addEventListener('click',clearCompare);
 }
 
 if(drawer){
