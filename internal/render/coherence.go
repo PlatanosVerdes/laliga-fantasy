@@ -70,6 +70,26 @@ func (d Document) offerPays(playerID string, ratio float64) bool {
 	return ratio >= policies.GoodOverValue || (d.sellCandidates()[playerID] && ratio >= SellerFloor)
 }
 
+// offerAdvice is whether to take an offer at this multiple of his value, and why, in words.
+// planned is the swap plan or a replacement counting on the sale.
+func (d Document) offerAdvice(playerID string, ratio float64, planned bool) (bool, string) {
+	words := ratioNote(ratio)
+	squad := rows(d.Advice["squad"])
+	_, xiNow := bestElevenOf(squad)
+	drop := xiNow - elevenWithout(squad, playerID)
+	switch {
+	case planned:
+		return true, words + ": lo pide el plan"
+	case ratio >= policies.GoodOverValue && !d.keepers()[playerID]:
+		return true, words
+	case ratio >= SellerFloor && d.sellCandidates()[playerID]:
+		return true, words + " y el consejo quiere venderlo"
+	case ratio >= policies.GoodOverValue:
+		return false, fmt.Sprintf("%s pero tu once pierde %s xPts", words, esNum(drop, 1))
+	}
+	return false, words + ": no compensa"
+}
+
 // keyPlayers are the ones worth defending at any clause: my three best outfield players by
 // xPts and the keeper of my best eleven.
 func (d Document) keyPlayers() map[string]bool {

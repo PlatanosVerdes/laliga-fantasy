@@ -242,7 +242,7 @@ func (d Document) Views() []string {
 		d.buyView(), moreSection("comprar", "fichajes · en venta · mis pujas · siguiendo · cómo acabaron"),
 		d.sellView(), moreSection("vender", "mis ventas · ofertas · siempre en mercado"),
 		d.clauseView(), moreSection("clausulas", "subir · programados · calendario · vencimientos · oportunidades"),
-		Pitch, d.squadView(), moreSection("plantilla", "plantilla · candidatos a vender"),
+		Pitch, d.squadView(),
 		d.matchesView(), moreSection("partidos", "cómo va la jornada · calendario de partidos"),
 		d.rivalsView(),
 	}
@@ -635,10 +635,10 @@ func (d Document) sellView() string {
 		return number(offers[one]["vs_value"]) > number(offers[two]["vs_value"])
 	})
 	// The plan's sales: an offer it counts on is accepted to sign somebody else.
-	planned := map[string]string{}
+	plannedFor := map[string]string{}
 	for _, move := range rows(d.Swaps["moves"]) {
 		if out, in := mapOf(move["out"]), mapOf(move["in"]); out != nil && in != nil {
-			planned[text(out["id"])] = text(in["name"])
+			plannedFor[text(out["id"])] = text(in["name"])
 		}
 	}
 	var items []string
@@ -650,28 +650,28 @@ func (d Document) sellView() string {
 			`data-op-name="%s" data-op-amount="%d"`, Esc(text(offer["market_id"])),
 			Esc(text(offer["offer_id"])), Esc(text(offer["id"])), Esc(text(offer["name"])),
 			int64(amount))
-		words := ratioNote(ratio)
 		meta := Esc(text(offer["team_short"]))
 		if who := text(offer["offer_from"]); who != "" && !truthy(offer["offer_from_market"]) {
 			meta += " · de " + Esc(who)
 		}
 		// Both buttons, always; the one the panel recommends is filled and says why.
 		recommend := func(label, kind, op, reason string) string {
-			return button("★ "+label, kind, "op", fmt.Sprintf(` data-op="%s" title="recomendado: %s"`,
+			return button(label, kind, "op", fmt.Sprintf(` data-op="%s" title="recomendado: %s"`,
 				op, Esc(reason))+common)
 		}
-		tone, actions := "", recommend("Rechazar", "bad", "decline_offer", words+": no compensa")+
+		planned := plannedFor[text(offer["id"])] != ""
+		take, why := d.offerAdvice(text(offer["id"]), ratio, planned)
+		tone := ""
+		actions := recommend("Rechazar", "bad", "decline_offer", why) +
 			button("Aceptar", "ghost", "op", ` data-op="accept_offer"`+common)
-		switch {
-		case planned[text(offer["id"])] != "":
-			meta += " · si fichas a " + Esc(planned[text(offer["id"])])
-			tone = "accent"
-			actions = recommend("Aceptar", "good", "accept_offer", words+": lo pide el plan") +
-				button("Rechazar", "ghost", "op", ` data-op="decline_offer"`+common)
-		case d.offerPays(text(offer["id"]), ratio):
+		if take {
 			tone = "good"
-			actions = recommend("Aceptar", "good", "accept_offer", words) +
+			actions = recommend("Aceptar", "good", "accept_offer", why) +
 				button("Rechazar", "ghost", "op", ` data-op="decline_offer"`+common)
+		}
+		if planned {
+			meta += " · si fichas a " + Esc(plannedFor[text(offer["id"])])
+			tone = "accent"
 		}
 		glyph := "▲"
 		if ratio < 1 {
@@ -868,7 +868,7 @@ func (d Document) clauseView() string {
 		body += folded(fmt.Sprintf("%d que no merece la pena subir", len(rest)),
 			`<ul class="always">`+lines.String()+`</ul>`)
 	}
-	main := block("Sube solo estas", body, "", len(items))
+	main := block("Recomendaciones", body, "", len(items))
 
 	byID := d.playersByID()
 	var scheduled []string

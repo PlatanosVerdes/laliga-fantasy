@@ -1645,3 +1645,6 @@ table.cmp tr:last-child td{border-bottom:0}
 .drawer-actions.pc-acts button.act-good{background:var(--good);border-color:var(--good);color:#fff}
 .drawer-actions.pc-acts button.act-bad{background:var(--critical);border-color:var(--critical);color:#fff}
 .mk .big-note.up{color:var(--good)} .mk .big-note.down{color:var(--critical)}
+.mk .rows .line-head{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:11px;color:var(--muted);
+  background:var(--surface-2);border-top:1px solid var(--line);font-weight:600}
+.mk .rows .line-head:first-child{border-top:0}

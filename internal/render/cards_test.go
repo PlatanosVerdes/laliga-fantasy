@@ -56,7 +56,7 @@ func decidingDocument() Document {
 			"is_mine": true, "available": true, "value": 2_000_000.0, "xpts": 2.0},
 		map[string]any{"id": "12", "name": "Medio suplente", "position": "MED",
 			"position_id": 3.0, "is_mine": true, "available": true, "value": 1_000_000.0,
-			"xpts": 1.0},
+			"xpts": 2.0},
 		map[string]any{"id": "13", "name": "Ángel Pérez", "position": "MED", "position_id": 3.0,
 			"is_mine": true, "available": true, "value": 36_000_000.0, "xpts": 7.0,
 			"market": map[string]any{"market_id": "m13"}},
@@ -310,5 +310,16 @@ func TestCrackReachIsWhatCanBeRaisedToday(t *testing.T) {
 	box := document.crackBox()
 	if strings.Contains(box, "Portero") || strings.Contains(box, "Ángel Pérez") {
 		t.Errorf("alcance: %s", box)
+	}
+}
+
+// Unai's 1,02x is not a sale when the eleven loses 3,9 xPts without him, and it says so.
+func TestOfferAdviceSaysWhyNot(t *testing.T) {
+	take, why := decidingDocument().offerAdvice("13", 1.04, false)
+	if take || !strings.Contains(why, "×1,04 su valor pero tu once pierde") {
+		t.Errorf("%v %q", take, why)
+	}
+	if take, _ := decidingDocument().offerAdvice("13", 1.04, true); !take {
+		t.Error("con el sustituto en el plan, sí")
 	}
 }

@@ -214,10 +214,11 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 				}
 				note += "caduca " + expires[:16]
 			}
+			take, why := offerAdvice(rows, id, float64(amount), number(player["value"]))
 			actions = append(actions,
 				map[string]any{"op": "accept_offer", "label": label, "kind": "confirm",
 					"offer_id": text(offer["id"]), "market_id": listing["market_id"],
-					"amount": amount, "note": note,
+					"amount": amount, "note": note, "take": take, "why": why,
 					"from": who, "from_market": truthy(offer["from_market"])},
 				map[string]any{"op": "decline_offer",
 					"label": "Rechazar la " + from, "kind": "confirm", "danger": true,
@@ -627,6 +628,31 @@ func shirtOf(slot map[string]any, known map[string]map[string]any) map[string]an
 		"listed_for":        mapOf(extra["market"])["min_bid"],
 		"best_offer":        bestOffer(extra),
 	}
+}
+
+// offerAdvice is the card's verdict on an offer: at 1.02x his value or more, and only when the
+// best eleven loses at most one xPts without him.
+func offerAdvice(rows []map[string]any, id string, amount, value float64) (bool, string) {
+	if value <= 0 {
+		return false, ""
+	}
+	ratio := amount / value
+	words := "×" + strings.Replace(fmt.Sprintf("%.2f", ratio), ".", ",", 1) + " su valor"
+	without := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		if text(row["id"]) != id {
+			without = append(without, row)
+		}
+	}
+	drop := number(bestLineup(rows)["xpts"]) - number(bestLineup(without)["xpts"])
+	switch {
+	case ratio >= policies.GoodOverValue && drop <= 1:
+		return true, words
+	case ratio >= policies.GoodOverValue:
+		return false, fmt.Sprintf("%s pero tu once pierde %s xPts", words,
+			strings.Replace(fmt.Sprintf("%.1f", drop), ".", ",", 1))
+	}
+	return false, words + ": no compensa"
 }
 
 func bestOffer(row map[string]any) any {

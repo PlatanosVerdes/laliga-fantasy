@@ -122,7 +122,10 @@ func (d Document) offerCards(actions []map[string]any, rate float64) []Card {
 			continue
 		}
 		amount, value := number(row["offer_amount"]), number(row["value"])
-		if value <= 0 || !d.offerPays(text(row["id"]), amount/value) {
+		if value <= 0 {
+			continue
+		}
+		if take, _ := d.offerAdvice(text(row["id"]), amount/value, stand != nil); !take {
 			continue
 		}
 		over := amount - value

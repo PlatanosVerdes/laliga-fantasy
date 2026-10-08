@@ -1858,11 +1858,10 @@ async function openDetail(playerId){
   const notes=actions.filter(x=>x.kind==='note'), buttons=actions.filter(x=>x.kind!=='note');
   // An offer's pair: the button the panel recommends is filled and says why.
   const recommended=new Map();
-  buttons.filter(x=>x.op==='accept_offer'&&x.amount&&p.value).forEach(x=>{
-    const ratio=x.amount/p.value, words='×'+dec(ratio,2)+' su valor';
+  buttons.filter(x=>x.op==='accept_offer'&&x.why).forEach(x=>{
     const decline=buttons.find(y=>y.op==='decline_offer'&&y.offer_id===x.offer_id);
-    if(ratio>=1.02) recommended.set(x,{tone:'good',why:words});
-    else if(decline) recommended.set(decline,{tone:'bad',why:words+': no compensa'});
+    if(x.take) recommended.set(x,{tone:'good',why:x.why});
+    else if(decline) recommended.set(decline,{tone:'bad',why:x.why});
   });
   const primary=buttons.find(x=>!isDanger(x)&&x.op!=='always'&&!x.blocked&&x.op!=='accept_offer');
   body.innerHTML=`
@@ -1996,7 +1995,7 @@ function actionButton(a,primary=false,rec=null){
   if(a.kind==='note') return `<p class="pc-info">${a.label}${a.deadline
     ? ` · quedan <span data-deadline="${a.deadline}" data-plain="1">${leftUntil(a.deadline)}</span>` : ''}</p>`;
   if(rec) return `<button class="act act-${rec.tone}" type="button" title="recomendado: ${rec.why}" `
-    +`data-action='${JSON.stringify(a).replace(/'/g,"&#39;")}'>★ ${a.label}</button>`;
+    +`data-action='${JSON.stringify(a).replace(/'/g,"&#39;")}'>${a.label}</button>`;
   const cls='act'+(isDanger(a)&&!/^(accept|decline)_offer$/.test(a.op)?' act-danger':primary?' act-primary':'')
     +((a.op==='always'||a.op==='raid')&&a.on?' on':'');
   const off=a.blocked?' disabled':'';
@@ -2799,7 +2798,6 @@ const FOLDS={
   comprar:['fichajes','enventa','mispujas','seguimiento','resueltas'],
   vender:['misventas','ofertas','siempre'],
   clausulas:['subir','programados','calendario','vencimientos','oportunidades','clausulas'],
-  plantilla:['plantilla','ventas'],
   partidos:['jornada','partidos'],
   rivales:['rivales','pinta'],
   ranking:['ranking','rentabilidad'],

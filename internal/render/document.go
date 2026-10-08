@@ -1348,25 +1348,71 @@ func (d Document) feedSection() string {
 func (d Document) squadSection() string {
 	squad := rows(d.Advice["squad"])
 	shape := mapOf(d.Advice["shape"])
-	var bits []string
+	var groups strings.Builder
 	for _, positionID := range []string{"1", "2", "3", "4"} {
-		data := mapOf(shape[positionID])
-		if data == nil {
+		var line []map[string]any
+		for _, player := range squad {
+			if text(player["position_id"]) == positionID {
+				line = append(line, player)
+			}
+		}
+		if len(line) == 0 {
 			continue
 		}
-		// A gap is bolded and a surplus is not: one of them is a hole in the eleven and the
-		// other is a player you could sell.
-		state := "ok"
-		if truthy(data["gap"]) {
-			state = "<strong>falta</strong>"
-		} else if truthy(data["surplus"]) {
-			state = "sobra"
+		sort.SliceStable(line, func(one, two int) bool {
+			return number(line[one]["xpts"]) > number(line[two]["xpts"])
+		})
+		state := ""
+		if data := mapOf(shape[positionID]); data != nil {
+			switch {
+			case truthy(data["gap"]):
+				state = " · falta uno"
+			case truthy(data["surplus"]):
+				state = " · sobra uno"
+			}
 		}
-		bits = append(bits, fmt.Sprintf("%s %d/%d (%s)", positionNames[positionID],
-			int(number(data["owned"])), int(number(data["ideal"])), state))
+		slug := map[string]string{"1": "por", "2": "def", "3": "med", "4": "del"}[positionID]
+		fmt.Fprintf(&groups, `<li class="line-head"><span class="pos pos-%s">%s</span>%s%s</li>`,
+			slug, strings.ToUpper(slug), counted(len(line), "jugador", "jugadores"), state)
+		for _, player := range line {
+			groups.WriteString(squadRow(player))
+		}
 	}
-	table, _ := SectionTable("plantilla", squad)
-	return Section("Mi plantilla", table, strings.Join(bits, " · "), "", "plantilla")
+	return mkSection("plantilla", "plantilla", "Mi plantilla",
+		`<ul class="rows">`+groups.String()+`</ul>`, "", len(squad))
+}
+
+// squadRow is one of mine: what he gives, what he is worth and where his clause and his sale
+// stand.
+func squadRow(player map[string]any) string {
+	meta := Esc(text(player["team_short"]))
+	if starts := asFloat(player["start_probability"]); starts != nil {
+		meta += fmt.Sprintf(" · titular %.0f %%", *starts)
+	}
+	if truthy(player["sale_locked"]) {
+		meta += " · 🔒 venta " + esDay(text(player["hold_until"]))
+	}
+	if asking := number(mapOf(player["market"])["min_bid"]); asking > 0 {
+		meta += " · 🏷 en venta por " + esMoney(asking)
+	}
+	trend := number(player["pct_7d"])
+	class, sign := "up", "+"
+	if trend < 0 {
+		class, sign = "down", ""
+	}
+	note := fmt.Sprintf(`%s · <span class="%s">%s%s %%</span>`, esMoney(number(player["value"])),
+		class, sign, esNum(trend, 1))
+	var chip string
+	switch {
+	case truthy(player["shielded"]):
+		chip = tag("🛡 blindado", "done")
+	case truthy(player["clause_locked"]):
+		chip = clock(text(player["clause_locked_until"]), "se libera su cláusula")
+	case number(player["clause"]) > 0:
+		chip = tag("🔓 "+esMoney(number(player["clause"])), "warn")
+	}
+	return row(player, meta, esNum(number(player["xpts"]), 1)+" xPts", note, chip,
+		Star(player)+CompareButton(player), "")
 }
 
 var positionNames = map[string]string{
@@ -1473,11 +1519,6 @@ func (d Document) marketSections() []string {
 			"sale <em>caro</em>, y que se pueda pagar no lo convierte en buena idea.",
 		fmt.Sprintf("%d", len(raids)), "clausulas"))
 
-	sells := rows(d.Advice["sells"])
-	table, _ = SectionTable("ventas", sells)
-	out = append(out, Section("Candidatos a vender", table,
-		"Ordenados por presion de venta: score bajo, valor cayendo, poca titularidad "+
-			"o exceso en la posicion.", "", "ventas"))
 
 	// The exposure table used to live here, saying who was cheap and how many could pay it.
 	// "Subir cláusulas" answers the same question and then the next two — how likely it is,
