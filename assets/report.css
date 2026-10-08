@@ -1532,3 +1532,12 @@ footer,header.topline{margin-top:24px}
   .mk .fx .chips{grid-column:1/-1}
   .mk .tok{width:64px} .mk .tok-name{max-width:64px;font-size:11px}
 }
+/* The comparator as a tab: one rounded box, labels a narrow column, players sharing the rest. */
+.cmp-wrap{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px 0}
+table.cmp{table-layout:fixed}
+table.cmp th:first-child,table.cmp td:first-child{width:150px;padding-left:16px}
+table.cmp th,table.cmp td{text-align:center}
+table.cmp td:first-child,table.cmp th:first-child{text-align:left}
+table.cmp th{padding-top:12px}
+table.cmp tr:last-child td{border-bottom:0}
+.cmp-who,.cmp-sub,.cmp-state{align-items:center;justify-content:center;text-align:center}
