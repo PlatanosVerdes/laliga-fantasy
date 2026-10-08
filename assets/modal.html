@@ -55,3 +55,22 @@
     <p class="modal-note">Dura 24h desde la hora que elijas. Puedes programar varios: se hacen en orden.</p>
   </div>
 </div>
+
+<div class="modal" id="raid-modal" hidden role="dialog" aria-modal="true"
+     aria-label="Programar clausulazo">
+  <div class="modal-card">
+    <h3>Clausulazo a <span class="raid-who"></span></h3>
+    <dl class="bid-dl raid-facts"></dl>
+    <div class="bid-field">
+      <label for="raid-max">Pago máximo</label>
+      <input id="raid-max" type="text" inputmode="numeric" autocomplete="off" spellcheck="false">
+    </div>
+    <p class="bid-error raid-error"></p>
+    <div class="modal-actions">
+      <button class="raid-cancel" type="button">Cancelar</button>
+      <button class="raid-save bid-next" type="button">Programar</button>
+    </div>
+    <p class="modal-note">Se paga en cuanto se libere la cláusula, solo si sigue por debajo de este
+      importe. Si la suben por encima o lo blindan, se cancela sola.</p>
+  </div>
+</div>

@@ -1867,19 +1867,8 @@ function actionButton(a){
 async function runAction(a,player){
   if(a.op==='note') return;
   if(a.op==='raid'){
-    const current=group(a.suggested);
-    const answer=prompt('Clausulazo programado para '+player.name+'.\n\n'
-      +'Se pagara en cuanto se libere la clausula, y SOLO si entonces sigue por debajo '
-      +'del importe que pongas aqui. Si el dueño la sube o le pone blindaje, se cancela.\n\n'
-      +(myCash!=null?'Tu saldo ahora: '+exact(myCash)+'\n\n':'')
-      +'Pago maximo (€):', current);
-    if(answer===null) return;
-    const max_pay=digits(answer);
-    if(!max_pay) return;
-    const res=await fetch('/api/raid',{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({id:player.id,name:player.name,max_pay})});
-    if(res.ok) openDetail(player.id);
+    raidDialog({id:player.id, name:player.name, suggested:a.suggested, clause:player.clause,
+                opens:player.clause_locked_until},()=>openDetail(player.id));
     return;
   }
   if(a.op==='shield'){
@@ -1989,28 +1978,54 @@ function wireRaises(root=document){
   });
 }
 
-async function scheduleRaid(dataset){
-  const suggested=group(+dataset.raidMax||0);
-  const clause=+dataset.raidClause||0;
-  const answer=prompt('Clausulazo programado para '+dataset.raidName+'.\n\n'
-    +'Se pagara SOLO en el momento en que la clausula se libere, y solo si entonces '
-    +'sigue por debajo del importe que pongas aqui.\n'
-    +(clause?('Clausula ahora: '+clause.toLocaleString('es-ES')+' €\n'):'')
-    +'Si el dueño la sube por encima de tu limite, o blinda al jugador, se cancela '
-    +'sola y no se paga nada.\n\n'
-    +(myCash!=null?'Tu saldo ahora: '+exact(myCash)+'\n\n':'')
-    +'Pago maximo (€):', suggested);
-  if(answer===null) return;
-  const max_pay=digits(answer);
-  if(!max_pay) return;
-  const res=await fetch('/api/raid',{method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({id:dataset.raid,name:dataset.raidName,max_pay})});
-  if(!res.ok){ alert('No se ha podido programar.'); return; }
-  alert(dataset.raidName+': programado con limite '+max_pay.toLocaleString('es-ES')+' €.\n'
-    +(MODE==='auto' ? 'Se ejecutara solo, sin preguntar, en cuanto se cumpla.'
-                    : 'Este servidor esta en modo '+MODE+': lo vera pero no lo ejecutara.'));
-  swap();
+function scheduleRaid(dataset){
+  raidDialog({id:dataset.raid, name:dataset.raidName, suggested:+dataset.raidMax||0,
+              clause:+dataset.raidClause||0},()=>swap());
+}
+
+// The scheduled clausulazo asks for one number, the most you would pay; it is grouped as it is
+// typed so a million and ten millions cannot be told apart by counting zeros.
+function raidDialog(p,done){
+  const box=document.getElementById('raid-modal');
+  if(!box) return;
+  const input=box.querySelector('#raid-max'), error=box.querySelector('.raid-error');
+  box.querySelector('.raid-who').textContent=p.name;
+  box.querySelector('.raid-facts').innerHTML=
+    (p.clause?`<dt>Cláusula ahora</dt><dd><strong>${exact(p.clause)}</strong></dd>`:'')
+    +(p.opens&&new Date(p.opens)>new Date()?`<dt>Se libera</dt><dd>${stampText(p.opens)}</dd>`:'')
+    +(myCash!=null?`<dt>Tu saldo</dt><dd>${exact(myCash)}</dd>`:'')
+    +(MODE!=='auto'?`<dt></dt><dd class="clause-open">este servidor está en modo ${MODE}: `
+      +'lo guardará pero no lo pagará solo</dd>':'');
+  input.value=group(p.suggested||p.clause||0);
+  error.textContent='';
+  box.hidden=false;
+  input.focus(); input.select();
+
+  const format=()=>{
+    const caret=input.selectionStart, before=input.value.length;
+    input.value=group(digits(input.value));
+    const shift=input.value.length-before;
+    input.setSelectionRange(Math.max(0,caret+shift),Math.max(0,caret+shift));
+  };
+  const close=()=>{ box.hidden=true; box.onclick=null; input.oninput=null;
+    document.removeEventListener('keydown',onKey); };
+  const save=async()=>{
+    const max_pay=digits(input.value);
+    if(!max_pay){ error.textContent='Escribe un importe.'; return; }
+    if(p.clause&&max_pay<p.clause){ error.textContent='Por debajo de la cláusula actual: no se pagaría.'; return; }
+    const res=await fetch('/api/raid',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:p.id,name:p.name,max_pay})});
+    if(!res.ok){ error.textContent='No se ha podido programar.'; return; }
+    close();
+    if(done) done();
+  };
+  const onKey=(e)=>{ if(e.key==='Escape') close(); if(e.key==='Enter') save(); };
+  document.addEventListener('keydown',onKey);
+  input.oninput=format;
+  box.onclick=(e)=>{
+    if(e.target===box||e.target.closest('.raid-cancel')) close();
+    else if(e.target.closest('.raid-save')) save();
+  };
 }
 
 function wireRaids(root=document){
