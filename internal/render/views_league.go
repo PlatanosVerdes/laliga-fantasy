@@ -226,12 +226,82 @@ func rankList(players []map[string]any, shown int, withChip bool) string {
 	return out
 }
 
-func (d Document) rankingView(byScore, byValue []map[string]any) string {
+// bestRow is a player of "Los mejores": his price today and whether my reach gets there.
+func bestRow(player map[string]any, reach float64) string {
+	owner := text(player["owner"])
+	switch {
+	case truthy(player["is_mine"]):
+		owner = "tuyo"
+	case owner == "":
+		owner = "libre"
+	default:
+		owner = "de " + owner
+	}
+	meta := Esc(text(player["team_short"])) + " · " + Esc(owner)
+	if starts := asFloat(player["start_probability"]); starts != nil {
+		meta += fmt.Sprintf(" · titular %.0f %%", *starts)
+	}
+	price, how := crackPrice(player)
+	note, chip := Esc(how), ""
+	switch {
+	case truthy(player["is_mine"]):
+		note = "vale " + esMoney(number(player["value"]))
+	case price > 0:
+		note = esMoney(price) + " · " + Esc(how)
+	}
+	switch {
+	case truthy(player["is_mine"]):
+	case price > 0 && reach >= price:
+		chip = tag("te llega", "ok")
+	case price > 0:
+		chip = tag("te faltan "+esMoney(price-reach), "warn")
+	}
+	line := row(player, meta, esNum(number(player["xpts"]), 1)+" xPts", note, chip,
+		Star(player)+CompareButton(player), "")
+	return strings.Replace(line, `<li class="r " `, fmt.Sprintf(
+		`<li class="r " data-position="%s" data-price="%.0f" data-name="%s" `,
+		Esc(text(player["position"])), number(player["value"]),
+		Esc(strings.ToLower(text(player["name"])))), 1)
+}
+
+func (d Document) rankingView(byScore, byXPts []map[string]any) string {
+	reach, _ := d.crackReach()
+	var top, rest []string
+	for index, player := range byXPts {
+		if index < 10 {
+			top = append(top, bestRow(player, reach))
+		} else {
+			rest = append(rest, bestRow(player, reach))
+		}
+	}
+	best := rowList(top, false)
+	if len(rest) > 0 {
+		best += folded(fmt.Sprintf("%d más", len(rest)), rowList(rest, false))
+	}
 	main := `<div class="mk-filters">` + Filters + `</div>` +
-		block("Ranking global", rankList(byScore, 10, true), "",
-			len(byScore))
-	aside := block("Mejor rentabilidad", rankList(byValue, 10, false),
-		"", len(byValue))
+		block("Los mejores", best, "", len(byXPts)) +
+		block("Chollos", `<p class="lead">puntos por millón, titularidad y valor al alza: para el `+
+			`banquillo barato</p>`+rankList(byScore, 10, true), "", len(byScore))
+
+	var byLine strings.Builder
+	for _, positionID := range []int{1, 2, 3, 4} {
+		shown := 0
+		var items []string
+		for _, player := range byXPts {
+			if int(number(player["position_id"])) == positionID && shown < 3 {
+				items = append(items, rankRow(player, false))
+				shown++
+			}
+		}
+		if len(items) == 0 {
+			continue
+		}
+		slug := positionSlug[positionID]
+		fmt.Fprintf(&byLine, `<li class="line-head"><span class="pos pos-%s">%s</span></li>%s`,
+			slug, strings.ToUpper(slug), strings.Join(items, ""))
+	}
+	aside := block("Los mejores por posición", `<ul class="rows tight">`+byLine.String()+`</ul>`,
+		"", -1)
 	return view("v-ranking", "ranking", main, aside)
 }
 

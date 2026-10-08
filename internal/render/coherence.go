@@ -177,6 +177,43 @@ func maxFloat(one, two float64) float64 {
 	return two
 }
 
+// crackReach is what can be raised today, and from whom.
+func (d Document) crackReach() (float64, []string) {
+	// What can really be raised today: the cash, the offers on the table that pay, and the
+	// bench players the hold rule already lets go.
+	reach := number(d.Advice["budget"])
+	sold := []string{}
+	amounts := map[string]float64{}
+	names := map[string]string{}
+	keep := d.keepers()
+	for _, offer := range rows(d.Advice["offers"]) {
+		id := text(offer["id"])
+		if number(offer["vs_value"]) >= policies.GoodOverValue && !keep[id] {
+			amounts[id] = maxFloat(amounts[id], number(offer["offer_amount"]))
+			names[id] = text(offer["name"])
+		}
+	}
+	for _, player := range d.benchOf() {
+		id := text(player["id"])
+		if truthy(player["sale_locked"]) {
+			continue
+		}
+		amounts[id] = maxFloat(amounts[id], number(player["value"]))
+		names[id] = text(player["name"])
+	}
+	ids := make([]string, 0, len(amounts))
+	for id := range amounts {
+		ids = append(ids, id)
+	}
+	sort.SliceStable(ids, func(one, two int) bool { return amounts[ids[one]] > amounts[ids[two]] })
+	for _, id := range ids {
+		reach += amounts[id]
+		sold = append(sold, names[id])
+	}
+
+	return reach, sold
+}
+
 // crackBox is the goal: the three best players I do not have, what each costs today, how far
 // my cash and my sales reach, and what the cheapest would add to my eleven.
 func (d Document) crackBox() string {
@@ -212,37 +249,7 @@ func (d Document) crackBox() string {
 		return ""
 	}
 
-	// What can really be raised today: the cash, the offers on the table that pay, and the
-	// bench players the hold rule already lets go.
-	reach := number(d.Advice["budget"])
-	sold := []string{}
-	amounts := map[string]float64{}
-	names := map[string]string{}
-	keep := d.keepers()
-	for _, offer := range rows(d.Advice["offers"]) {
-		id := text(offer["id"])
-		if number(offer["vs_value"]) >= policies.GoodOverValue && !keep[id] {
-			amounts[id] = maxFloat(amounts[id], number(offer["offer_amount"]))
-			names[id] = text(offer["name"])
-		}
-	}
-	for _, player := range d.benchOf() {
-		id := text(player["id"])
-		if truthy(player["sale_locked"]) {
-			continue
-		}
-		amounts[id] = maxFloat(amounts[id], number(player["value"]))
-		names[id] = text(player["name"])
-	}
-	ids := make([]string, 0, len(amounts))
-	for id := range amounts {
-		ids = append(ids, id)
-	}
-	sort.SliceStable(ids, func(one, two int) bool { return amounts[ids[one]] > amounts[ids[two]] })
-	for _, id := range ids {
-		reach += amounts[id]
-		sold = append(sold, names[id])
-	}
+	reach, sold := d.crackReach()
 
 	var items []string
 	var cheapest map[string]any

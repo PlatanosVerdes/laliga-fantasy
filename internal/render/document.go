@@ -1817,7 +1817,14 @@ func (d Document) rankingSections(players []map[string]any) []string {
 	if len(byValue) > 40 {
 		byValue = byValue[:40]
 	}
-	out[0] = d.rankingView(byScore, byValue)
+	byXPts := append([]map[string]any(nil), available...)
+	sort.SliceStable(byXPts, func(i, j int) bool {
+		return number(byXPts[i]["xpts"]) > number(byXPts[j]["xpts"])
+	})
+	if len(byXPts) > 80 {
+		byXPts = byXPts[:80]
+	}
+	out[0] = d.rankingView(byScore, byXPts)
 	out = append(out, Section("Mejor rentabilidad",
 		TableIn(PlayerColumns(""), byValue, "Sin datos", "", false),
 		"xPts esperados por jornada divididos entre el precio. La metrica que manda cuando "+

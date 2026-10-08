@@ -62,3 +62,19 @@ func TestMatchdayBoardOrdersByProjectedFinish(t *testing.T) {
 		t.Errorf("mi puesto previsto: J%d %dº", week, place)
 	}
 }
+
+// "Los mejores" is by xPts alone and says whether my reach gets to each one's price.
+func TestRankingOpensWithTheBestAndTheirPrice(t *testing.T) {
+	document := decidingDocument()
+	star := map[string]any{"id": "99", "name": "Raphinha", "position": "DEL", "position_id": 4.0,
+		"xpts": 9.5, "available": true, "owner": "Rival", "clause": 500_000_000.0}
+	cheap := map[string]any{"id": "98", "name": "Barato", "position": "DEL", "position_id": 4.0,
+		"xpts": 6.0, "available": true, "owner": "Rival", "clause": 1_000_000.0, "score": 9.0}
+	html := document.rankingView([]map[string]any{cheap}, []map[string]any{star, cheap})
+	if strings.Index(html, "Los mejores") > strings.Index(html, "Chollos") {
+		t.Error("los mejores van primero")
+	}
+	if !strings.Contains(html, "te faltan") || !strings.Contains(html, "te llega") {
+		t.Errorf("el alcance frente a cada precio: %s", html)
+	}
+}
