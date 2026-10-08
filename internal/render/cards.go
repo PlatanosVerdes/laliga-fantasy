@@ -28,6 +28,7 @@ type Card struct {
 	Verb          string
 	Big           string
 	BigNote       string
+	NoteClass     string
 	Deadline      string
 	DeadlineLabel string
 	Why           []string
@@ -50,7 +51,7 @@ func (d Document) decisionCards(now time.Time) []Card {
 	actions := d.actionRows()
 	var cards []Card
 	cards = append(cards, d.offerCards(actions, rate)...)
-	cards = append(cards, d.raiseCards()...)
+	cards = append(cards, d.raiseCards(now)...)
 	cards = append(cards, d.swapCards()...)
 	cards = append(cards, d.signingCards(actions)...)
 	return orderCards(cards, now)
@@ -79,6 +80,10 @@ func orderCards(cards []Card, now time.Time) []Card {
 	sort.SliceStable(list, func(one, two int) bool {
 		if list[one].bucket != list[two].bucket {
 			return list[one].bucket < list[two].bucket
+		}
+		// At the same hour, money coming in before money going out: cash is what buys a crack.
+		if first, second := list[one].card.Cash > 0, list[two].card.Cash > 0; first != second {
+			return first
 		}
 		return list[one].card.Weight > list[two].card.Weight
 	})
@@ -117,6 +122,9 @@ func (d Document) offerCards(actions []map[string]any, rate float64) []Card {
 			continue
 		}
 		amount, value := number(row["offer_amount"]), number(row["value"])
+		if value <= 0 || !d.offerPays(text(row["id"]), amount/value) {
+			continue
+		}
 		over := amount - value
 		who := text(row["offer_from"])
 		if who == "" {
@@ -145,8 +153,9 @@ func (d Document) offerCards(actions []map[string]any, rate float64) []Card {
 		}
 		out = append(out, Card{
 			Kind: "offer", Key: "own:" + text(row["id"]), Player: row,
-			Verb: "Acepta la oferta", Big: esMoney(amount), BigNote: "vale " + esMoney(value),
-			Deadline: text(row["offer_expires"]), DeadlineLabel: "caduca la oferta",
+			Verb: "Acepta la oferta", Big: esMoney(amount), BigNote: ratioNote(amount / value),
+			NoteClass: ratioClassOf(amount / value),
+			Deadline:  text(row["offer_expires"]), DeadlineLabel: "caduca la oferta",
 			Why: why, Impact: impact, Tone: "good",
 			Button: fmt.Sprintf(`<button class="op op-primary dcard-go" data-op="accept_offer" `+
 				`data-op-market="%s" data-op-offer="%s" data-op-player="%s" data-op-name="%s" `+
@@ -160,10 +169,15 @@ func (d Document) offerCards(actions []map[string]any, rate float64) []Card {
 }
 
 // raiseCards are the raises the clause plan fits in the balance, riskiest first.
-func (d Document) raiseCards() []Card {
+func (d Document) raiseCards(now time.Time) []Card {
 	var out []Card
 	for _, row := range rows(d.Raise["rows"]) {
-		if !truthy(row["in_plan"]) || number(row["pay"]) <= 0 {
+		if !truthy(row["in_plan"]) || number(row["pay"]) <= 0 || !d.raiseWanted(row) {
+			continue
+		}
+		// Further off than two days it is the Cláusulas tab's business, not today's.
+		deadline, label := d.raiseDeadline(row)
+		if when, ok := parseStamp(deadline); !ok || when.After(now.Add(RaiseHorizon)) {
 			continue
 		}
 		pay, target, clause := number(row["pay"]), number(row["target_clause"]),
@@ -182,15 +196,15 @@ func (d Document) raiseCards() []Card {
 				threat, esMoney(cash))
 		}
 		drop := number(row["xi_drop"])
-		deadline, label := d.raiseDeadline(row)
 		out = append(out, Card{
 			Kind: "raise", Key: "own:" + text(row["id"]), Player: row,
 			Verb: "Sube su cláusula", Big: esMoney(target), BigNote: "hoy " + esMoney(clause),
 			Deadline: deadline, DeadlineLabel: label,
 			Why: []string{first,
 				fmt.Sprintf("Si se lo lleva, tu once pierde %s xPts.", esNum(drop, 1))},
-			Impact: fmt.Sprintf("riesgo estimado %.0f %%", number(row["risk"])*100),
-			Tone:   "critical",
+			Impact: fmt.Sprintf("retrasa tu crack %s · riesgo %.0f %%", esMoney(pay),
+				number(row["risk"])*100),
+			Tone: "critical",
 			Button: fmt.Sprintf(`<button class="raise dcard-go" data-raise="%s" data-raise-name="%s" `+
 				`data-raise-pay="%d" data-raise-slot="%s" data-raise-clause="%d" `+
 				`data-raise-target="%d" type="button">Subir cláusula · pagas %s</button>`,

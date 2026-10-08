@@ -1856,7 +1856,15 @@ async function openDetail(playerId){
   const grid=tiles.map(([k,v,sm,cls])=>`<div class="${cls||''}"><span>${k}</span><b>${v}</b>${sm?`<small>${sm}</small>`:''}</div>`).join('');
   const actions=data.actions||[];
   const notes=actions.filter(x=>x.kind==='note'), buttons=actions.filter(x=>x.kind!=='note');
-  const primary=buttons.find(x=>!isDanger(x)&&x.op!=='always'&&!x.blocked);
+  // An offer's pair: the button the panel recommends is filled and says why.
+  const recommended=new Map();
+  buttons.filter(x=>x.op==='accept_offer'&&x.amount&&p.value).forEach(x=>{
+    const ratio=x.amount/p.value, words='×'+dec(ratio,2)+' su valor';
+    const decline=buttons.find(y=>y.op==='decline_offer'&&y.offer_id===x.offer_id);
+    if(ratio>=1.02) recommended.set(x,{tone:'good',why:words});
+    else if(decline) recommended.set(decline,{tone:'bad',why:words+': no compensa'});
+  });
+  const primary=buttons.find(x=>!isDanger(x)&&x.op!=='always'&&!x.blocked&&x.op!=='accept_offer');
   body.innerHTML=`
     ${drawerFrom?`<button class="drawer-back" type="button" data-back="${drawerFrom.id}"
       >← ${drawerFrom.label}</button>`:''}
@@ -1873,7 +1881,7 @@ async function openDetail(playerId){
     ${sparkSvg(data.history||[])}
     ${actions.length?'<div class="pc-h">Acciones</div>':''}
     ${notes.map(actionButton).join('')}
-    <div class="drawer-actions pc-acts">${buttons.map(x=>actionButton(x,x===primary)).join('')}</div>
+    <div class="drawer-actions pc-acts">${buttons.map(x=>actionButton(x,x===primary,recommended.get(x))).join('')}</div>
     ${data.writes_enabled?'':'<p class="drawer-note">Servidor en modo solo lectura: '
       +'las operaciones estan desactivadas.</p>'}`;
   body.querySelectorAll('button[data-action]').forEach(button=>
@@ -1984,10 +1992,12 @@ function isDanger(a){
   return !!a.danger||a.op==='decline_offer'||a.op==='withdraw';
 }
 
-function actionButton(a,primary=false){
+function actionButton(a,primary=false,rec=null){
   if(a.kind==='note') return `<p class="pc-info">${a.label}${a.deadline
     ? ` · quedan <span data-deadline="${a.deadline}" data-plain="1">${leftUntil(a.deadline)}</span>` : ''}</p>`;
-  const cls='act'+(isDanger(a)?' act-danger':primary?' act-primary':'')
+  if(rec) return `<button class="act act-${rec.tone}" type="button" title="recomendado: ${rec.why}" `
+    +`data-action='${JSON.stringify(a).replace(/'/g,"&#39;")}'>★ ${a.label}</button>`;
+  const cls='act'+(isDanger(a)&&!/^(accept|decline)_offer$/.test(a.op)?' act-danger':primary?' act-primary':'')
     +((a.op==='always'||a.op==='raid')&&a.on?' on':'');
   const off=a.blocked?' disabled':'';
   const button=`<button class="${cls}" type="button" data-action='${JSON.stringify(a).replace(/'/g,"&#39;")}'${off}`

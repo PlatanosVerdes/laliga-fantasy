@@ -296,7 +296,7 @@ func cardHTML(rank int, card Card) string {
 		esNum(number(player["xpts"]), 1))
 	note := ""
 	if card.BigNote != "" {
-		note = `<span class="big-note">` + Esc(card.BigNote) + `</span>`
+		note = `<span class="big-note ` + card.NoteClass + `">` + Esc(card.BigNote) + `</span>`
 	}
 	var why strings.Builder
 	for _, line := range card.Why {
@@ -398,7 +398,7 @@ func (d Document) elevenAside() string {
 			week, place)
 	}
 	return block("Tu once", `<div class="pitchlist">`+summary+elevenChips(lines, arriving)+legend+
-		`</div>`+finish, Esc(shape), -1) + more
+		`</div>`+finish, Esc(shape), -1) + d.crackBox() + more
 }
 
 // --- Comprar ---------------------------------------------------------------------------
@@ -650,21 +650,28 @@ func (d Document) sellView() string {
 			`data-op-name="%s" data-op-amount="%d"`, Esc(text(offer["market_id"])),
 			Esc(text(offer["offer_id"])), Esc(text(offer["id"])), Esc(text(offer["name"])),
 			int64(amount))
-		accept := func(kind string) string {
-			return button("Aceptar", kind, "op", ` data-op="accept_offer"`+common)
-		}
-		decline := button("Rechazar", "ghost", "op", ` data-op="decline_offer"`+common)
+		words := ratioNote(ratio)
 		meta := Esc(text(offer["team_short"]))
 		if who := text(offer["offer_from"]); who != "" && !truthy(offer["offer_from_market"]) {
 			meta += " · de " + Esc(who)
 		}
-		tone, actions := "", decline+accept("ghost")
+		// Both buttons, always; the one the panel recommends is filled and says why.
+		recommend := func(label, kind, op, reason string) string {
+			return button("★ "+label, kind, "op", fmt.Sprintf(` data-op="%s" title="recomendado: %s"`,
+				op, Esc(reason))+common)
+		}
+		tone, actions := "", recommend("Rechazar", "bad", "decline_offer", words+": no compensa")+
+			button("Aceptar", "ghost", "op", ` data-op="accept_offer"`+common)
 		switch {
 		case planned[text(offer["id"])] != "":
 			meta += " · si fichas a " + Esc(planned[text(offer["id"])])
-			tone, actions = "accent", accept("primary")+decline
-		case truthy(offer["worth_taking"]):
-			tone, actions = "good", accept("primary")+decline
+			tone = "accent"
+			actions = recommend("Aceptar", "good", "accept_offer", words+": lo pide el plan") +
+				button("Rechazar", "ghost", "op", ` data-op="decline_offer"`+common)
+		case d.offerPays(text(offer["id"]), ratio):
+			tone = "good"
+			actions = recommend("Aceptar", "good", "accept_offer", words) +
+				button("Rechazar", "ghost", "op", ` data-op="decline_offer"`+common)
 		}
 		glyph := "▲"
 		if ratio < 1 {
@@ -794,7 +801,7 @@ func (d Document) clauseView() string {
 	for _, raise := range rows(d.Raise["rows"]) {
 		switch text(raise["verdict"]) {
 		case "sube", "no te llega":
-			if number(raise["pay"]) > 0 {
+			if number(raise["pay"]) > 0 && d.raiseWanted(raise) {
 				worth = append(worth, raise)
 				continue
 			}
@@ -848,9 +855,15 @@ func (d Document) clauseView() string {
 			if pay := number(raise["pay"]); pay > 0 {
 				cost = " · subirla cuesta " + esMoney(pay)
 			}
+			verdict, why := text(raise["verdict"]), text(raise["why"])
+			if !d.raiseWanted(raise) {
+				verdict = "déjalo ir"
+				why = fmt.Sprintf("su cláusula ya es %s su valor: si se lo llevan, es buena venta",
+					strings.TrimSuffix(ratioNote(number(raise["clause"])/number(raise["value"])),
+						" su valor"))
+			}
 			fmt.Fprintf(&lines, `<li class="al" data-pid="%s"><b>%s</b><span class="meta">%s · %s%s</span></li>`,
-				Esc(text(raise["id"])), Esc(text(raise["name"])), Esc(text(raise["verdict"])),
-				Esc(text(raise["why"])), cost)
+				Esc(text(raise["id"])), Esc(text(raise["name"])), Esc(verdict), Esc(why), cost)
 		}
 		body += folded(fmt.Sprintf("%d que no merece la pena subir", len(rest)),
 			`<ul class="always">`+lines.String()+`</ul>`)

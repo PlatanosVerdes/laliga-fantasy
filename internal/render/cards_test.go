@@ -103,9 +103,12 @@ func decidingDocument() Document {
 			"clause": 3_500_000.0, "top_threat": "JMjugon", "top_threat_cash": 66_200_000.0,
 			"threats": 8.0, "tempted": 3.0, "xi_drop": 2.7, "risk": 1.0,
 			"player_team_id": "s8"})}},
-		Window: &schedule.Window{Open: true, ClosesAt: "2999-01-01T21:00:00+02:00"},
+		Window: &schedule.Window{Open: true, ClosesAt: soonClose},
 	}
 }
+
+// soonClose is the clause window shutting within the hours a raise card looks ahead.
+var soonClose = time.Now().Add(3 * time.Hour).Format(time.RFC3339)
 
 func TestDecisionCardsComeFromTheAdvice(t *testing.T) {
 	cards := decidingDocument().decisionCards(time.Now())
@@ -130,7 +133,7 @@ func TestDecisionCardsComeFromTheAdvice(t *testing.T) {
 		!strings.Contains(raise.Button, `data-raise-pay="2000000"`) {
 		t.Errorf("raise card = %v / %s", raise.Why, raise.Button)
 	}
-	if raise.Deadline != "2999-01-01T21:00:00+02:00" {
+	if raise.Deadline != soonClose {
 		t.Errorf("an open clause is defended until the window shuts, got %q", raise.Deadline)
 	}
 	if _, ok := kinds["offer:13"]; ok {
@@ -188,4 +191,93 @@ func TestElevenAsideShowsThePlan(t *testing.T) {
 	if strings.Contains(decidingDocument().elevenAside(), "si haces el plan") {
 		t.Error("without moves the aside is today's eleven")
 	}
+}
+
+// Pedrosa: 3,1M for a 3,2M player is not a sale worth a card, unless the advice wants him out
+// anyway and it is close to his value.
+func TestOfferCardOnlyWhenItPays(t *testing.T) {
+	document := decidingDocument()
+	offers := rows(document.Advice["offers"])
+	offers[0]["offer_amount"] = 19_400_000.0
+	document.Advice["offers"] = []any{offers[0], offers[1]}
+	has := func(document Document) bool {
+		for _, card := range document.decisionCards(time.Now()) {
+			if card.Kind == "offer" && text(card.Player["id"]) == "7" {
+				return true
+			}
+		}
+		return false
+	}
+	if has(document) {
+		t.Error("×0,97 su valor no es una venta que empujar")
+	}
+	document.Advice["sells"] = []any{map[string]any{"id": "7", "reasons": []any{"no juega"}}}
+	offers[0]["offer_amount"] = 19_700_000.0
+	if !has(document) {
+		t.Error("si el consejo ya quiere venderlo, ×0,97 basta")
+	}
+	if note, class := ratioWords(0.97); note != "×0,97 su valor" || class != "down" {
+		t.Errorf("ratio: %q %q", note, class)
+	}
+}
+
+// Unai: a clause at 1,27x his value is already a good sale, and Agoumé's lock lifts in 11 days.
+func TestRaiseCardsOnlyWhenWorthItAndSoon(t *testing.T) {
+	document := decidingDocument()
+	raises := rows(document.Raise["rows"])
+	cheap := merge(raises[0], map[string]any{"id": "10", "name": "Medio", "value": 2_000_000.0,
+		"clause": 2_600_000.0, "xpts": 2.0})
+	late := merge(raises[0], map[string]any{"clause_locked": true,
+		"clause_locked_until": time.Now().Add(11 * 24 * time.Hour).Format(time.RFC3339)})
+	for _, row := range []map[string]any{cheap, late} {
+		document.Raise = map[string]any{"rows": []any{row}}
+		for _, card := range document.decisionCards(time.Now()) {
+			if card.Kind == "raise" {
+				t.Errorf("no tendría que haber carta para %v", row["name"])
+			}
+		}
+	}
+	// O. Rey is among the three best outfield players, so his 1,75x clause is still defended.
+	document.Raise = map[string]any{"rows": []any{raises[0]}}
+	found := false
+	for _, card := range document.decisionCards(time.Now()) {
+		if card.Kind == "raise" {
+			found = strings.Contains(card.Impact, "retrasa tu crack 2,0M")
+		}
+	}
+	if !found {
+		t.Error("un titular clave se defiende, y la carta dice cuánto retrasa el crack")
+	}
+}
+
+func TestCashBeforeSpendingAtTheSameHour(t *testing.T) {
+	now := time.Date(2026, 10, 8, 18, 0, 0, 0, time.UTC)
+	cards := orderCards([]Card{
+		{Key: "spend", Deadline: "2026-10-08T21:00:00Z", Weight: 9, Cash: -5e6},
+		{Key: "cash", Deadline: "2026-10-08T21:10:00Z", Weight: 1, Cash: 3e6},
+	}, now)
+	if cards[0].Key != "cash" {
+		t.Errorf("a la misma hora, primero lo que trae caja: %v", cards[0].Key)
+	}
+}
+
+func TestCrackBoxNamesTheBestIDoNotHave(t *testing.T) {
+	document := decidingDocument()
+	players := rows(document.Universe["players"])
+	crack := map[string]any{"id": "99", "name": "Raphinha", "position_id": 4.0, "xpts": 9.5,
+		"available": true, "owner": "Rival", "clause": 200_000_000.0}
+	document.Universe["players"] = append(toAny(players), crack)
+	box := document.crackBox()
+	if !strings.Contains(box, "Raphinha") || !strings.Contains(box, "200,0M") ||
+		!strings.Contains(box, "te faltan") {
+		t.Errorf("objetivo: %s", box)
+	}
+}
+
+func toAny(rows []map[string]any) []any {
+	out := make([]any, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row)
+	}
+	return out
 }

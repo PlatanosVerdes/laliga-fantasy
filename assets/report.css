@@ -1640,3 +1640,8 @@ table.cmp tr:last-child td{border-bottom:0}
   .mk-once .slot.tokslot{width:66px} .mk-once .tok-name{max-width:64px;font-size:11px}
   .mk .fx{grid-template-columns:58px minmax(0,1fr)}
 }
+.mk button.mb.mb-good{background:var(--good);color:#fff;border:1px solid var(--good)}
+.mk button.mb.mb-bad{background:var(--critical);color:#fff;border:1px solid var(--critical)}
+.drawer-actions.pc-acts button.act-good{background:var(--good);border-color:var(--good);color:#fff}
+.drawer-actions.pc-acts button.act-bad{background:var(--critical);border-color:var(--critical);color:#fff}
+.mk .big-note.up{color:var(--good)} .mk .big-note.down{color:var(--critical)}
