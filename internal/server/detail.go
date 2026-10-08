@@ -198,7 +198,11 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 			if who == "" {
 				who = "el mercado"
 			}
-			label := fmt.Sprintf("Aceptar %s de %s", thousands(amount), who)
+			from := "de " + who
+			if who == "el mercado" {
+				from = "del mercado"
+			}
+			label := fmt.Sprintf("Aceptar %s %s", short(float64(amount)), from)
 			note := ""
 			if made := text(offer["createdAt"]); made != "" {
 				note = "ofrecida " + made[:16]
@@ -215,7 +219,7 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 					"amount": amount, "note": note,
 					"from": who, "from_market": truthy(offer["from_market"])},
 				map[string]any{"op": "decline_offer",
-					"label": "Rechazar la de " + who, "kind": "confirm", "danger": true,
+					"label": "Rechazar la " + from, "kind": "confirm", "danger": true,
 					"offer_id": text(offer["id"]), "market_id": listing["market_id"]})
 		}
 		// What it would take to put the clause where the advice stops calling it a risk, and
@@ -223,7 +227,7 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 		// behind it, and it contradicted the same page two sections up: over SafeMargin nobody in
 		// the league gains by paying it, so there is nothing to buy.
 		actions = append(actions, map[string]any{"op": "raise_clause",
-			"label": "Subir clausula", "kind": "amount",
+			"label": "Subir cláusula", "kind": "amount",
 			"player_team_id": player["player_team_id"],
 			"safe_margin":    advice.SafeMargin,
 			"suggested":      raiseToSafe(number(player["value"]), number(player["clause"]))})
@@ -233,7 +237,7 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 		shielded := truthy(player["shielded"])
 		if shielded {
 			actions = append(actions, map[string]any{"op": "note", "kind": "note",
-				"label":    "Blindado: nadie puede pagar su clausula",
+				"label":    "Blindado: nadie puede pagar su cláusula",
 				"deadline": player["shielded_until"]})
 		}
 		for _, stamp := range policy.ShieldTimes() {
@@ -325,11 +329,11 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 			actions = append(actions, offers...)
 		} else {
 			actions = append(actions, map[string]any{"op": "note", "kind": "note",
-				"label": owner + " no lo tiene en venta: solo se le puede pagar la clausula"})
+				"label": owner + " no lo tiene en venta: solo se le puede pagar la cláusula"})
 		}
 		if clause > 0 && !truthy(player["clause_locked"]) {
 			actions = append(actions, map[string]any{"op": "pay_clause",
-				"label": fmt.Sprintf("Pagar clausula (%s)", thousands(int64(clause))),
+				"label": "Pagar cláusula " + short(clause),
 				"kind":  "amount", "player_team_id": player["player_team_id"],
 				"suggested": int64(clause), "min": int64(clause),
 				"blocked": clause > budget})
@@ -401,7 +405,7 @@ func bidActions(listing map[string]any, suggested float64) []map[string]any {
 		if existing := text(listing["my_bid_id"]); existing != "" {
 			amount := int64(number(listing["my_bid"]))
 			return []map[string]any{{"op": "cancel_offer",
-				"label": fmt.Sprintf("Retirar tu oferta de %s", thousands(amount)),
+				"label": "Retirar tu oferta de " + short(float64(amount)),
 				"kind": "confirm", "danger": true, "market_id": marketID, "offer_id": existing,
 				"note": "No se puede cambiar una oferta: se retira y se hace otra."}}
 		}
@@ -415,7 +419,7 @@ func bidActions(listing map[string]any, suggested float64) []map[string]any {
 			suggested = float64(mine)
 		}
 		return []map[string]any{
-			{"op": "modify_bid", "label": fmt.Sprintf("Cambiar tu puja (%s)", thousands(mine)),
+			{"op": "modify_bid", "label": "Cambiar tu puja de " + short(float64(mine)),
 				"kind": "amount", "market_id": marketID, "bid_id": bidID,
 				"suggested": int64(suggested), "min": minBid,
 				"bids": listing["bids"], "expires": listing["expires"],

@@ -149,11 +149,11 @@ func TestDecisionCardsComeFromTheAdvice(t *testing.T) {
 
 func TestDecideSectionRendersOneSwappableSection(t *testing.T) {
 	html := decidingDocument().decideSection()
-	if !strings.HasPrefix(html, `<section id="ahora">`) ||
+	if !strings.HasPrefix(html, `<section id="ahora"`) ||
 		strings.Count(html, "<section") != 1 || strings.Count(html, "</section>") != 1 {
 		t.Fatalf("the live refresh splits on sections, so there must be exactly one: %.200s", html)
 	}
-	for _, want := range []string{`data-detail="7"`, "Qué hacer ahora", "Tu once",
+	for _, want := range []string{`data-pid="7"`, "Qué hacer ahora", "Tu once",
 		`data-deadline="2999-01-01T19:00:00+02:00"`, `data-goto="clausulas"`} {
 		if !strings.Contains(html, want) {
 			t.Errorf("missing %s", want)
@@ -180,7 +180,7 @@ func TestElevenAsideShowsThePlan(t *testing.T) {
 	document.Swaps = map[string]any{"moves": []any{map[string]any{
 		"out": squad[len(squad)-2], "in": signing, "gain": 4.5, "cost": 2_000_000.0}}}
 	html := document.elevenAside()
-	for _, want := range []string{"si haces el plan", "<s>", `xi-new`, `data-detail="20"`} {
+	for _, want := range []string{"si haces el plan", `class="from"`, `is-new`, `data-pid="20"`} {
 		if !strings.Contains(html, want) {
 			t.Errorf("plan aside misses %s", want)
 		}

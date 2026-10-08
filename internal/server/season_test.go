@@ -41,3 +41,14 @@ func TestPlaceByWeekSharesAndSkips(t *testing.T) {
 		t.Errorf("a matchday with nothing to read has no place: %v", first["place"].([]any)[1])
 	}
 }
+
+// The matchday's own table: cristian1206 was sixth after J1 and first in J2 on 71 points.
+func TestRankByWeekIsEachMatchdayOnItsOwn(t *testing.T) {
+	tete := map[string]any{"points": []any{61.0, 60.0}}
+	cristian := map[string]any{"points": []any{35.0, 71.0}}
+	rankByWeek([]map[string]any{tete, cristian}, 2)
+	if tete["week_rank"].([]any)[0] != 1 || cristian["week_rank"].([]any)[1] != 1 ||
+		tete["week_rank"].([]any)[1] != 2 {
+		t.Errorf("places: %v %v", tete["week_rank"], cristian["week_rank"])
+	}
+}

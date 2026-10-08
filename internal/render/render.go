@@ -448,13 +448,16 @@ func TabsWithAmount(cash string, amount *float64) string {
 	if cash == "" {
 		return Tabs
 	}
+	return strings.Replace(Tabs, `</div>`, cashChip(cash, amount)+`</div>`, 1)
+}
+
+func cashChip(cash string, amount *float64) string {
 	exact := ""
 	if amount != nil {
 		exact = fmt.Sprintf(` data-cash="%.0f"`, *amount)
 	}
-	chip := `<span class="tab-cash" id="tab-cash" title="Tu saldo ahora mismo"` + exact + `>` +
+	return `<span class="tab-cash" id="tab-cash" title="Tu saldo ahora mismo"` + exact + `>` +
 		Esc(cash) + `</span>`
-	return strings.Replace(Tabs, `</div>`, chip+`</div>`, 1)
 }
 
 const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
@@ -530,19 +533,17 @@ func StatCard(stat Stat) string {
 	return `<div class="stat">` + inner + `</div>`
 }
 
-// Header is the tab bar with the search, the four cards, one slim line saying where the page
-// comes from and how live it is, and the rest of the figures folded under "más datos". The
-// live dot starts off: a static file is honest about not being live, and the script turns it
-// on when the push channel connects.
-func Header(generated, leagueName string, week int, stats, more []string, withTabs bool,
-	mode, cash string, cashAmount *float64) string {
-	league := ""
-	if leagueName != "" {
-		league = ` · liga <strong>` + Esc(leagueName) + `</strong>`
-	}
+// Header is the tab bar, with the live dot, the balance and the search on its right, and the
+// four cards under it. The live dot starts off: a static file is honest about not being live,
+// and the script turns it on when the push channel connects.
+func Header(stats []string, withTabs bool, cash string, cashAmount *float64) string {
 	tabs := ""
 	if withTabs {
-		tabs = TabsWithAmount(cash, cashAmount)
+		tabs = Tabs
+	}
+	chip := ""
+	if withTabs && cash != "" {
+		chip = cashChip(cash, cashAmount)
 	}
 	find := `<div class="head-find"><input id="find" class="head-input" type="search" ` +
 		`autocomplete="off" spellcheck="false" placeholder="buscar jugador…" ` +
@@ -552,16 +553,26 @@ func Header(generated, leagueName string, week int, stats, more []string, withTa
 	if len(stats) > 0 {
 		strip = `<div class="strip">` + strings.Join(stats, "") + `</div>`
 	}
+	return `<div class="topbar">` + tabs + `<div class="topright">` +
+		`<span id="live-dot" class="live-off" title="Sin conexión en vivo"></span>` + chip + find +
+		`</div></div>` + strip
+}
+
+// PageFoot is where the page comes from and what the server may do, and the figures that did
+// not make the four cards, folded.
+func PageFoot(generated, leagueName string, week int, more []string, mode string) string {
+	league := ""
+	if leagueName != "" {
+		league = ` · liga <strong>` + Esc(leagueName) + `</strong>`
+	}
 	extra := ""
 	if len(more) > 0 {
 		extra = `<details class="kpis-more"><summary>más datos</summary><div class="kpis">` +
 			strings.Join(more, "") + `</div></details>`
 	}
-	return `<div class="topbar">` + tabs + find + `</div>` + strip +
-		`<header class="topline"><h1>LaLiga Fantasy</h1>` +
+	return `<header class="topline"><h1>LaLiga Fantasy</h1>` +
 		`<p>` + Esc(generated) + league + fmt.Sprintf(` · jornada %d</p>`, week) +
-		`<span class="live"><span id="live-dot" class="live-off"></span>` +
-		`<span id="live-stamp">estatico</span></span>` +
+		`<span class="live"><span id="live-stamp">estatico</span></span>` +
 		modeChip(mode) + buildChip() + `</header>` + extra
 }
 

@@ -130,8 +130,7 @@ func (d Document) HTML() string {
 
 	var sections []string
 	if hasAdvice {
-		sections = append(sections, d.decideSection())
-		sections = append(sections, d.detailToggle())
+		sections = append(sections, d.Views()...)
 		sections = append(sections, d.swapSection())
 		sections = append(sections, d.actionsSection())
 		sections = append(sections, d.moneySection())
@@ -158,11 +157,11 @@ func (d Document) HTML() string {
 	// The balance rides in the tab bar, which is the only strip that stays on screen.
 	cash, budget := "", asFloat(d.Advice["budget"])
 	if budget != nil {
-		cash = Money(budget)
+		cash = esMoney(*budget)
 	}
-	header := Header(d.Generated, d.LeagueName, int(number(week["weekNumber"])), stats, more,
-		hasAdvice, d.Mode, cash, budget)
-	footer := Footer(number(universe["current_weight"]))
+	header := Header(stats, hasAdvice, cash, budget)
+	footer := PageFoot(d.Generated, d.LeagueName, int(number(week["weekNumber"])), more, d.Mode) +
+		Footer(number(universe["current_weight"]))
 
 	body := strings.Join(filterEmpty(sections), "")
 	return Page(d.CSS, d.JS, CrestCSS(), header, body, footer, d.Modal, d.Drawer)
@@ -264,7 +263,7 @@ func (d Document) widgets(week map[string]any, players []map[string]any) ([]stri
 		exact = group(fmt.Sprintf("%.0f", *budget)) + " €"
 	}
 	stats := filterEmpty([]string{
-		StatCard(Stat{Icon: "💶", Label: "Caja", Value: Money(budget), ValueID: "kpi-cash",
+		StatCard(Stat{Icon: "💶", Label: "Caja", Value: esMoney(number(d.Advice["budget"])), ValueID: "kpi-cash",
 			Note: exact, Tab: "rivales"}),
 		clauses, matchday,
 		StatCard(Stat{Icon: "🏆", Label: "Liga", Value: position + "º",

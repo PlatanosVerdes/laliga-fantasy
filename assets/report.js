@@ -193,6 +193,7 @@ function tick(){
     const left=new Date(el.dataset.deadline).getTime()-now;
     if(isNaN(left)) return;
     const plain=el.dataset.plain==='1';
+    if(el.dataset.chip){ chipTick(el,left); return; }
     const stat=el.closest('.stat');
     if(stat) stat.classList.toggle('hot',left>0&&left<6*3600000);
     if(left<=0){ el.textContent='ya'; if(!plain) el.className='pill-critical'; return; }
@@ -208,6 +209,17 @@ function tick(){
   });
 }
 setInterval(tick,1000);
+
+// A row's countdown chip: "4 h 04 min", red in its last six hours, "cerrado" once it is past.
+function chipTick(el,left){
+  const target=el.querySelector('.left')||el;
+  const minutes=Math.round(left/60000), d=Math.floor(minutes/1440),
+        h=Math.floor(minutes%1440/60), m=minutes%60;
+  target.textContent = left<=0 ? 'cerrado' : d ? `${d} d ${h} h`
+                     : h ? `${h} h ${String(m).padStart(2,'0')} min` : `${m} min`;
+  el.classList.toggle('soon',left>0&&left<6*3600000);
+  el.classList.toggle('done',left<=0);
+}
 
 // ---- bidding, confirmed twice ----------------------------------------------
 const modal=document.getElementById('bid-modal');
@@ -1163,6 +1175,7 @@ const VIEWS={
   manager: id=>openManager(id),
   plantillas: week=>openMatchday(week),
   prevision: week=>typeof openForecast==='function'&&openForecast(week),
+  jornada: week=>openWeek(week),
   // The comparator was a drawer before it had its tab: old links land on the tab.
   comparar: ()=>openCompare({replace:true}),
 };
@@ -2019,7 +2032,7 @@ function wireRaises(root=document){
     button.dataset.wired='1';
     button.addEventListener('click',()=>{
       const d=button.dataset;
-      openAmount({op:'raise_clause', kind:'amount', label:'Subir clausula',
+      openAmount({op:'raise_clause', kind:'amount', label:'Subir cláusula',
                   player_id:d.raise, player_team_id:d.raiseSlot,
                   suggested:+d.raisePay||0},
                  {id:d.raise, name:d.raiseName, clause:+d.raiseClause||0,
@@ -2694,32 +2707,165 @@ document.addEventListener('change',(event)=>{
   applyRivalPick();
 });
 
-// The tables behind the cards stay sections of their own, so the live refresh still finds them by
-// id; the fold only decides whether they are on screen.
-const FOLD_KEY='fantasy:detalle';
-const FOLDED=['plan','acciones','caja','chollos'];
-function foldOpen(){
-  try{ return localStorage.getItem(FOLD_KEY)==='1'; }catch(e){ return false; }
+// ---- each tab's view first, its old tables folded under "Ver detalle" -------------
+// The tables stay sections of their own, so the live refresh still finds them by id; the fold
+// only decides whether they are on screen.
+const FOLDS={
+  decidir:['plan','acciones','caja','chollos'],
+  comprar:['fichajes','enventa','mispujas','seguimiento','resueltas'],
+  vender:['misventas','ofertas','siempre'],
+  clausulas:['subir','programados','calendario','vencimientos','oportunidades','clausulas'],
+  plantilla:['once','plantilla','ventas'],
+  partidos:['jornada','partidos'],
+};
+const FOLD_KEY='fantasy:detalle:';
+function foldOpen(tab){
+  try{ return localStorage.getItem(FOLD_KEY+tab)==='1'; }catch(e){ return false; }
 }
-function applyFold(){
-  const open=foldOpen();
-  document.querySelectorAll('button[data-fold]').forEach(button=>{
+function applyFold(tab){
+  const ids=FOLDS[tab];
+  if(!ids) return;
+  const open=foldOpen(tab);
+  document.querySelectorAll(`button[data-fold="${tab}"]`).forEach(button=>{
     button.setAttribute('aria-expanded',open?'true':'false');
     button.classList.toggle('on',open);
   });
-  const active=document.querySelector('.tab.on');
-  if(!active||active.dataset.tab!=='decidir'||open) return;
-  FOLDED.forEach(id=>{ const node=document.getElementById(id); if(node) node.hidden=true; });
+  if(!document.getElementById('mas-'+tab)) return;
+  ids.forEach(id=>{ const node=document.getElementById(id); if(node&&!open) node.hidden=true; });
 }
 document.addEventListener('click',(event)=>{
   const button=event.target.closest&&event.target.closest('button[data-fold]');
   if(!button) return;
-  const open=!foldOpen();
-  try{ localStorage.setItem(FOLD_KEY,open?'1':'0'); }catch(e){}
-  usage.click('detalle',open?'ver detalle':'ocultar detalle');
-  showTab('decidir',{updateHash:false});
-  if(open) document.getElementById(FOLDED[0])?.scrollIntoView({behavior:'smooth',block:'start'});
+  const tab=button.dataset.fold, open=!foldOpen(tab);
+  try{ localStorage.setItem(FOLD_KEY+tab,open?'1':'0'); }catch(e){}
+  usage.click('detalle',(open?'ver detalle ':'ocultar detalle ')+tab);
+  showTab(tab,{updateHash:false});
+  const first=(FOLDS[tab]||[]).map(id=>document.getElementById(id)).find(n=>n&&!n.hidden);
+  if(open&&first) first.scrollIntoView({behavior:'smooth',block:'start'});
 });
+
+// Faces, names and rows in the views open the player's card; a button inside them does its own.
+document.addEventListener('click',(event)=>{
+  const target=event.target;
+  if(!target.closest) return;
+  if(target.closest('button, a, input, select, label')) return;
+  const host=target.closest('.mk [data-pid], .md-xi [data-pid]');
+  if(host&&host.dataset.pid){ event.preventDefault(); openDetail(host.dataset.pid); return; }
+  const week=target.closest('.mk .hist[data-week]');
+  if(week) openWeek(week.dataset.week);
+});
+document.addEventListener('keydown',(event)=>{
+  const week=event.target.closest&&event.target.closest('.mk .hist[data-week]');
+  if(week&&(event.key==='Enter'||event.key===' ')){ event.preventDefault(); openWeek(week.dataset.week); }
+});
+
+// A row's button that is one of the player's own actions runs it exactly as his card would.
+document.addEventListener('click',async(event)=>{
+  const button=event.target.closest&&event.target.closest('button[data-act]');
+  if(!button) return;
+  button.disabled=true;
+  try{
+    const res=await fetch('/api/player/'+button.dataset.actPlayer);
+    if(!res.ok) throw new Error(res.status);
+    const data=await res.json();
+    const action=(data.actions||[]).find(a=>a.op===button.dataset.act);
+    if(!action){ alert('Ahora mismo no se puede: abre su ficha para ver por qué.'); return; }
+    runAction(action,data.player);
+  }catch(e){
+    alert('Solo disponible en la versión servida.');
+  }finally{ button.disabled=false; }
+});
+
+// ---- Partidos: my points per matchday, and each matchday's whole table -------------
+let seasonCache=null;
+async function fillHistory(){
+  const list=document.getElementById('pv-history');
+  if(!list) return;
+  const week=+list.dataset.week, plannedHere=+list.dataset.planned||0;
+  try{
+    if(!seasonCache){
+      const [season,forecast]=await Promise.all([
+        fetch('/api/season').then(r=>r.ok?r.json():null),
+        fetch('/api/forecast/'+week).then(r=>r.ok?r.json():null)]);
+      seasonCache={season,forecast};
+    }
+  }catch(e){ seasonCache={season:null,forecast:null}; }
+  const target=document.getElementById('pv-history');
+  if(!target) return;
+  const {season,forecast}=seasonCache;
+  const me=((season||{}).managers||[]).find(m=>m.is_me);
+  const weeks=(season||{}).weeks||[];
+  const planned=((forecast||{}).mine||{}).planned||plannedHere;
+  const real=weeks.map((w,i)=>({w, pts:me?me.points[i]:null, rank:me&&me.week_rank?me.week_rank[i]:null}));
+  const scale=Math.max(planned,...real.map(r=>r.pts||0))*1.05||1;
+  const rows=real.map(r=>r.pts==null
+    ? `<li class="hist"><span class="hj">J${r.w}</span><span class="bars"></span><span class="hv">—</span></li>`
+    : `<li class="hist" data-week="${r.w}" tabindex="0"><span class="hj">J${r.w}</span><span class="bars">`
+      +`<span class="bar real" style="width:${Math.max(r.pts,0)/scale*100}%"></span></span>`
+      +`<span class="hv">${r.pts}<i>${r.rank?r.rank+'º':''}</i></span></li>`);
+  rows.push(`<li class="hist now" data-week="${week}" tabindex="0"><span class="hj">J${week}</span><span class="bars">`
+    +`<span class="bar fore" style="width:${planned/scale*100}%"></span></span>`
+    +`<span class="hv">${dec(planned)}<i>prev.</i></span></li>`);
+  target.innerHTML=rows.join('');
+  const sub=document.getElementById('pv-sub');
+  const total=real.reduce((sum,r)=>sum+(r.pts||0),0), played=real.filter(r=>r.pts!=null).length;
+  if(sub) sub.textContent=played?`${total} pts en ${played} jornadas`:'';
+}
+
+const XI_LINES=[['striker','DEL'],['midfield','MED'],['defender','DEF'],['goalkeeper','POR']];
+function ptsClass(p){ return p==null?'':p>=8?'x-hi':p>=4?'x-mid':p<0?'x-bad':'x-lo'; }
+function fcClass(v){ return v>=6?'x-hi':v>=3.5?'x-mid':v>=2?'x-lo':'x-bad'; }
+
+async function openWeek(week){
+  if(!drawer) return;
+  markView('jornada',week);
+  drawer.hidden=false;
+  panelWide(false);
+  drawer.classList.add('as-pop');
+  const body=drawer.querySelector('.drawer-body');
+  body.dataset.view='week';
+  body.innerHTML='<p class="empty">Cargando…</p>';
+  let md=null, fc=null;
+  try{
+    [md,fc]=await Promise.all([
+      fetch('/api/matchday/'+week).then(r=>r.ok?r.json():null),
+      fetch('/api/forecast/'+week).then(r=>r.ok?r.json():null)]);
+  }catch(e){}
+  if(!md||!md.managers){ body.innerHTML='<p class="empty">No he podido leer esa jornada.</p>'; return; }
+  const current=+((document.getElementById('pv-history')||{dataset:{}}).dataset.week||0);
+  const future=current&&+week>=current;
+  const forecasts={}, plans={};
+  [...((fc||{}).managers||[]), ...((fc||{}).mine?[fc.mine]:[])].forEach(m=>{
+    plans[m.team_id]=m.planned;
+    (m.players||[]).forEach(p=>{ forecasts[p.id]=p.forecast; });
+  });
+  const score=m=>future?(plans[m.team_id]||0):(m.week_points||0);
+  const managers=md.managers.slice().sort((a,b)=>score(b)-score(a));
+  const rows=managers.map((m,i)=>{
+    const lineup=m.lineup||{};
+    const lines=XI_LINES.map(([key,label])=>{
+      let players=(lineup[key]||[]).filter(Boolean);
+      if(!m.lineup) players=(m.squad||[]).filter(p=>({1:'POR',2:'DEF',3:'MED',4:'DEL'})[p.position_id]===label);
+      const chips=players.map(p=>{
+        const f=forecasts[p.id];
+        const value=future?(f!=null?dec(f):'–'):(p.points??'–');
+        const cls=future?fcClass(f||0):ptsClass(p.points);
+        const small=!future&&f!=null?` <span class="fcs">${dec(f)}</span>`:'';
+        return `<span class="tchip ${cls}" data-pid="${p.id}">${faceOf(p,'xs')}`
+          +`<span class="tname">${p.name}</span><span class="tx">${value}</span>${small}</span>`;
+      }).join('');
+      return chips?`<div class="line"><span class="pos pos-${label.toLowerCase()}">${label}</span><div class="chips">${chips}</div></div>`:'';
+    }).join('');
+    const total=future?`${dec(score(m))} <span class="mf">previsto</span>`:`${m.week_points??'–'} <span class="mf">pts</span>`;
+    return `<details class="md-row${m.is_me?' me':''}"${m.is_me?' open':''}><summary><span class="rk">${i+1}º</span>`
+      +`<span>${m.manager}</span><span class="mp">${total}</span></summary><div class="md-xi">${lines}</div></details>`;
+  }).join('');
+  const k=md.kickoff?new Date(md.kickoff):null;
+  const when=k?['dom','lun','mar','mié','jue','vie','sáb'][k.getDay()]+' '+k.getDate()+' '
+    +['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][k.getMonth()]:'';
+  body.innerHTML=`<h3 class="pc-title">J${week}${future?' · previsión de cada once':when?' · '+when:''}</h3>`
+    +`<p class="drawer-note" style="margin:0 0 8px">Toca un manager para ver su once${future?'':'; en pequeño, lo previsto si se guardó'}.</p>${rows}`;
+}
 
 function showTab(id,{section=null,updateHash=true}={}){
   const tab=TABS.find(t=>t.id===id)||TABS[0];
@@ -2733,9 +2879,6 @@ function showTab(id,{section=null,updateHash=true}={}){
     // a list written here.
     s.hidden = s.dataset.tab ? s.dataset.tab!==tab.id : !tab.sections.includes(s.id);
   });
-  if(section&&FOLDED.includes(section)){
-    try{ localStorage.setItem(FOLD_KEY,'1'); }catch(e){}
-  }
   document.querySelectorAll('.tab').forEach(b=>{
     const on=b.dataset.tab===tab.id;
     b.classList.toggle('on',on);
@@ -2744,7 +2887,6 @@ function showTab(id,{section=null,updateHash=true}={}){
     // the page itself where it was.
     if(on) b.scrollIntoView({block:'nearest',inline:'center'});
   });
-  applyFold();
   try{ localStorage.setItem('fantasy-tab',tab.id); }catch(e){}
   usage.tab(tab.id);
   applyFilters();
@@ -2757,6 +2899,11 @@ function showTab(id,{section=null,updateHash=true}={}){
   if(tab.sections.includes('once') && !pitchState) loadPitch();
   if(tab.sections.includes('evolucion')) loadSeason();
   if(tab.id==='comparador'&&was!=='comparador') renderCompare();
+  if(section&&(FOLDS[tab.id]||[]).includes(section)){
+    try{ localStorage.setItem(FOLD_KEY+tab.id,'1'); }catch(e){}
+  }
+  applyFold(tab.id);
+  if(tab.id==='partidos') fillHistory();
   drawTray();
   if(section){
     const node=document.getElementById(section);
@@ -2802,9 +2949,9 @@ function showCash(amount){
   myCash=amount;
   const text=exact(amount);
   const chip=document.getElementById('tab-cash');
-  if(chip){ chip.textContent=fmt(amount); chip.title='Tu saldo ahora mismo: '+text; }
+  if(chip){ chip.textContent=mny(amount); chip.title='Tu saldo ahora mismo: '+text; }
   const kpi=document.getElementById('kpi-cash');
-  if(kpi) kpi.textContent=fmt(amount);
+  if(kpi) kpi.textContent=mny(amount);
 }
 
 async function swap(){

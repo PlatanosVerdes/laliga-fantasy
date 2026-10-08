@@ -1725,10 +1725,9 @@ func cmdShell(args []string) error {
 		fmt.Printf("uno|%s|%.6f|%s\n", label, share, status)
 
 	case "cabecera":
-		fmt.Println(render.Header("18/08/2026 16:20", "Liga Fantasy Comité 2026-", 1,
-			[]string{`<div class="stat">uno</div>`, `<div class="stat">dos</div>`}, nil, true, "auto",
-			"18.21M", nil))
-		fmt.Println(render.Header("18/08/2026 16:20", "", 3, nil, nil, false, "", "", nil))
+		fmt.Println(render.Header([]string{`<div class="stat">uno</div>`,
+			`<div class="stat">dos</div>`}, true, "18.21M", nil))
+		fmt.Println(render.PageFoot("18/08/2026 16:20", "Liga Fantasy Comité 2026-", 1, nil, "auto"))
 
 	default:
 		return fmt.Errorf("caso desconocido: %s", args[0])
