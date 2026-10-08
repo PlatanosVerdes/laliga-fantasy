@@ -1004,11 +1004,8 @@ func (d Document) squadView() string {
 	}
 	// Only the ones the advice gives a reason to sell, with that reason.
 	var items []string
-	for _, player := range rows(d.Advice["sells"]) {
+	for _, player := range d.sellRows() {
 		reasons := asStrings(player["reasons"])
-		if len(reasons) == 0 {
-			continue
-		}
 		listing := mapOf(player["market"])
 		best := 0.0
 		offerID := ""

@@ -281,3 +281,34 @@ func toAny(rows []map[string]any) []any {
 	}
 	return out
 }
+
+// Á. Valles: the keeper of the best eleven, sold with nobody to replace him, is never on the
+// list, whatever the advice says about his points per million; a reserve with a reason is.
+func TestSellListKeepsTheBestElevenUnlessItBarelyNotices(t *testing.T) {
+	document := decidingDocument()
+	document.Advice["sells"] = []any{
+		map[string]any{"id": "9", "available": true, "reasons": []any{"pocos puntos por millon"}},
+		map[string]any{"id": "12", "available": true, "reasons": []any{"no juega"}},
+	}
+	got := document.sellCandidates()
+	if got["9"] || !got["12"] {
+		t.Errorf("candidatos: %v", got)
+	}
+	document.Advice["sells"] = []any{map[string]any{"id": "9", "available": false,
+		"reasons": []any{"lesionado"}}}
+	if !document.sellCandidates()["9"] {
+		t.Error("el que no puede jugar sí se puede vender")
+	}
+}
+
+// The reach counts the cash, offers that pay and reserves free to sell: not the eleven.
+func TestCrackReachIsWhatCanBeRaisedToday(t *testing.T) {
+	document := decidingDocument()
+	crack := map[string]any{"id": "99", "name": "Raphinha", "position_id": 4.0, "xpts": 9.5,
+		"available": true, "owner": "Rival", "clause": 200_000_000.0}
+	document.Universe["players"] = append(toAny(rows(document.Universe["players"])), crack)
+	box := document.crackBox()
+	if strings.Contains(box, "Portero") || !strings.Contains(box, "Unai Lopez") {
+		t.Errorf("alcance: %s", box)
+	}
+}

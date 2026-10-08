@@ -21,13 +21,38 @@ const ClauseIsASale = 1.25
 // RaiseHorizon is how far ahead a raise has to be decided to earn a card in Decidir.
 const RaiseHorizon = 48 * time.Hour
 
-// sellCandidates are my players the advice gives a reason to sell.
+// StarterSaleSlack is how many xPts the best eleven may lose when one of its players is sold.
+const StarterSaleSlack = 1.0
+
+// sellRows are the advice's sell candidates that are really for sale: one of the best eleven
+// only when he cannot play or the eleven barely notices him gone.
+func (d Document) sellRows() []map[string]any {
+	squad := rows(d.Advice["squad"])
+	choice, xiNow := bestElevenOf(squad)
+	starters := map[string]bool{}
+	for _, id := range choice.IDs() {
+		starters[id] = true
+	}
+	var out []map[string]any
+	for _, player := range rows(d.Advice["sells"]) {
+		if len(asStrings(player["reasons"])) == 0 {
+			continue
+		}
+		id := text(player["id"])
+		if starters[id] && truthy(player["available"]) &&
+			xiNow-elevenWithout(squad, id) > StarterSaleSlack {
+			continue
+		}
+		out = append(out, player)
+	}
+	return out
+}
+
+// sellCandidates are the ids of sellRows.
 func (d Document) sellCandidates() map[string]bool {
 	out := map[string]bool{}
-	for _, player := range rows(d.Advice["sells"]) {
-		if len(asStrings(player["reasons"])) > 0 {
-			out[text(player["id"])] = true
-		}
+	for _, player := range d.sellRows() {
+		out[text(player["id"])] = true
 	}
 	return out
 }
@@ -158,29 +183,35 @@ func (d Document) crackBox() string {
 		return ""
 	}
 
+	// What can really be raised today: the cash, the offers on the table that pay, and the
+	// bench players the hold rule already lets go.
 	reach := number(d.Advice["budget"])
 	sold := []string{}
-	counted := map[string]bool{}
-	for _, player := range rows(d.Advice["sells"]) {
-		if len(asStrings(player["reasons"])) == 0 {
-			continue
-		}
-		amount := number(player["value"])
-		for _, offer := range rows(player["offers"]) {
-			amount = maxFloat(amount, number(offer["money"]))
-		}
-		reach += amount
-		counted[text(player["id"])] = true
-		sold = append(sold, text(player["name"]))
-	}
+	amounts := map[string]float64{}
+	names := map[string]string{}
 	for _, offer := range rows(d.Advice["offers"]) {
 		id := text(offer["id"])
-		if counted[id] || !d.offerPays(id, number(offer["vs_value"])) {
+		if number(offer["vs_value"]) >= policies.GoodOverValue {
+			amounts[id] = maxFloat(amounts[id], number(offer["offer_amount"]))
+			names[id] = text(offer["name"])
+		}
+	}
+	for _, player := range d.benchOf() {
+		id := text(player["id"])
+		if truthy(player["sale_locked"]) {
 			continue
 		}
-		reach += number(offer["offer_amount"])
-		counted[id] = true
-		sold = append(sold, text(offer["name"]))
+		amounts[id] = maxFloat(amounts[id], number(player["value"]))
+		names[id] = text(player["name"])
+	}
+	ids := make([]string, 0, len(amounts))
+	for id := range amounts {
+		ids = append(ids, id)
+	}
+	sort.SliceStable(ids, func(one, two int) bool { return amounts[ids[one]] > amounts[ids[two]] })
+	for _, id := range ids {
+		reach += amounts[id]
+		sold = append(sold, names[id])
 	}
 
 	var items []string
@@ -206,8 +237,8 @@ func (d Document) crackBox() string {
 	line := "Con tu caja llegas a " + esMoney(reach)
 	if len(sold) > 0 {
 		names := sold
-		if len(names) > 2 {
-			names = append(names[:2:2], fmt.Sprintf("%d más", len(sold)-2))
+		if len(names) > 4 {
+			names = append(names[:4:4], fmt.Sprintf("%d más", len(sold)-4))
 		}
 		line = fmt.Sprintf("Con tu caja y vendiendo %s llegas a %s", strings.Join(names, ", "),
 			esMoney(reach))
