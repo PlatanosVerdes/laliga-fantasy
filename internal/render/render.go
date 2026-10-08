@@ -494,8 +494,8 @@ func buildChip() string {
 	if Build == "" {
 		return ""
 	}
-	return fmt.Sprintf(`<span class="build" title="Version del binario que sirve esta `+
-		`pagina: la etiqueta con la que se construyo la imagen">%s</span>`, Esc(Build))
+	return fmt.Sprintf(`<span class="build" title="Versión del panel que estás viendo: la `+
+		`etiqueta con la que se construyó">%s</span>`, Esc(Build))
 }
 
 // Stat is one of the four cards under the tab bar: a label, one figure and a line under it.
@@ -554,7 +554,8 @@ func Header(stats []string, withTabs bool, cash string, cashAmount *float64) str
 		strip = `<div class="strip">` + strings.Join(stats, "") + `</div>`
 	}
 	return `<div class="topbar">` + tabs + `<div class="topright">` +
-		`<span id="live-dot" class="live-off" title="Sin conexión en vivo"></span>` + chip + find +
+		buildChip() + `<span id="live-dot" class="live-off" title="Sin conexión en vivo"></span>` +
+		chip + find +
 		`</div></div>` + strip
 }
 
@@ -573,7 +574,7 @@ func PageFoot(generated, leagueName string, week int, more []string, mode string
 	return `<header class="topline"><h1>LaLiga Fantasy</h1>` +
 		`<p>` + Esc(generated) + league + fmt.Sprintf(` · jornada %d</p>`, week) +
 		`<span class="live"><span id="live-stamp">estatico</span></span>` +
-		modeChip(mode) + buildChip() + `</header>` + extra
+		modeChip(mode) + `</header>` + extra
 }
 
 // Footer says what the numbers are and what they are not. xPts is an estimate of ours, and

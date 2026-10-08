@@ -5,19 +5,19 @@ import (
 	"testing"
 )
 
-// The page has to say which build is serving it: without it the only way to tell whether a fix
+// The page has to say which build is serving it, where it is seen: without it the only way to tell whether a fix
 // is deployed is to read the container's logs, and a stale page looks exactly like a broken fix.
 func TestHeaderShowsTheBuildOnlyWhenStamped(t *testing.T) {
 	Build = ""
-	if got := PageFoot("21/08/2026 16:07", "Liga", 2, nil, "auto"); strings.Contains(got, "build") {
+	if got := Header(nil, true, "", nil); strings.Contains(got, `class="build"`) {
 		t.Errorf("sin sello no deberia anunciar version: %s", got)
 	}
 
 	Build = "v2026.08.21.3"
 	defer func() { Build = "" }()
-	got := PageFoot("21/08/2026 16:07", "Liga", 2, nil, "auto")
+	got := Header(nil, true, "", nil)
 	if !strings.Contains(got, `class="build"`) || !strings.Contains(got, "v2026.08.21.3") {
-		t.Errorf("la cabecera deberia llevar la version: %s", got)
+		t.Errorf("la barra de arriba deberia llevar la version: %s", got)
 	}
 }
 
