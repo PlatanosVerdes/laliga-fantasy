@@ -11,6 +11,10 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 )
 
+// MaxOfferDrop is how many xPts an accepted offer may take out of the eleven when the card has
+// no replacement to put in his place. Past it the money is not worth the matchdays.
+const MaxOfferDrop = 2.0
+
 // MaxCards is how many decisions "Qué hacer ahora" shows before sending the rest to the detail.
 const MaxCards = 5
 
@@ -97,9 +101,19 @@ func (d Document) offerCards(actions []map[string]any, rate float64) []Card {
 	for _, sale := range rows(d.Money["sell"]) {
 		sales[text(sale["offer_id"])] = sale
 	}
+	squad := rows(d.Advice["squad"])
+	_, xiNow := bestElevenOf(squad)
 	var out []Card
 	for _, row := range actions {
 		if text(row["verdict"]) != "cash" {
+			continue
+		}
+		stand := mapOf(row["stand_in"])
+		drop := xiNow - elevenWithout(squad, text(row["id"]))
+		if sale := sales[text(row["offer_id"])]; sale != nil {
+			drop = number(sale["xi_drop"])
+		}
+		if stand == nil && drop > MaxOfferDrop {
 			continue
 		}
 		amount, value := number(row["offer_amount"]), number(row["value"])
@@ -115,15 +129,15 @@ func (d Document) offerCards(actions []map[string]any, rate float64) []Card {
 				esMoney(over))
 			impact = "+" + esMoney(over) + " sobre su valor"
 		}
-		if stand := mapOf(row["stand_in"]); stand != nil {
+		if stand != nil {
 			why = append(why, fmt.Sprintf("Antes ficha a %s por %s: sin él no te queda once.",
 				text(stand["name"]), esMoney(number(stand["cost"]))))
-		} else if sale := sales[text(row["offer_id"])]; sale != nil {
+		} else {
 			line := "Tu once no lo nota: entra otro igual."
-			if drop := number(sale["xi_drop"]); drop > 0 {
+			if drop >= 0.05 {
 				line = fmt.Sprintf("Tu once pierde %s xPts.", esNum(drop, 1))
 			}
-			if truthy(sale["match_pending"]) {
+			if sale := sales[text(row["offer_id"])]; truthy(sale["match_pending"]) {
 				line += fmt.Sprintf(" Aún no ha jugado: regalas sus %s xPts de esta jornada.",
 					esNum(number(sale["points_at_risk"]), 1))
 			}
@@ -513,10 +527,21 @@ func (d Document) elevenAside() string {
 	for _, player := range squad {
 		byID[text(player["id"])] = player
 	}
-	choice, total := bestElevenOf(squad)
+	_, now := bestElevenOf(squad)
+	planned, arriving := planSquad(squad, rows(d.Swaps["moves"]))
+	for _, player := range planned {
+		byID[text(player["id"])] = player
+	}
+	choice, total := bestElevenOf(planned)
 
-	head := `<div class="dhead"><h2>Tu once</h2><p>` + Esc(choice.Shape.Name) + `</p></div>`
+	shape := Esc(choice.Shape.Name)
 	summary := `<div class="xi-total"><b>` + esNum(total, 1) + ` xPts</b> por jornada</div>`
+	if len(arriving) > 0 {
+		shape += " si haces el plan"
+		summary = `<div class="xi-total"><s>` + esNum(now, 1) + `</s> <b>` + esNum(total, 1) +
+			` xPts</b> <span class="xi-gain">` + esSigned(total-now) + `</span></div>`
+	}
+	head := `<div class="dhead"><h2>Tu once</h2><p>` + shape + `</p></div>`
 	lines := []struct {
 		slug string
 		ids  []string
@@ -533,16 +558,24 @@ func (d Document) elevenAside() string {
 				continue
 			}
 			xpts := number(player["xpts"])
+			class := xptsClass(xpts)
+			if arriving[id] {
+				class += " xi-new"
+			}
 			fmt.Fprintf(&chips, `<button class="xi-chip %s" type="button" data-detail="%s">`+
 				`%s<span class="xi-name">%s</span><span class="xi-x">%s</span></button>`,
-				xptsClass(xpts), Esc(id), miniFace(player), Esc(text(player["name"])),
+				class, Esc(id), miniFace(player), Esc(text(player["name"])),
 				esNum(xpts, 1))
 		}
 		fmt.Fprintf(&body, `<div class="xi-line"><span class="pos pos-%s">%s</span>`+
 			`<div class="xi-chips">%s</div></div>`, line.slug, strings.ToUpper(line.slug),
 			chips.String())
 	}
-	legend := `<p class="xi-legend">xPts por jornada: <span class="x-hi">≥6</span> · ` +
+	fresh := ""
+	if len(arriving) > 0 {
+		fresh = `<span class="xi-fresh">●</span> fichaje nuevo · `
+	}
+	legend := `<p class="xi-legend">` + fresh + `xPts por jornada: <span class="x-hi">≥6</span> · ` +
 		`<span class="x-mid">3,5–6</span> · <span class="x-lo">2–3,5</span> · ` +
 		`<span class="x-bad">&lt;2</span></p>`
 	more := `<nav class="dmore"><span>Ver todo en</span>` +
@@ -551,6 +584,27 @@ func (d Document) elevenAside() string {
 		`<button type="button" data-goto="misofertas">Mis ofertas</button>` +
 		`<button type="button" data-goto="plantilla">Plantilla</button></nav>`
 	return head + `<div class="xi-box">` + summary + body.String() + legend + `</div>` + more
+}
+
+// planSquad is the squad once the plan's moves are done, and who in it arrives with them.
+func planSquad(squad, moves []map[string]any) ([]map[string]any, map[string]bool) {
+	leaving, arriving := map[string]bool{}, map[string]bool{}
+	out := []map[string]any{}
+	for _, move := range moves {
+		if player := mapOf(move["out"]); player != nil {
+			leaving[text(player["id"])] = true
+		}
+		if player := mapOf(move["in"]); player != nil {
+			arriving[text(player["id"])] = true
+			out = append(out, player)
+		}
+	}
+	for _, player := range squad {
+		if !leaving[text(player["id"])] {
+			out = append(out, player)
+		}
+	}
+	return out, arriving
 }
 
 func bestElevenOf(squad []map[string]any) (eleven.Choice, float64) {
@@ -569,6 +623,17 @@ func bestElevenOf(squad []map[string]any) (eleven.Choice, float64) {
 		total += points[id]
 	}
 	return choice, total
+}
+
+func elevenWithout(squad []map[string]any, id string) float64 {
+	rest := make([]map[string]any, 0, len(squad))
+	for _, player := range squad {
+		if text(player["id"]) != id {
+			rest = append(rest, player)
+		}
+	}
+	_, total := bestElevenOf(rest)
+	return total
 }
 
 func miniFace(player map[string]any) string {

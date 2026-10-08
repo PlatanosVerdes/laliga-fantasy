@@ -1294,7 +1294,7 @@ func RiskBar(share float64) string {
 // carries it and the modal opens on the confirmation rather than on an empty field.
 func RaiseButton(row map[string]any) string {
 	pay := number(row["pay"])
-	if pay <= 0 || text(row["verdict"]) == "dejalo ir" {
+	if pay <= 0 || text(row["verdict"]) == "dejalo ir" || text(row["verdict"]) == "no compensa" {
 		return Missing
 	}
 	return fmt.Sprintf(`<button class="raise" data-raise="%s" data-raise-name="%s" `+
@@ -1311,6 +1311,7 @@ func RaiseVerdict(row map[string]any) string {
 	verdict, why := text(row["verdict"]), text(row["why"])
 	status := map[string]string{
 		"sube": "warning", "no te llega": "critical", "dejalo ir": "neutral",
+		"no compensa": "neutral",
 		"tranquilo": "good",
 	}[verdict]
 	if status == "" {

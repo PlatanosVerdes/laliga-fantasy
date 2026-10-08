@@ -43,7 +43,7 @@ func TestOrderCardsKeepsOneCardPerPlayer(t *testing.T) {
 func decidingDocument() Document {
 	squad := []any{
 		map[string]any{"id": "7", "name": "Unai Lopez", "position": "MED", "position_id": 3.0,
-			"is_mine": true, "available": true, "value": 20_000_000.0, "xpts": 4.5,
+			"is_mine": true, "available": true, "value": 20_000_000.0, "xpts": 2.5,
 			"team_short": "RAY", "image": "https://example.test/7.png",
 			"market": map[string]any{"market_id": "m7"},
 			"offers": []any{map[string]any{"id": "o1", "money": 21_700_000.0,
@@ -57,6 +57,9 @@ func decidingDocument() Document {
 		map[string]any{"id": "12", "name": "Medio suplente", "position": "MED",
 			"position_id": 3.0, "is_mine": true, "available": true, "value": 1_000_000.0,
 			"xpts": 1.0},
+		map[string]any{"id": "13", "name": "Ángel Pérez", "position": "MED", "position_id": 3.0,
+			"is_mine": true, "available": true, "value": 36_000_000.0, "xpts": 7.0,
+			"market": map[string]any{"market_id": "m13"}},
 		map[string]any{"id": "9", "name": "Portero", "position": "POR", "position_id": 1.0,
 			"is_mine": true, "available": true, "value": 5_000_000.0, "xpts": 6.0},
 	}
@@ -88,11 +91,15 @@ func decidingDocument() Document {
 			"offers": []any{merge(squad[0].(map[string]any), map[string]any{
 				"offer_id": "o1", "offer_amount": 21_700_000.0, "worth_taking": true,
 				"offer_expires": "2999-01-01T19:00:00+02:00", "market_id": "m7",
-				"vs_value": 1.085, "offer_from": "el mercado"})},
+				"vs_value": 1.085, "offer_from": "el mercado"}),
+				merge(squad[5].(map[string]any), map[string]any{
+					"offer_id": "o2", "offer_amount": 37_600_000.0, "worth_taking": true,
+					"offer_expires": "2999-01-01T19:00:00+02:00", "market_id": "m13",
+					"vs_value": 1.04, "offer_from": "cristian"})},
 		},
 		Money: map[string]any{"bargains": []any{bargain(cheap, 2.0), bargain(dear, 1.0)}},
 		Raise: map[string]any{"rows": []any{merge(squad[1].(map[string]any), map[string]any{
-			"in_plan": true, "pay": 10_300_000.0, "target_clause": 24_200_000.0,
+			"in_plan": true, "pay": 2_000_000.0, "target_clause": 24_200_000.0,
 			"clause": 3_500_000.0, "top_threat": "JMjugon", "top_threat_cash": 66_200_000.0,
 			"threats": 8.0, "tempted": 3.0, "xi_drop": 2.7, "risk": 1.0,
 			"player_team_id": "s8"})}},
@@ -120,11 +127,14 @@ func TestDecisionCardsComeFromTheAdvice(t *testing.T) {
 	}
 	if !strings.Contains(raise.Why[0], "JMjugon tiene 66,2M") ||
 		!strings.Contains(raise.Button, `class="raise dcard-go"`) ||
-		!strings.Contains(raise.Button, `data-raise-pay="10300000"`) {
+		!strings.Contains(raise.Button, `data-raise-pay="2000000"`) {
 		t.Errorf("raise card = %v / %s", raise.Why, raise.Button)
 	}
 	if raise.Deadline != "2999-01-01T21:00:00+02:00" {
 		t.Errorf("an open clause is defended until the window shuts, got %q", raise.Deadline)
+	}
+	if _, ok := kinds["offer:13"]; ok {
+		t.Error("selling the best player of the eleven with no replacement is not a decision to push")
 	}
 	if _, ok := kinds["sign:20"]; !ok {
 		t.Error("a backed signing that pays for itself should have a card")
@@ -160,5 +170,22 @@ func TestSpanishNumbers(t *testing.T) {
 		if got != want {
 			t.Errorf("got %q, want %q", got, want)
 		}
+	}
+}
+
+func TestElevenAsideShowsThePlan(t *testing.T) {
+	document := decidingDocument()
+	squad := rows(document.Advice["squad"])
+	signing := rows(document.Advice["bids_now"])[0]
+	document.Swaps = map[string]any{"moves": []any{map[string]any{
+		"out": squad[len(squad)-2], "in": signing, "gain": 4.5, "cost": 2_000_000.0}}}
+	html := document.elevenAside()
+	for _, want := range []string{"si haces el plan", "<s>", `xi-new`, `data-detail="20"`} {
+		if !strings.Contains(html, want) {
+			t.Errorf("plan aside misses %s", want)
+		}
+	}
+	if strings.Contains(decidingDocument().elevenAside(), "si haces el plan") {
+		t.Error("without moves the aside is today's eleven")
 	}
 }
