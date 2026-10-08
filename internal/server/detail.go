@@ -256,19 +256,8 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 		if until := text(player["shielded_until"]); shielded && until > suggested {
 			suggested, because = until, "shield"
 		}
-		at := time.Now()
-		if when, err := time.Parse(time.RFC3339, suggested); err == nil {
-			at = when
-		}
-		button := "Blindar 24h"
-		if shielded {
-			button = "Programar otro blindaje"
-		}
-		actions = append(actions, map[string]any{"op": "shield", "kind": "prompt",
-			"label": button, "player_id": id,
-			"player_team_id": player["player_team_id"],
-			"suggested":      suggested, "because": because, "now_allowed": !shielded,
-			"budget":         s.shieldBudget(at)})
+		actions = append(actions, shieldActions(id, player["player_team_id"], shielded,
+			suggested, because, time.Now(), s.shieldBudget)...)
 
 	case text(listing["kind"]) == "libre":
 		suggested := number(player["ideal_bid"])
@@ -353,6 +342,54 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 // on the same listing with a bare 400, so once one exists the only honest options are to
 // change it or to take it back — offering "Pujar" again would be offering a button that
 // cannot work.
+// shieldActions is the shield button for a player of yours. With the round's two shields
+// spent, "Blindar 24h" would only be refused, so it says so and offers the next round instead.
+func shieldActions(id string, slot any, shielded bool, suggested, because string, now time.Time,
+	budgetAt func(time.Time) shieldBudget) []map[string]any {
+	at := now
+	if when, err := time.Parse(time.RFC3339, suggested); err == nil {
+		at = when
+	}
+	budget := budgetAt(at)
+	label := "Blindar 24h"
+	if shielded {
+		label = "Programar otro blindaje"
+	}
+	nowAllowed := !shielded
+	actions := []map[string]any{}
+	if budget.Known && budget.Left() <= 0 {
+		spent := len(budget.Used) + len(budget.Booked)
+		note := fmt.Sprintf("Blindajes de la J%d: %d de %d usados", budget.Round.Week, spent,
+			budget.Limit)
+		if len(budget.Booked) > 0 {
+			note += fmt.Sprintf(" (%d programado", len(budget.Booked))
+			if len(budget.Booked) > 1 {
+				note += "s"
+			}
+			note += ")"
+		}
+		actions = append(actions, map[string]any{"op": "note", "kind": "note", "label": note})
+		found := false
+		for range 3 {
+			at = budget.Round.End.Add(time.Minute)
+			budget = budgetAt(at)
+			if !budget.Known || budget.Left() > 0 {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return actions
+		}
+		label, nowAllowed = "Programar otro blindaje", false
+		suggested, because = at.Format(time.RFC3339), "round"
+	}
+	return append(actions, map[string]any{"op": "shield", "kind": "prompt",
+		"label": label, "player_id": id, "player_team_id": slot,
+		"suggested": suggested, "because": because, "now_allowed": nowAllowed,
+		"budget": budget})
+}
+
 func bidActions(listing map[string]any, suggested float64) []map[string]any {
 	marketID := text(listing["market_id"])
 	minBid := int64(number(listing["min_bid"]))
