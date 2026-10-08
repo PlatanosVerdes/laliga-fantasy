@@ -97,17 +97,17 @@ func TestRivalSectionsSayWhoBeatsMine(t *testing.T) {
 		t.Fatal("sin seccion de cristian")
 	}
 	// 4.5 contra mi 3.0 es un jugador mejor, y 1.0 no: uno solo.
-	if !strings.Contains(cristian, "<strong>Uno</strong> de los suyos mejora") {
+	if !strings.Contains(cristian, "1 mejora a los tuyos") {
 		t.Errorf("la nota tiene que contar los que te mejoran: %s", note(cristian))
 	}
-	if !strings.Contains(cristian, "+1.50") {
+	if !strings.Contains(cristian, "+1,5") {
 		t.Error("falta la diferencia de xPts contra el tuyo de esa posicion")
 	}
 	// Su medio malo tiene la clausula bloqueada y el bueno no.
 	if !strings.Contains(cristian, "pagable ya") {
 		t.Error("una clausula libre tiene que decir que es pagable")
 	}
-	if !strings.Contains(cristian, "1 con la clausula pagable ya") {
+	if !strings.Contains(cristian, "1 pagable ya") {
 		t.Errorf("la nota tiene que contar las clausulas pagables: %s", note(cristian))
 	}
 }

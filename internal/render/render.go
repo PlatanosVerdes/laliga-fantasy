@@ -448,13 +448,16 @@ func TabsWithAmount(cash string, amount *float64) string {
 	if cash == "" {
 		return Tabs
 	}
+	return strings.Replace(Tabs, `</div>`, cashChip(cash, amount)+`</div>`, 1)
+}
+
+func cashChip(cash string, amount *float64) string {
 	exact := ""
 	if amount != nil {
 		exact = fmt.Sprintf(` data-cash="%.0f"`, *amount)
 	}
-	chip := `<span class="tab-cash" id="tab-cash" title="Tu saldo ahora mismo"` + exact + `>` +
+	return `<span class="tab-cash" id="tab-cash" title="Tu saldo ahora mismo"` + exact + `>` +
 		Esc(cash) + `</span>`
-	return strings.Replace(Tabs, `</div>`, chip+`</div>`, 1)
 }
 
 const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
@@ -467,7 +470,21 @@ const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
 	`/button>`+
 	`<button class="tab" role="tab" data-tab="rivales" aria-selected="false" type="button">Rivales</button>` +
 	`<button class="tab" role="tab" data-tab="liga" aria-selected="false" type="button">Liga</button>` +
-	`<button class="tab" role="tab" data-tab="ranking" aria-selected="false" type="button">Ranking</button></div>`
+	`<button class="tab" role="tab" data-tab="ranking" aria-selected="false" type="button">Ranking</button>` +
+	`<button class="tab" role="tab" data-tab="comparador" aria-selected="false" type="button">Comparador</button></div>`
+
+// CompareShell is the comparator's tab. The browser fills it from the tray it keeps, so the
+// live refresh must leave its inside alone (CLIENT_OWNED in report.js).
+const CompareShell = `<section id="comparador" data-tab="comparador">` +
+	`<h2>Comparador</h2>` +
+	`<div class="cmp-bar"><div class="cmp-find-wrap"><input class="cmp-find" type="search" ` +
+	`autocomplete="off" spellcheck="false" placeholder="añadir jugador…" ` +
+	`aria-label="Buscar jugador para comparar"><div class="cmp-results" hidden></div></div>` +
+	`<div class="cmp-mine-wrap"><button type="button" class="cmp-mine">Mi plantilla</button>` +
+	`<div class="cmp-results cmp-mine-list" hidden></div></div>` +
+	`<button type="button" class="cmp-clear">Vaciar</button><span class="cmp-msg"></span></div>` +
+	`<div class="cmp-body"><p class="empty">Busca jugadores arriba o pulsa ` +
+	`<b>+ comparar</b> en la ficha de cualquiera.</p></div></section>`
 
 // Build is the version of the binary serving this page, stamped at compile time. Empty renders
 // nothing: a page built by hand should not claim a version it does not have.
@@ -481,38 +498,82 @@ func buildChip() string {
 		`pagina: la etiqueta con la que se construyo la imagen">%s</span>`, Esc(Build))
 }
 
-// Header is the title, when it was generated, the widgets and the tabs. The live dot starts
-// off: a static file is honest about not being live, and the script turns it on when the
-// push channel connects.
-func Header(generated, leagueName string, week int, kpis []string, withTabs bool,
-	mode, cash string, cashAmount *float64) string {
+// Stat is one of the four cards under the tab bar: a label, one figure and a line under it.
+type Stat struct {
+	Icon, Label, Value, Small, Note string
+	// ValueID lets the live refresh rewrite the figure without re-rendering the strip.
+	ValueID string
+	// Deadline turns the figure into a live countdown, outlined in red in its last six hours.
+	Deadline string
+	Tab      string
+}
+
+func StatCard(stat Stat) string {
+	attrs := ""
+	if stat.ValueID != "" {
+		attrs += ` id="` + Esc(stat.ValueID) + `"`
+	}
+	if stat.Deadline != "" {
+		attrs += ` data-deadline="` + Esc(stat.Deadline) + `" data-plain="1"`
+	}
+	value := Esc(stat.Value)
+	if stat.Small != "" {
+		value += ` <small>` + Esc(stat.Small) + `</small>`
+	}
+	label := Esc(stat.Label)
+	if stat.Icon != "" {
+		label = stat.Icon + " " + label
+	}
+	inner := `<span class="k">` + label + `</span><span class="v"` + attrs + `>` + value +
+		`</span><span class="s">` + Esc(stat.Note) + `</span>`
+	if stat.Tab != "" {
+		return `<button class="stat" type="button" data-goto="` + Esc(stat.Tab) + `">` + inner +
+			`</button>`
+	}
+	return `<div class="stat">` + inner + `</div>`
+}
+
+// Header is the tab bar, with the live dot, the balance and the search on its right, and the
+// four cards under it. The live dot starts off: a static file is honest about not being live,
+// and the script turns it on when the push channel connects.
+func Header(stats []string, withTabs bool, cash string, cashAmount *float64) string {
+	tabs := ""
+	if withTabs {
+		tabs = Tabs
+	}
+	chip := ""
+	if withTabs && cash != "" {
+		chip = cashChip(cash, cashAmount)
+	}
+	find := `<div class="head-find"><input id="find" class="head-input" type="search" ` +
+		`autocomplete="off" spellcheck="false" placeholder="buscar jugador…" ` +
+		`aria-label="Buscar un jugador y abrir su ficha">` +
+		`<div class="cmp-results find-results" hidden></div></div>`
+	strip := ""
+	if len(stats) > 0 {
+		strip = `<div class="strip">` + strings.Join(stats, "") + `</div>`
+	}
+	return `<div class="topbar">` + tabs + `<div class="topright">` +
+		`<span id="live-dot" class="live-off" title="Sin conexión en vivo"></span>` + chip + find +
+		`</div></div>` + strip
+}
+
+// PageFoot is where the page comes from and what the server may do, and the figures that did
+// not make the four cards, folded.
+func PageFoot(generated, leagueName string, week int, more []string, mode string) string {
 	league := ""
 	if leagueName != "" {
 		league = ` · liga <strong>` + Esc(leagueName) + `</strong>`
 	}
-	tabs := ""
-	if withTabs {
-		tabs = TabsWithAmount(cash, cashAmount)
+	extra := ""
+	if len(more) > 0 {
+		extra = `<details class="kpis-more"><summary>más datos</summary><div class="kpis">` +
+			strings.Join(more, "") + `</div></details>`
 	}
-	return `<header><h1>LaLiga Fantasy · panel de decisiones</h1>` +
-		`<p>` + Esc(generated) + league +
-		fmt.Sprintf(` · jornada %d</p>`, week) +
-		`<span class="live"><span id="live-dot" class="live-off"></span>` +
-		`<span id="live-stamp">estatico</span></span>` +
-		// What this server may do, next to when it last looked: both answer "can I trust what I
-		// am seeing to be acted on".
-		modeChip(mode) + buildChip() +
-		// The comparator has no table of its own to live in, so its way in is here: a
-		// signing is decided against what you already have, from wherever you are looking.
-		`<button class="head-btn" id="open-compare" type="button" ` +
-		`title="Comparar jugadores entre ellos y con tu plantilla">Comparador</button>` +
-		// The way into a player's card from anywhere. See wireFindPlayer.
-		`<div class="head-find"><input id="find" class="head-input" type="search" ` +
-		`autocomplete="off" spellcheck="false" placeholder="buscar jugador…" ` +
-		`aria-label="Buscar un jugador y abrir su ficha">` +
-		`<div class="cmp-results find-results" hidden></div></div>` +
-		`</header>` +
-		`<div class="kpis">` + strings.Join(kpis, "") + `</div>` + tabs
+	return `<header class="topline"><h1>LaLiga Fantasy</h1>` +
+		`<p>` + Esc(generated) + league + fmt.Sprintf(` · jornada %d</p>`, week) +
+		`<span class="live"><span id="live-stamp">estatico</span></span>` +
+		modeChip(mode) + buildChip() + `</header>` + extra
 }
 
 // Footer says what the numbers are and what they are not. xPts is an estimate of ours, and
@@ -962,8 +1023,8 @@ func Feed(events []map[string]any) string {
 	var blocks strings.Builder
 	if len(moves) > 8 {
 		blocks.WriteString(`<div class="feed-sort" role="group" aria-label="Ordenar">` +
-			`<button type="button" data-feed-sort="recent" class="on">Lo ultimo</button>` +
-			`<button type="button" data-feed-sort="amount">Mas grandes</button></div>` +
+			`<button type="button" data-feed-sort="recent" class="on">Lo último</button>` +
+			`<button type="button" data-feed-sort="amount">Más grandes</button></div>` +
 			`<span class="feed-legend"><i class="feed-mine"></i>tuyo<i class="feed-bid"></i>pujaste` +
 			`<i class="feed-fav"></i>favorito</span>`)
 	}
@@ -1244,7 +1305,7 @@ func RiskBar(share float64) string {
 // carries it and the modal opens on the confirmation rather than on an empty field.
 func RaiseButton(row map[string]any) string {
 	pay := number(row["pay"])
-	if pay <= 0 || text(row["verdict"]) == "dejalo ir" {
+	if pay <= 0 || text(row["verdict"]) == "dejalo ir" || text(row["verdict"]) == "no compensa" {
 		return Missing
 	}
 	return fmt.Sprintf(`<button class="raise" data-raise="%s" data-raise-name="%s" `+
@@ -1261,6 +1322,7 @@ func RaiseVerdict(row map[string]any) string {
 	verdict, why := text(row["verdict"]), text(row["why"])
 	status := map[string]string{
 		"sube": "warning", "no te llega": "critical", "dejalo ir": "neutral",
+		"no compensa": "neutral",
 		"tranquilo": "good",
 	}[verdict]
 	if status == "" {
@@ -1301,12 +1363,17 @@ func BidButton(row map[string]any) string {
 			label = "Tu puja " + Money(amount)
 		}
 	}
-	// The count and the closing time travel with the button: without them the dialog said
-	// "pujas vigentes: ninguna" on a listing with four, which is worse than saying nothing.
-	return fmt.Sprintf(`<button class="bid" type="button" data-market="%s" `+
+	return bidButton(row, "bid", operation, bid, label)
+}
+
+// bidButton is the markup openBid reads. The count and the closing time travel with the button:
+// without them the dialog said "pujas vigentes: ninguna" on a listing with four.
+func bidButton(row map[string]any, class, operation, bid, label string) string {
+	listing, _ := row["market"].(map[string]any)
+	return fmt.Sprintf(`<button class="%s" type="button" data-market="%s" `+
 		`data-operation="%s" data-bids="%d" data-expires="%s" `+
 		`data-player="%s" data-name="%s" data-min="%d" data-ideal="%d" data-value="%d"%s>%s</button>`,
-		Esc(marketID), Esc(operation), int64(number(listing["bids"])),
+		class, Esc(text(listing["market_id"])), Esc(operation), int64(number(listing["bids"])),
 		Esc(text(listing["expires"])), Esc(text(row["id"])), Esc(text(row["name"])),
 		int64(number(listing["min_bid"])), int64(number(row["ideal_bid"])),
 		int64(number(row["value"])), bid, label)

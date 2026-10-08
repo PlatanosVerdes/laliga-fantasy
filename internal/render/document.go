@@ -130,6 +130,7 @@ func (d Document) HTML() string {
 
 	var sections []string
 	if hasAdvice {
+		sections = append(sections, d.Views()...)
 		sections = append(sections, d.swapSection())
 		sections = append(sections, d.actionsSection())
 		sections = append(sections, d.moneySection())
@@ -141,7 +142,6 @@ func (d Document) HTML() string {
 	sections = append(sections, d.seasonSection())
 	sections = append(sections, d.feedSection())
 	if hasAdvice {
-		sections = append(sections, Pitch)
 		sections = append(sections, d.squadSection())
 		sections = append(sections, d.marketSections()...)
 		sections = append(sections, d.clauseSections()...)
@@ -150,19 +150,38 @@ func (d Document) HTML() string {
 	sections = append(sections, d.scheduleSection(players))
 	sections = append(sections, d.rulesSection())
 	sections = append(sections, d.rankingSections(players)...)
+	sections = append(sections, CompareShell)
 
-	kpis := d.widgets(week, players)
+	stats, more := d.widgets(week, players)
 	// The balance rides in the tab bar, which is the only strip that stays on screen.
 	cash, budget := "", asFloat(d.Advice["budget"])
 	if budget != nil {
-		cash = Money(budget)
+		cash = esMoney(*budget)
 	}
-	header := Header(d.Generated, d.LeagueName, int(number(week["weekNumber"])), kpis,
-		hasAdvice, d.Mode, cash, budget)
-	footer := Footer(number(universe["current_weight"]))
+	header := Header(stats, hasAdvice, cash, budget) + d.pageFacts()
+	footer := PageFoot(d.Generated, d.LeagueName, int(number(week["weekNumber"])), more, d.Mode) +
+		Footer(number(universe["current_weight"]))
 
 	body := strings.Join(filterEmpty(sections), "")
 	return Page(d.CSS, d.JS, CrestCSS(), header, body, footer, d.Modal, d.Drawer)
+}
+
+// pageFacts is what the player card needs to know about the league and cannot ask for: the
+// clause window and the exceptions to the hold rule.
+func (d Document) pageFacts() string {
+	attrs := ""
+	if d.Window != nil {
+		open := "0"
+		if d.Window.Open {
+			open = "1"
+		}
+		attrs += fmt.Sprintf(` data-window-open="%s" data-opens="%s" data-closes="%s"`, open,
+			Esc(d.Window.OpensAt), Esc(d.Window.ClosesAt))
+	}
+	if d.HoldExceptions != "" {
+		attrs += ` data-hold-except="` + Esc(d.HoldExceptions) + `"`
+	}
+	return `<div id="page-facts" hidden` + attrs + `></div>`
 }
 
 func filterEmpty(values []string) []string {
@@ -180,15 +199,16 @@ var Pitch, Filters string
 
 // --- widgets ---------------------------------------------------------------------------
 
-func (d Document) widgets(week map[string]any, players []map[string]any) []string {
+// widgets are the four cards under the tab bar and, apart, the figures behind "más datos".
+func (d Document) widgets(week map[string]any, players []map[string]any) ([]string, []string) {
 	// The one number on this card that keeps changing is how long is left: to the first
 	// kick-off, then to the last one, then to the close the game stamps hours after it.
 	closing, opening := text(week["closingWeekDate"]), text(week["openingWeekDate"])
 	last := d.lastKickoff(opening)
 	now := time.Now()
-	state, deadline := "hasta que se cierra la alineacion", opening
+	state, deadline := "hasta que se cierra la alineación", opening
 	if when, ok := parseStamp(opening); !ok || !now.Before(when) || truthy(week["isLive"]) {
-		state, deadline = "en juego, hasta el ultimo partido", last
+		state, deadline = "en juego, hasta el último partido", last
 		if when, ok := parseStamp(last); !ok || !now.Before(when) {
 			state, deadline = "acabando, se cierra", closing
 		}
@@ -197,35 +217,28 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 	if deadline != "" {
 		value = LeftUntil(deadline)
 	}
-	notes := []string{}
-	if starts := whenLabel(opening); starts != "" && deadline == opening {
-		notes = append(notes, "empieza "+starts)
+	note := state
+	switch {
+	case deadline == opening && esWhen(opening) != "":
+		note = "empieza " + esWhen(opening)
+	case deadline == last && esWhen(last) != "":
+		note = "último partido " + esWhen(last)
 	}
-	if ends := whenLabel(last); ends != "" {
-		notes = append(notes, "ultimo partido "+ends)
-	}
-	if nextOpens := whenLabel(text(d.Universe["next_week_opens"])); nextOpens != "" &&
-		deadline != opening {
-		notes = append(notes, fmt.Sprintf("J%d desde %s", int(number(week["nextWeek"])), nextOpens))
-	}
-
-	kpis := []string{Widget(KPI{
-		Label:    fmt.Sprintf("Jornada %d", int(number(week["weekNumber"]))),
-		Value:    value,
-		Deadline: deadline,
-		// The widget states which matchday it is; the section says how it is going.
-		Hint: state, Notes: notes, Status: "neutral", Tab: "jornada"})}
-	if clauses, ok := d.clauseWidget(); ok {
-		kpis = append(kpis, Widget(clauses))
+	weekNumber := int(number(week["weekNumber"]))
+	matchday := StatCard(Stat{Icon: "⚽", Label: fmt.Sprintf("Jornada %d", weekNumber),
+		Value: value, Deadline: deadline, Note: note, Tab: "jornada"})
+	clauses := ""
+	if stat, ok := d.clauseStat(); ok {
+		clauses = StatCard(stat)
 	}
 
 	if len(d.Advice) == 0 {
-		kpis = append(kpis,
-			Widget(KPI{Label: "Jugadores", Value: fmt.Sprintf("%d", len(players)),
-				Hint: fmt.Sprintf("%d con datos de futbolfantasy",
-					int(number(d.Universe["matched_count"])))}),
-			Widget(KPI{Label: "Sesion", Value: "sin liga", Hint: "solo datos publicos"}))
-		return kpis
+		return filterEmpty([]string{matchday, clauses,
+				StatCard(Stat{Label: "Jugadores", Value: fmt.Sprintf("%d", len(players)),
+					Note: fmt.Sprintf("%d con datos de futbolfantasy",
+						int(number(d.Universe["matched_count"])))}),
+				StatCard(Stat{Label: "Sesión", Value: "sin liga", Note: "solo datos públicos"})}),
+			nil
 	}
 
 	squad := rows(d.Advice["squad"])
@@ -262,16 +275,30 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 	if seat := asFloat(me["position"]); seat != nil {
 		position = fmt.Sprintf("%d", int(*seat))
 	}
-	kpis = append(kpis,
+	exact := ""
+	if budget != nil {
+		exact = group(fmt.Sprintf("%.0f", *budget)) + " €"
+	}
+	stats := filterEmpty([]string{
+		StatCard(Stat{Icon: "💶", Label: "Caja", Value: esMoney(number(d.Advice["budget"])), ValueID: "kpi-cash",
+			Note: exact, Tab: "rivales"}),
+		clauses, matchday,
+		StatCard(Stat{Icon: "🏆", Label: "Liga", Value: position + "º",
+			Small: fmt.Sprintf("de %d", len(teams)),
+			Note:  fmt.Sprintf("%d pts", int(number(me["points"]))), Tab: "rivales"}),
+	})
+
+	more := []string{
 		Widget(KPI{Label: "Mi puesto", Value: position + "º",
 			Hint: fmt.Sprintf("%d puntos", int(number(me["points"]))),
 			Rank: pointsRank, Meter: &pointsShare, Status: pointsStatus, Tab: "rivales"}),
-		Widget(KPI{Label: "Mi saldo", Value: Money(budget), ValueID: "kpi-cash",
+		Widget(KPI{Label: "Mi saldo", Value: Money(budget),
 			Hint: text(me["power_note"]), Rank: cashRank, Meter: &cashShare,
 			Status: cashStatus, Tab: "rivales"}),
 		Widget(KPI{Label: "Valor de plantilla", Value: Money(&squadValue),
 			Hint: fmt.Sprintf("%d jugadores", len(squad)),
-			Rank: valueRank, Meter: &valueShare, Status: valueStatus, Tab: "plantilla"}))
+			Rank: valueRank, Meter: &valueShare, Status: valueStatus, Tab: "plantilla"}),
+	}
 
 	var goodOffers []map[string]any
 	for _, offer := range rows(d.Advice["offers"]) {
@@ -287,7 +314,7 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 			}
 			names = append(names, text(offer["name"]))
 		}
-		kpis = append(kpis, Widget(KPI{Label: "Ofertas que interesan",
+		more = append(more, Widget(KPI{Label: "Ofertas que interesan",
 			Value: fmt.Sprintf("%d", len(goodOffers)), Hint: strings.Join(names, ", "),
 			Rank: "cobra", Status: "good", Tab: "ofertas"}))
 	}
@@ -303,24 +330,13 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 		}
 		clauseHint = "bloqueadas hasta " + from
 	}
-	kpis = append(kpis,
+	more = append(more,
 		Widget(KPI{Label: "xPts del mejor 11", Value: Num(&bestEleven, 1), Hint: "por jornada"}),
 		Widget(KPI{Label: "Pujables ahora", Value: fmt.Sprintf("%d", len(bids)),
 			Hint: fmt.Sprintf("%d mas en venta por rivales", len(asks)), Tab: "fichajes"}),
 		Widget(KPI{Label: "Cláusulas a tiro", Value: fmt.Sprintf("%d", len(raids)),
 			Hint: clauseHint, Tab: "clausulas"}))
-	return kpis
-}
-
-// whenLabel is "vie 22 ago 19:30": the day matters more than the exact hour, and a weekday
-// is easier to place than a date.
-func whenLabel(value string) string {
-	when, ok := parseStamp(value)
-	if !ok {
-		return ""
-	}
-	return fmt.Sprintf("%s %d %s %02d:%02d", weekdays[(int(when.Weekday())+6)%7],
-		when.Day(), months[int(when.Month())], when.Hour(), when.Minute())
+	return stats, more
 }
 
 // lastKickoff is the matchday's last match, leaving out any moved weeks away from the rest.
@@ -340,27 +356,27 @@ func (d Document) lastKickoff(opening string) string {
 	return round.End.Add(-schedule.RoundTail).Format(time.RFC3339)
 }
 
-// clauseWidget counts down to the next change of the clause window: the game shuts it the day
+// clauseStat counts down to the next change of the clause window: the game shuts it the day
 // before a matchday and reopens it at the first kick-off, for you and for every rival.
-func (d Document) clauseWidget() (KPI, bool) {
+func (d Document) clauseStat() (Stat, bool) {
 	fixtures := []schedule.Fixture{}
 	for _, fixture := range rows(d.Universe["schedule"]) {
 		fixtures = append(fixtures, schedule.Fixture{Week: int(number(fixture["week"])),
 			Kickoff: text(fixture["kickoff"])})
 	}
 	if len(fixtures) == 0 {
-		return KPI{}, false
+		return Stat{}, false
 	}
 	window := schedule.Clauses(fixtures, time.Now())
-	hint, deadline, note := "abiertas, se cierran en", window.ClosesAt, "cierran "
+	icon, label, deadline, note := "🔓", "Cláusulas abiertas", window.ClosesAt, "hasta "
 	if !window.Open {
-		hint, deadline, note = "cerradas, se abren en", window.OpensAt, "abren "
+		icon, label, deadline, note = "🔒", "Cláusulas cerradas", window.OpensAt, "se abren "
 	}
 	if deadline == "" {
-		return KPI{}, false
+		return Stat{}, false
 	}
-	return KPI{Label: "Clausulazos", Value: LeftUntil(deadline), Deadline: deadline, Hint: hint,
-		Notes: []string{note + whenLabel(deadline)}, Status: "neutral"}, true
+	return Stat{Icon: icon, Label: label, Value: LeftUntil(deadline), Deadline: deadline,
+		Note: note + esWhen(deadline), Tab: "clausulas"}, true
 }
 
 // --- the sections ----------------------------------------------------------------------
@@ -417,7 +433,7 @@ func (d Document) actionsSection() string {
 	}
 
 	table := TableIn(columnsFor("acciones"), rowsOut, "Nada urgente", "", false)
-	return Section("Que hacer ahora", legend+table,
+	return Section("Todas las decisiones", legend+table,
 		"Todo lo accionable en una tabla, de lo urgente a lo que puede esperar. "+
 			"Cada fila lleva el motivo escrito: el color repite el dato, no lo sustituye.",
 		fmt.Sprintf("%d decisiones", len(rowsOut)), "acciones")
@@ -661,6 +677,7 @@ func (d Document) actionRows() []map[string]any {
 		// position is a no *until you sign somebody*, which is an instruction rather than a
 		// refusal.
 		blocked, verdict := "", "cash"
+		var standIn map[string]any
 		if truthy(offer["sale_locked"]) {
 			until := text(offer["hold_until"])
 			if len(until) > 10 {
@@ -674,6 +691,7 @@ func (d Document) actionRows() []map[string]any {
 			if stand := d.replacementFor(offer, spare); stand != nil {
 				gap := number(stand["xpts"]) - number(offer["xpts"])
 				if truthy(stand["adequate"]) {
+					standIn = stand
 					// The net is the number that decides: the offer pays for part of the
 					// replacement, and sometimes for all of it.
 					net := number(stand["cost"]) - number(offer["offer_amount"])
@@ -701,8 +719,12 @@ func (d Document) actionRows() []map[string]any {
 		if blocked != "" {
 			why += " · pero " + blocked
 		}
-		out = append(out, merge(offer, map[string]any{
-			"verdict": verdict, "entry_cost": offer["offer_amount"], "why": why}))
+		row := merge(offer, map[string]any{
+			"verdict": verdict, "entry_cost": offer["offer_amount"], "why": why})
+		if standIn != nil {
+			row["stand_in"] = standIn
+		}
+		out = append(out, row)
 	}
 
 	for index, player := range rows(d.Advice["sells"]) {
@@ -1210,13 +1232,9 @@ func (d Document) rulesSection() string {
 	if d.HoldDays == 0 && len(d.RuleNotes) == 0 {
 		return ""
 	}
-	count := ""
-	if total := len(d.RuleNotes) + map[bool]int{true: 1, false: 0}[d.HoldDays > 0]; total > 0 {
-		count = fmt.Sprintf("%d normas", total)
-	}
-	return Section("Normas de la liga", HouseRules(d.HoldDays, d.HoldExceptions, d.RuleNotes),
-		"Lo que no sabe el juego. Solo la primera cambia lo que te propongo; las demas "+
-			"estan aqui para consultarlas.", count, "normas")
+	return mkSection("normas", "liga", "Normas de la liga",
+		`<div class="mk-box">`+HouseRules(d.HoldDays, d.HoldExceptions, d.RuleNotes)+`</div>`,
+		"", len(d.RuleNotes)+map[bool]int{true: 1, false: 0}[d.HoldDays > 0])
 }
 
 // managerTeams is the user-id to team-id map the feed needs to make its names clickable. Built
@@ -1244,12 +1262,9 @@ func (d Document) managerTeams() map[string]string {
 // seasonSection is only the frame: the line of every manager across the season is thirteen
 // lineups per matchday, so it is asked for when the tab is opened and not on every rebuild.
 func (d Document) seasonSection() string {
-	note := "En que puesto acabo cada uno cada jornada. La clasificacion oficial solo publica " +
-		"la de hoy, asi que el recorrido se suma de los onces que alineo cada uno: el total " +
-		"que sale es exactamente el de la tabla."
-	return Section("La liga jornada a jornada",
+	return mkSection("evolucion", "liga", "La liga jornada a jornada",
 		`<div class="evo" data-season="1"><p class="empty">Cargando…</p></div>`,
-		note, "", "evolucion")
+		"", -1)
 }
 
 // feedMarks is which players of the log concern me, strongest first: mine (now, or bought or
@@ -1326,34 +1341,78 @@ func (d Document) feedSection() string {
 	}
 	ManagerTeams = d.managerTeams()
 	FeedMarks, FeedMe = d.feedMarks()
-	return Section("Movimientos de la liga", Feed(events),
-		"Quien ha fichado y vendido, y por cuanto. Las operaciones grandes "+
-			"cuentan quien se esta quedando sin caja.",
-		fmt.Sprintf("%d operaciones", moves), "movimientos")
+	return mkSection("movimientos", "liga", "Movimientos de la liga", Feed(events),
+		"", moves)
 }
 
 func (d Document) squadSection() string {
 	squad := rows(d.Advice["squad"])
 	shape := mapOf(d.Advice["shape"])
-	var bits []string
+	var groups strings.Builder
 	for _, positionID := range []string{"1", "2", "3", "4"} {
-		data := mapOf(shape[positionID])
-		if data == nil {
+		var line []map[string]any
+		for _, player := range squad {
+			if text(player["position_id"]) == positionID {
+				line = append(line, player)
+			}
+		}
+		if len(line) == 0 {
 			continue
 		}
-		// A gap is bolded and a surplus is not: one of them is a hole in the eleven and the
-		// other is a player you could sell.
-		state := "ok"
-		if truthy(data["gap"]) {
-			state = "<strong>falta</strong>"
-		} else if truthy(data["surplus"]) {
-			state = "sobra"
+		sort.SliceStable(line, func(one, two int) bool {
+			return number(line[one]["xpts"]) > number(line[two]["xpts"])
+		})
+		state := ""
+		if data := mapOf(shape[positionID]); data != nil {
+			switch {
+			case truthy(data["gap"]):
+				state = " · falta uno"
+			case truthy(data["surplus"]):
+				state = " · sobra uno"
+			}
 		}
-		bits = append(bits, fmt.Sprintf("%s %d/%d (%s)", positionNames[positionID],
-			int(number(data["owned"])), int(number(data["ideal"])), state))
+		slug := map[string]string{"1": "por", "2": "def", "3": "med", "4": "del"}[positionID]
+		fmt.Fprintf(&groups, `<li class="line-head"><span class="pos pos-%s">%s</span>%s%s</li>`,
+			slug, strings.ToUpper(slug), counted(len(line), "jugador", "jugadores"), state)
+		for _, player := range line {
+			groups.WriteString(squadRow(player))
+		}
 	}
-	table, _ := SectionTable("plantilla", squad)
-	return Section("Mi plantilla", table, strings.Join(bits, " · "), "", "plantilla")
+	return mkSection("plantilla", "plantilla", "Mi plantilla",
+		`<ul class="rows">`+groups.String()+`</ul>`, "", len(squad))
+}
+
+// squadRow is one of mine: what he gives, what he is worth and where his clause and his sale
+// stand.
+func squadRow(player map[string]any) string {
+	meta := Esc(text(player["team_short"]))
+	if starts := asFloat(player["start_probability"]); starts != nil {
+		meta += fmt.Sprintf(" · titular %.0f %%", *starts)
+	}
+	if truthy(player["sale_locked"]) {
+		meta += " · 🔒 venta " + esDay(text(player["hold_until"]))
+	}
+	if asking := number(mapOf(player["market"])["min_bid"]); asking > 0 {
+		meta += " · 🏷 en venta por " + esMoney(asking)
+	}
+	trend := number(player["pct_7d"])
+	class, sign := "up", "+"
+	if trend < 0 {
+		class, sign = "down", ""
+	}
+	note := fmt.Sprintf(`%s · <span class="%s">%s%s %%</span>`, esMoney(number(player["value"])),
+		class, sign, esNum(trend, 1))
+	var chip string
+	switch {
+	case truthy(player["shielded"]):
+		chip = tag("🛡 blindado", "done")
+	case truthy(player["clause_locked"]):
+		chip = clock(text(player["clause_locked_until"]), "se libera su cláusula")
+	case number(player["clause"]) > 0:
+		chip = tag("🔓 "+esMoney(number(player["clause"])), "warn")
+	}
+	return row(player, meta, esNum(number(player["xpts"]), 1)+" xPts", note, chip,
+		Star(player)+CompareButton(player), "")
 }
 
 var positionNames = map[string]string{
@@ -1460,11 +1519,6 @@ func (d Document) marketSections() []string {
 			"sale <em>caro</em>, y que se pueda pagar no lo convierte en buena idea.",
 		fmt.Sprintf("%d", len(raids)), "clausulas"))
 
-	sells := rows(d.Advice["sells"])
-	table, _ = SectionTable("ventas", sells)
-	out = append(out, Section("Candidatos a vender", table,
-		"Ordenados por presion de venta: score bajo, valor cayendo, poca titularidad "+
-			"o exceso en la posicion.", "", "ventas"))
 
 	// The exposure table used to live here, saying who was cheap and how many could pay it.
 	// "Subir cláusulas" answers the same question and then the next two — how likely it is,
@@ -1550,6 +1604,9 @@ func (d Document) clauseSections() []string {
 	}
 	// One section per rival, after the table that compares them all.
 	out = append(out, d.rivalSections(rows(d.Universe["players"]))...)
+	if len(d.Advice) > 0 {
+		out = append(out, moreSection("rivales", "poder de compra de la liga · quién pinta peor"))
+	}
 	return out
 }
 
@@ -1706,48 +1763,6 @@ func (d Document) rivalSections(players []map[string]any) []string {
 		if manager == "" {
 			manager = teamID
 		}
-		upgrades, payable, listed, value, points := 0, 0, 0, 0.0, 0.0
-		for _, player := range squad {
-			if number(player["vs_mine"]) > 0 {
-				upgrades++
-			}
-			if !truthy(player["clause_locked"]) && !truthy(player["shielded"]) &&
-				number(player["clause"]) > 0 {
-				payable++
-			}
-			if number(player["asking"]) > 0 {
-				listed++
-			}
-			value += number(player["value"])
-			points += number(player["xpts"])
-		}
-
-		note := fmt.Sprintf("%.0f puntos · caja estimada <strong>%s</strong> · "+
-			"plantilla %s · %.1f xPts por jornada.", number(team["points"]),
-			Esc(Money(asFloat(team["estimated_cash"]))), Esc(Money(&value)), points)
-		switch {
-		case upgrades == 0:
-			note += " No tiene a nadie que mejore lo que tienes en su posicion."
-		case upgrades == 1:
-			note += " <strong>Uno</strong> de los suyos mejora al tuyo de su posicion."
-		default:
-			note += fmt.Sprintf(" <strong>%d</strong> de los suyos mejoran al tuyo de su "+
-				"posicion.", upgrades)
-		}
-		if payable > 0 {
-			note += fmt.Sprintf(" %d con la clausula pagable ya.", payable)
-		}
-		switch {
-		case listed == 1:
-			note += " Uno puesto en venta."
-		case listed > 1:
-			note += fmt.Sprintf(" %d puestos en venta.", listed)
-		}
-
-		badge := fmt.Sprintf("%d jugadores", len(squad))
-		if position := number(team["position"]); position > 0 {
-			badge = fmt.Sprintf("%.0fº · %d jugadores", position, len(squad))
-		}
 		label := manager
 		if position := number(team["position"]); position > 0 {
 			label = fmt.Sprintf("%.0fº · %s", position, manager)
@@ -1755,18 +1770,14 @@ func (d Document) rivalSections(players []map[string]any) []string {
 		options = append(options, fmt.Sprintf(
 			`<option value="rival-%s">%s · %d jugadores</option>`,
 			Esc(teamID), Esc(label), len(squad)))
-		out = append(out, SectionIn("rivales", manager, table, note, badge, "rival-"+teamID))
+		out = append(out, rivalSquad(team, manager, squad, table))
 	}
 
 	picker := `<div class="pick-bar"><label>Equipo<select id="rival-pick">` +
 		strings.Join(options, "") +
 		`<option value="all">todos a la vez</option></select></label></div>`
-	head := SectionIn("rivales", "Plantillas rivales", picker,
-		"La plantilla entera de cada rival, uno a la vez. <strong>Frente a lo tuyo</strong> "+
-			"compara cada jugador con tu mejor jugador de esa misma posicion, que es lo que "+
-			"decide si merece la pena ir a por el, y <strong>Se puede</strong> dice si su "+
-			"clausula esta pagable hoy. El <strong>+</strong> mete al jugador en el comparador.",
-		fmt.Sprintf("%d rivales", len(ordered)), "rivalpick")
+	head := mkSection("rivalpick", "rivales", "Plantillas rivales", picker,
+		"", len(ordered))
 	return append([]string{head}, out...)
 }
 
@@ -1789,7 +1800,8 @@ func (d Document) rankingSections(players []map[string]any) []string {
 	// The ranking uses the shared player columns, so it borrows the squad's spec but never
 	// its section: these players are not yours and the "mio" flag has to show.
 	table = TableIn(PlayerColumns(""), byScore, "Sin datos", "", true)
-	out := []string{Section("Ranking global", Filters+table,
+	out := []string{"", moreSection("ranking", "las tablas completas"),
+		Section("Ranking global", Filters+table,
 		"Los 80 mejores de LaLiga por score, con dueño o sin el. Filtra por posicion y "+
 			"precio, o pincha una cabecera para reordenar.", "top 80", "ranking")}
 
@@ -1805,6 +1817,14 @@ func (d Document) rankingSections(players []map[string]any) []string {
 	if len(byValue) > 40 {
 		byValue = byValue[:40]
 	}
+	byXPts := append([]map[string]any(nil), available...)
+	sort.SliceStable(byXPts, func(i, j int) bool {
+		return number(byXPts[i]["xpts"]) > number(byXPts[j]["xpts"])
+	})
+	if len(byXPts) > 80 {
+		byXPts = byXPts[:80]
+	}
+	out[0] = d.rankingView(byScore, byXPts)
 	out = append(out, Section("Mejor rentabilidad",
 		TableIn(PlayerColumns(""), byValue, "Sin datos", "", false),
 		"xPts esperados por jornada divididos entre el precio. La metrica que manda cuando "+

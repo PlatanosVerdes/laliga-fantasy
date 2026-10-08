@@ -121,3 +121,68 @@ func TestRaiseTargetStopsAtWhatAnybodyCanPay(t *testing.T) {
 		t.Errorf("target = %v, tiene que subir de la clausula actual", target)
 	}
 }
+
+// The card that asks for a raise names who would pay and how much he holds, so the cash has to
+// travel with the name rather than be looked up again by manager.
+func TestClausePlanCarriesTheThreatsCash(t *testing.T) {
+	plan := ClausePlan(defenceWorld(20_000_000), 20_000_000)
+	for _, row := range rowsOf(plan["rows"]) {
+		if text(row["name"]) != "medio1" {
+			continue
+		}
+		if text(row["top_threat"]) != "Villaone" {
+			t.Fatalf("top_threat = %q, want Villaone", text(row["top_threat"]))
+		}
+		if got := number(row["top_threat_cash"]); got != 40_000_000 {
+			t.Errorf("top_threat_cash = %v, want 40M", got)
+		}
+		return
+	}
+	t.Fatal("medio1 missing from the plan")
+}
+
+func TestTopThreatCashPrefersTheTempted(t *testing.T) {
+	threats := []Threat{
+		{Manager: "rico", Cash: 90_000_000},
+		{Manager: "tentado", Cash: 30_000_000, Worth: true},
+	}
+	if got := TopThreatCash(threats); got != 30_000_000 {
+		t.Errorf("TopThreatCash = %v, want the tempted one's 30M", got)
+	}
+	if got := TopThreatCash(nil); got != 0 {
+		t.Errorf("TopThreatCash(nil) = %v, want 0", got)
+	}
+}
+
+// Ten million to keep 2.7 xPts in the eleven is a worse use of the money than any signing.
+func TestClausePlanRefusesRaisesThatProtectTooLittle(t *testing.T) {
+	plan := ClausePlan(defenceWorld(20_000_000), 20_000_000)
+	for _, row := range rowsOf(plan["rows"]) {
+		pay, drop := number(row["pay"]), number(row["xi_drop"])
+		if text(row["verdict"]) == "sube" && drop/(pay/1e6) < RaiseWorthPerMillion {
+			t.Errorf("%s: pays %v to protect %v xPts and is still a raise", text(row["name"]),
+				pay, drop)
+		}
+	}
+
+	// The same midfielder with a one-million clause: lifting it out of reach costs tens of
+	// millions for the few xPts he adds.
+	world := defenceWorld(60_000_000)
+	for _, player := range rowsOf(world["players"]) {
+		if text(player["name"]) == "medio1" {
+			player["clause"] = 1_000_000.0
+		}
+	}
+	for _, row := range rowsOf(ClausePlan(world, 60_000_000)["rows"]) {
+		if text(row["name"]) != "medio1" {
+			continue
+		}
+		if text(row["verdict"]) != "no compensa" {
+			t.Errorf("verdict = %q (pay %v, drop %v), want no compensa", text(row["verdict"]),
+				number(row["pay"]), number(row["xi_drop"]))
+		}
+		if truthy(row["in_plan"]) {
+			t.Error("a raise that does not pay off cannot be in the plan")
+		}
+	}
+}

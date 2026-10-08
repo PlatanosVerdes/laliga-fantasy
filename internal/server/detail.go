@@ -6,16 +6,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
 
@@ -198,7 +201,11 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 			if who == "" {
 				who = "el mercado"
 			}
-			label := fmt.Sprintf("Aceptar %s de %s", thousands(amount), who)
+			from := "de " + who
+			if who == "el mercado" {
+				from = "del mercado"
+			}
+			label := fmt.Sprintf("Aceptar %s %s", short(float64(amount)), from)
 			note := ""
 			if made := text(offer["createdAt"]); made != "" {
 				note = "ofrecida " + made[:16]
@@ -209,13 +216,15 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 				}
 				note += "caduca " + expires[:16]
 			}
+			take, why := offerAdvice(rows, id, float64(amount), number(player["value"]), budget,
+				s.state.ClauseWindow(time.Now()), s.rivalBank())
 			actions = append(actions,
 				map[string]any{"op": "accept_offer", "label": label, "kind": "confirm",
 					"offer_id": text(offer["id"]), "market_id": listing["market_id"],
-					"amount": amount, "note": note,
+					"amount": amount, "note": note, "take": take, "why": why,
 					"from": who, "from_market": truthy(offer["from_market"])},
 				map[string]any{"op": "decline_offer",
-					"label": "Rechazar la de " + who, "kind": "confirm", "danger": true,
+					"label": "Rechazar la " + from, "kind": "confirm", "danger": true,
 					"offer_id": text(offer["id"]), "market_id": listing["market_id"]})
 		}
 		// What it would take to put the clause where the advice stops calling it a risk, and
@@ -223,7 +232,7 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 		// behind it, and it contradicted the same page two sections up: over SafeMargin nobody in
 		// the league gains by paying it, so there is nothing to buy.
 		actions = append(actions, map[string]any{"op": "raise_clause",
-			"label": "Subir clausula", "kind": "amount",
+			"label": "Subir cláusula", "kind": "amount",
 			"player_team_id": player["player_team_id"],
 			"safe_margin":    advice.SafeMargin,
 			"suggested":      raiseToSafe(number(player["value"]), number(player["clause"]))})
@@ -233,7 +242,7 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 		shielded := truthy(player["shielded"])
 		if shielded {
 			actions = append(actions, map[string]any{"op": "note", "kind": "note",
-				"label":    "Blindado: nadie puede pagar su clausula",
+				"label":    "Blindado: nadie puede pagar su cláusula",
 				"deadline": player["shielded_until"]})
 		}
 		for _, stamp := range policy.ShieldTimes() {
@@ -256,19 +265,8 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 		if until := text(player["shielded_until"]); shielded && until > suggested {
 			suggested, because = until, "shield"
 		}
-		at := time.Now()
-		if when, err := time.Parse(time.RFC3339, suggested); err == nil {
-			at = when
-		}
-		button := "Blindar 24h"
-		if shielded {
-			button = "Programar otro blindaje"
-		}
-		actions = append(actions, map[string]any{"op": "shield", "kind": "prompt",
-			"label": button, "player_id": id,
-			"player_team_id": player["player_team_id"],
-			"suggested":      suggested, "because": because, "now_allowed": !shielded,
-			"budget":         s.shieldBudget(at)})
+		actions = append(actions, shieldActions(id, player["player_team_id"], shielded,
+			suggested, because, time.Now(), s.shieldBudget)...)
 
 	case text(listing["kind"]) == "libre":
 		suggested := number(player["ideal_bid"])
@@ -336,11 +334,11 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 			actions = append(actions, offers...)
 		} else {
 			actions = append(actions, map[string]any{"op": "note", "kind": "note",
-				"label": owner + " no lo tiene en venta: solo se le puede pagar la clausula"})
+				"label": owner + " no lo tiene en venta: solo se le puede pagar la cláusula"})
 		}
 		if clause > 0 && !truthy(player["clause_locked"]) {
 			actions = append(actions, map[string]any{"op": "pay_clause",
-				"label": fmt.Sprintf("Pagar clausula (%s)", thousands(int64(clause))),
+				"label": "Pagar cláusula " + short(clause),
 				"kind":  "amount", "player_team_id": player["player_team_id"],
 				"suggested": int64(clause), "min": int64(clause),
 				"blocked": clause > budget})
@@ -353,6 +351,54 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 // on the same listing with a bare 400, so once one exists the only honest options are to
 // change it or to take it back — offering "Pujar" again would be offering a button that
 // cannot work.
+// shieldActions is the shield button for a player of yours. With the round's two shields
+// spent, "Blindar 24h" would only be refused, so it says so and offers the next round instead.
+func shieldActions(id string, slot any, shielded bool, suggested, because string, now time.Time,
+	budgetAt func(time.Time) shieldBudget) []map[string]any {
+	at := now
+	if when, err := time.Parse(time.RFC3339, suggested); err == nil {
+		at = when
+	}
+	budget := budgetAt(at)
+	label := "Blindar 24h"
+	if shielded {
+		label = "Programar otro blindaje"
+	}
+	nowAllowed := !shielded
+	actions := []map[string]any{}
+	if budget.Known && budget.Left() <= 0 {
+		spent := len(budget.Used) + len(budget.Booked)
+		note := fmt.Sprintf("Blindajes de la J%d: %d de %d usados", budget.Round.Week, spent,
+			budget.Limit)
+		if len(budget.Booked) > 0 {
+			note += fmt.Sprintf(" (%d programado", len(budget.Booked))
+			if len(budget.Booked) > 1 {
+				note += "s"
+			}
+			note += ")"
+		}
+		actions = append(actions, map[string]any{"op": "note", "kind": "note", "label": note})
+		found := false
+		for range 3 {
+			at = budget.Round.End.Add(time.Minute)
+			budget = budgetAt(at)
+			if !budget.Known || budget.Left() > 0 {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return actions
+		}
+		label, nowAllowed = "Programar otro blindaje", false
+		suggested, because = at.Format(time.RFC3339), "round"
+	}
+	return append(actions, map[string]any{"op": "shield", "kind": "prompt",
+		"label": label, "player_id": id, "player_team_id": slot,
+		"suggested": suggested, "because": because, "now_allowed": nowAllowed,
+		"budget": budget})
+}
+
 func bidActions(listing map[string]any, suggested float64) []map[string]any {
 	marketID := text(listing["market_id"])
 	minBid := int64(number(listing["min_bid"]))
@@ -364,7 +410,7 @@ func bidActions(listing map[string]any, suggested float64) []map[string]any {
 		if existing := text(listing["my_bid_id"]); existing != "" {
 			amount := int64(number(listing["my_bid"]))
 			return []map[string]any{{"op": "cancel_offer",
-				"label": fmt.Sprintf("Retirar tu oferta de %s", thousands(amount)),
+				"label": "Retirar tu oferta de " + short(float64(amount)),
 				"kind": "confirm", "danger": true, "market_id": marketID, "offer_id": existing,
 				"note": "No se puede cambiar una oferta: se retira y se hace otra."}}
 		}
@@ -378,7 +424,7 @@ func bidActions(listing map[string]any, suggested float64) []map[string]any {
 			suggested = float64(mine)
 		}
 		return []map[string]any{
-			{"op": "modify_bid", "label": fmt.Sprintf("Cambiar tu puja (%s)", thousands(mine)),
+			{"op": "modify_bid", "label": "Cambiar tu puja de " + short(float64(mine)),
 				"kind": "amount", "market_id": marketID, "bid_id": bidID,
 				"suggested": int64(suggested), "min": minBid,
 				"bids": listing["bids"], "expires": listing["expires"],
@@ -470,9 +516,41 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	s.json(writer, http.StatusOK, map[string]any{"lines": lines, "bench": bench,
+		"best":      bestLineup(rows),
 		"formation": formation["tacticalFormation"],
 		"formations": map[string]any{"free": free, "premium": premium},
 		"updated_at": payload["updatedAt"], "writes_enabled": s.opts.AllowWrites})
+}
+
+// bestLineup is the best legal eleven of my squad, in the lineup's own lines, so the editor can
+// offer it next to the saved one.
+func bestLineup(rows []map[string]any) map[string]any {
+	players := []eleven.Player{}
+	points := map[string]float64{}
+	for _, row := range rows {
+		if !truthy(row["is_mine"]) {
+			continue
+		}
+		id := text(row["id"])
+		players = append(players, eleven.Player{ID: id, Name: text(row["name"]),
+			Position: int(number(row["position_id"])), XPts: number(row["xpts"]),
+			Available: truthy(row["available"])})
+		points[id] = number(row["xpts"])
+	}
+	choice, ok := eleven.Best(players)
+	if !ok {
+		return nil
+	}
+	total := 0.0
+	for _, id := range choice.IDs() {
+		total += points[id]
+	}
+	return map[string]any{
+		"formation": []int{choice.Shape.Need[2], choice.Shape.Need[3], choice.Shape.Need[4]},
+		"lines": map[string][]string{"goalkeeper": {choice.Keeper}, "defender": choice.Defence,
+			"midfield": choice.Middle, "striker": choice.Attack},
+		"xpts": total,
+	}
 }
 
 // nested walks a chain of keys, because the images live three levels down and any of them can
@@ -546,7 +624,66 @@ func shirtOf(slot map[string]any, known map[string]map[string]any) map[string]an
 		"next_home":         extra["next_home"],
 		"starred":           extra["starred"],
 		"absence":           extra["absence"],
+		"shielded":          extra["shielded"],
+		"shielded_until":    extra["shielded_until"],
+		"sale_locked":       extra["sale_locked"],
+		"hold_until":        extra["hold_until"],
+		"listed_for":        mapOf(extra["market"])["min_bid"],
+		"best_offer":        bestOffer(extra),
 	}
+}
+
+// offerAdvice is the card's verdict on an offer: at 1.02x his value or more, and only when the
+// best eleven loses at most one xPts without him.
+func offerAdvice(rows []map[string]any, id string, amount, value, cash float64,
+	window schedule.Window, rivals advice.RivalBank) (bool, string) {
+	if value <= 0 {
+		return false, ""
+	}
+	ratio := amount / value
+	words := "×" + strings.Replace(fmt.Sprintf("%.2f", ratio), ".", ",", 1) + " su valor"
+	without := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		if text(row["id"]) != id {
+			without = append(without, row)
+		}
+	}
+	drop := number(bestLineup(rows)["xpts"]) - number(bestLineup(without)["xpts"])
+	switch {
+	case ratio >= policies.GoodOverValue && drop <= 1:
+		return true, words
+	case ratio >= policies.GoodOverValue:
+		// Selling him is fine when the money takes somebody else's player who covers him.
+		if move, ok := advice.SwapForSale(rows, id, amount, cash, window, time.Now(), nil,
+			rivals); ok {
+			return true, fmt.Sprintf("%s si clausulas a %s (%s xPts)", words,
+				text(move.In["name"]), signedOne(move.Gain))
+		}
+		return false, fmt.Sprintf("%s pero tu once pierde %s xPts", words,
+			strings.Replace(fmt.Sprintf("%.1f", drop), ".", ",", 1))
+	}
+	return false, words + ": no compensa"
+}
+
+func signedOne(value float64) string {
+	sign := "+"
+	if value < 0 {
+		sign = "−"
+	}
+	return sign + strings.Replace(fmt.Sprintf("%.1f", math.Abs(value)), ".", ",", 1)
+}
+
+func bestOffer(row map[string]any) any {
+	best := 0.0
+	for _, offer := range listOf(row["offers"]) {
+		if amount := number(offer["money"]); amount > best {
+			best = amount
+		}
+	}
+	if best == 0 {
+		return nil
+	}
+	return best
 }
 
 // fragments serves the page in pieces so a repaint replaces the sections that changed instead
@@ -657,4 +794,19 @@ func raiseToSafe(value, clause float64) int64 {
 		return 0
 	}
 	return int64(missing / writes.ClauseFactor)
+}
+
+// rivalBank is each rival's estimated cash, for the moves that would pay one of them.
+func (s *Server) rivalBank() advice.RivalBank {
+	out := advice.RivalBank{}
+	universe := s.state.Universe()
+	if universe == nil {
+		return out
+	}
+	for id, team := range universe.LeagueTeams {
+		if team != nil && (universe.MyTeamID == nil || id != *universe.MyTeamID) {
+			out[id] = team.EstimatedCash
+		}
+	}
+	return out
 }

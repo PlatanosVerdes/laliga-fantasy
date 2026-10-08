@@ -28,6 +28,10 @@ const RaiseHeadroom = 1.02
 // the clause.
 const DropWorthDefending = 1.0
 
+// RaiseWorthPerMillion is the least a raise has to protect: xPts the eleven would lose, per
+// million paid. Under it the money buys more points spent on a signing than on keeping him.
+const RaiseWorthPerMillion = 0.5
+
 // ClausePlan is one row per player of mine whose clause somebody could pay, with what raising
 // it would cost, what it would buy, and whether he is worth defending at all.
 func ClausePlan(universe Row, cash float64) Row {
@@ -58,12 +62,13 @@ func ClausePlan(universe Row, cash float64) Row {
 		drop := xiNow - after
 
 		row := merge(player, Row{
-			"clause_margin": margin,
-			"threats":       len(threats),
-			"tempted":       Tempted(threats),
-			"top_threat":    TopThreat(threats),
-			"xi_drop":       drop,
-			"risk":          RaidRisk(player, threats, shortOf),
+			"clause_margin":   margin,
+			"threats":         len(threats),
+			"tempted":         Tempted(threats),
+			"top_threat":      TopThreat(threats),
+			"top_threat_cash": TopThreatCash(threats),
+			"xi_drop":         drop,
+			"risk":            RaidRisk(player, threats, shortOf),
 		})
 		// Nobody can pay it: there is nothing to defend against and no money to spend.
 		if len(threats) == 0 {
@@ -91,6 +96,10 @@ func ClausePlan(universe Row, cash float64) Row {
 			row["verdict"] = "dejalo ir"
 			row["why"] = fmt.Sprintf("perderlo te cuesta %.2f xPts: sale mas barato "+
 				"quedarte la clausula", drop)
+		case drop/(pay/1e6) < RaiseWorthPerMillion:
+			row["verdict"] = "no compensa"
+			row["why"] = fmt.Sprintf("pagar %s para proteger %.2f xPts no compensa", short(pay),
+				drop)
 		case pay > cash:
 			row["verdict"] = "no te llega"
 			row["why"] = "subirla cuesta " + short(pay) + " y tienes " + short(cash)

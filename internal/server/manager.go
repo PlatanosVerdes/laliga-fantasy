@@ -47,7 +47,7 @@ func (s *Server) manager(writer http.ResponseWriter, request *http.Request) {
 			"value": player["value"], "xpts": player["xpts"],
 			"points_value": player["points_value"], "season_points": player["season_points"],
 			"projected_pct": player["projected_pct"], "start_probability": player["start_probability"],
-			"status": player["status"], "available": player["available"],
+			"status": player["status"], "available": player["available"], "absence": player["absence"],
 			"clause": player["clause"], "clause_locked": player["clause_locked"],
 			"clause_locked_until": player["clause_locked_until"],
 			"shielded":            player["shielded"],

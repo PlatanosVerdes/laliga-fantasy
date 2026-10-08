@@ -48,21 +48,31 @@ func (s *Server) weekPoints(teamID string, week int) (float64, bool) {
 // being level. A week nobody could be read for leaves a hole rather than a place, so the line
 // breaks there instead of dropping to last.
 func placeByWeek(managers []map[string]any, weeks int) {
+	rankEach(managers, weeks, "total", "place")
+}
+
+// rankByWeek is each manager's place in each matchday on its own points: the matchday's table,
+// not the season's.
+func rankByWeek(managers []map[string]any, weeks int) {
+	rankEach(managers, weeks, "points", "week_rank")
+}
+
+func rankEach(managers []map[string]any, weeks int, from, to string) {
 	for at := 0; at < weeks; at++ {
 		for _, manager := range managers {
 			var place any
-			if mine := manager["total"].([]any)[at]; mine != nil {
+			if mine := manager[from].([]any)[at]; mine != nil {
 				position := 1
 				for _, other := range managers {
-					if above := other["total"].([]any)[at]; above != nil &&
+					if above := other[from].([]any)[at]; above != nil &&
 						number(above) > number(mine) {
 						position++
 					}
 				}
 				place = position
 			}
-			places, _ := manager["place"].([]any)
-			manager["place"] = append(places, place)
+			places, _ := manager[to].([]any)
+			manager[to] = append(places, place)
 		}
 	}
 }
@@ -114,6 +124,7 @@ func (s *Server) seasonTable(writer http.ResponseWriter, request *http.Request) 
 	}
 
 	placeByWeek(managers, len(weeks))
+	rankByWeek(managers, len(weeks))
 	// By the season's total, and by name when they are level: the map they came out of has no
 	// order, and the labels down the right of the chart cannot change place between refreshes.
 	sort.SliceStable(managers, func(one, two int) bool {

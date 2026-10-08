@@ -93,7 +93,10 @@ function applyFilters(){
   document.querySelectorAll('.filters').forEach(bar=>{
     const scope=bar.closest('section');
     let shown=0,total=0;
-    scope.querySelectorAll('tr[data-position]').forEach(row=>{
+    // A list keeps its rest folded; a filter has to look through all of it.
+    if(filterState.pos!=='all'||filterState.price||needle)
+      scope.querySelectorAll('details.fold').forEach(d=>{ if(d.querySelector('li[data-position]')) d.open=true; });
+    scope.querySelectorAll('tr[data-position], li[data-position]').forEach(row=>{
       total++;
       const ok=(filterState.pos==='all'||row.dataset.position===filterState.pos)
         && parseFloat(row.dataset.price)<=maxPrice
@@ -193,6 +196,9 @@ function tick(){
     const left=new Date(el.dataset.deadline).getTime()-now;
     if(isNaN(left)) return;
     const plain=el.dataset.plain==='1';
+    if(el.dataset.chip){ chipTick(el,left); return; }
+    const stat=el.closest('.stat');
+    if(stat) stat.classList.toggle('hot',left>0&&left<6*3600000);
     if(left<=0){ el.textContent='ya'; if(!plain) el.className='pill-critical'; return; }
     const h=Math.floor(left/3600000), m=Math.floor(left%3600000/60000),
           s=Math.floor(left%60000/1000);
@@ -200,11 +206,23 @@ function tick(){
                    : h>0   ? h+'h '+String(m).padStart(2,'0')+'m'
                            : m+'m '+String(s).padStart(2,'0')+'s';
     // A widget's value is not a pill: only the colour changes, not the whole class.
+    if(stat) return;
     if(plain) el.style.color = h<1 ? 'var(--critical)' : h<6 ? 'var(--warning)' : '';
     else el.className = h<1 ? 'pill-critical' : h<24 ? 'pill-warning' : 'pill-neutral';
   });
 }
 setInterval(tick,1000);
+
+// A row's countdown chip: "4 h 04 min", red in its last six hours, "cerrado" once it is past.
+function chipTick(el,left){
+  const target=el.querySelector('.left')||el;
+  const minutes=Math.round(left/60000), d=Math.floor(minutes/1440),
+        h=Math.floor(minutes%1440/60), m=minutes%60;
+  target.textContent = left<=0 ? 'cerrado' : d ? `${d} d ${h} h`
+                     : h ? `${h} h ${String(m).padStart(2,'0')} min` : `${m} min`;
+  el.classList.toggle('soon',left>0&&left<6*3600000);
+  el.classList.toggle('done',left<=0);
+}
 
 // ---- bidding, confirmed twice ----------------------------------------------
 const modal=document.getElementById('bid-modal');
@@ -528,6 +546,7 @@ const OP_LABELS={accept_offer:'Aceptar oferta por',decline_offer:'Rechazar ofert
                  withdraw:'Retirar del mercado a',sell_to_market:'Poner en venta a',
                  cancel_offer:'Retirar tu oferta por',cancel_raid:'Cancelar el clausulazo de',
                  drop_always:'Quitar de siempre-en-mercado a',
+                 pay_clause:'Pagar la cláusula de',
                  shield_player:'Blindar 24h a'};
 
 function wireOps(root=document){
@@ -631,35 +650,61 @@ const ICON_CARD='';              // la propia insignia ES la tarjeta
 const ICON_KIT='<i class="kit"></i>';
 const ICON_DOUBT='?';
 
-function statusOf(player){
+// Red when the absence is confirmed, yellow when it is a doubt: an injury of unknown length
+// (severity 0 on futbolfantasy) counts as confirmed, any other injury as a doubt.
+function health(player){
   const st=player.status||'ok';
   const a=player.absence||{};
   if(st==='suspended'||st==='sanctioned'||a.kind==='sancionado')
-    return {cls:'st-sancionado', icon:ICON_CARD, label:'Sancionado'};
-  if(st==='injured'||a.kind==='lesionado')
-    return {cls:'st-lesionado', icon:ICON_KIT, label:'Lesionado'};
-  if(st==='doubtful'||a.kind==='duda')
-    return {cls:'st-duda', icon:ICON_DOUBT, label:'Duda'};
+    return {ring:'out', glyph:'card', label:'Sancionado'};
+  if(st==='injured'||(a.kind==='lesionado'&&Number(a.severity)===0&&a.severity!=null))
+    return {ring:'out', glyph:'cross', label:'Lesionado'};
+  if(st==='doubtful'||a.kind==='lesionado'||a.kind==='duda')
+    return {ring:'doubt', glyph:a.kind==='lesionado'?'cross':'', label:a.kind==='lesionado'?'Tocado':'Duda'};
   return null;
 }
 
+function healthTip(player){
+  const s=health(player);
+  if(!s) return '';
+  const a=player.absence||{};
+  const bits=[s.label, a.reason||'sin detalle en futbolfantasy'];
+  if(a.since) bits.push(a.since);
+  if(a.until) bits.push(a.until);
+  return bits.join(' \u00b7 ').replace(/"/g,'&quot;');
+}
+
+function statusOf(player){
+  const s=health(player);
+  if(!s) return null;
+  if(s.glyph==='card') return {cls:'st-sancionado', icon:ICON_CARD, label:s.label};
+  if(s.glyph==='cross') return {cls:'st-lesionado'+(s.ring==='doubt'?' st-doubt':''), icon:ICON_KIT, label:s.label};
+  return {cls:'st-duda', icon:ICON_DOUBT, label:s.label};
+}
+
 function statusRing(player){
-  const s=statusOf(player);
-  return s ? ' ring-'+(s.cls==='st-sancionado'?'red':'amber') : '';
+  const s=health(player);
+  return s ? ' ring-'+s.ring : '';
 }
 
 function statusBadge(player){
   const s=statusOf(player);
   if(!s) return '';
-  const a=player.absence||{};
-  const bits=[s.label];
-  if(a.reason) bits.push(a.reason); else bits.push('sin detalle en futbolfantasy');
-  if(a.since) bits.push(a.since);
-  if(a.until) bits.push(a.until);
   // The floating tooltip, not a child of the badge: on a card in the top line the nested one
   // hung outside the pitch and read as an empty input box.
-  const tip=bits.join(' \u00b7 ').replace(/"/g,'&quot;');
-  return `<span class="badge-status ${s.cls}" data-tip="${tip}">${s.icon}</span>`;
+  return `<span class="badge-status ${s.cls}" data-tip="${healthTip(player)}">${s.icon}</span>`;
+}
+
+// A round face with the status ring and its badge, the reason as the tooltip.
+function faceOf(player,size='sm'){
+  const s=health(player);
+  const badge=!s?'':s.glyph==='card'?'<span class="hb hb-card"></span>'
+    :s.glyph==='cross'?'<span class="hb hb-cross">✚</span>':'';
+  const inner=player.image
+    ? `<img src="${player.image}" alt="" loading="lazy" onerror="this.remove()">`
+    : `<span class="crest crest-${player.team_id}"></span>`;
+  return `<span class="face face-${size}${s?' ring-'+s.ring:''}"${s?` data-tip="${healthTip(player)}"`:''}
+    >${inner}${badge}</span>`;
 }
 
 // Odds of starting: the number that decides whether the xPts will materialise at all.
@@ -672,94 +717,83 @@ function hierClass(rank){
   return rank>=50?'tit-hi':rank>=40?'tit-mid':rank>=30?'tit-lo':'tit-out';
 }
 
-// The points he scored, matchday by matchday. Built in the server, see detail.go.
-// With a forecast on record, each matchday stacks what he made over what was expected of him.
-function weekStrip(weeks){
-  if(!weeks||!weeks.length) return '';
-  const forecasts=weeks.some(w=>w.forecast!=null);
-  const chips=weeks.map(w=>{
-    const p=w.points;
-    const cls = p==null?'wk-none': p<0?'wk-neg': p>=8?'wk-hi': p>=4?'wk-mid':'wk-lo';
-    const expected=w.forecast!=null?' · previsto '+(Math.round(w.forecast*10)/10):'';
-    const when=`Jornada ${w.week}${w.rival?' · '+w.rival:''}${w.ideal?' · once ideal':''}${expected}`;
-    const chip=`<span class="wk ${cls}${w.ideal?' wk-ideal':''}" title="${when}"
-      >${p==null?'\u2013':p}</span>`;
-    if(!forecasts) return chip;
-    return `<span class="wk-col" title="${when}">${chip}<small class="wk-fc">${
-      w.forecast!=null?(Math.round(w.forecast*10)/10):''}</small></span>`;
-  }).join('');
-  const label=forecasts
-    ? '<span class="wk-label wk-col"><span>J</span><small class="wk-fc">prev</small></span>'
-    : '<span class="wk-label">J</span>';
-  return `<div class="card-weeks">${label}
-    <div class="card-weeks-rail">${chips}</div></div>`;
-}
-
-// The strip opens on the newest: "how is he doing" is a question about the last few weeks, and
-// on a line read left to right the answer is at the far end.
-function wireWeeks(root){
-  const rail=root.querySelector('.card-weeks-rail');
-  if(!rail) return;
-  const edge=()=>rail.classList.toggle('has-more', rail.scrollLeft > 2);
-  rail.scrollLeft=rail.scrollWidth;
-  edge();
-  rail.addEventListener('scroll',edge,{passive:true});
-}
-
 function weekChip(w){
   const p=w.points;
   const cls = p==null?'wk-none': p<0?'wk-neg': p>=8?'wk-hi': p>=4?'wk-mid':'wk-lo';
   return `<span class="wk ${cls}" title="Jornada ${w.week}">${p==null?'–':p}</span>`;
 }
 
-// The face identifies faster than the name; the crest stays in the corner because the
-// matchday's opponent is read by club. If the image fails to load, the crest is left alone.
-function faceHtml(player){
-  const crest=`<span class="crest crest-${player.team_id}"></span>`;
-  if(!player.image) return crest;
-  return `<span class="slot-avatar"><img class="slot-face" src="${player.image}" alt=""
-    loading="lazy" onerror="this.remove()">${crest}</span>`;
-}
+function xClass(v){ return v>=6?'x-hi':v>=3.5?'x-mid':v>=2?'x-lo':'x-bad'; }
 
 function shirtHtml(player,line,index){
   if(!player) return `<div class="slot empty gap" data-line="${line}" data-index="${index}"
     title="No tienes con quien cubrir esta plaza">⚠<br>${LINE_LABEL[line]}<br>sin cubrir</div>`;
-  const trend=player.projected_pct||0;
-  const played=(player.weeks||[]).slice(-5);
-  const weeks=played.length
-    ? '<span class="wk-label">J</span>'+played.map(weekChip).join('')
-    : '<span class="wk wk-none">sin jornadas</span>';
-  return `<div class="slot${statusRing(player)}" draggable="true" data-line="${line}"
+  const listed=player.listed_for?`<span class="tok-flag" title="en venta por ${mny(player.listed_for)}">🏷</span>`:'';
+  return `<div class="slot tokslot" draggable="true" data-line="${line}"
     data-index="${index}" data-player="${player.id}" data-pt="${player.player_team_id}"
     title="${player.name}${player.next_rival?(' · vs '+player.next_rival
       +(player.next_home?' (en casa)':' (fuera)')):''}">
-    ${gripHtml()}
-    ${statusBadge(player)}
-    ${faceHtml(player)}
-    <span class="slot-name">${player.name}</span>
-    <span class="slot-weeks">${weeks}</span>
-    <span class="slot-meta">
-      <span>${(player.xpts||0).toFixed(1)} xPts</span>
-      ${player.start_probability!=null?`<span class="tit ${titClass(player.start_probability)}"
-        >${player.start_probability}%</span>`:''}
-      <span class="slot-trend ${trend>=0?'up':'down'}">${trend>=0?'▲':'▼'}${Math.abs(trend).toFixed(1)}%</span>
-    </span>
+    ${gripHtml()}${listed}
+    ${faceOf(player,'md')}
+    <span class="tok-name">${player.name}${shieldMark(player)}</span>
+    <span class="tok-x ${xClass(player.xpts||0)}">${dec(player.xpts||0)}</span>
   </div>`;
 }
 
+// How a reserve stands for selling: the hold rule first, then what is already on the table.
+function sellState(p){
+  if(p.sale_locked&&p.hold_until) return `🔒 hasta ${whenShort(p.hold_until)}`;
+  if(p.best_offer) return `oferta de ${mny(p.best_offer)}`;
+  if(p.listed_for) return `en venta por ${mny(p.listed_for)}`;
+  return 'se puede vender';
+}
+
 function benchHtml(player){
-  const trend=player.projected_pct||0;
-  return `<div class="bench-item${statusRing(player)}" draggable="true" data-player="${player.id}"
+  const pos={1:'POR',2:'DEF',3:'MED',4:'DEL'}[player.position_id]||'ENT';
+  return `<div class="bench-item" draggable="true" data-player="${player.id}"
     data-pt="${player.player_team_id}" data-from="bench" title="${player.name}">
     ${gripHtml()}
-    ${faceHtml(player)}
-    <span class="pos pos-${(LINE_LABEL[Object.keys(LINE_POS).find(k=>LINE_POS[k]===player.position_id)]||'ENT').toLowerCase()}">${
-      {1:'POR',2:'DEF',3:'MED',4:'DEL'}[player.position_id]||'ENT'}</span>
-    <span class="bench-name">${player.name}</span>
-    ${statusBadge(player)}
-    <span class="slot-trend ${trend>=0?'up':'down'}" style="margin-left:auto">${
-      (player.xpts||0).toFixed(1)}</span>
+    ${faceOf(player,'sm')}
+    <span class="bench-who"><span class="bench-name">${player.name}${shieldMark(player)}</span>
+      <span class="bench-sell">${sellState(player)}</span></span>
+    <span class="pos pos-${pos.toLowerCase()}">${pos}</span>
+    <span class="tx ${xClass(player.xpts||0)}">${dec(player.xpts||0)}</span>
   </div>`;
+}
+
+// The saved eleven against the best one the squad allows, and the way to load the latter.
+function pitchBest(){
+  const box=document.getElementById('pitch-best');
+  if(!box||!pitchState) return;
+  const best=pitchState.best;
+  const saved=LINE_ORDER.reduce((sum,l)=>sum+(pitchState.lines[l]||[])
+    .reduce((t,p)=>t+(p?(p.xpts||0):0),0),0);
+  if(!best||best.xpts-saved<0.05){ box.hidden=true; return; }
+  box.hidden=false;
+  box.innerHTML=`Tu mejor once suma <b>${dec(best.xpts)}</b>; el que tienes, <b>${dec(saved)}</b>. `
+    +`<button type="button" class="pitch-apply">Poner el mejor</button>`;
+  box.querySelector('.pitch-apply').onclick=applyBest;
+}
+
+function applyBest(){
+  const best=pitchState&&pitchState.best;
+  if(!best) return;
+  const everyone=[...LINE_ORDER.flatMap(l=>(pitchState.lines[l]||[]).filter(Boolean)),
+                  ...(pitchState.bench||[])];
+  const byId=Object.fromEntries(everyone.map(p=>[String(p.id),p]));
+  const used=new Set();
+  const lines={};
+  LINE_ORDER.forEach(l=>{
+    lines[l]=(best.lines[l]||[]).map(id=>{ used.add(String(id)); return byId[String(id)]||null; });
+  });
+  pitchState.lines=lines;
+  pitchState.bench=everyone.filter(p=>!used.has(String(p.id)));
+  pitchState.formation=best.formation;
+  const select=document.getElementById('pitch-formation-select');
+  if(select) select.value=best.formation.join(',');
+  pitchDirty=true;
+  usage.click('alineacion','poner el mejor once');
+  renderPitch();
 }
 
 function renderPitch(){
@@ -781,6 +815,7 @@ function renderPitch(){
   document.getElementById('pitch-status').textContent = pitchDirty
     ? 'cambios sin guardar' : (pitchState.writes_enabled?'':'servidor en solo lectura');
   pitchAlert();
+  pitchBest();
   wireDrag();
 }
 
@@ -1022,7 +1057,9 @@ async function loadSeason(){
     const res=await fetch('/api/season');
     if(!res.ok) throw new Error(res.status);
     seasonData=await res.json();
-    box.innerHTML=seasonChart(seasonData,box.clientWidth);
+    // A live refresh during the wait puts a new, empty frame in place of the one asked for.
+    const frame=document.querySelector('.evo')||box;
+    frame.innerHTML=seasonChart(seasonData,frame.clientWidth);
   }catch(e){
     seasonAsked=false;
     box.innerHTML='<p class="empty">No he podido reconstruir la clasificacion.</p>';
@@ -1167,9 +1204,11 @@ const VIEWS={
   manager: id=>openManager(id),
   plantillas: week=>openMatchday(week),
   prevision: week=>typeof openForecast==='function'&&openForecast(week),
-  comparar: ()=>openCompare(),
+  jornada: week=>openWeek(week),
+  // The comparator was a drawer before it had its tab: old links land on the tab.
+  comparar: ()=>openCompare({replace:true}),
 };
-let routing=false, routed=null;
+let routing=false, routed=null, routedOnce=false;
 
 function hashParts(hash=location.hash){
   const [base,view,arg]=(hash||'').replace(/^#/,'').split('/');
@@ -1192,6 +1231,10 @@ function route(){
   if(routed===location.hash) return;
   routed=location.hash;
   const {base,view,arg}=hashParts();
+  // Ids in the address only count when it is how the page was opened: on Back the tray,
+  // which has moved on since that entry was written, is the truth.
+  if(base==='comparador'&&view&&!VIEWS[view]&&!routedOnce) adoptCompareIds(view);
+  routedOnce=true;
   const target=resolveTarget('#'+base);
   if(target){
     const active=document.querySelector('.tab.on');
@@ -1202,6 +1245,7 @@ function route(){
   try{
     if(view&&VIEWS[view]) VIEWS[view](arg);
     else if(drawer&&!drawer.hidden) shutDrawer();
+    if(base==='comparador'&&!VIEWS[view]) renderCompare();
   }finally{ routing=false; }
 }
 
@@ -1218,11 +1262,8 @@ function closeDrawer(){
 function shutDrawer(){
   if(!drawer) return;
   drawerFrom=null;
-  // Closing the comparator is being done comparing: the bar at the bottom goes with it.
-  const wasComparing=!!drawer.querySelector('.cmp-view');
   drawer.hidden=true;
   panelWide(false);
-  if(wasComparing&&typeof drawTray==='function'){ tray=[]; cmpSave(); drawTray(); }
 }
 
 // The browser writes the first value and tick() keeps it every second: the countdown
@@ -1249,7 +1290,9 @@ function shieldDialog(a,player){
   const today=new Date();
   box.querySelector('.shield-who').textContent=player.name;
   box.querySelector('.shield-help').textContent=
-    a.because==='shield'?'Su blindaje acaba el '+stampText(a.suggested)+': te propongo esa hora '
+    a.because==='round'?'Los dos blindajes de esta jornada ya están usados: te propongo '
+      +stampText(a.suggested)+', cuando empieza la siguiente.'
+    :a.because==='shield'?'Su blindaje acaba el '+stampText(a.suggested)+': te propongo esa hora '
       +'para encadenar el siguiente.'
     :a.suggested?'Las clausulas estan cerradas hasta '+stampText(a.suggested)+': te propongo '
       +'esa hora, antes no protege de nada.'
@@ -1342,8 +1385,8 @@ function sparkSvg(history){
     </svg>
     <div class="chart-tip" hidden></div>
   </div>
-  <p class="drawer-note">Valor diario, ultimos ${points.length} dias ·
-    min ${fmt(lo)} · max ${fmt(hi)} · pasa el cursor para ver cada dia</p>`;
+  <p class="drawer-note">Valor diario, últimos ${points.length} días ·
+    mín ${fmt(lo)} · máx ${fmt(hi)} · pasa el cursor para ver cada día</p>`;
 }
 
 function wireChart(root){
@@ -1393,9 +1436,7 @@ function byLine(squad){
 
 // The player's face in miniature, with the crest behind it when there is no photo.
 function chipFace(p){
-  return p.image
-    ? `<img class="chip-face" src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
-    : `<span class="crest crest-${p.team_id}"></span>`;
+  return faceOf(p,'xs');
 }
 
 // The pitch in miniature: the same four lines as the eleven, attack to keeper, because a squad
@@ -1683,6 +1724,58 @@ function managerRow(p){
   </div>`;
 }
 
+// Figures written for the card, the Spanish way: 40,2M and 6,6.
+const dec=(v,d=1)=> v==null||isNaN(v) ? '—' : Number(v).toFixed(d).replace('.',',').replace('-','−');
+const mny=(v)=> v==null||isNaN(v) ? '—'
+  : Math.abs(v)>=1e6 ? dec(v/1e6)+'M' : Math.abs(v)>=1e3 ? Math.round(v/1e3)+'K' : String(v);
+const signed=(v,d=1)=> (v>=0?'+':'−')+dec(Math.abs(v),d);
+
+function popWeeks(weeks){
+  if(!weeks||!weeks.length) return '';
+  const chips=weeks.map(w=>{
+    const p=w.points;
+    const cls=p==null?(w.forecast!=null?'fc':'na'):p<0?'rd':p>=8?'g':p>=4?'bl':'br';
+    const shown=p==null?(w.forecast!=null?dec(w.forecast):'–'):p;
+    const below=p!=null&&w.forecast!=null?`<small>${dec(w.forecast)}</small>`:'';
+    const tip=`Jornada ${w.week}${w.rival?' · '+w.rival:''}${w.ideal?' · once ideal':''}`
+      +(w.forecast!=null?' · previsto '+dec(w.forecast):'');
+    return `<span class="pc-wk${w.ideal?' ideal':''}" title="${tip}"><b class="${cls}">${shown}</b>${below}<i>J${w.week}</i></span>`;
+  }).join('');
+  const legend=weeks.some(w=>w.forecast!=null)?' · en pequeño, lo previsto':'';
+  return `<div class="pc-h">Puntos por jornada<span class="pc-h-note">${legend}</span></div><div class="pc-wks">${chips}</div>`;
+}
+
+// How much his value moved in the last seven days of the series, the same thing the
+// projection beside it guesses forwards.
+function lastWeekPct(history){
+  const days=(history||[]).filter(h=>h.value!=null);
+  if(days.length<8) return null;
+  const now=days[days.length-1].value, then=days[days.length-8].value;
+  return then ? (now/then-1)*100 : null;
+}
+
+// What the server stamped about the league in the page: the clause window and the hold rule.
+const pageFacts=(()=>{
+  const node=document.getElementById('page-facts');
+  if(!node) return {};
+  const d=node.dataset;
+  return {windowOpen:d.windowOpen==='1'?true:d.windowOpen==='0'?false:null,
+          opens:d.opens||'', closes:d.closes||'', holdExcept:d.holdExcept||''};
+})();
+
+function whenShort(stamp){
+  const t=new Date(stamp);
+  if(isNaN(t)) return '';
+  const day=['dom','lun','mar','mié','jue','vie','sáb'][t.getDay()];
+  const hm=String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');
+  const soon=t-Date.now()<6*86400000;
+  return soon?`${day} ${hm}`:`${day} ${t.getDate()} ${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][t.getMonth()]} ${hm}`;
+}
+
+function shieldMark(p){
+  return p.shielded?` <span class="shield-mark" title="blindado${p.shielded_until?' hasta '+whenShort(p.shielded_until):''}">🛡</span>`:'';
+}
+
 async function openDetail(playerId){
   if(!drawer) return;
   markView('jugador',playerId);
@@ -1694,6 +1787,7 @@ async function openDetail(playerId){
     : null;
   drawer.hidden=false;
   panelWide(false);
+  drawer.classList.add('as-pop');
   body.dataset.view='player';
   body.innerHTML='<p class="empty">Cargando…</p>';
   let data;
@@ -1707,84 +1801,94 @@ async function openDetail(playerId){
     return;
   }
   const p=data.player, l=data.listing||{};
-  // 🏠 home, ✈️ away: two words repeated on every row read as noise.
-  const where=(home)=>home?'<span title="en casa">🏠</span>':'<span title="fuera">✈️</span>';
-  const rival=p.next_rival?`${p.next_rival} ${where(p.next_home)}`:'—';
   // The owner is a link: what the rival holds decides whether his clause is worth paying and
-  // whether his offer is worth taking, and until now it was a name and nothing else.
-  const owner=p.is_mine ? 'tu'
+  // whether his offer is worth taking.
+  const owner=p.is_mine ? 'tuyo'
     : (p.owner && p.owner_team_id
-        ? `<button class="p-name" type="button" data-manager="${p.owner_team_id}">${p.owner}</button>`
-        : (p.owner||'libre'));
-  // The photo identifies before the name does; without one, the club's crest is left.
-  const face=p.image
-    ? `<img class="drawer-face" src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
-    : `<span class="drawer-face crest crest-${p.team_id}"></span>`;
+        ? `de <button class="p-name" type="button" data-manager="${p.owner_team_id}">${p.owner}</button>`
+        : (p.owner?'de '+p.owner:'libre'));
+  const h=health(p), a=p.absence||{};
+  const status=h?`<div class="pc-status ${h.ring}">${h.glyph==='card'?'🟥':'✚'} ${
+    [h.label,a.reason,a.since,a.until].filter(Boolean).join(' · ')}</div>`:'';
+  const countdown=(stamp)=>`<span data-deadline="${stamp}" data-plain="1">${leftUntil(stamp)}</span>`;
+  const past=lastWeekPct(data.history);
+  const projected=p.projected_pct;
+  const trend=past!=null?past:projected;
+  const starts=p.start_probability;
+  const xp=p.xpts||0;
+  const tiles=[
+    ['Valor', mny(p.value), l.market_id?`en venta por ${mny(l.min_bid)}`:''],
+    ['Cláusula', p.clause?mny(p.clause):'—',
+      p.clause&&p.value?`${dec(p.clause/p.value,2)}x su valor`:''],
+    ['xPts / jornada', dec(p.xpts), p.rank?`score #${p.rank}`:'',
+      xp>=6?'t-good':xp>=3.5?'t-info':xp>=2?'t-warn':'t-bad'],
+    ['Puntos temporada', p.season_points??'—',
+      p.last_season_points?`25/26: ${p.last_season_points}`:''],
+    ['Titular', starts!=null?starts+' %':'—',
+      p.hierarchy?p.hierarchy:(p.start_probability_source==='ficha'?`J${p.start_week||''} en su ficha`:''),
+      starts==null?'':starts>=75?'t-good':starts>=50?'t-warn':'t-bad'],
+    ['Próximo', p.next_rival||'—', p.next_rival?(p.next_home?'🏠 en casa':'✈️ fuera'):''],
+    ['Valor 7d', trend!=null?`${signed(trend)} %`:'—',
+      past!=null&&projected!=null?`prevé ${signed(projected)} % en 7 días`:(past==null&&projected!=null?'previsión':''),
+      trend==null?'':trend>=0?'t-good':'t-bad'],
+  ];
+  // Whether anybody can pay his clause right now, and if not, until when.
+  if(p.clause){
+    const shut=pageFacts.windowOpen===false||(pageFacts.closes&&new Date(pageFacts.closes)<=new Date());
+    if(p.shielded&&p.shielded_until) tiles.push(['Clausulable',`blindado hasta ${whenShort(p.shielded_until)}`,'','t-info']);
+    else if(p.clause_locked&&p.clause_locked_until) tiles.push(['Clausulable',`se libera en ${countdown(p.clause_locked_until)}`,
+      whenShort(p.clause_locked_until),'t-warn']);
+    else if(shut&&pageFacts.opens) tiles.push(['Clausulable',`se abre ${whenShort(pageFacts.opens)}`,
+      'ventana de cláusulas cerrada','t-warn']);
+    else tiles.push(['Clausulable','pagable ya','','t-good']);
+  }
+  if(p.is_mine){
+    const rule=pageFacts.holdExcept?` title="excepción: ${pageFacts.holdExcept.replace(/"/g,'&quot;')}"`:'';
+    tiles.push(p.sale_locked&&p.hold_until
+      ? ['Puedes venderlo',`<span${rule}>🔒 en ${countdown(p.hold_until)}</span>`,'norma de la liga','t-warn']
+      : ['Puedes venderlo',`<span${rule}>ya</span>`,'','t-good']);
+  }
+  if(!p.is_mine) tiles.push(['Techo rentable', p.ideal_bid?mny(p.ideal_bid):'sin margen',
+    p.ideal_bid?'futbolfantasy':'']);
+  if(l.kind==='libre'||l.expires) tiles.push(['Pujas', l.bids||'ninguna',
+    l.expires?'cierra '+String(l.expires).slice(11,16):'']);
+  if(p.bought_at) tiles.push(['Fichado', since(p.bought_at), '']);
+  const grid=tiles.map(([k,v,sm,cls])=>`<div class="${cls||''}"><span>${k}</span><b>${v}</b>${sm?`<small>${sm}</small>`:''}</div>`).join('');
+  const actions=data.actions||[];
+  const notes=actions.filter(x=>x.kind==='note'), buttons=actions.filter(x=>x.kind!=='note');
+  // An offer's pair: the button the panel recommends is filled and says why.
+  const recommended=new Map();
+  buttons.filter(x=>x.op==='accept_offer'&&x.why).forEach(x=>{
+    const decline=buttons.find(y=>y.op==='decline_offer'&&y.offer_id===x.offer_id);
+    if(x.take) recommended.set(x,{tone:'good',why:x.why});
+    else if(decline) recommended.set(decline,{tone:'bad',why:x.why});
+  });
+  const primary=buttons.find(x=>!isDanger(x)&&x.op!=='always'&&!x.blocked&&x.op!=='accept_offer');
   body.innerHTML=`
     ${drawerFrom?`<button class="drawer-back" type="button" data-back="${drawerFrom.id}"
       >← ${drawerFrom.label}</button>`:''}
-    <div class="drawer-head">${face}<h3>${p.name}</h3></div>
-    <p class="sub"><span class="pos pos-${(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
-      ${p.team||''} · ${owner}${p.starred?' · ★':''}
-      <button class="cmp-add" type="button" data-cmp="${p.id}" data-cmp-name="${p.name}"
-        data-cmp-pos="${p.position||''}">+ comparar</button></p>
-    <dl class="drawer-stats">
-      <div><dt>Valor de mercado</dt><dd>${exact(p.value)}</dd></div>
-      <div><dt>xPts por jornada</dt><dd>${(p.xpts||0).toFixed(2)}</dd></div>
-      <div><dt>Puntos por millon</dt><dd>${(p.points_value||0).toFixed(3)}</dd></div>
-      <div><dt>Score</dt><dd>${(p.score||0)>=0?'+':''}${(p.score||0).toFixed(2)}
-        <span style="color:var(--muted);font-weight:400">· #${p.rank||'?'}</span></dd></div>
-      <div><dt>Puntos 25/26</dt><dd>${p.last_season_points||0}</dd></div>
-      <div><dt>Puntos temporada</dt><dd>${p.season_points||0}</dd></div>
-      <div><dt>Titularidad</dt><dd class="${p.start_probability!=null?titClass(p.start_probability):''}"
-        >${p.start_probability!=null?p.start_probability+'%':'—'}${
-          p.start_probability_source==='ficha'
-            ? `<span style="color:var(--muted);font-weight:400"> · J${p.start_week||''} en su ficha</span>`
-            : ''}</dd></div>
-      ${p.hierarchy?`<div><dt>Jerarquia</dt><dd class="${hierClass(p.hierarchy_rank)}"
-        >${p.hierarchy}<span style="color:var(--muted);font-weight:400"> · en su equipo</span></dd></div>`:''}
-      <div><dt>Proximo rival</dt><dd>${rival}</dd></div>
-      <div><dt>Valor 7d</dt><dd style="color:var(--${(p.projected_pct||0)>=0?'pole-pos':'pole-neg'})"
-        >${(p.projected_pct||0)>=0?'+':''}${(p.projected_pct||0).toFixed(2)}%</dd></div>
-      <div><dt>Techo rentable</dt><dd${p.ideal_bid?'':' style="color:var(--warning)"'}
-        >${p.ideal_bid?exact(p.ideal_bid):'sin margen'}</dd></div>
-      <div><dt>Clausula</dt><dd>${p.clause?exact(p.clause):'—'}${p.clause_locked?' 🔒':''}</dd></div>
-      ${p.clause_locked&&p.clause_locked_until?`<div><dt>${p.is_mine?'Blindada hasta':'Se libera en'}</dt>
-        <dd><span data-deadline="${p.clause_locked_until}">${leftUntil(p.clause_locked_until)}</span>
-        <span style="color:var(--muted);font-weight:400"> · ${String(p.clause_locked_until).slice(0,10)}</span></dd></div>`:''}
-      ${!p.clause_locked&&p.clause&&!p.is_mine?`<div><dt>Clausula</dt><dd
-        style="color:var(--pole-pos)">pagable ya</dd></div>`:''}
-      ${p.shielded&&p.shielded_until?`<div><dt>Blindaje acaba en</dt>
-        <dd><span data-deadline="${p.shielded_until}">${leftUntil(p.shielded_until)}</span>
-        <span style="color:var(--muted);font-weight:400"> · ${String(p.shielded_until).slice(11,16)}</span></dd></div>`:''}
-      ${p.bought_at?`<div><dt>Fichado</dt><dd>${since(p.bought_at)}
-        <span style="color:var(--muted);font-weight:400"> · ${String(p.bought_at).slice(0,10)}</span></dd></div>`:''}
-      ${p.sale_locked&&p.hold_until?`<div><dt>${p.is_mine?'Puedes venderlo en':'Puede venderlo en'}</dt>
-        <dd style="color:var(--warning)"><span data-deadline="${p.hold_until}">${leftUntil(p.hold_until)}</span>
-        <span style="color:var(--muted);font-weight:400"> · norma de la liga</span></dd></div>`:''}
-      ${l.market_id?`<div><dt>En mercado</dt><dd>${exact(l.min_bid)}</dd></div>`:''}
-      ${l.kind==='libre'?`<div><dt>Pujas vigentes</dt><dd${l.bids?' style="color:var(--warning)"':''}>${l.bids||'ninguna'}</dd></div>`:''}
-      ${l.expires?`<div><dt>Cierra</dt><dd>${String(l.expires).slice(11,16)}</dd></div>`:''}
-      ${p.status&&p.status!=='ok'?`<div><dt>Estado</dt><dd style="color:var(--${
-        p.status==='suspended'||p.status==='sanctioned'?'critical':'warning'})">${
-        {injured:'lesionado',doubtful:'duda',suspended:'sancionado',
-         sanctioned:'sancionado'}[p.status]||p.status}</dd></div>`:''}
-      ${p.absence&&p.absence.reason?`<div style="grid-column:1/-1"><dt>Motivo</dt><dd
-        style="text-align:left;font-weight:400">${p.absence.reason}${
-        p.absence.since?' · '+p.absence.since:''}${
-        p.absence.until?' · '+p.absence.until:''}</dd></div>`:''}
-    </dl>
-    ${weekStrip(data.weeks||[])}
+    <div class="pc-head">${faceOf(p,'xl')}<div class="pc-who"><h3>${p.name}${shieldMark(p)}</h3>
+      <div class="pc-sub"><span class="pos pos-${(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
+        ${p.team||''} · ${owner}${p.starred?' · ★':''}
+        <button class="cmp-add" type="button" data-cmp="${p.id}" data-cmp-name="${p.name}"
+          data-cmp-pos="${p.position||''}">+ comparar</button></div></div></div>
+    ${status}
+    <div class="pc-grid">${grid}</div>
+    ${popWeeks(data.weeks||[])}
+    ${(data.history||[]).filter(x=>x.value!=null).length>=3
+      ?`<div class="pc-h">Valor · ${(data.history||[]).filter(x=>x.value!=null).length} días</div>`:''}
     ${sparkSvg(data.history||[])}
-    <div class="drawer-actions">${(data.actions||[]).map(actionButton).join('')}</div>
+    ${actions.length?'<div class="pc-h">Acciones</div>':''}
+    ${notes.map(actionButton).join('')}
+    <div class="drawer-actions pc-acts">${buttons.map(x=>actionButton(x,x===primary,recommended.get(x))).join('')}</div>
     ${data.writes_enabled?'':'<p class="drawer-note">Servidor en modo solo lectura: '
       +'las operaciones estan desactivadas.</p>'}`;
   body.querySelectorAll('button[data-action]').forEach(button=>
     button.addEventListener('click',()=>runAction(JSON.parse(button.dataset.action),p)));
   wireAlways(body,p);
-  wireWeeks(body);
   wireChart(body);
   wireManagers(body);
+  tick();
   drawTray();
 }
 
@@ -1883,13 +1987,20 @@ function alwaysPanel(a){
     </div></div>`;
 }
 
-function actionButton(a){
-  if(a.kind==='note') return `<p class="drawer-note">${a.label}${a.deadline
-    ? ` · quedan <span data-deadline="${a.deadline}">${leftUntil(a.deadline)}</span>` : ''}</p>`;
-  const cls=a.op==='decline_offer'||a.op==='withdraw' ? 'danger-full'
-          : (a.op==='always'||a.op==='raid') ? (a.on?'on':'') : 'primary';
+function isDanger(a){
+  return !!a.danger||a.op==='decline_offer'||a.op==='withdraw';
+}
+
+function actionButton(a,primary=false,rec=null){
+  if(a.kind==='note') return `<p class="pc-info">${a.label}${a.deadline
+    ? ` · quedan <span data-deadline="${a.deadline}" data-plain="1">${leftUntil(a.deadline)}</span>` : ''}</p>`;
+  if(rec) return `<button class="act act-${rec.tone}" type="button" title="recomendado: ${rec.why}" `
+    +`data-action='${JSON.stringify(a).replace(/'/g,"&#39;")}'>${a.label}</button>`;
+  const cls='act'+(isDanger(a)&&!/^(accept|decline)_offer$/.test(a.op)?' act-danger':primary?' act-primary':'')
+    +((a.op==='always'||a.op==='raid')&&a.on?' on':'');
   const off=a.blocked?' disabled':'';
-  const button=`<button class="${cls}" data-action='${JSON.stringify(a).replace(/'/g,"&#39;")}'${off}>`
+  const button=`<button class="${cls}" type="button" data-action='${JSON.stringify(a).replace(/'/g,"&#39;")}'${off}`
+    +`${a.note?` title="${String(a.note).replace(/"/g,'&quot;')}"`:''}>`
     +`${a.label}${a.blocked?' — no te llega':''}</button>`;
   return a.op==='always'&&a.on ? button+alwaysPanel(a) : button;
 }
@@ -1999,7 +2110,7 @@ function wireRaises(root=document){
     button.dataset.wired='1';
     button.addEventListener('click',()=>{
       const d=button.dataset;
-      openAmount({op:'raise_clause', kind:'amount', label:'Subir clausula',
+      openAmount({op:'raise_clause', kind:'amount', label:'Subir cláusula',
                   player_id:d.raise, player_team_id:d.raiseSlot,
                   suggested:+d.raisePay||0},
                  {id:d.raise, name:d.raiseName, clause:+d.raiseClause||0,
@@ -2143,19 +2254,17 @@ function cmpAdd(id,name,pos){
   if(tray.length>=CMP_MAX){ trayMsg(`El comparador ya lleva ${CMP_MAX}`); return false; }
   tray.push({id,name:name||id,pos:pos||''});
   cmpSave(); drawTray();
+  if(comparing()) renderCompare();
   return true;
 }
 function cmpDrop(id){
   tray=tray.filter(p=>p.id!==String(id));
   cmpSave(); drawTray();
   // Dropping one with the table in front of you has to drop him from the table, not just the bar.
-  if(comparing()){
-    if(tray.length) openCompare();
-    else closeDrawer();
-  }
+  if(comparing()) renderCompare();
 }
 
-const comparing=()=> !!(drawer&&!drawer.hidden&&drawer.querySelector('.cmp-view'));
+const comparing=()=> (document.querySelector('.tab.on')||{dataset:{}}).dataset.tab==='comparador';
 
 function trayBox(){
   let box=document.getElementById('cmp-tray');
@@ -2175,9 +2284,11 @@ function trayBox(){
         <div class="cmp-results cmp-mine-list" hidden></div>
       </div>
       <button type="button" class="cmp-go primary"></button>
+      <button type="button" class="cmp-close" title="Quitar todos" aria-label="Quitar todos">✕</button>
     </div>`;
   document.body.appendChild(box);
   box.querySelector('.cmp-go').addEventListener('click',openCompare);
+  box.querySelector('.cmp-close').addEventListener('click',clearCompare);
   wireFind(box);
   wireMine(box);
   return box;
@@ -2255,7 +2366,7 @@ function trayLine(){
 
 function drawTray(){
   const box=trayBox();
-  const visible=tray.length>0||comparing();
+  const visible=tray.length>0&&!comparing();
   box.hidden=!visible;
   document.body.classList.toggle('tray-on',visible);
   box.querySelector('.cmp-chips').innerHTML=tray.map(p=>
@@ -2269,7 +2380,6 @@ function drawTray(){
   mineButton.title=line?`Meter tus ${line} para verlos al lado`:'Meter jugadores tuyos';
   const go=box.querySelector('.cmp-go');
   go.textContent=`Comparar (${tray.length})`;
-  go.disabled=tray.length<2;
   wireDetails(box);
   // The card's button has to say which state it is in: "+" invites, "✓" reminds.
   document.querySelectorAll('button[data-cmp]').forEach(button=>{
@@ -2329,7 +2439,7 @@ function wireMine(box){
     if(all) all.addEventListener('click',()=>{
       for(const p of same){ if(!cmpAdd(p.id,p.name,p.position)) break; }
       hide();
-      if(tray.length>1) openCompare();
+      if(tray.length>1&&!comparing()) openCompare();
     });
   };
   button.addEventListener('click',async()=>{
@@ -2421,43 +2531,70 @@ function cmpVerdict(list){
 function panelWide(on){
   const panel=drawer&&drawer.querySelector('.drawer-panel');
   if(panel) panel.classList.toggle('wide',!!on);
+  // Only the player's card is a centred popup; every other view keeps the side drawer.
+  if(drawer) drawer.classList.remove('as-pop');
 }
 
-async function openCompare(){
-  if(!drawer) return;
-  markView('comparar');
-  drawer.hidden=false;
-  panelWide(true);
-  const body=drawer.querySelector('.drawer-body');
-  // With nobody in it, it is still the comparator: it opens with the search waiting.
+// The comparator is a tab of its own; its address carries who is in it, so a link reopens
+// the same comparison.
+function compareHash(){
+  return '#comparador'+(tray.length?'/'+tray.map(p=>p.id).join(','):'');
+}
+
+function adoptCompareIds(list){
+  const ids=String(list).split(',').map(x=>x.trim()).filter(Boolean).slice(0,CMP_MAX);
+  if(ids.join(',')===tray.map(p=>p.id).join(',')) return;
+  tray=ids.map(id=>tray.find(p=>p.id===id)||{id,name:id,pos:''});
+  cmpSave(); drawTray();
+}
+
+function openCompare({replace=false}={}){
+  if(drawer&&!drawer.hidden) shutDrawer();
+  if(replace) history.replaceState(null,'',compareHash());
+  else history.pushState(null,'',compareHash());
+  routed=location.hash;
+  showTab('comparador',{updateHash:false});
+}
+
+let compareRun=0;
+async function renderCompare(){
+  const section=document.getElementById('comparador');
+  if(!section) return;
+  wireCompareSection(section);
+  const body=section.querySelector('.cmp-body');
+  // Only the bare tab address follows the tray: with a card open on top it is that card's.
+  const at=hashParts();
+  if(at.base==='comparador'&&!VIEWS[at.view]&&location.hash!==compareHash()){
+    history.replaceState(history.state,'',compareHash());
+    routed=location.hash;
+  }
   if(!tray.length){
-    body.innerHTML=`<div class="cmp-view">
-      <div class="drawer-head"><h3>Comparador</h3></div>
-      <p class="sub">busca jugadores abajo y ve añadiendolos</p>
-      <p class="empty">Puedes meter a cualquiera desde el buscador, desde el boton
-        <b>Mi plantilla</b>, o con el <b>+ comparar</b> de cada ficha.</p></div>`;
-    drawTray();
-    const find=document.querySelector('.cmp-find');
-    if(find) find.focus();
+    body.innerHTML=`<p class="empty">Busca jugadores arriba y ve añadiéndolos, pulsa
+      <b>Mi plantilla</b> para meter a los tuyos, o usa el <b>+ comparar</b> de cada ficha.</p>`;
     return;
   }
-  body.innerHTML='<p class="empty">Comparando…</p>';
+  const run=++compareRun;
+  if(!body.querySelector('.cmp-view')) body.innerHTML='<p class="empty">Comparando…</p>';
   let data;
   try{
     const res=await fetch('/api/compare?ids='+tray.map(p=>p.id).join(','));
     if(!res.ok) throw new Error(res.status);
     data=await res.json();
   }catch(e){
-    body.innerHTML='<p class="empty">No he podido comparar.</p>';
+    if(run===compareRun) body.innerHTML='<p class="empty">No he podido comparar.</p>';
     return;
   }
+  if(run!==compareRun) return;
   const list=data.players||[];
   if(!list.length){ body.innerHTML='<p class="empty">No conozco a ninguno de esos.</p>'; return; }
+  // Ids that came in an address have no name yet: the answer brings them.
+  let named=false;
+  tray.forEach(t=>{ const p=list.find(x=>String(x.id)===t.id);
+    if(p&&(t.name!==p.name||!t.pos)){ t.name=p.name; t.pos=p.position||''; named=true; } });
+  if(named){ cmpSave(); drawTray(); }
   const head=list.map(p=>`<th>
     <div class="cmp-who">
-      ${p.image
-        ? `<img src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
-        : `<span class="crest crest-${p.team_id}"></span>`}
+      ${faceOf(p,'md')}
       <span class="cmp-name">
         <button class="p-name" type="button" data-detail="${p.id}">${p.name}</button>
         <button class="cmp-x" type="button" data-cmp-drop="${p.id}" aria-label="Quitar">&times;</button>
@@ -2488,8 +2625,7 @@ async function openCompare(){
   }).join('');
   body.innerHTML=`
     <div class="cmp-view">
-    <div class="drawer-head"><h3>Comparador</h3></div>
-    <p class="sub">${list.length} jugadores · lo mejor de cada fila en verde</p>
+    <p class="note">${list.length} jugadores · lo mejor de cada fila en verde</p>
     ${cmpVerdict(list)}
     <div class="cmp-wrap"><table class="cmp">
       <thead><tr><th></th>${head}</tr></thead>
@@ -2499,16 +2635,33 @@ async function openCompare(){
           ).join('')}</tr>
       </tbody>
     </table></div>
-    <p class="drawer-note">Valor y clausula en negrita marcan el mas barato, no el mejor.
-      Pulsa un nombre para su ficha; al cerrar, la barra de abajo se va con el comparador.</p>
+    <p class="drawer-note">Valor y cláusula en verde marcan el más barato, no el mejor.
+      Pulsa un nombre para su ficha.</p>
     </div>`;
-  wireDetails(body); wireManagers(body); tick(); drawTray();
+  wireDetails(body); wireManagers(body); tick();
+}
+
+
+function clearCompare(){
+  tray=[]; cmpSave(); drawTray();
+  if(comparing()) renderCompare();
+}
+
+function wireCompareSection(section){
+  if(section.dataset.wired) return;
+  section.dataset.wired='1';
+  wireFind(section);
+  wireMine(section);
+  section.querySelector('.cmp-clear').addEventListener('click',clearCompare);
 }
 
 if(drawer){
   drawer.querySelector('.drawer-close').addEventListener('click',closeDrawer);
   drawer.addEventListener('click',(e)=>{ if(e.target===drawer) closeDrawer(); });
-  document.addEventListener('keydown',(e)=>{ if(e.key==='Escape') closeDrawer(); });
+  // A dialog opened from the card closes first; the card waits for its own Escape.
+  document.addEventListener('keydown',(e)=>{
+    if(e.key==='Escape'&&!drawer.hidden&&!document.querySelector('.modal:not([hidden])')) closeDrawer();
+  });
 }
 
 // ---- find a player and open his card --------------------------------------
@@ -2519,28 +2672,14 @@ function wireFindPlayer(){
   if(!input||input.dataset.wired) return;
   input.dataset.wired='1';
   const list=input.parentElement.querySelector('.find-results');
-  let timer=null, found=[];
-  const hide=()=>{ list.hidden=true; list.innerHTML=''; found=[]; };
+  let timer=null, found=[], cur=0;
+  const hide=()=>{ list.hidden=true; list.innerHTML=''; found=[]; cur=0; };
   const open=(id)=>{ hide(); input.value=''; input.blur(); openDetail(id); };
-  const run=async()=>{
-    const query=input.value.trim();
-    if(query.length<2){ hide(); return; }
-    try{
-      const res=await fetch('/api/compare?q='+encodeURIComponent(query));
-      if(!res.ok) throw new Error(res.status);
-      found=(await res.json()).matches||[];
-    }catch(e){ hide(); return; }
-    if(!found.length){
-      list.innerHTML='<p class="cmp-none">Nadie con ese nombre</p>';
-      list.hidden=false;
-      return;
-    }
+  const paint=()=>{
     list.innerHTML=found.map((p,i)=>`
-      <button class="cmp-hit${i===0?' first':''}" type="button" data-find="${p.id}">
+      <button class="cmp-hit${i===cur?' first':''}" type="button" data-find="${p.id}">
         <span class="cmp-hit-who">
-          ${p.image
-            ? `<img src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
-            : `<span class="crest crest-${p.team_id}"></span>`}
+          ${faceOf(p,'xs')}
           <b>${p.name}</b>
           <span class="pos pos-${String(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
         </span>
@@ -2549,10 +2688,35 @@ function wireFindPlayer(){
       </button>`).join('');
     list.hidden=false;
   };
+  const run=async()=>{
+    const query=input.value.trim();
+    if(query.length<2){ hide(); return; }
+    try{
+      const res=await fetch('/api/compare?q='+encodeURIComponent(query));
+      if(!res.ok) throw new Error(res.status);
+      const matches=(await res.json()).matches||[];
+      // Your own first: the card you look up most is one of yours.
+      found=[...matches.filter(p=>p.is_mine),...matches.filter(p=>!p.is_mine)];
+    }catch(e){ hide(); return; }
+    cur=0;
+    if(!found.length){
+      list.innerHTML='<p class="cmp-none">Nadie con ese nombre</p>';
+      list.hidden=false;
+      return;
+    }
+    paint();
+  };
   input.addEventListener('input',()=>{ clearTimeout(timer); timer=setTimeout(run,180); });
   input.addEventListener('keydown',(event)=>{
     if(event.key==='Escape'){ input.value=''; hide(); input.blur(); }
-    if(event.key==='Enter'&&found.length) open(found[0].id);
+    if(!found.length) return;
+    if(event.key==='ArrowDown'||event.key==='ArrowUp'){
+      event.preventDefault();
+      cur=Math.max(0,Math.min(found.length-1,cur+(event.key==='ArrowDown'?1:-1)));
+      paint();
+      list.querySelector('.cmp-hit.first')?.scrollIntoView({block:'nearest'});
+    }
+    if(event.key==='Enter'){ event.preventDefault(); open(found[cur].id); }
   });
   list.addEventListener('click',(event)=>{
     const hit=event.target.closest('button[data-find]');
@@ -2583,6 +2747,7 @@ const TABS=[
   {id:'rivales', label:'Rivales', sections:['rivales']},
   {id:'liga', label:'Liga', sections:['evolucion','movimientos','normas']},
   {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
+  {id:'comparador', label:'Comparador', sections:['comparador']},
 ];
 
 // A hash can be a tab (#comprar) or a section (#oportunidades), and the second is what the
@@ -2625,8 +2790,172 @@ document.addEventListener('change',(event)=>{
   applyRivalPick();
 });
 
+// ---- each tab's view first, its old tables folded under "Ver detalle" -------------
+// The tables stay sections of their own, so the live refresh still finds them by id; the fold
+// only decides whether they are on screen.
+const FOLDS={
+  decidir:['plan','acciones','caja','chollos'],
+  comprar:['fichajes','enventa','mispujas','seguimiento','resueltas'],
+  vender:['misventas','ofertas','siempre'],
+  clausulas:['subir','programados','calendario','vencimientos','oportunidades','clausulas'],
+  partidos:['jornada','partidos'],
+  rivales:['rivales','pinta'],
+  ranking:['ranking','rentabilidad'],
+};
+const FOLD_KEY='fantasy:detalle:';
+function foldOpen(tab){
+  try{ return localStorage.getItem(FOLD_KEY+tab)==='1'; }catch(e){ return false; }
+}
+function applyFold(tab){
+  const ids=FOLDS[tab];
+  if(!ids) return;
+  const open=foldOpen(tab);
+  document.querySelectorAll(`button[data-fold="${tab}"]`).forEach(button=>{
+    button.setAttribute('aria-expanded',open?'true':'false');
+    button.classList.toggle('on',open);
+  });
+  if(!document.getElementById('mas-'+tab)) return;
+  ids.forEach(id=>{ const node=document.getElementById(id); if(node&&!open) node.hidden=true; });
+}
+document.addEventListener('click',(event)=>{
+  const button=event.target.closest&&event.target.closest('button[data-fold]');
+  if(!button) return;
+  const tab=button.dataset.fold, open=!foldOpen(tab);
+  try{ localStorage.setItem(FOLD_KEY+tab,open?'1':'0'); }catch(e){}
+  usage.click('detalle',(open?'ver detalle ':'ocultar detalle ')+tab);
+  showTab(tab,{updateHash:false});
+  const first=(FOLDS[tab]||[]).map(id=>document.getElementById(id)).find(n=>n&&!n.hidden);
+  if(open&&first) first.scrollIntoView({behavior:'smooth',block:'start'});
+});
+
+// Faces, names and rows in the views open the player's card; a button inside them does its own.
+document.addEventListener('click',(event)=>{
+  const target=event.target;
+  if(!target.closest) return;
+  if(target.closest('button, a, input, select, label')) return;
+  const team=target.closest('.mk [data-team]');
+  if(team&&!target.closest('[data-pid]')){ openManager(team.dataset.team); return; }
+  const host=target.closest('.mk [data-pid], .md-xi [data-pid]');
+  if(host&&host.dataset.pid){ event.preventDefault(); openDetail(host.dataset.pid); return; }
+  const week=target.closest('.mk .hist[data-week]');
+  if(week) openWeek(week.dataset.week);
+});
+document.addEventListener('keydown',(event)=>{
+  const week=event.target.closest&&event.target.closest('.mk .hist[data-week]');
+  if(week&&(event.key==='Enter'||event.key===' ')){ event.preventDefault(); openWeek(week.dataset.week); }
+});
+
+// A row's button that is one of the player's own actions runs it exactly as his card would.
+document.addEventListener('click',async(event)=>{
+  const button=event.target.closest&&event.target.closest('button[data-act]');
+  if(!button) return;
+  button.disabled=true;
+  try{
+    const res=await fetch('/api/player/'+button.dataset.actPlayer);
+    if(!res.ok) throw new Error(res.status);
+    const data=await res.json();
+    const action=(data.actions||[]).find(a=>a.op===button.dataset.act);
+    if(!action){ alert('Ahora mismo no se puede: abre su ficha para ver por qué.'); return; }
+    runAction(action,data.player);
+  }catch(e){
+    alert('Solo disponible en la versión servida.');
+  }finally{ button.disabled=false; }
+});
+
+// ---- Partidos: my points per matchday, and each matchday's whole table -------------
+let seasonCache=null;
+async function fillHistory(){
+  const list=document.getElementById('pv-history');
+  if(!list) return;
+  const week=+list.dataset.week, plannedHere=+list.dataset.planned||0;
+  try{
+    if(!seasonCache){
+      const [season,forecast]=await Promise.all([
+        fetch('/api/season').then(r=>r.ok?r.json():null),
+        fetch('/api/forecast/'+week).then(r=>r.ok?r.json():null)]);
+      seasonCache={season,forecast};
+    }
+  }catch(e){ seasonCache={season:null,forecast:null}; }
+  const target=document.getElementById('pv-history');
+  if(!target) return;
+  const {season,forecast}=seasonCache;
+  const me=((season||{}).managers||[]).find(m=>m.is_me);
+  const weeks=(season||{}).weeks||[];
+  const planned=((forecast||{}).mine||{}).planned||plannedHere;
+  const real=weeks.map((w,i)=>({w, pts:me?me.points[i]:null, rank:me&&me.week_rank?me.week_rank[i]:null}));
+  const scale=Math.max(planned,...real.map(r=>r.pts||0))*1.05||1;
+  const rows=real.map(r=>r.pts==null
+    ? `<li class="hist"><span class="hj">J${r.w}</span><span class="bars"></span><span class="hv">—</span></li>`
+    : `<li class="hist" data-week="${r.w}" tabindex="0"><span class="hj">J${r.w}</span><span class="bars">`
+      +`<span class="bar real" style="width:${Math.max(r.pts,0)/scale*100}%"></span></span>`
+      +`<span class="hv">${r.pts}<i>${r.rank?r.rank+'º':''}</i></span></li>`);
+  rows.push(`<li class="hist now" data-week="${week}" tabindex="0"><span class="hj">J${week}</span><span class="bars">`
+    +`<span class="bar fore" style="width:${planned/scale*100}%"></span></span>`
+    +`<span class="hv">${dec(planned)}<i>prev.</i></span></li>`);
+  target.innerHTML=rows.join('');
+  const sub=document.getElementById('pv-sub');
+  const total=real.reduce((sum,r)=>sum+(r.pts||0),0), played=real.filter(r=>r.pts!=null).length;
+  if(sub) sub.textContent=played?`${total} pts en ${played} jornadas`:'';
+}
+
+const XI_LINES=[['striker','DEL'],['midfield','MED'],['defender','DEF'],['goalkeeper','POR']];
+function ptsClass(p){ return p==null?'':p>=8?'x-hi':p>=4?'x-mid':p<0?'x-bad':'x-lo'; }
+function fcClass(v){ return v>=6?'x-hi':v>=3.5?'x-mid':v>=2?'x-lo':'x-bad'; }
+
+async function openWeek(week){
+  if(!drawer) return;
+  markView('jornada',week);
+  drawer.hidden=false;
+  panelWide(false);
+  drawer.classList.add('as-pop');
+  const body=drawer.querySelector('.drawer-body');
+  body.dataset.view='week';
+  body.innerHTML='<p class="empty">Cargando…</p>';
+  let md=null, fc=null;
+  try{
+    [md,fc]=await Promise.all([
+      fetch('/api/matchday/'+week).then(r=>r.ok?r.json():null),
+      fetch('/api/forecast/'+week).then(r=>r.ok?r.json():null)]);
+  }catch(e){}
+  if(!md||!md.managers){ body.innerHTML='<p class="empty">No he podido leer esa jornada.</p>'; return; }
+  const current=+((document.getElementById('pv-history')||{dataset:{}}).dataset.week||0);
+  const future=current&&+week>=current;
+  const forecasts={}, plans={};
+  [...((fc||{}).managers||[]), ...((fc||{}).mine?[fc.mine]:[])].forEach(m=>{
+    plans[m.team_id]=m.planned;
+    (m.players||[]).forEach(p=>{ forecasts[p.id]=p.forecast; });
+  });
+  const score=m=>future?(plans[m.team_id]||0):(m.week_points||0);
+  const managers=md.managers.slice().sort((a,b)=>score(b)-score(a));
+  const rows=managers.map((m,i)=>{
+    const lineup=m.lineup||{};
+    const lines=XI_LINES.map(([key,label])=>{
+      let players=(lineup[key]||[]).filter(Boolean);
+      if(!m.lineup) players=(m.squad||[]).filter(p=>({1:'POR',2:'DEF',3:'MED',4:'DEL'})[p.position_id]===label);
+      const chips=players.map(p=>{
+        const f=forecasts[p.id];
+        const value=future?(f!=null?dec(f):'–'):(p.points??'–');
+        const cls=future?fcClass(f||0):ptsClass(p.points);
+        const small=!future&&f!=null?` <span class="fcs">${dec(f)}</span>`:'';
+        return `<span class="tchip ${cls}" data-pid="${p.id}">${faceOf(p,'xs')}`
+          +`<span class="tname">${p.name}</span><span class="tx">${value}</span>${small}</span>`;
+      }).join('');
+      return chips?`<div class="line"><span class="pos pos-${label.toLowerCase()}">${label}</span><div class="chips">${chips}</div></div>`:'';
+    }).join('');
+    const total=future?`${dec(score(m))} <span class="mf">previsto</span>`:`${m.week_points??'–'} <span class="mf">pts</span>`;
+    return `<details class="md-row${m.is_me?' me':''}"${m.is_me?' open':''}><summary><span class="rk">${i+1}º</span>`
+      +`<span>${m.manager}</span><span class="mp">${total}</span></summary><div class="md-xi">${lines}</div></details>`;
+  }).join('');
+  const k=md.kickoff?new Date(md.kickoff):null;
+  const when=k?['dom','lun','mar','mié','jue','vie','sáb'][k.getDay()]+' '+k.getDate()+' '
+    +['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][k.getMonth()]:'';
+  body.innerHTML=`<h3 class="pc-title">J${week}${future?' · previsión de cada once':when?' · '+when:''}</h3>`
+    +`<p class="drawer-note" style="margin:0 0 8px">Toca un manager para ver su once${future?'':'; en pequeño, lo previsto si se guardó'}.</p>${rows}`;
+}
+
 function showTab(id,{section=null,updateHash=true}={}){
   const tab=TABS.find(t=>t.id===id)||TABS[0];
+  const was=(document.querySelector('.tab.on')||{dataset:{}}).dataset.tab;
   // Un enlace a un rival concreto manda sobre lo elegido en el desplegable.
   if(section&&section.startsWith('rival-')){
     try{ localStorage.setItem(RIVAL_KEY,section); }catch(e){}
@@ -2655,6 +2984,13 @@ function showTab(id,{section=null,updateHash=true}={}){
   applyRivalPick();
   if(tab.sections.includes('once') && !pitchState) loadPitch();
   if(tab.sections.includes('evolucion')) loadSeason();
+  if(tab.id==='comparador'&&was!=='comparador') renderCompare();
+  if(section&&(FOLDS[tab.id]||[]).includes(section)){
+    try{ localStorage.setItem(FOLD_KEY+tab.id,'1'); }catch(e){}
+  }
+  applyFold(tab.id);
+  if(tab.id==='partidos') fillHistory();
+  drawTray();
   if(section){
     const node=document.getElementById(section);
     if(node) node.scrollIntoView({behavior:'smooth',block:'start'});
@@ -2688,7 +3024,7 @@ let currentVersion=null;
 // Sections whose content the browser paints rather than the server: the fragment that arrives
 // is an empty shell, so swapping it in would wipe what is inside (and any unsaved lineup
 // changes).
-const CLIENT_OWNED=new Set(['once']);
+const CLIENT_OWNED=new Set(['once','comparador']);
 
 // The balance is in two places and cannot say two things: the chip in the bar, which is the
 // one always on screen, and the header widget, which also carries the place in the league.
@@ -2699,9 +3035,9 @@ function showCash(amount){
   myCash=amount;
   const text=exact(amount);
   const chip=document.getElementById('tab-cash');
-  if(chip){ chip.textContent=fmt(amount); chip.title='Tu saldo ahora mismo: '+text; }
+  if(chip){ chip.textContent=mny(amount); chip.title='Tu saldo ahora mismo: '+text; }
   const kpi=document.getElementById('kpi-cash');
-  if(kpi) kpi.textContent=fmt(amount);
+  if(kpi) kpi.textContent=mny(amount);
 }
 
 async function swap(){
@@ -2805,8 +3141,6 @@ wireTabs(); tick(); drawTray();
   const stamped=document.getElementById('tab-cash');
   if(stamped&&stamped.dataset.cash) myCash=+stamped.dataset.cash;
 }
-const headCompare=document.getElementById('open-compare');
-if(headCompare) headCompare.addEventListener('click',openCompare);
 if(window.EventSource && location.protocol.startsWith('http')) connect();
 
 // ---- legacy (fichero estatico) ----
