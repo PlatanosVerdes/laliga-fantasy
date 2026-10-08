@@ -1,0 +1,237 @@
+package render
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+)
+
+// The league tabs in the same language as the others: Rivales, Liga and Ranking.
+
+// mkSection is a section of its own (so the live refresh swaps it by id) drawn as a block.
+func mkSection(id, tab, title, body, sub string, count int) string {
+	return fmt.Sprintf(`<section id="%s" data-tab="%s" class="mk"><div class="main">%s</div></section>`,
+		id, tab, block(title, body, sub, count))
+}
+
+// teamRow is a manager as a compact row: his place where a face would be.
+func teamRow(teamID, place, name, meta, value, note, chip, action, tone string) string {
+	if note != "" {
+		note = `<span class="rnote">` + note + `</span>`
+	}
+	if action != "" {
+		action = `<span class="ract">` + action + `</span>`
+	}
+	return fmt.Sprintf(`<li class="r %s" data-team="%s"><span class="rank-dot">%s</span>`+
+		`<span class="rwho"><b>%s</b>%s</span><span class="rval"><b>%s</b>%s</span>%s%s</li>`,
+		tone, Esc(teamID), place, Esc(name), meta, value, note, chip, action)
+}
+
+func tag(text, class string) string {
+	return `<span class="mk-chip ` + class + `">` + text + `</span>`
+}
+
+// --- Rivales ---------------------------------------------------------------------------
+
+func (d Document) rivalsView() string {
+	rivals := []map[string]any{}
+	for _, team := range rows(d.Advice["rivals"]) {
+		if !truthy(team["is_me"]) {
+			rivals = append(rivals, team)
+		}
+	}
+	if len(rivals) == 0 {
+		return ""
+	}
+	sort.SliceStable(rivals, func(one, two int) bool {
+		return number(rivals[one]["position"]) < number(rivals[two]["position"])
+	})
+	squad := rows(d.Advice["squad"])
+	// Who each rival is the main threat to, read off the clause plan.
+	threatens := map[string][]string{}
+	for _, raise := range rows(d.Raise["rows"]) {
+		if who := text(raise["top_threat"]); who != "" && !truthy(raise["clause_locked"]) &&
+			!truthy(raise["shielded"]) {
+			threatens[who] = append(threatens[who], text(raise["name"]))
+		}
+	}
+	var items []string
+	for _, team := range rivals {
+		cash := number(team["estimated_cash"])
+		manager := fallbackText(text(team["manager"]), text(team["name"]))
+		var top map[string]any
+		reach := 0
+		for _, player := range squad {
+			clause := number(player["clause"])
+			if clause <= 0 || clause > cash || truthy(player["shielded"]) {
+				continue
+			}
+			if !truthy(player["clause_locked"]) {
+				reach++
+			}
+			if top == nil || clause > number(top["clause"]) {
+				top = player
+			}
+		}
+		pays := `<span class="meta">no le llega a ninguna cláusula tuya</span>`
+		if top != nil {
+			lock := ""
+			if truthy(top["clause_locked"]) {
+				lock = " 🔒"
+			}
+			pays = fmt.Sprintf(`<span class="meta">le llega hasta %s%s %s%s</span>`,
+				face(top, "xs"), Esc(text(top["name"])), esMoney(number(top["clause"])), lock)
+		}
+		meta := fmt.Sprintf(`<span class="meta">%.0f pts · %.0f jugadores · plantilla %s</span>%s`,
+			number(team["points"]), number(team["players"]),
+			esMoney(number(team["squad_value"])), pays)
+		chip, tone := tag("no llega", "done"), ""
+		switch {
+		case len(threatens[manager]) > 0:
+			chip = tag(fmt.Sprintf("amenaza a %d", len(threatens[manager])), "soon")
+			chip = strings.Replace(chip, `class="mk-chip soon"`, fmt.Sprintf(
+				`class="mk-chip soon" title="%s"`, Esc(strings.Join(threatens[manager], ", "))), 1)
+			tone = "critical"
+		case reach > 0:
+			chip = tag(fmt.Sprintf("llega a %d", reach), "warn")
+		}
+		place := "—"
+		if position := number(team["position"]); position > 0 {
+			place = fmt.Sprintf("%.0fº", position)
+		}
+		note := `<span title="Reconstruida del historial de traspasos: es una estimación">caja estimada</span>`
+		action := fmt.Sprintf(`<button type="button" class="mb mb-ghost" data-goto="rival-%s">`+
+			`Ver plantilla</button>`, Esc(text(team["team_id"])))
+		items = append(items, teamRow(text(team["team_id"]), place, manager, meta, esMoney(cash),
+			note, chip, action, tone))
+	}
+	main := block("Rivales", rowList(items, false), "su caja es una estimación del historial",
+		len(items))
+	return view("v-rivales", "rivales", main, d.outlookAside())
+}
+
+func (d Document) outlookAside() string {
+	forecast := rows(d.Advice["outlook"])
+	if len(forecast) == 0 {
+		return ""
+	}
+	week := int(number(forecast[0]["week"]))
+	var items []string
+	for index, row := range forecast {
+		if index == 3 {
+			break
+		}
+		why := ""
+		if reasons := asStrings(row["reasons"]); len(reasons) > 0 {
+			why = `<span class="meta">` + Esc(reasons[0]) + `</span>`
+		}
+		items = append(items, teamRow(text(row["team_id"]), fmt.Sprintf("%dº", index+1),
+			text(row["manager"]), why, esNum(number(row["xpts"]), 1)+" xPts",
+			fmt.Sprintf("%.0fº de la liga", number(row["position"])), "", "", ""))
+	}
+	return block(fmt.Sprintf("Quién pinta peor la J%d", week), rowList(items, true),
+		"su mejor once posible", -1)
+}
+
+// rivalSquad is one rival's squad as compact rows, the full table folded under it.
+func rivalSquad(team map[string]any, manager string, squad []map[string]any, table string) string {
+	var items []string
+	upgrades, payable := 0, 0
+	for _, player := range squad {
+		if number(player["vs_mine"]) > 0 {
+			upgrades++
+		}
+		if !truthy(player["clause_locked"]) && !truthy(player["shielded"]) &&
+			number(player["clause"]) > 0 {
+			payable++
+		}
+		meta := Esc(text(player["team_short"]))
+		if vs, ok := player["vs_mine"]; ok {
+			class := "down"
+			if number(vs) > 0 {
+				class = "up"
+			}
+			meta += fmt.Sprintf(` · <span class="%s">%s</span> frente a %s`, class,
+				esSigned(number(vs)), Esc(text(player["vs_who"])))
+		}
+		var chip string
+		switch {
+		case truthy(player["shielded"]):
+			chip = tag("🛡 blindado", "done")
+		case truthy(player["clause_locked"]):
+			chip = clock(text(player["clause_locked_until"]), "se libera su cláusula")
+		case number(player["asking"]) > 0:
+			chip = tag("en venta "+esMoney(number(player["asking"])), "")
+		case number(player["clause"]) > 0:
+			chip = tag("🔓 pagable", "ok")
+		}
+		action := CompareButton(player)
+		if raid := RaidButton(player); raid != Missing && !strings.HasPrefix(raid, "<span") {
+			action += strings.Replace(raid, `class="raid-btn"`, `class="mb mb-ghost raid-btn"`, 1)
+		}
+		items = append(items, row(player, meta, esNum(number(player["xpts"]), 1)+" xPts",
+			"cláusula "+esMoney(number(player["clause"])), chip, action, ""))
+	}
+	sub := fmt.Sprintf("%.0f pts · caja estimada %s · %d jugadores · %s · %s",
+		number(team["points"]), esMoney(number(team["estimated_cash"])), len(squad),
+		counted(upgrades, "mejora a los tuyos", "mejoran a los tuyos"),
+		counted(payable, "pagable ya", "pagables ya"))
+	title := Esc(manager)
+	if position := number(team["position"]); position > 0 {
+		title = fmt.Sprintf("%.0fº · %s", position, Esc(manager))
+	}
+	return mkSection("rival-"+text(team["team_id"]), "rivales", title,
+		rowList(items, false)+folded("tabla completa", table), sub, -1)
+}
+
+// --- Ranking ---------------------------------------------------------------------------
+
+func rankRow(player map[string]any, withChip bool) string {
+	owner := text(player["owner"])
+	switch {
+	case truthy(player["is_mine"]):
+		owner = "tuyo"
+	case owner == "":
+		owner = "libre"
+	default:
+		owner = "de " + owner
+	}
+	chip := ""
+	if starts := asFloat(player["start_probability"]); starts != nil && withChip {
+		chip = tag(fmt.Sprintf("titular %.0f %%", *starts), "")
+	}
+	line := row(player, Esc(text(player["team_short"]))+" · "+Esc(owner),
+		esNum(number(player["xpts"]), 1)+" xPts",
+		fmt.Sprintf("%s pts/M · %s", esNum(number(player["points_value"]), 2),
+			esMoney(number(player["value"]))), chip, Star(player)+CompareButton(player), "")
+	// The filter bar reads these, as it does on the table rows.
+	return strings.Replace(line, `<li class="r " `, fmt.Sprintf(
+		`<li class="r " data-position="%s" data-price="%.0f" data-name="%s" `,
+		Esc(text(player["position"])), number(player["value"]),
+		Esc(strings.ToLower(text(player["name"])))), 1)
+}
+
+func rankList(players []map[string]any, shown int, withChip bool) string {
+	var top, rest []string
+	for index, player := range players {
+		if index < shown {
+			top = append(top, rankRow(player, withChip))
+		} else {
+			rest = append(rest, rankRow(player, withChip))
+		}
+	}
+	out := rowList(top, false)
+	if len(rest) > 0 {
+		out += folded(fmt.Sprintf("%d más", len(rest)), rowList(rest, false))
+	}
+	return out
+}
+
+func (d Document) rankingView(byScore, byValue []map[string]any) string {
+	main := `<div class="mk-filters">` + Filters + `</div>` +
+		block("Ranking global", rankList(byScore, 10, true), "los mejores de LaLiga por score",
+			len(byScore))
+	aside := block("Mejor rentabilidad", rankList(byValue, 10, false),
+		"xPts por millón: manda cuando vas justo", len(byValue))
+	return view("v-ranking", "ranking", main, aside)
+}

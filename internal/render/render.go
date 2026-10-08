@@ -1023,8 +1023,8 @@ func Feed(events []map[string]any) string {
 	var blocks strings.Builder
 	if len(moves) > 8 {
 		blocks.WriteString(`<div class="feed-sort" role="group" aria-label="Ordenar">` +
-			`<button type="button" data-feed-sort="recent" class="on">Lo ultimo</button>` +
-			`<button type="button" data-feed-sort="amount">Mas grandes</button></div>` +
+			`<button type="button" data-feed-sort="recent" class="on">Lo último</button>` +
+			`<button type="button" data-feed-sort="amount">Más grandes</button></div>` +
 			`<span class="feed-legend"><i class="feed-mine"></i>tuyo<i class="feed-bid"></i>pujaste` +
 			`<i class="feed-fav"></i>favorito</span>`)
 	}

@@ -1541,3 +1541,42 @@ table.cmp td:first-child,table.cmp th:first-child{text-align:left}
 table.cmp th{padding-top:12px}
 table.cmp tr:last-child td{border-bottom:0}
 .cmp-who,.cmp-sub,.cmp-state{align-items:center;justify-content:center;text-align:center}
+
+/* ---- league tabs ---------------------------------------------------------- */
+.mk .rank-dot{grid-area:f;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+  background:var(--surface-2);color:var(--ink-2);font-size:12px;font-weight:700;
+  font-variant-numeric:tabular-nums}
+.mk .r[data-team]{cursor:pointer}
+.mk .r[data-team]:hover{background:color-mix(in srgb,var(--accent) 5%,transparent)}
+.mk .rwho .meta+.meta{margin-top:1px}
+.mk .rwho .meta .face{margin-right:1px}
+.mk .mk-chip.warn{background:color-mix(in srgb,var(--warning) 18%,transparent);color:var(--warning)}
+.mk .mk-chip.ok{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.mk .ract .star{font-size:16px;padding:2px 6px}
+.mk .ract .cmp-add.small{width:28px;height:28px}
+.mk .ract .raid-btn.mb{padding:6px 10px;font-size:12px}
+.mk .mk-box{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.mk .rules li{font-size:13px}
+.mk .evo{border-radius:12px;padding:8px 0}
+.mk .evo .empty{border:0;margin:0 14px;background:none}
+.mk .feed{border-radius:12px}
+.mk .feed-row{padding:9px 12px}
+.mk .feed-sort{margin:0 0 8px}
+.mk .feed-legend{font-size:11px}
+.mk .pick-bar{margin:0}
+.mk .pick-bar select{border-radius:9px}
+.mk .fold .table-wrap{margin-top:6px}
+.mk-filters .filters{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin:0 0 16px;font-size:12px}
+.mk-filters .filters label{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.mk-filters .filters select,.mk-filters .filters input{font:inherit;font-size:13px;background:var(--plane);
+  color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:5px 8px;max-width:150px}
+.mk-filters .f-reset{font:inherit;font-size:12px;background:none;border:1px solid var(--line);color:var(--ink);
+  border-radius:8px;padding:5px 10px;cursor:pointer}
+@media (max-width:760px){
+  .mk-filters .filters label{flex:1 1 140px}
+  .mk-filters .filters select,.mk-filters .filters input{max-width:none;width:100%;font-size:16px}
+  .mk .rwho .meta{white-space:normal}
+}
+.mk .evo,.mk .feed{max-width:none}
+.mk .side .ract .star{padding:0 4px}

@@ -231,6 +231,7 @@ func (d Document) Views() []string {
 		d.clauseView(), moreSection("clausulas", "subir · programados · calendario · vencimientos · oportunidades"),
 		d.squadView(), moreSection("plantilla", "editar la alineación · plantilla · candidatos a vender"),
 		d.matchesView(), moreSection("partidos", "cómo va la jornada · calendario de partidos"),
+		d.rivalsView(),
 	}
 }
 

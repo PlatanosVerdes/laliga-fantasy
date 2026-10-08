@@ -93,7 +93,10 @@ function applyFilters(){
   document.querySelectorAll('.filters').forEach(bar=>{
     const scope=bar.closest('section');
     let shown=0,total=0;
-    scope.querySelectorAll('tr[data-position]').forEach(row=>{
+    // A list keeps its rest folded; a filter has to look through all of it.
+    if(filterState.pos!=='all'||filterState.price||needle)
+      scope.querySelectorAll('details.fold').forEach(d=>{ if(d.querySelector('li[data-position]')) d.open=true; });
+    scope.querySelectorAll('tr[data-position], li[data-position]').forEach(row=>{
       total++;
       const ok=(filterState.pos==='all'||row.dataset.position===filterState.pos)
         && parseFloat(row.dataset.price)<=maxPrice
@@ -1030,7 +1033,9 @@ async function loadSeason(){
     const res=await fetch('/api/season');
     if(!res.ok) throw new Error(res.status);
     seasonData=await res.json();
-    box.innerHTML=seasonChart(seasonData,box.clientWidth);
+    // A live refresh during the wait puts a new, empty frame in place of the one asked for.
+    const frame=document.querySelector('.evo')||box;
+    frame.innerHTML=seasonChart(seasonData,frame.clientWidth);
   }catch(e){
     seasonAsked=false;
     box.innerHTML='<p class="empty">No he podido reconstruir la clasificacion.</p>';
@@ -2717,6 +2722,8 @@ const FOLDS={
   clausulas:['subir','programados','calendario','vencimientos','oportunidades','clausulas'],
   plantilla:['once','plantilla','ventas'],
   partidos:['jornada','partidos'],
+  rivales:['rivales','pinta'],
+  ranking:['ranking','rentabilidad'],
 };
 const FOLD_KEY='fantasy:detalle:';
 function foldOpen(tab){
@@ -2749,6 +2756,8 @@ document.addEventListener('click',(event)=>{
   const target=event.target;
   if(!target.closest) return;
   if(target.closest('button, a, input, select, label')) return;
+  const team=target.closest('.mk [data-team]');
+  if(team&&!target.closest('[data-pid]')){ openManager(team.dataset.team); return; }
   const host=target.closest('.mk [data-pid], .md-xi [data-pid]');
   if(host&&host.dataset.pid){ event.preventDefault(); openDetail(host.dataset.pid); return; }
   const week=target.closest('.mk .hist[data-week]');

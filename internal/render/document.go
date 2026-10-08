@@ -1219,9 +1219,10 @@ func (d Document) rulesSection() string {
 	if total := len(d.RuleNotes) + map[bool]int{true: 1, false: 0}[d.HoldDays > 0]; total > 0 {
 		count = fmt.Sprintf("%d normas", total)
 	}
-	return Section("Normas de la liga", HouseRules(d.HoldDays, d.HoldExceptions, d.RuleNotes),
-		"Lo que no sabe el juego. Solo la primera cambia lo que te propongo; las demas "+
-			"estan aqui para consultarlas.", count, "normas")
+	_ = count
+	return mkSection("normas", "liga", "Normas de la liga",
+		`<div class="mk-box">`+HouseRules(d.HoldDays, d.HoldExceptions, d.RuleNotes)+`</div>`,
+		"lo que el juego no sabe", len(d.RuleNotes)+map[bool]int{true: 1, false: 0}[d.HoldDays > 0])
 }
 
 // managerTeams is the user-id to team-id map the feed needs to make its names clickable. Built
@@ -1252,9 +1253,10 @@ func (d Document) seasonSection() string {
 	note := "En que puesto acabo cada uno cada jornada. La clasificacion oficial solo publica " +
 		"la de hoy, asi que el recorrido se suma de los onces que alineo cada uno: el total " +
 		"que sale es exactamente el de la tabla."
-	return Section("La liga jornada a jornada",
+	_ = note
+	return mkSection("evolucion", "liga", "La liga jornada a jornada",
 		`<div class="evo" data-season="1"><p class="empty">Cargando…</p></div>`,
-		note, "", "evolucion")
+		"el puesto de cada uno tras cada jornada", -1)
 }
 
 // feedMarks is which players of the log concern me, strongest first: mine (now, or bought or
@@ -1331,10 +1333,8 @@ func (d Document) feedSection() string {
 	}
 	ManagerTeams = d.managerTeams()
 	FeedMarks, FeedMe = d.feedMarks()
-	return Section("Movimientos de la liga", Feed(events),
-		"Quien ha fichado y vendido, y por cuanto. Las operaciones grandes "+
-			"cuentan quien se esta quedando sin caja.",
-		fmt.Sprintf("%d operaciones", moves), "movimientos")
+	return mkSection("movimientos", "liga", "Movimientos de la liga", Feed(events),
+		"quién ficha y vende, y por cuánto", moves)
 }
 
 func (d Document) squadSection() string {
@@ -1555,6 +1555,9 @@ func (d Document) clauseSections() []string {
 	}
 	// One section per rival, after the table that compares them all.
 	out = append(out, d.rivalSections(rows(d.Universe["players"]))...)
+	if len(d.Advice) > 0 {
+		out = append(out, moreSection("rivales", "poder de compra de la liga · quién pinta peor"))
+	}
 	return out
 }
 
@@ -1711,48 +1714,6 @@ func (d Document) rivalSections(players []map[string]any) []string {
 		if manager == "" {
 			manager = teamID
 		}
-		upgrades, payable, listed, value, points := 0, 0, 0, 0.0, 0.0
-		for _, player := range squad {
-			if number(player["vs_mine"]) > 0 {
-				upgrades++
-			}
-			if !truthy(player["clause_locked"]) && !truthy(player["shielded"]) &&
-				number(player["clause"]) > 0 {
-				payable++
-			}
-			if number(player["asking"]) > 0 {
-				listed++
-			}
-			value += number(player["value"])
-			points += number(player["xpts"])
-		}
-
-		note := fmt.Sprintf("%.0f puntos · caja estimada <strong>%s</strong> · "+
-			"plantilla %s · %.1f xPts por jornada.", number(team["points"]),
-			Esc(Money(asFloat(team["estimated_cash"]))), Esc(Money(&value)), points)
-		switch {
-		case upgrades == 0:
-			note += " No tiene a nadie que mejore lo que tienes en su posicion."
-		case upgrades == 1:
-			note += " <strong>Uno</strong> de los suyos mejora al tuyo de su posicion."
-		default:
-			note += fmt.Sprintf(" <strong>%d</strong> de los suyos mejoran al tuyo de su "+
-				"posicion.", upgrades)
-		}
-		if payable > 0 {
-			note += fmt.Sprintf(" %d con la clausula pagable ya.", payable)
-		}
-		switch {
-		case listed == 1:
-			note += " Uno puesto en venta."
-		case listed > 1:
-			note += fmt.Sprintf(" %d puestos en venta.", listed)
-		}
-
-		badge := fmt.Sprintf("%d jugadores", len(squad))
-		if position := number(team["position"]); position > 0 {
-			badge = fmt.Sprintf("%.0fº · %d jugadores", position, len(squad))
-		}
 		label := manager
 		if position := number(team["position"]); position > 0 {
 			label = fmt.Sprintf("%.0fº · %s", position, manager)
@@ -1760,18 +1721,14 @@ func (d Document) rivalSections(players []map[string]any) []string {
 		options = append(options, fmt.Sprintf(
 			`<option value="rival-%s">%s · %d jugadores</option>`,
 			Esc(teamID), Esc(label), len(squad)))
-		out = append(out, SectionIn("rivales", manager, table, note, badge, "rival-"+teamID))
+		out = append(out, rivalSquad(team, manager, squad, table))
 	}
 
 	picker := `<div class="pick-bar"><label>Equipo<select id="rival-pick">` +
 		strings.Join(options, "") +
 		`<option value="all">todos a la vez</option></select></label></div>`
-	head := SectionIn("rivales", "Plantillas rivales", picker,
-		"La plantilla entera de cada rival, uno a la vez. <strong>Frente a lo tuyo</strong> "+
-			"compara cada jugador con tu mejor jugador de esa misma posicion, que es lo que "+
-			"decide si merece la pena ir a por el, y <strong>Se puede</strong> dice si su "+
-			"clausula esta pagable hoy. El <strong>+</strong> mete al jugador en el comparador.",
-		fmt.Sprintf("%d rivales", len(ordered)), "rivalpick")
+	head := mkSection("rivalpick", "rivales", "Plantillas rivales", picker,
+		"una a la vez; el + la mete en el comparador", len(ordered))
 	return append([]string{head}, out...)
 }
 
@@ -1794,7 +1751,8 @@ func (d Document) rankingSections(players []map[string]any) []string {
 	// The ranking uses the shared player columns, so it borrows the squad's spec but never
 	// its section: these players are not yours and the "mio" flag has to show.
 	table = TableIn(PlayerColumns(""), byScore, "Sin datos", "", true)
-	out := []string{Section("Ranking global", Filters+table,
+	out := []string{"", moreSection("ranking", "las tablas completas"),
+		Section("Ranking global", Filters+table,
 		"Los 80 mejores de LaLiga por score, con dueño o sin el. Filtra por posicion y "+
 			"precio, o pincha una cabecera para reordenar.", "top 80", "ranking")}
 
@@ -1810,6 +1768,7 @@ func (d Document) rankingSections(players []map[string]any) []string {
 	if len(byValue) > 40 {
 		byValue = byValue[:40]
 	}
+	out[0] = d.rankingView(byScore, byValue)
 	out = append(out, Section("Mejor rentabilidad",
 		TableIn(PlayerColumns(""), byValue, "Sin datos", "", false),
 		"xPts esperados por jornada divididos entre el precio. La metrica que manda cuando "+
