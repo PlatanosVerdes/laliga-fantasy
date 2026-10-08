@@ -264,6 +264,9 @@ func cmdServe(args []string) error {
 			}
 		}
 		now := time.Now()
+		if err := model.MarkClausulazos(universe, now); err != nil {
+			slog.Warn("clausulazos not marked", "reason", err.Error())
+		}
 		forecasts, err := forecast.Record(universe, now)
 		if err != nil {
 			slog.Warn("forecast log not written", "reason", err.Error())

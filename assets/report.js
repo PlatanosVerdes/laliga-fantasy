@@ -1548,6 +1548,36 @@ async function openForecast(week){
   wireDetails(body);
 }
 
+// The league log in one list: newest first as the server sends it, or biggest first.
+const FEED_SORT_KEY='fantasy:feed-sort';
+function sortFeed(order){
+  const rail=document.querySelector('.feed-rail');
+  if(!rail) return;
+  const rows=[...rail.children];
+  rows.forEach((row,i)=>{ if(row.dataset.i==null) row.dataset.i=i; });
+  rows.sort(order==='amount'
+    ? (a,b)=>(+b.dataset.amount||0)-(+a.dataset.amount||0)||a.dataset.i-b.dataset.i
+    : (a,b)=>a.dataset.i-b.dataset.i);
+  rows.forEach(row=>rail.appendChild(row));
+  rail.scrollTop=0;
+  document.querySelectorAll('[data-feed-sort]').forEach(b=>
+    b.classList.toggle('on',b.dataset.feedSort===order));
+}
+
+function wireFeedSort(root=document){
+  root.querySelectorAll('[data-feed-sort]').forEach(button=>{
+    if(button.dataset.wired) return;
+    button.dataset.wired='1';
+    button.addEventListener('click',()=>{
+      try{ localStorage.setItem(FEED_SORT_KEY,button.dataset.feedSort); }catch(e){}
+      sortFeed(button.dataset.feedSort);
+    });
+  });
+  let saved=null;
+  try{ saved=localStorage.getItem(FEED_SORT_KEY); }catch(e){}
+  if(saved==='amount') sortFeed('amount');
+}
+
 function wireMatchdays(root=document){
   root.querySelectorAll('button[data-matchday]').forEach(button=>{
     if(button.dataset.wired) return;
@@ -2528,9 +2558,9 @@ function wireFindPlayer(){
 // ---- tabs: one view at a time ---------------------------------------------
 const TABS=[
   {id:'decidir', label:'Decidir', sections:['plan','acciones','caja','chollos']},
-  {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
-  // What is under way, in its own place: what you put up and what was put to you.
-  {id:'misofertas', label:'Mis ofertas', sections:['mispujas','ofertas','resueltas']},
+  // By direction: a bid sits with the market it was made in, an offer with the sale it answers.
+  {id:'comprar', label:'Comprar', sections:['fichajes','enventa','mispujas','seguimiento','resueltas']},
+  {id:'vender', label:'Vender', sections:['misventas','ofertas','siempre']},
   {id:'clausulas', label:'Cláusulas', sections:['subir','programados','calendario','vencimientos','oportunidades','clausulas']},
   {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
   {id:'partidos', label:'Partidos', sections:['jornada','partidos']},
@@ -2540,10 +2570,14 @@ const TABS=[
   {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
 ];
 
-// A hash can be a tab (#mercado) or a section (#oportunidades), and the second is what the
+// A hash can be a tab (#comprar) or a section (#oportunidades), and the second is what the
 // links carry, so it has to be resolved to the tab that owns it.
+// The tabs before they were split by direction, so old links and bookmarks still land.
+const TAB_ALIASES={mercado:'comprar', misofertas:'vender'};
+
 function resolveTarget(hash){
-  const id=(hash||'').replace(/^#/,'');
+  let id=(hash||'').replace(/^#/,'');
+  id=TAB_ALIASES[id]||id;
   if(!id) return null;
   if(TABS.some(t=>t.id===id)) return {tab:id, section:null};
   const own=document.getElementById(id);
@@ -2630,7 +2664,7 @@ function wireTabs(){
   let saved=null;
   try{ saved=localStorage.getItem('fantasy-tab'); }catch(e){}
   if(resolveTarget('#'+hashParts().base)) route();
-  else showTab(saved||'decidir');
+  else showTab(TAB_ALIASES[saved]||saved||'decidir');
 }
 
 // ---- push: swap out only what changed -------------------------------------
@@ -2682,7 +2716,7 @@ async function swap(){
   wireTables(); wireFilters(); wireOnly(); wireStars(); wireBids(); wireOps();
   wireDetails(); wireRaids();
   wireRaises();
-  wireManagers(); wireMatchdays(); tick();
+  wireManagers(); wireMatchdays(); wireFeedSort(); tick();
   // The chart is the client's, and the rebuild has just put the empty frame back in its place.
   if(seasonData) loadSeason();
   showTab(document.querySelector('.tab.on')?.dataset.tab||'decidir',
@@ -2750,7 +2784,7 @@ function connect(){
 
 wireTables(); wireFilters(); wireOnly(); wireStars(); wireBids(); wireOps();
 wireDetails(); wireRaids();
-wireRaises(); wireManagers(); wireMatchdays();
+wireRaises(); wireManagers(); wireMatchdays(); wireFeedSort();
 wireTabs(); tick(); drawTray();
 {
   const stamped=document.getElementById('tab-cash');

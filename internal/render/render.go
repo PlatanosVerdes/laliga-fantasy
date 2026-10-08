@@ -459,9 +459,8 @@ func TabsWithAmount(cash string, amount *float64) string {
 
 const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
 	`<button class="tab" role="tab" data-tab="decidir" aria-selected="false" type="button">Decidir</button>` +
-	`<button class="tab" role="tab" data-tab="mercado" aria-selected="false" type="button">Mercado</button>` +
-	`<button class="tab" role="tab" data-tab="misofertas" aria-selected="false" type="button">`+
-	`Mis ofertas</button>`+
+	`<button class="tab" role="tab" data-tab="comprar" aria-selected="false" type="button">Comprar</button>` +
+	`<button class="tab" role="tab" data-tab="vender" aria-selected="false" type="button">Vender</button>` +
 	`<button class="tab" role="tab" data-tab="clausulas" aria-selected="false" type="button">Cláusulas</button>` +
 	`<button class="tab" role="tab" data-tab="plantilla" aria-selected="false" type="button">Plantilla</button>` +
 	`<button class="tab" role="tab" data-tab="partidos" aria-selected="false" type="button">Partidos<`+
@@ -925,6 +924,11 @@ func Endings(rows []map[string]any) string {
 		}
 		if owner := text(ending["new_owner"]); owner != "" {
 			tail = " · se lo quedo " + Esc(owner)
+			if paid := number(ending["won_for"]); paid > 0 {
+				gap := paid - number(ending["amount"])
+				tail += fmt.Sprintf(" por <strong>%s</strong> (%s mas que tu)",
+					Esc(Money(&paid)), Esc(Money(&gap)))
+			}
 		}
 		fmt.Fprintf(&body, `<div class="ending"><span class="ending-when">%s</span>`+
 			`<span class="pill-%s">%s</span>`+
@@ -953,34 +957,15 @@ func Feed(events []map[string]any) string {
 			`ninguna compra ni venta todavia.</p>`
 	}
 
-	withAmount := make([]map[string]any, 0, len(moves))
-	for _, event := range moves {
-		// The matchday prize is not an operation: 4.8M of reward at the top of the list would
-		// bury the signing the section is about.
-		if text(event["kind"]) == "recompensa" {
-			continue
-		}
-		if amount := asFloat(event["amount"]); amount != nil && *amount != 0 {
-			withAmount = append(withAmount, event)
-		}
-	}
-	sort.SliceStable(withAmount, func(i, j int) bool {
-		return number(withAmount[i]["amount"]) > number(withAmount[j]["amount"])
-	})
-	if len(withAmount) > 12 {
-		withAmount = withAmount[:12]
-	}
-
+	// One list: the newest first, or the biggest first at a click. The page reorders the same
+	// rows, so the valuations on the biggest ones show in both orders.
 	var blocks strings.Builder
-	// Two lists only earn their space once the log is long enough for them to differ.
-	if len(moves) > 8 && len(withAmount) > 0 {
-		blocks.WriteString(`<h3 class="kpi-label">Operaciones mas grandes</h3><div class="feed">`)
-		for _, event := range withAmount {
-			blocks.WriteString(FeedRow(event))
-		}
-		blocks.WriteString(fmt.Sprintf(
-			`</div><h3 class="kpi-label" style="margin-top:20px">Lo ultimo · %d movimientos`+
-				`</h3>`, len(moves)))
+	if len(moves) > 8 {
+		blocks.WriteString(`<div class="feed-sort" role="group" aria-label="Ordenar">` +
+			`<button type="button" data-feed-sort="recent" class="on">Lo ultimo</button>` +
+			`<button type="button" data-feed-sort="amount">Mas grandes</button></div>` +
+			`<span class="feed-legend"><i class="feed-mine"></i>tuyo<i class="feed-bid"></i>pujaste` +
+			`<i class="feed-fav"></i>favorito</span>`)
 	}
 	// The whole log, inside a rail that scrolls: cut at twenty it answered "what happened
 	// today" and nothing else, and the season is what the section is for.
@@ -1074,10 +1059,26 @@ func FeedRow(event map[string]any) string {
 	if len(date) > 16 {
 		date = date[:16]
 	}
-	return fmt.Sprintf(`<div class="feed-row"><span class="feed-date">%s</span>`+
+	// The matchday prize is not an operation: sorted by size it would bury the signings.
+	size := 0.0
+	if text(event["kind"]) != "recompensa" {
+		size = math.Abs(number(event["amount"]))
+	}
+	kind := text(event["kind"])
+	if truthy(event["clausulazo"]) {
+		kind = "clausulazo"
+	}
+	mark := FeedMarks[text(event["player_id"])]
+	if FeedMe != "" && (text(event["buyer"]) == FeedMe || text(event["seller"]) == FeedMe) {
+		mark = "mine"
+	}
+	if mark != "" {
+		mark = " feed-" + mark
+	}
+	return fmt.Sprintf(`<div class="feed-row%s" data-amount="%.0f"><span class="feed-date">%s</span>`+
 		`<span class="feed-kind">%s</span><span class="feed-body">%s</span>`+
 		`<span class="feed-amount">%s</span>%s</div>`,
-		Esc(date), Esc(text(event["kind"])), body, Esc(amount), extra)
+		mark, size, Esc(date), Esc(kind), body, Esc(amount), extra)
 }
 
 // Verdicts are the five recommendations, each with its glyph and status. The glyph is not
@@ -1205,6 +1206,11 @@ func pays(event map[string]any) bool {
 // the panel needs. Filled by the caller for the same reason as Crests: this package does not
 // fetch, and the feed's events name people by user.
 var ManagerTeams = map[string]string{}
+
+// FeedMarks is how each player of the log concerns me (mine, bid, fav), and FeedMe my manager
+// name: rows I bought or sold are mine whoever the player is now.
+var FeedMarks = map[string]string{}
+var FeedMe string
 
 // PowerBadge is who can actually buy right now. Named, not just coloured.
 func PowerBadge(row map[string]any) string {
