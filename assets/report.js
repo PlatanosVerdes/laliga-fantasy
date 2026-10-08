@@ -531,6 +531,7 @@ const OP_LABELS={accept_offer:'Aceptar oferta por',decline_offer:'Rechazar ofert
                  withdraw:'Retirar del mercado a',sell_to_market:'Poner en venta a',
                  cancel_offer:'Retirar tu oferta por',cancel_raid:'Cancelar el clausulazo de',
                  drop_always:'Quitar de siempre-en-mercado a',
+                 pay_clause:'Pagar la cláusula de',
                  shield_player:'Blindar 24h a'};
 
 function wireOps(root=document){
@@ -2693,6 +2694,33 @@ document.addEventListener('change',(event)=>{
   applyRivalPick();
 });
 
+// The tables behind the cards stay sections of their own, so the live refresh still finds them by
+// id; the fold only decides whether they are on screen.
+const FOLD_KEY='fantasy:detalle';
+const FOLDED=['plan','acciones','caja','chollos'];
+function foldOpen(){
+  try{ return localStorage.getItem(FOLD_KEY)==='1'; }catch(e){ return false; }
+}
+function applyFold(){
+  const open=foldOpen();
+  document.querySelectorAll('button[data-fold]').forEach(button=>{
+    button.setAttribute('aria-expanded',open?'true':'false');
+    button.classList.toggle('on',open);
+  });
+  const active=document.querySelector('.tab.on');
+  if(!active||active.dataset.tab!=='decidir'||open) return;
+  FOLDED.forEach(id=>{ const node=document.getElementById(id); if(node) node.hidden=true; });
+}
+document.addEventListener('click',(event)=>{
+  const button=event.target.closest&&event.target.closest('button[data-fold]');
+  if(!button) return;
+  const open=!foldOpen();
+  try{ localStorage.setItem(FOLD_KEY,open?'1':'0'); }catch(e){}
+  usage.click('detalle',open?'ver detalle':'ocultar detalle');
+  showTab('decidir',{updateHash:false});
+  if(open) document.getElementById(FOLDED[0])?.scrollIntoView({behavior:'smooth',block:'start'});
+});
+
 function showTab(id,{section=null,updateHash=true}={}){
   const tab=TABS.find(t=>t.id===id)||TABS[0];
   const was=(document.querySelector('.tab.on')||{dataset:{}}).dataset.tab;
@@ -2705,6 +2733,9 @@ function showTab(id,{section=null,updateHash=true}={}){
     // a list written here.
     s.hidden = s.dataset.tab ? s.dataset.tab!==tab.id : !tab.sections.includes(s.id);
   });
+  if(section&&FOLDED.includes(section)){
+    try{ localStorage.setItem(FOLD_KEY,'1'); }catch(e){}
+  }
   document.querySelectorAll('.tab').forEach(b=>{
     const on=b.dataset.tab===tab.id;
     b.classList.toggle('on',on);
@@ -2713,6 +2744,7 @@ function showTab(id,{section=null,updateHash=true}={}){
     // the page itself where it was.
     if(on) b.scrollIntoView({block:'nearest',inline:'center'});
   });
+  applyFold();
   try{ localStorage.setItem('fantasy-tab',tab.id); }catch(e){}
   usage.tab(tab.id);
   applyFilters();

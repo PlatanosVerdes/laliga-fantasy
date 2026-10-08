@@ -1351,12 +1351,17 @@ func BidButton(row map[string]any) string {
 			label = "Tu puja " + Money(amount)
 		}
 	}
-	// The count and the closing time travel with the button: without them the dialog said
-	// "pujas vigentes: ninguna" on a listing with four, which is worse than saying nothing.
-	return fmt.Sprintf(`<button class="bid" type="button" data-market="%s" `+
+	return bidButton(row, "bid", operation, bid, label)
+}
+
+// bidButton is the markup openBid reads. The count and the closing time travel with the button:
+// without them the dialog said "pujas vigentes: ninguna" on a listing with four.
+func bidButton(row map[string]any, class, operation, bid, label string) string {
+	listing, _ := row["market"].(map[string]any)
+	return fmt.Sprintf(`<button class="%s" type="button" data-market="%s" `+
 		`data-operation="%s" data-bids="%d" data-expires="%s" `+
 		`data-player="%s" data-name="%s" data-min="%d" data-ideal="%d" data-value="%d"%s>%s</button>`,
-		Esc(marketID), Esc(operation), int64(number(listing["bids"])),
+		class, Esc(text(listing["market_id"])), Esc(operation), int64(number(listing["bids"])),
 		Esc(text(listing["expires"])), Esc(text(row["id"])), Esc(text(row["name"])),
 		int64(number(listing["min_bid"])), int64(number(row["ideal_bid"])),
 		int64(number(row["value"])), bid, label)

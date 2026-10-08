@@ -130,6 +130,8 @@ func (d Document) HTML() string {
 
 	var sections []string
 	if hasAdvice {
+		sections = append(sections, d.decideSection())
+		sections = append(sections, d.detailToggle())
 		sections = append(sections, d.swapSection())
 		sections = append(sections, d.actionsSection())
 		sections = append(sections, d.moneySection())
@@ -321,18 +323,6 @@ func (d Document) widgets(week map[string]any, players []map[string]any) ([]stri
 	return stats, more
 }
 
-var esWeekdays = []string{"lun", "mar", "mié", "jue", "vie", "sáb", "dom"}
-
-// esWhen is whenLabel with the weekday spelled as it is written: "mié 14 oct 21:00".
-func esWhen(value string) string {
-	when, ok := parseStamp(value)
-	if !ok {
-		return ""
-	}
-	return fmt.Sprintf("%s %d %s %02d:%02d", esWeekdays[(int(when.Weekday())+6)%7],
-		when.Day(), months[int(when.Month())], when.Hour(), when.Minute())
-}
-
 // lastKickoff is the matchday's last match, leaving out any moved weeks away from the rest.
 func (d Document) lastKickoff(opening string) string {
 	fixtures := []schedule.Fixture{}
@@ -427,7 +417,7 @@ func (d Document) actionsSection() string {
 	}
 
 	table := TableIn(columnsFor("acciones"), rowsOut, "Nada urgente", "", false)
-	return Section("Que hacer ahora", legend+table,
+	return Section("Todas las decisiones", legend+table,
 		"Todo lo accionable en una tabla, de lo urgente a lo que puede esperar. "+
 			"Cada fila lleva el motivo escrito: el color repite el dato, no lo sustituye.",
 		fmt.Sprintf("%d decisiones", len(rowsOut)), "acciones")
@@ -671,6 +661,7 @@ func (d Document) actionRows() []map[string]any {
 		// position is a no *until you sign somebody*, which is an instruction rather than a
 		// refusal.
 		blocked, verdict := "", "cash"
+		var standIn map[string]any
 		if truthy(offer["sale_locked"]) {
 			until := text(offer["hold_until"])
 			if len(until) > 10 {
@@ -684,6 +675,7 @@ func (d Document) actionRows() []map[string]any {
 			if stand := d.replacementFor(offer, spare); stand != nil {
 				gap := number(stand["xpts"]) - number(offer["xpts"])
 				if truthy(stand["adequate"]) {
+					standIn = stand
 					// The net is the number that decides: the offer pays for part of the
 					// replacement, and sometimes for all of it.
 					net := number(stand["cost"]) - number(offer["offer_amount"])
@@ -711,8 +703,12 @@ func (d Document) actionRows() []map[string]any {
 		if blocked != "" {
 			why += " · pero " + blocked
 		}
-		out = append(out, merge(offer, map[string]any{
-			"verdict": verdict, "entry_cost": offer["offer_amount"], "why": why}))
+		row := merge(offer, map[string]any{
+			"verdict": verdict, "entry_cost": offer["offer_amount"], "why": why})
+		if standIn != nil {
+			row["stand_in"] = standIn
+		}
+		out = append(out, row)
 	}
 
 	for index, player := range rows(d.Advice["sells"]) {

@@ -121,3 +121,35 @@ func TestRaiseTargetStopsAtWhatAnybodyCanPay(t *testing.T) {
 		t.Errorf("target = %v, tiene que subir de la clausula actual", target)
 	}
 }
+
+// The card that asks for a raise names who would pay and how much he holds, so the cash has to
+// travel with the name rather than be looked up again by manager.
+func TestClausePlanCarriesTheThreatsCash(t *testing.T) {
+	plan := ClausePlan(defenceWorld(20_000_000), 20_000_000)
+	for _, row := range rowsOf(plan["rows"]) {
+		if text(row["name"]) != "medio1" {
+			continue
+		}
+		if text(row["top_threat"]) != "Villaone" {
+			t.Fatalf("top_threat = %q, want Villaone", text(row["top_threat"]))
+		}
+		if got := number(row["top_threat_cash"]); got != 40_000_000 {
+			t.Errorf("top_threat_cash = %v, want 40M", got)
+		}
+		return
+	}
+	t.Fatal("medio1 missing from the plan")
+}
+
+func TestTopThreatCashPrefersTheTempted(t *testing.T) {
+	threats := []Threat{
+		{Manager: "rico", Cash: 90_000_000},
+		{Manager: "tentado", Cash: 30_000_000, Worth: true},
+	}
+	if got := TopThreatCash(threats); got != 30_000_000 {
+		t.Errorf("TopThreatCash = %v, want the tempted one's 30M", got)
+	}
+	if got := TopThreatCash(nil); got != 0 {
+		t.Errorf("TopThreatCash(nil) = %v, want 0", got)
+	}
+}

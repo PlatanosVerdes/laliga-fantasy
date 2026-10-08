@@ -555,6 +555,19 @@ func TopThreat(threats []Threat) any {
 	return nil
 }
 
+// TopThreatCash is the estimated cash of the rival TopThreat names, or 0 when it names nobody.
+func TopThreatCash(threats []Threat) float64 {
+	for _, threat := range threats {
+		if threat.Worth {
+			return threat.Cash
+		}
+	}
+	if len(threats) > 0 {
+		return threats[0].Cash
+	}
+	return 0
+}
+
 // clauseRisk weighs wanting it over being able to pay it. Somebody who cannot beat his own
 // squad's rate at that price is not nothing -- values move and people overpay -- but he is not
 // the one who takes the player either, and ranking him level with somebody who would put

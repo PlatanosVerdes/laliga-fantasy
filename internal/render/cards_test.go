@@ -1,0 +1,164 @@
+package render
+
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
+)
+
+func TestOrderCardsDeadlineThenImpact(t *testing.T) {
+	now := time.Date(2026, 10, 8, 18, 0, 0, 0, time.UTC)
+	cards := []Card{
+		{Key: "late", Deadline: "2026-10-08T21:00:00Z", Weight: 9},
+		{Key: "none", Weight: 50},
+		{Key: "small", Deadline: "2026-10-08T19:10:00Z", Weight: 1},
+		{Key: "big", Deadline: "2026-10-08T19:40:00Z", Weight: 3},
+		{Key: "gone", Deadline: "2026-10-08T17:00:00Z", Weight: 99},
+	}
+	var keys []string
+	for _, card := range orderCards(cards, now) {
+		keys = append(keys, card.Key)
+	}
+	if got := strings.Join(keys, ","); got != "big,small,late,none" {
+		t.Errorf("order = %s, want big,small,late,none", got)
+	}
+}
+
+func TestOrderCardsKeepsOneCardPerPlayer(t *testing.T) {
+	now := time.Date(2026, 10, 8, 18, 0, 0, 0, time.UTC)
+	cards := []Card{
+		{Kind: "raise", Key: "own:7", Deadline: "2026-10-08T21:00:00Z", Weight: 5},
+		{Kind: "offer", Key: "own:7", Deadline: "2026-10-08T19:00:00Z", Weight: 0.3},
+	}
+	out := orderCards(cards, now)
+	if len(out) != 1 || out[0].Kind != "offer" {
+		t.Fatalf("selling him and defending him cannot both stay: %+v", out)
+	}
+}
+
+// A document with one offer worth taking, one raise in the clause plan and two market listings
+// the actions table backs: one that pays for itself at the squad's rate and one that does not.
+func decidingDocument() Document {
+	squad := []any{
+		map[string]any{"id": "7", "name": "Unai Lopez", "position": "MED", "position_id": 3.0,
+			"is_mine": true, "available": true, "value": 20_000_000.0, "xpts": 4.5,
+			"team_short": "RAY", "image": "https://example.test/7.png",
+			"market": map[string]any{"market_id": "m7"},
+			"offers": []any{map[string]any{"id": "o1", "money": 21_700_000.0,
+				"expirationDate": "2999-01-01T19:00:00+02:00"}}},
+		map[string]any{"id": "8", "name": "O. Rey", "position": "MED", "position_id": 3.0,
+			"is_mine": true, "available": true, "value": 2_000_000.0, "xpts": 3.3},
+		map[string]any{"id": "10", "name": "Medio", "position": "MED", "position_id": 3.0,
+			"is_mine": true, "available": true, "value": 2_000_000.0, "xpts": 2.0},
+		map[string]any{"id": "11", "name": "Otro medio", "position": "MED", "position_id": 3.0,
+			"is_mine": true, "available": true, "value": 2_000_000.0, "xpts": 2.0},
+		map[string]any{"id": "12", "name": "Medio suplente", "position": "MED",
+			"position_id": 3.0, "is_mine": true, "available": true, "value": 1_000_000.0,
+			"xpts": 1.0},
+		map[string]any{"id": "9", "name": "Portero", "position": "POR", "position_id": 1.0,
+			"is_mine": true, "available": true, "value": 5_000_000.0, "xpts": 6.0},
+	}
+	// Enough of the other lines that selling a midfielder still leaves a legal eleven.
+	for index, position := range []float64{2, 2, 2, 2, 2, 4, 4, 4} {
+		squad = append(squad, map[string]any{"id": "f" + string(rune('a'+index)),
+			"name": "Relleno", "position_id": position, "is_mine": true, "available": true,
+			"value": 1_000_000.0, "xpts": 0.5})
+	}
+	listing := func(id string) map[string]any {
+		return map[string]any{"market_id": "mk" + id, "kind": "libre", "min_bid": 1.0,
+			"expires": "2999-01-01T19:00:00+02:00"}
+	}
+	cheap := map[string]any{"id": "20", "name": "Barato", "position": "DEL", "position_id": 4.0,
+		"xpts": 5.0, "value": 2_000_000.0, "entry_cost": 2_000_000.0, "affordable": true,
+		"ideal_bid": 3_000_000.0, "available": true, "market": listing("20")}
+	dear := map[string]any{"id": "21", "name": "Caro", "position": "DEL", "position_id": 4.0,
+		"xpts": 1.0, "value": 50_000_000.0, "entry_cost": 50_000_000.0, "affordable": true,
+		"ideal_bid": 60_000_000.0, "available": true, "market": listing("21")}
+	bargain := func(row map[string]any, gain float64) map[string]any {
+		return merge(row, map[string]any{"route": "puja libre", "xi_gain": gain})
+	}
+	return Document{
+		Universe: map[string]any{"players": squad},
+		Advice: map[string]any{
+			"budget": 30_000_000.0, "squad_ppm_benchmark": 0.5,
+			"squad":    squad,
+			"bids_now": []any{cheap, dear},
+			"offers": []any{merge(squad[0].(map[string]any), map[string]any{
+				"offer_id": "o1", "offer_amount": 21_700_000.0, "worth_taking": true,
+				"offer_expires": "2999-01-01T19:00:00+02:00", "market_id": "m7",
+				"vs_value": 1.085, "offer_from": "el mercado"})},
+		},
+		Money: map[string]any{"bargains": []any{bargain(cheap, 2.0), bargain(dear, 1.0)}},
+		Raise: map[string]any{"rows": []any{merge(squad[1].(map[string]any), map[string]any{
+			"in_plan": true, "pay": 10_300_000.0, "target_clause": 24_200_000.0,
+			"clause": 3_500_000.0, "top_threat": "JMjugon", "top_threat_cash": 66_200_000.0,
+			"threats": 8.0, "tempted": 3.0, "xi_drop": 2.7, "risk": 1.0,
+			"player_team_id": "s8"})}},
+		Window: &schedule.Window{Open: true, ClosesAt: "2999-01-01T21:00:00+02:00"},
+	}
+}
+
+func TestDecisionCardsComeFromTheAdvice(t *testing.T) {
+	cards := decidingDocument().decisionCards(time.Now())
+	kinds := map[string]Card{}
+	for _, card := range cards {
+		kinds[card.Kind+":"+text(card.Player["id"])] = card
+	}
+	offer, ok := kinds["offer:7"]
+	if !ok {
+		t.Fatalf("the offer worth taking has no card: %+v", cards)
+	}
+	if offer.Big != "21,7M" || !strings.Contains(offer.Button, `data-op="accept_offer"`) ||
+		!strings.Contains(offer.Button, `data-op-offer="o1"`) {
+		t.Errorf("offer card = %q / %s", offer.Big, offer.Button)
+	}
+	raise, ok := kinds["raise:8"]
+	if !ok {
+		t.Fatal("the raise in the plan has no card")
+	}
+	if !strings.Contains(raise.Why[0], "JMjugon tiene 66,2M") ||
+		!strings.Contains(raise.Button, `class="raise dcard-go"`) ||
+		!strings.Contains(raise.Button, `data-raise-pay="10300000"`) {
+		t.Errorf("raise card = %v / %s", raise.Why, raise.Button)
+	}
+	if raise.Deadline != "2999-01-01T21:00:00+02:00" {
+		t.Errorf("an open clause is defended until the window shuts, got %q", raise.Deadline)
+	}
+	if _, ok := kinds["sign:20"]; !ok {
+		t.Error("a backed signing that pays for itself should have a card")
+	}
+	if _, ok := kinds["sign:21"]; ok {
+		t.Error("one xPts for 50M is under the squad's rate and the plan turns it down")
+	}
+	if !strings.Contains(kinds["sign:20"].Button, `data-operation="bid"`) {
+		t.Errorf("free market signing should bid: %s", kinds["sign:20"].Button)
+	}
+}
+
+func TestDecideSectionRendersOneSwappableSection(t *testing.T) {
+	html := decidingDocument().decideSection()
+	if !strings.HasPrefix(html, `<section id="ahora">`) ||
+		strings.Count(html, "<section") != 1 || strings.Count(html, "</section>") != 1 {
+		t.Fatalf("the live refresh splits on sections, so there must be exactly one: %.200s", html)
+	}
+	for _, want := range []string{`data-detail="7"`, "Qué hacer ahora", "Tu once",
+		`data-deadline="2999-01-01T19:00:00+02:00"`, `data-goto="clausulas"`} {
+		if !strings.Contains(html, want) {
+			t.Errorf("missing %s", want)
+		}
+	}
+}
+
+func TestSpanishNumbers(t *testing.T) {
+	cases := map[string]string{
+		esMoney(21_724_064): "21,7M", esMoney(757_000): "757K", esMoney(-1_100_000): "−1,1M",
+		esNum(-0.04, 1): "0,0", esNum(-2.7, 1): "−2,7", esSigned(5.25): "+5,3",
+	}
+	for got, want := range cases {
+		if got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	}
+}

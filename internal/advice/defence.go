@@ -58,12 +58,13 @@ func ClausePlan(universe Row, cash float64) Row {
 		drop := xiNow - after
 
 		row := merge(player, Row{
-			"clause_margin": margin,
-			"threats":       len(threats),
-			"tempted":       Tempted(threats),
-			"top_threat":    TopThreat(threats),
-			"xi_drop":       drop,
-			"risk":          RaidRisk(player, threats, shortOf),
+			"clause_margin":   margin,
+			"threats":         len(threats),
+			"tempted":         Tempted(threats),
+			"top_threat":      TopThreat(threats),
+			"top_threat_cash": TopThreatCash(threats),
+			"xi_drop":         drop,
+			"risk":            RaidRisk(player, threats, shortOf),
 		})
 		// Nobody can pay it: there is nothing to defend against and no money to spend.
 		if len(threats) == 0 {
