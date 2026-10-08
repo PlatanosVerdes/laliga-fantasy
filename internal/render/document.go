@@ -159,12 +159,30 @@ func (d Document) HTML() string {
 	if budget != nil {
 		cash = esMoney(*budget)
 	}
-	header := Header(stats, hasAdvice, cash, budget)
+	header := Header(stats, hasAdvice, cash, budget) + d.pageFacts()
 	footer := PageFoot(d.Generated, d.LeagueName, int(number(week["weekNumber"])), more, d.Mode) +
 		Footer(number(universe["current_weight"]))
 
 	body := strings.Join(filterEmpty(sections), "")
 	return Page(d.CSS, d.JS, CrestCSS(), header, body, footer, d.Modal, d.Drawer)
+}
+
+// pageFacts is what the player card needs to know about the league and cannot ask for: the
+// clause window and the exceptions to the hold rule.
+func (d Document) pageFacts() string {
+	attrs := ""
+	if d.Window != nil {
+		open := "0"
+		if d.Window.Open {
+			open = "1"
+		}
+		attrs += fmt.Sprintf(` data-window-open="%s" data-opens="%s" data-closes="%s"`, open,
+			Esc(d.Window.OpensAt), Esc(d.Window.ClosesAt))
+	}
+	if d.HoldExceptions != "" {
+		attrs += ` data-hold-except="` + Esc(d.HoldExceptions) + `"`
+	}
+	return `<div id="page-facts" hidden` + attrs + `></div>`
 }
 
 func filterEmpty(values []string) []string {

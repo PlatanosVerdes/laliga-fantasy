@@ -56,6 +56,19 @@ func initials(name string) string {
 	return out
 }
 
+// shieldName is the name, with a shield when nobody can pay his clause until a given hour.
+func shieldName(player map[string]any) string {
+	name := Esc(text(player["name"]))
+	if !truthy(player["shielded"]) {
+		return name
+	}
+	until := ""
+	if stamp := text(player["shielded_until"]); stamp != "" {
+		until = " hasta " + esWhen(stamp)
+	}
+	return name + ` <span class="shield-mark" title="blindado` + Esc(until) + `">🛡</span>`
+}
+
 // face is the round photo that opens the player's card, ringed by his status.
 func face(player map[string]any, size string) string {
 	ring, glyph, reason := health(player)
@@ -114,7 +127,7 @@ func row(player map[string]any, meta, value, note, chip, action, tone string) st
 	}
 	return fmt.Sprintf(`<li class="r %s" data-pid="%s">%s<span class="rwho"><b>%s</b>`+
 		`<span class="meta">%s%s</span></span><span class="rval"><b>%s</b>%s</span>%s%s</li>`,
-		tone, Esc(text(player["id"])), face(player, "sm"), Esc(text(player["name"])),
+		tone, Esc(text(player["id"])), face(player, "sm"), shieldName(player),
 		posTag(player), meta, value, note, chip, action)
 }
 
@@ -298,7 +311,7 @@ func cardHTML(rank int, card Card) string {
 		`<span class="meta">%s</span></div>%s</div>`+
 		`<div class="verb">%s</div><div class="big">%s%s</div><ul class="why">%s</ul>`+
 		`<div class="card-foot">%s<span class="impact">%s</span></div></article>`,
-		tone, card.Kind, rank, faces, Esc(text(player["id"])), Esc(text(player["name"])), meta,
+		tone, card.Kind, rank, faces, Esc(text(player["id"])), shieldName(player), meta,
 		clock(card.Deadline, card.DeadlineLabel), Esc(card.Verb), Esc(card.Big), note,
 		why.String(), card.Button, Esc(card.Impact))
 }
@@ -316,7 +329,7 @@ func elevenChips(lines [][]map[string]any, arriving map[string]bool) string {
 			}
 			fmt.Fprintf(&chips, `<span class="tchip %s" data-pid="%s">%s<span class="tname">%s</span>`+
 				`<span class="tx">%s</span></span>`, class, Esc(text(player["id"])),
-				face(player, "xs"), Esc(text(player["name"])), esNum(number(player["xpts"]), 1))
+				face(player, "xs"), shieldName(player), esNum(number(player["xpts"]), 1))
 		}
 		fmt.Fprintf(&out, `<div class="line"><span class="pos pos-%s">%s</span>`+
 			`<div class="chips">%s</div></div>`, labels[index], strings.ToUpper(labels[index]),
@@ -607,7 +620,7 @@ func (d Document) starredAside() string {
 		}
 		fmt.Fprintf(&items, `<li class="mk-star" data-pid="%s">%s<span>%s</span>`+
 			`<span class="meta">%s</span><span class="tx %s">%s</span></li>`,
-			Esc(text(player["id"])), face(player, "xs"), Esc(text(player["name"])), Esc(owner),
+			Esc(text(player["id"])), face(player, "xs"), shieldName(player), Esc(owner),
 			xptsClass(number(player["xpts"])), esNum(number(player["xpts"]), 1))
 	}
 	return block("☆ Siguiendo", `<ul class="stars">`+items.String()+`</ul>`, "",
@@ -996,7 +1009,7 @@ func (d Document) squadView() string {
 			}
 			fmt.Fprintf(&pitch, `<span class="tok" data-pid="%s">%s<span class="tok-name">%s</span>`+
 				`<span class="tok-x %s">%s</span>%s</span>`, Esc(text(player["id"])),
-				face(player, "md"), Esc(text(player["name"])), xptsClass(number(player["xpts"])),
+				face(player, "md"), shieldName(player), xptsClass(number(player["xpts"])),
 				esNum(number(player["xpts"]), 1), flag)
 		}
 		pitch.WriteString(`</div>`)
@@ -1019,7 +1032,7 @@ func (d Document) squadView() string {
 	for _, player := range bench {
 		fmt.Fprintf(&chips, `<span class="tchip %s" data-pid="%s">%s<span class="tname">%s</span>`+
 			`<span class="tx">%s</span></span>`, xptsClass(number(player["xpts"])),
-			Esc(text(player["id"])), face(player, "xs"), Esc(text(player["name"])),
+			Esc(text(player["id"])), face(player, "xs"), shieldName(player),
 			esNum(number(player["xpts"]), 1))
 	}
 	main += block("Banquillo", `<div class="chips">`+chips.String()+`</div>`, "",
@@ -1130,7 +1143,7 @@ func (d Document) matchesView() string {
 				}
 				fmt.Fprintf(&chips, `<span class="tchip %s%s" data-pid="%s">%s<span class="tname">%s</span>`+
 					`<span class="tx">%s</span></span>`, xptsClass(number(player["xpts"])), bench,
-					Esc(text(player["id"])), face(player, "xs"), Esc(text(player["name"])),
+					Esc(text(player["id"])), face(player, "xs"), shieldName(player),
 					esNum(number(player["xpts"]), 1))
 			}
 			score := ""

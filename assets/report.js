@@ -1730,6 +1730,28 @@ function lastWeekPct(history){
   return then ? (now/then-1)*100 : null;
 }
 
+// What the server stamped about the league in the page: the clause window and the hold rule.
+const pageFacts=(()=>{
+  const node=document.getElementById('page-facts');
+  if(!node) return {};
+  const d=node.dataset;
+  return {windowOpen:d.windowOpen==='1'?true:d.windowOpen==='0'?false:null,
+          opens:d.opens||'', closes:d.closes||'', holdExcept:d.holdExcept||''};
+})();
+
+function whenShort(stamp){
+  const t=new Date(stamp);
+  if(isNaN(t)) return '';
+  const day=['dom','lun','mar','mié','jue','vie','sáb'][t.getDay()];
+  const hm=String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');
+  const soon=t-Date.now()<6*86400000;
+  return soon?`${day} ${hm}`:`${day} ${t.getDate()} ${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][t.getMonth()]} ${hm}`;
+}
+
+function shieldMark(p){
+  return p.shielded?` <span class="shield-mark" title="blindado${p.shielded_until?' hasta '+whenShort(p.shielded_until):''}">🛡</span>`:'';
+}
+
 async function openDetail(playerId){
   if(!drawer) return;
   markView('jugador',playerId);
@@ -1765,38 +1787,56 @@ async function openDetail(playerId){
   const status=h?`<div class="pc-status ${h.ring}">${h.glyph==='card'?'🟥':'✚'} ${
     [h.label,a.reason,a.since,a.until].filter(Boolean).join(' · ')}</div>`:'';
   const countdown=(stamp)=>`<span data-deadline="${stamp}" data-plain="1">${leftUntil(stamp)}</span>`;
-  const clauseNote = p.shielded&&p.shielded_until ? `🛡 blindado ${countdown(p.shielded_until)}`
-    : p.clause_locked&&p.clause_locked_until ? `🔒 se libera en ${countdown(p.clause_locked_until)}`
-    : p.clause ? (p.is_mine?'🔓 se puede pagar':'🔓 pagable') : '';
   const past=lastWeekPct(data.history);
   const projected=p.projected_pct;
+  const trend=past!=null?past:projected;
+  const starts=p.start_probability;
+  const xp=p.xpts||0;
   const tiles=[
     ['Valor', mny(p.value), l.market_id?`en venta por ${mny(l.min_bid)}`:''],
-    ['Cláusula', p.clause?mny(p.clause):'—', clauseNote],
-    ['xPts / jornada', dec(p.xpts), p.rank?`score #${p.rank}`:''],
+    ['Cláusula', p.clause?mny(p.clause):'—',
+      p.clause&&p.value?`${dec(p.clause/p.value,2)}x su valor`:''],
+    ['xPts / jornada', dec(p.xpts), p.rank?`score #${p.rank}`:'',
+      xp>=6?'t-good':xp>=3.5?'t-info':xp>=2?'t-warn':'t-bad'],
     ['Puntos temporada', p.season_points??'—',
       p.last_season_points?`25/26: ${p.last_season_points}`:''],
-    ['Titular', p.start_probability!=null?p.start_probability+' %':'—',
-      p.hierarchy?p.hierarchy:(p.start_probability_source==='ficha'?`J${p.start_week||''} en su ficha`:'')],
+    ['Titular', starts!=null?starts+' %':'—',
+      p.hierarchy?p.hierarchy:(p.start_probability_source==='ficha'?`J${p.start_week||''} en su ficha`:''),
+      starts==null?'':starts>=75?'t-good':starts>=50?'t-warn':'t-bad'],
     ['Próximo', p.next_rival||'—', p.next_rival?(p.next_home?'🏠 en casa':'✈️ fuera'):''],
-    ['Valor 7d', past!=null?`<span class="${past>=0?'up':'down'}">${signed(past)} %</span>`
-        :(projected!=null?`<span class="${projected>=0?'up':'down'}">${signed(projected)} %</span>`:'—'),
-      past!=null&&projected!=null?`prevé ${signed(projected)} % en 7 días`:(past==null&&projected!=null?'previsión':'')],
+    ['Valor 7d', trend!=null?`${signed(trend)} %`:'—',
+      past!=null&&projected!=null?`prevé ${signed(projected)} % en 7 días`:(past==null&&projected!=null?'previsión':''),
+      trend==null?'':trend>=0?'t-good':'t-bad'],
   ];
+  // Whether anybody can pay his clause right now, and if not, until when.
+  if(p.clause){
+    const shut=pageFacts.windowOpen===false||(pageFacts.closes&&new Date(pageFacts.closes)<=new Date());
+    if(p.shielded&&p.shielded_until) tiles.push(['Clausulable',`blindado hasta ${whenShort(p.shielded_until)}`,'','t-info']);
+    else if(p.clause_locked&&p.clause_locked_until) tiles.push(['Clausulable',`se libera en ${countdown(p.clause_locked_until)}`,
+      whenShort(p.clause_locked_until),'t-warn']);
+    else if(shut&&pageFacts.opens) tiles.push(['Clausulable',`se abre ${whenShort(pageFacts.opens)}`,
+      'ventana de cláusulas cerrada','t-warn']);
+    else tiles.push(['Clausulable','pagable ya','','t-good']);
+  }
+  if(p.is_mine){
+    const rule=pageFacts.holdExcept?` title="excepción: ${pageFacts.holdExcept.replace(/"/g,'&quot;')}"`:'';
+    tiles.push(p.sale_locked&&p.hold_until
+      ? ['Puedes venderlo',`<span${rule}>🔒 en ${countdown(p.hold_until)}</span>`,'norma de la liga','t-warn']
+      : ['Puedes venderlo',`<span${rule}>ya</span>`,'','t-good']);
+  }
   if(!p.is_mine) tiles.push(['Techo rentable', p.ideal_bid?mny(p.ideal_bid):'sin margen',
     p.ideal_bid?'futbolfantasy':'']);
   if(l.kind==='libre'||l.expires) tiles.push(['Pujas', l.bids||'ninguna',
     l.expires?'cierra '+String(l.expires).slice(11,16):'']);
-  if(p.bought_at) tiles.push(['Fichado', since(p.bought_at),
-    p.sale_locked&&p.hold_until?`venta en ${countdown(p.hold_until)}`:'']);
-  const grid=tiles.map(([k,v,sm])=>`<div><span>${k}</span><b>${v}</b>${sm?`<small>${sm}</small>`:''}</div>`).join('');
+  if(p.bought_at) tiles.push(['Fichado', since(p.bought_at), '']);
+  const grid=tiles.map(([k,v,sm,cls])=>`<div class="${cls||''}"><span>${k}</span><b>${v}</b>${sm?`<small>${sm}</small>`:''}</div>`).join('');
   const actions=data.actions||[];
   const notes=actions.filter(x=>x.kind==='note'), buttons=actions.filter(x=>x.kind!=='note');
   const primary=buttons.find(x=>!isDanger(x)&&x.op!=='always'&&!x.blocked);
   body.innerHTML=`
     ${drawerFrom?`<button class="drawer-back" type="button" data-back="${drawerFrom.id}"
       >← ${drawerFrom.label}</button>`:''}
-    <div class="pc-head">${faceOf(p,'xl')}<div class="pc-who"><h3>${p.name}</h3>
+    <div class="pc-head">${faceOf(p,'xl')}<div class="pc-who"><h3>${p.name}${shieldMark(p)}</h3>
       <div class="pc-sub"><span class="pos pos-${(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
         ${p.team||''} · ${owner}${p.starred?' · ★':''}
         <button class="cmp-add" type="button" data-cmp="${p.id}" data-cmp-name="${p.name}"

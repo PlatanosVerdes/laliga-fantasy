@@ -1589,3 +1589,15 @@ table.cmp tr:last-child td{border-bottom:0}
 .cmp-tray .cmp-close{font:inherit;font-size:14px;line-height:1;width:32px;height:32px;flex:none;border-radius:50%;
   border:1px solid var(--line);background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center}
 .cmp-tray .cmp-close:hover{color:var(--ink);border-color:var(--baseline)}
+.pc-grid>div.t-good b{color:var(--good)} .pc-grid>div.t-warn b{color:var(--warning)}
+.pc-grid>div.t-bad b{color:var(--critical)} .pc-grid>div.t-info b{color:var(--accent)}
+.pc-grid>div.t-good{border-color:color-mix(in srgb,var(--good) 35%,var(--line))}
+.pc-grid>div.t-warn{border-color:color-mix(in srgb,var(--warning) 35%,var(--line))}
+.pc-grid>div.t-bad{border-color:color-mix(in srgb,var(--critical) 35%,var(--line))}
+.pc-grid>div.t-info{border-color:color-mix(in srgb,var(--accent) 35%,var(--line))}
+.pc-grid>div b [data-deadline]{color:inherit!important}
+.shield-mark{font-size:.85em;cursor:help}
+.cmp-acts button.cmp-close{width:33px;height:33px;padding:0;border-radius:50%;font-size:13px;line-height:1;
+  display:inline-grid;place-items:center;align-self:center;background:transparent;color:var(--muted);
+  border:1px solid var(--line)}
+.cmp-acts button.cmp-close:hover{color:var(--ink);border-color:var(--baseline)}
