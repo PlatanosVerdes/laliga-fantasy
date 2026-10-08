@@ -150,14 +150,15 @@ func (d Document) HTML() string {
 	sections = append(sections, d.scheduleSection(players))
 	sections = append(sections, d.rulesSection())
 	sections = append(sections, d.rankingSections(players)...)
+	sections = append(sections, CompareShell)
 
-	kpis := d.widgets(week, players)
+	stats, more := d.widgets(week, players)
 	// The balance rides in the tab bar, which is the only strip that stays on screen.
 	cash, budget := "", asFloat(d.Advice["budget"])
 	if budget != nil {
 		cash = Money(budget)
 	}
-	header := Header(d.Generated, d.LeagueName, int(number(week["weekNumber"])), kpis,
+	header := Header(d.Generated, d.LeagueName, int(number(week["weekNumber"])), stats, more,
 		hasAdvice, d.Mode, cash, budget)
 	footer := Footer(number(universe["current_weight"]))
 
@@ -180,15 +181,16 @@ var Pitch, Filters string
 
 // --- widgets ---------------------------------------------------------------------------
 
-func (d Document) widgets(week map[string]any, players []map[string]any) []string {
+// widgets are the four cards under the tab bar and, apart, the figures behind "más datos".
+func (d Document) widgets(week map[string]any, players []map[string]any) ([]string, []string) {
 	// The one number on this card that keeps changing is how long is left: to the first
 	// kick-off, then to the last one, then to the close the game stamps hours after it.
 	closing, opening := text(week["closingWeekDate"]), text(week["openingWeekDate"])
 	last := d.lastKickoff(opening)
 	now := time.Now()
-	state, deadline := "hasta que se cierra la alineacion", opening
+	state, deadline := "hasta que se cierra la alineación", opening
 	if when, ok := parseStamp(opening); !ok || !now.Before(when) || truthy(week["isLive"]) {
-		state, deadline = "en juego, hasta el ultimo partido", last
+		state, deadline = "en juego, hasta el último partido", last
 		if when, ok := parseStamp(last); !ok || !now.Before(when) {
 			state, deadline = "acabando, se cierra", closing
 		}
@@ -197,35 +199,28 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 	if deadline != "" {
 		value = LeftUntil(deadline)
 	}
-	notes := []string{}
-	if starts := whenLabel(opening); starts != "" && deadline == opening {
-		notes = append(notes, "empieza "+starts)
+	note := state
+	switch {
+	case deadline == opening && esWhen(opening) != "":
+		note = "empieza " + esWhen(opening)
+	case deadline == last && esWhen(last) != "":
+		note = "último partido " + esWhen(last)
 	}
-	if ends := whenLabel(last); ends != "" {
-		notes = append(notes, "ultimo partido "+ends)
-	}
-	if nextOpens := whenLabel(text(d.Universe["next_week_opens"])); nextOpens != "" &&
-		deadline != opening {
-		notes = append(notes, fmt.Sprintf("J%d desde %s", int(number(week["nextWeek"])), nextOpens))
-	}
-
-	kpis := []string{Widget(KPI{
-		Label:    fmt.Sprintf("Jornada %d", int(number(week["weekNumber"]))),
-		Value:    value,
-		Deadline: deadline,
-		// The widget states which matchday it is; the section says how it is going.
-		Hint: state, Notes: notes, Status: "neutral", Tab: "jornada"})}
-	if clauses, ok := d.clauseWidget(); ok {
-		kpis = append(kpis, Widget(clauses))
+	weekNumber := int(number(week["weekNumber"]))
+	matchday := StatCard(Stat{Icon: "⚽", Label: fmt.Sprintf("Jornada %d", weekNumber),
+		Value: value, Deadline: deadline, Note: note, Tab: "jornada"})
+	clauses := ""
+	if stat, ok := d.clauseStat(); ok {
+		clauses = StatCard(stat)
 	}
 
 	if len(d.Advice) == 0 {
-		kpis = append(kpis,
-			Widget(KPI{Label: "Jugadores", Value: fmt.Sprintf("%d", len(players)),
-				Hint: fmt.Sprintf("%d con datos de futbolfantasy",
-					int(number(d.Universe["matched_count"])))}),
-			Widget(KPI{Label: "Sesion", Value: "sin liga", Hint: "solo datos publicos"}))
-		return kpis
+		return filterEmpty([]string{matchday, clauses,
+				StatCard(Stat{Label: "Jugadores", Value: fmt.Sprintf("%d", len(players)),
+					Note: fmt.Sprintf("%d con datos de futbolfantasy",
+						int(number(d.Universe["matched_count"])))}),
+				StatCard(Stat{Label: "Sesión", Value: "sin liga", Note: "solo datos públicos"})}),
+			nil
 	}
 
 	squad := rows(d.Advice["squad"])
@@ -262,16 +257,30 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 	if seat := asFloat(me["position"]); seat != nil {
 		position = fmt.Sprintf("%d", int(*seat))
 	}
-	kpis = append(kpis,
+	exact := ""
+	if budget != nil {
+		exact = group(fmt.Sprintf("%.0f", *budget)) + " €"
+	}
+	stats := filterEmpty([]string{
+		StatCard(Stat{Icon: "💶", Label: "Caja", Value: Money(budget), ValueID: "kpi-cash",
+			Note: exact, Tab: "rivales"}),
+		clauses, matchday,
+		StatCard(Stat{Icon: "🏆", Label: "Liga", Value: position + "º",
+			Small: fmt.Sprintf("de %d", len(teams)),
+			Note:  fmt.Sprintf("%d pts", int(number(me["points"]))), Tab: "rivales"}),
+	})
+
+	more := []string{
 		Widget(KPI{Label: "Mi puesto", Value: position + "º",
 			Hint: fmt.Sprintf("%d puntos", int(number(me["points"]))),
 			Rank: pointsRank, Meter: &pointsShare, Status: pointsStatus, Tab: "rivales"}),
-		Widget(KPI{Label: "Mi saldo", Value: Money(budget), ValueID: "kpi-cash",
+		Widget(KPI{Label: "Mi saldo", Value: Money(budget),
 			Hint: text(me["power_note"]), Rank: cashRank, Meter: &cashShare,
 			Status: cashStatus, Tab: "rivales"}),
 		Widget(KPI{Label: "Valor de plantilla", Value: Money(&squadValue),
 			Hint: fmt.Sprintf("%d jugadores", len(squad)),
-			Rank: valueRank, Meter: &valueShare, Status: valueStatus, Tab: "plantilla"}))
+			Rank: valueRank, Meter: &valueShare, Status: valueStatus, Tab: "plantilla"}),
+	}
 
 	var goodOffers []map[string]any
 	for _, offer := range rows(d.Advice["offers"]) {
@@ -287,7 +296,7 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 			}
 			names = append(names, text(offer["name"]))
 		}
-		kpis = append(kpis, Widget(KPI{Label: "Ofertas que interesan",
+		more = append(more, Widget(KPI{Label: "Ofertas que interesan",
 			Value: fmt.Sprintf("%d", len(goodOffers)), Hint: strings.Join(names, ", "),
 			Rank: "cobra", Status: "good", Tab: "ofertas"}))
 	}
@@ -303,23 +312,24 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 		}
 		clauseHint = "bloqueadas hasta " + from
 	}
-	kpis = append(kpis,
+	more = append(more,
 		Widget(KPI{Label: "xPts del mejor 11", Value: Num(&bestEleven, 1), Hint: "por jornada"}),
 		Widget(KPI{Label: "Pujables ahora", Value: fmt.Sprintf("%d", len(bids)),
 			Hint: fmt.Sprintf("%d mas en venta por rivales", len(asks)), Tab: "fichajes"}),
 		Widget(KPI{Label: "Cláusulas a tiro", Value: fmt.Sprintf("%d", len(raids)),
 			Hint: clauseHint, Tab: "clausulas"}))
-	return kpis
+	return stats, more
 }
 
-// whenLabel is "vie 22 ago 19:30": the day matters more than the exact hour, and a weekday
-// is easier to place than a date.
-func whenLabel(value string) string {
+var esWeekdays = []string{"lun", "mar", "mié", "jue", "vie", "sáb", "dom"}
+
+// esWhen is whenLabel with the weekday spelled as it is written: "mié 14 oct 21:00".
+func esWhen(value string) string {
 	when, ok := parseStamp(value)
 	if !ok {
 		return ""
 	}
-	return fmt.Sprintf("%s %d %s %02d:%02d", weekdays[(int(when.Weekday())+6)%7],
+	return fmt.Sprintf("%s %d %s %02d:%02d", esWeekdays[(int(when.Weekday())+6)%7],
 		when.Day(), months[int(when.Month())], when.Hour(), when.Minute())
 }
 
@@ -340,27 +350,27 @@ func (d Document) lastKickoff(opening string) string {
 	return round.End.Add(-schedule.RoundTail).Format(time.RFC3339)
 }
 
-// clauseWidget counts down to the next change of the clause window: the game shuts it the day
+// clauseStat counts down to the next change of the clause window: the game shuts it the day
 // before a matchday and reopens it at the first kick-off, for you and for every rival.
-func (d Document) clauseWidget() (KPI, bool) {
+func (d Document) clauseStat() (Stat, bool) {
 	fixtures := []schedule.Fixture{}
 	for _, fixture := range rows(d.Universe["schedule"]) {
 		fixtures = append(fixtures, schedule.Fixture{Week: int(number(fixture["week"])),
 			Kickoff: text(fixture["kickoff"])})
 	}
 	if len(fixtures) == 0 {
-		return KPI{}, false
+		return Stat{}, false
 	}
 	window := schedule.Clauses(fixtures, time.Now())
-	hint, deadline, note := "abiertas, se cierran en", window.ClosesAt, "cierran "
+	icon, label, deadline, note := "🔓", "Cláusulas abiertas", window.ClosesAt, "hasta "
 	if !window.Open {
-		hint, deadline, note = "cerradas, se abren en", window.OpensAt, "abren "
+		icon, label, deadline, note = "🔒", "Cláusulas cerradas", window.OpensAt, "se abren "
 	}
 	if deadline == "" {
-		return KPI{}, false
+		return Stat{}, false
 	}
-	return KPI{Label: "Clausulazos", Value: LeftUntil(deadline), Deadline: deadline, Hint: hint,
-		Notes: []string{note + whenLabel(deadline)}, Status: "neutral"}, true
+	return Stat{Icon: icon, Label: label, Value: LeftUntil(deadline), Deadline: deadline,
+		Note: note + esWhen(deadline), Tab: "clausulas"}, true
 }
 
 // --- the sections ----------------------------------------------------------------------

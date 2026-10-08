@@ -467,7 +467,21 @@ const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
 	`/button>`+
 	`<button class="tab" role="tab" data-tab="rivales" aria-selected="false" type="button">Rivales</button>` +
 	`<button class="tab" role="tab" data-tab="liga" aria-selected="false" type="button">Liga</button>` +
-	`<button class="tab" role="tab" data-tab="ranking" aria-selected="false" type="button">Ranking</button></div>`
+	`<button class="tab" role="tab" data-tab="ranking" aria-selected="false" type="button">Ranking</button>` +
+	`<button class="tab" role="tab" data-tab="comparador" aria-selected="false" type="button">Comparador</button></div>`
+
+// CompareShell is the comparator's tab. The browser fills it from the tray it keeps, so the
+// live refresh must leave its inside alone (CLIENT_OWNED in report.js).
+const CompareShell = `<section id="comparador" data-tab="comparador">` +
+	`<h2>Comparador</h2>` +
+	`<div class="cmp-bar"><div class="cmp-find-wrap"><input class="cmp-find" type="search" ` +
+	`autocomplete="off" spellcheck="false" placeholder="añadir jugador…" ` +
+	`aria-label="Buscar jugador para comparar"><div class="cmp-results" hidden></div></div>` +
+	`<div class="cmp-mine-wrap"><button type="button" class="cmp-mine">Mi plantilla</button>` +
+	`<div class="cmp-results cmp-mine-list" hidden></div></div>` +
+	`<button type="button" class="cmp-clear">Vaciar</button><span class="cmp-msg"></span></div>` +
+	`<div class="cmp-body"><p class="empty">Busca jugadores arriba o pulsa ` +
+	`<b>+ comparar</b> en la ficha de cualquiera.</p></div></section>`
 
 // Build is the version of the binary serving this page, stamped at compile time. Empty renders
 // nothing: a page built by hand should not claim a version it does not have.
@@ -481,10 +495,46 @@ func buildChip() string {
 		`pagina: la etiqueta con la que se construyo la imagen">%s</span>`, Esc(Build))
 }
 
-// Header is the title, when it was generated, the widgets and the tabs. The live dot starts
-// off: a static file is honest about not being live, and the script turns it on when the
-// push channel connects.
-func Header(generated, leagueName string, week int, kpis []string, withTabs bool,
+// Stat is one of the four cards under the tab bar: a label, one figure and a line under it.
+type Stat struct {
+	Icon, Label, Value, Small, Note string
+	// ValueID lets the live refresh rewrite the figure without re-rendering the strip.
+	ValueID string
+	// Deadline turns the figure into a live countdown, outlined in red in its last six hours.
+	Deadline string
+	Tab      string
+}
+
+func StatCard(stat Stat) string {
+	attrs := ""
+	if stat.ValueID != "" {
+		attrs += ` id="` + Esc(stat.ValueID) + `"`
+	}
+	if stat.Deadline != "" {
+		attrs += ` data-deadline="` + Esc(stat.Deadline) + `" data-plain="1"`
+	}
+	value := Esc(stat.Value)
+	if stat.Small != "" {
+		value += ` <small>` + Esc(stat.Small) + `</small>`
+	}
+	label := Esc(stat.Label)
+	if stat.Icon != "" {
+		label = stat.Icon + " " + label
+	}
+	inner := `<span class="k">` + label + `</span><span class="v"` + attrs + `>` + value +
+		`</span><span class="s">` + Esc(stat.Note) + `</span>`
+	if stat.Tab != "" {
+		return `<button class="stat" type="button" data-goto="` + Esc(stat.Tab) + `">` + inner +
+			`</button>`
+	}
+	return `<div class="stat">` + inner + `</div>`
+}
+
+// Header is the tab bar with the search, the four cards, one slim line saying where the page
+// comes from and how live it is, and the rest of the figures folded under "más datos". The
+// live dot starts off: a static file is honest about not being live, and the script turns it
+// on when the push channel connects.
+func Header(generated, leagueName string, week int, stats, more []string, withTabs bool,
 	mode, cash string, cashAmount *float64) string {
 	league := ""
 	if leagueName != "" {
@@ -494,25 +544,25 @@ func Header(generated, leagueName string, week int, kpis []string, withTabs bool
 	if withTabs {
 		tabs = TabsWithAmount(cash, cashAmount)
 	}
-	return `<header><h1>LaLiga Fantasy · panel de decisiones</h1>` +
-		`<p>` + Esc(generated) + league +
-		fmt.Sprintf(` · jornada %d</p>`, week) +
-		`<span class="live"><span id="live-dot" class="live-off"></span>` +
-		`<span id="live-stamp">estatico</span></span>` +
-		// What this server may do, next to when it last looked: both answer "can I trust what I
-		// am seeing to be acted on".
-		modeChip(mode) + buildChip() +
-		// The comparator has no table of its own to live in, so its way in is here: a
-		// signing is decided against what you already have, from wherever you are looking.
-		`<button class="head-btn" id="open-compare" type="button" ` +
-		`title="Comparar jugadores entre ellos y con tu plantilla">Comparador</button>` +
-		// The way into a player's card from anywhere. See wireFindPlayer.
-		`<div class="head-find"><input id="find" class="head-input" type="search" ` +
+	find := `<div class="head-find"><input id="find" class="head-input" type="search" ` +
 		`autocomplete="off" spellcheck="false" placeholder="buscar jugador…" ` +
 		`aria-label="Buscar un jugador y abrir su ficha">` +
-		`<div class="cmp-results find-results" hidden></div></div>` +
-		`</header>` +
-		`<div class="kpis">` + strings.Join(kpis, "") + `</div>` + tabs
+		`<div class="cmp-results find-results" hidden></div></div>`
+	strip := ""
+	if len(stats) > 0 {
+		strip = `<div class="strip">` + strings.Join(stats, "") + `</div>`
+	}
+	extra := ""
+	if len(more) > 0 {
+		extra = `<details class="kpis-more"><summary>más datos</summary><div class="kpis">` +
+			strings.Join(more, "") + `</div></details>`
+	}
+	return `<div class="topbar">` + tabs + find + `</div>` + strip +
+		`<header class="topline"><h1>LaLiga Fantasy</h1>` +
+		`<p>` + Esc(generated) + league + fmt.Sprintf(` · jornada %d</p>`, week) +
+		`<span class="live"><span id="live-dot" class="live-off"></span>` +
+		`<span id="live-stamp">estatico</span></span>` +
+		modeChip(mode) + buildChip() + `</header>` + extra
 }
 
 // Footer says what the numbers are and what they are not. xPts is an estimate of ours, and

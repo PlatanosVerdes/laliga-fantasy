@@ -127,6 +127,7 @@ func search(rows []map[string]any, query string) []map[string]any {
 			"team_id": found.row["team_id"], "image": found.row["image"],
 			"value": found.row["value"], "xpts": found.row["xpts"],
 			"is_mine": found.row["is_mine"], "owner": found.row["owner"],
+			"status": found.row["status"], "absence": found.row["absence"],
 		})
 	}
 	return out
@@ -142,7 +143,7 @@ func compareRow(row map[string]any) map[string]any {
 		"season_points", "season_avg", "last_season_points", "start_probability",
 		"next_rival", "next_home", "next_week", "projected_pct", "ideal_bid",
 		"clause", "clause_locked", "clause_locked_until", "shielded", "shielded_until",
-		"sale_locked", "hold_until", "status", "available",
+		"sale_locked", "hold_until", "status", "absence", "available",
 		"is_mine", "owner", "owner_team_id",
 	} {
 		if value, present := row[key]; present {
