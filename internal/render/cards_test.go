@@ -323,3 +323,28 @@ func TestOfferAdviceSaysWhyNot(t *testing.T) {
 		t.Error("con el sustituto en el plan, sí")
 	}
 }
+
+// Ángel Pérez's 1,04x costs the eleven too much on its own, but not when it pays a rival's
+// better midfielder's clause: one card with both legs, and Vender recommends accepting.
+func TestSaleSwapCardSellsAndTakes(t *testing.T) {
+	document := decidingDocument()
+	rival := map[string]any{"id": "77", "name": "Pedri", "position_id": 3.0, "xpts": 8.0,
+		"available": true, "owner": "cristian", "clause": 40_000_000.0}
+	document.Universe["players"] = append(toAny(rows(document.Universe["players"])), rival)
+	var swap *Card
+	for _, card := range document.decisionCards(time.Now()) {
+		if card.Kind == "swap" {
+			swap = &card
+		}
+	}
+	if swap == nil {
+		t.Fatal("falta la carta de vender y clausular")
+	}
+	if text(swap.In["id"]) != "77" || !strings.Contains(swap.Button, `data-op="accept_offer"`) ||
+		!strings.Contains(swap.Button, `data-op="pay_clause"`) {
+		t.Errorf("las dos patas: %+v", swap)
+	}
+	if !strings.Contains(document.sellView(), "si clausulas a Pedri") {
+		t.Error("Vender recomienda aceptar nombrando el sustituto")
+	}
+}

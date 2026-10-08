@@ -31,10 +31,13 @@ type Card struct {
 	NoteClass     string
 	Deadline      string
 	DeadlineLabel string
-	Why           []string
-	Button        string
-	Impact        string
-	Tone          string
+	// Deadline2 is the other leg's, on a card with two.
+	Deadline2      string
+	DeadlineLabel2 string
+	Why            []string
+	Button         string
+	Impact         string
+	Tone           string
 	// Weight is the impact in xPts per matchday. Money is converted at the squad's own points
 	// per million, the bar the swap plan already measures every purchase against.
 	Weight float64
@@ -54,6 +57,12 @@ func (d Document) decisionCards(now time.Time) []Card {
 	cards = append(cards, d.raiseCards(now)...)
 	cards = append(cards, d.swapCards()...)
 	cards = append(cards, d.signingCards(actions)...)
+	cards = append(cards, d.saleSwapCards()...)
+	covered := map[string]bool{}
+	for _, card := range cards {
+		covered[card.Key] = true
+	}
+	cards = append(cards, d.upgradeCards(covered)...)
 	return orderCards(cards, now)
 }
 

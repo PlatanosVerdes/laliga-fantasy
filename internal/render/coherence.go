@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 )
 
@@ -285,4 +286,130 @@ func (d Document) crackBox() string {
 	}
 	return block("Objetivo: un crack", rowList(items, true)+`<p class="mk-note">`+Esc(line)+`</p>`,
 		"", -1)
+}
+
+// --- selling a starter by taking somebody else's ---------------------------------------
+
+// saleSwaps are, for each offer that pays but costs the eleven too much, the rival's player
+// whose clause the sale pays for and who leaves the eleven at least where it is.
+func (d Document) saleSwaps() map[string]advice.Clausulazo {
+	window, _ := d.clauseWindow()
+	keep := d.keepers()
+	players := rows(d.Universe["players"])
+	blocked := []map[string]any{}
+	for _, offer := range rows(d.Advice["offers"]) {
+		id := text(offer["id"])
+		if number(offer["vs_value"]) >= policies.GoodOverValue && keep[id] {
+			blocked = append(blocked, offer)
+		}
+	}
+	// One rival's player can be taken once: the sale that gains most with him gets him, and
+	// the rest look for somebody else.
+	out := map[string]advice.Clausulazo{}
+	taken := map[string]bool{}
+	for len(out) < len(blocked) {
+		bestID, best := "", advice.Clausulazo{}
+		for _, offer := range blocked {
+			id := text(offer["id"])
+			if _, done := out[id]; done {
+				continue
+			}
+			move, ok := advice.SwapForSale(players, id, number(offer["offer_amount"]),
+				number(d.Advice["budget"]), window, time.Now(), taken)
+			if ok && (bestID == "" || move.Gain > best.Gain) {
+				bestID, best = id, move
+			}
+		}
+		if bestID == "" {
+			break
+		}
+		out[bestID] = best
+		taken[text(best.In["id"])] = true
+	}
+	return out
+}
+
+// clauseButton pays his clause now, or schedules the clausulazo for when it opens.
+func clauseButton(player map[string]any, cost float64, opens, class string) string {
+	id, name := Esc(text(player["id"])), Esc(text(player["name"]))
+	if opens == "" {
+		return fmt.Sprintf(`<button class="op %s" data-op="pay_clause" data-op-player="%s" `+
+			`data-op-name="%s" data-op-amount="%d" type="button">Pagar cláusula %s</button>`,
+			class, id, name, int64(cost), Esc(esMoney(cost)))
+	}
+	return fmt.Sprintf(`<button class="raid-btn %s" data-raid="%s" data-raid-name="%s" `+
+		`data-raid-max="%d" data-raid-clause="%d" type="button">Programar clausulazo</button>`,
+		class, id, name, int64(cost), int64(number(player["clause"])))
+}
+
+// swapCards are the sales the eleven only survives with a clausulazo: both legs on one card.
+func (d Document) saleSwapCards() []Card {
+	swaps := d.saleSwaps()
+	var out []Card
+	for _, offer := range rows(d.Advice["offers"]) {
+		id := text(offer["id"])
+		move, ok := swaps[id]
+		if !ok || text(offer["offer_id"]) == "" {
+			continue
+		}
+		amount, value := number(offer["offer_amount"]), number(offer["value"])
+		in := move.In
+		owner := text(in["owner"])
+		order := "Acepta primero: el dinero de la venta paga la cláusula."
+		if number(d.Advice["budget"]) >= move.Cost {
+			order = "Paga primero la cláusula y luego acepta: así no te quedas sin él."
+		}
+		if move.Opens != "" {
+			order = "Acepta la oferta antes de que caduque y programa el clausulazo para cuando se abra."
+		}
+		accept := fmt.Sprintf(`<button class="op op-primary dcard-go" data-op="accept_offer" `+
+			`data-op-market="%s" data-op-offer="%s" data-op-player="%s" data-op-name="%s" `+
+			`data-op-amount="%d" type="button">Aceptar %s</button>`,
+			Esc(text(offer["market_id"])), Esc(text(offer["offer_id"])), Esc(id),
+			Esc(text(offer["name"])), int64(amount), Esc(esMoney(amount)))
+		out = append(out, Card{
+			Kind: "swap", Key: "own:" + id, Player: offer, In: in,
+			Verb: "Vende y clausula", Big: esSigned(move.Gain) + " xPts",
+			BigNote:  "te quedan " + esMoney(move.CashAfter),
+			Deadline: text(offer["offer_expires"]), DeadlineLabel: "caduca la oferta",
+			Deadline2: move.Opens, DeadlineLabel2: "se abre su cláusula",
+			Why: []string{
+				fmt.Sprintf("Vende %s %s (%s); paga la cláusula de %s (de %s) %s.",
+					text(offer["name"]), esMoney(amount), ratioNote(amount/value), text(in["name"]),
+					owner, esMoney(move.Cost)),
+				order,
+			},
+			Impact: fmt.Sprintf("tu once %s xPts · te quedan %s", esSigned(move.Gain),
+				esMoney(move.CashAfter)),
+			Tone:   "accent",
+			Button: accept + clauseButton(in, move.Cost, move.Opens, "dcard-go dcard-second"),
+			Weight: move.Gain, Cash: amount - move.Cost,
+		})
+	}
+	return out
+}
+
+// upgradeCard is the clausulazo cash alone pays and the plan's bar per million approves.
+func (d Document) upgradeCards(covered map[string]bool) []Card {
+	window, _ := d.clauseWindow()
+	move, ok := advice.ClauseUpgrade(rows(d.Universe["players"]), number(d.Advice["budget"]),
+		number(d.Advice["squad_ppm_benchmark"]), window, time.Now())
+	if !ok || covered["in:"+text(move.In["id"])] {
+		return nil
+	}
+	in := move.In
+	deadline, label := window.ClosesAt, "cláusulas abiertas"
+	if move.Opens != "" {
+		deadline, label = move.Opens, "se abre su cláusula"
+	}
+	return []Card{{
+		Kind: "upgrade", Key: "in:" + text(in["id"]), Player: in,
+		Verb: "Clausula a " + text(in["name"]), Big: esSigned(move.Gain) + " xPts",
+		BigNote: "por jornada en tu once", Deadline: deadline, DeadlineLabel: label,
+		Why: []string{fmt.Sprintf("Su cláusula (de %s) cuesta %s y nadie puede negarse.",
+			text(in["owner"]), esMoney(move.Cost))},
+		Impact: "te quedan " + esMoney(move.CashAfter), Tone: "accent",
+		Button: clauseButton(in, move.Cost, move.Opens, "dcard-go"),
+		Weight: move.Gain, Cash: -move.Cost,
+	}}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
 
@@ -214,7 +216,8 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 				}
 				note += "caduca " + expires[:16]
 			}
-			take, why := offerAdvice(rows, id, float64(amount), number(player["value"]))
+			take, why := offerAdvice(rows, id, float64(amount), number(player["value"]), budget,
+				s.state.ClauseWindow(time.Now()))
 			actions = append(actions,
 				map[string]any{"op": "accept_offer", "label": label, "kind": "confirm",
 					"offer_id": text(offer["id"]), "market_id": listing["market_id"],
@@ -632,7 +635,8 @@ func shirtOf(slot map[string]any, known map[string]map[string]any) map[string]an
 
 // offerAdvice is the card's verdict on an offer: at 1.02x his value or more, and only when the
 // best eleven loses at most one xPts without him.
-func offerAdvice(rows []map[string]any, id string, amount, value float64) (bool, string) {
+func offerAdvice(rows []map[string]any, id string, amount, value, cash float64,
+	window schedule.Window) (bool, string) {
 	if value <= 0 {
 		return false, ""
 	}
@@ -649,10 +653,23 @@ func offerAdvice(rows []map[string]any, id string, amount, value float64) (bool,
 	case ratio >= policies.GoodOverValue && drop <= 1:
 		return true, words
 	case ratio >= policies.GoodOverValue:
+		// Selling him is fine when the money takes somebody else's player who covers him.
+		if move, ok := advice.SwapForSale(rows, id, amount, cash, window, time.Now(), nil); ok {
+			return true, fmt.Sprintf("%s si clausulas a %s (%s xPts)", words,
+				text(move.In["name"]), signedOne(move.Gain))
+		}
 		return false, fmt.Sprintf("%s pero tu once pierde %s xPts", words,
 			strings.Replace(fmt.Sprintf("%.1f", drop), ".", ",", 1))
 	}
 	return false, words + ": no compensa"
+}
+
+func signedOne(value float64) string {
+	sign := "+"
+	if value < 0 {
+		sign = "−"
+	}
+	return sign + strings.Replace(fmt.Sprintf("%.1f", math.Abs(value)), ".", ",", 1)
 }
 
 func bestOffer(row map[string]any) any {

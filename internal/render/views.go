@@ -312,7 +312,8 @@ func cardHTML(rank int, card Card) string {
 		`<div class="verb">%s</div><div class="big">%s%s</div><ul class="why">%s</ul>`+
 		`<div class="card-foot">%s<span class="impact">%s</span></div></article>`,
 		tone, card.Kind, rank, faces, Esc(text(player["id"])), shieldName(player), meta,
-		clock(card.Deadline, card.DeadlineLabel), Esc(card.Verb), Esc(card.Big), note,
+		clock(card.Deadline, card.DeadlineLabel)+clock(card.Deadline2, card.DeadlineLabel2),
+		Esc(card.Verb), Esc(card.Big), note,
 		why.String(), card.Button, Esc(card.Impact))
 }
 
@@ -635,6 +636,7 @@ func (d Document) sellView() string {
 		return number(offers[one]["vs_value"]) > number(offers[two]["vs_value"])
 	})
 	// The plan's sales: an offer it counts on is accepted to sign somebody else.
+	swaps := d.saleSwaps()
 	plannedFor := map[string]string{}
 	for _, move := range rows(d.Swaps["moves"]) {
 		if out, in := mapOf(move["out"]), mapOf(move["in"]); out != nil && in != nil {
@@ -660,7 +662,13 @@ func (d Document) sellView() string {
 				op, Esc(reason))+common)
 		}
 		planned := plannedFor[text(offer["id"])] != ""
-		take, why := d.offerAdvice(text(offer["id"]), ratio, planned)
+		swap, swapped := swaps[text(offer["id"])]
+		take, why := d.offerAdvice(text(offer["id"]), ratio, planned || swapped)
+		if swapped && !planned {
+			why = fmt.Sprintf("%s si clausulas a %s (%s xPts)", ratioNote(ratio),
+				text(swap.In["name"]), esSigned(swap.Gain))
+			meta += " · si clausulas a " + Esc(text(swap.In["name"]))
+		}
 		tone := ""
 		actions := recommend("Rechazar", "bad", "decline_offer", why) +
 			button("Aceptar", "ghost", "op", ` data-op="accept_offer"`+common)
