@@ -27,23 +27,31 @@ const StarterSaleSlack = 1.0
 // sellRows are the advice's sell candidates that are really for sale: one of the best eleven
 // only when he cannot play or the eleven barely notices him gone.
 func (d Document) sellRows() []map[string]any {
-	squad := rows(d.Advice["squad"])
-	choice, xiNow := bestElevenOf(squad)
-	starters := map[string]bool{}
-	for _, id := range choice.IDs() {
-		starters[id] = true
-	}
+	keep := d.keepers()
 	var out []map[string]any
 	for _, player := range rows(d.Advice["sells"]) {
-		if len(asStrings(player["reasons"])) == 0 {
-			continue
-		}
-		id := text(player["id"])
-		if starters[id] && truthy(player["available"]) &&
-			xiNow-elevenWithout(squad, id) > StarterSaleSlack {
+		if len(asStrings(player["reasons"])) == 0 || (keep[text(player["id"])] && truthy(player["available"])) {
 			continue
 		}
 		out = append(out, player)
+	}
+	return out
+}
+
+// keepers are the players of my best eleven who can play and whose sale would cost it more
+// than StarterSaleSlack: they are not for sale, whatever is offered.
+func (d Document) keepers() map[string]bool {
+	squad := rows(d.Advice["squad"])
+	choice, xiNow := bestElevenOf(squad)
+	byID := map[string]map[string]any{}
+	for _, player := range squad {
+		byID[text(player["id"])] = player
+	}
+	out := map[string]bool{}
+	for _, id := range choice.IDs() {
+		if truthy(byID[id]["available"]) && xiNow-elevenWithout(squad, id) > StarterSaleSlack {
+			out[id] = true
+		}
 	}
 	return out
 }
@@ -189,9 +197,10 @@ func (d Document) crackBox() string {
 	sold := []string{}
 	amounts := map[string]float64{}
 	names := map[string]string{}
+	keep := d.keepers()
 	for _, offer := range rows(d.Advice["offers"]) {
 		id := text(offer["id"])
-		if number(offer["vs_value"]) >= policies.GoodOverValue {
+		if number(offer["vs_value"]) >= policies.GoodOverValue && !keep[id] {
 			amounts[id] = maxFloat(amounts[id], number(offer["offer_amount"]))
 			names[id] = text(offer["name"])
 		}

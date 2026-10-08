@@ -308,7 +308,7 @@ func TestCrackReachIsWhatCanBeRaisedToday(t *testing.T) {
 		"available": true, "owner": "Rival", "clause": 200_000_000.0}
 	document.Universe["players"] = append(toAny(rows(document.Universe["players"])), crack)
 	box := document.crackBox()
-	if strings.Contains(box, "Portero") || !strings.Contains(box, "Unai Lopez") {
+	if strings.Contains(box, "Portero") || strings.Contains(box, "Ángel Pérez") {
 		t.Errorf("alcance: %s", box)
 	}
 }
