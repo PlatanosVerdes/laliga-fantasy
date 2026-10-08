@@ -2558,9 +2558,9 @@ function wireFindPlayer(){
 // ---- tabs: one view at a time ---------------------------------------------
 const TABS=[
   {id:'decidir', label:'Decidir', sections:['plan','acciones','caja','chollos']},
-  {id:'mercado', label:'Mercado', sections:['fichajes','enventa','misventas','siempre','seguimiento']},
-  // What is under way, in its own place: what you put up and what was put to you.
-  {id:'misofertas', label:'Mis ofertas', sections:['mispujas','ofertas','resueltas']},
+  // By direction: a bid sits with the market it was made in, an offer with the sale it answers.
+  {id:'comprar', label:'Comprar', sections:['fichajes','enventa','mispujas','seguimiento','resueltas']},
+  {id:'vender', label:'Vender', sections:['misventas','ofertas','siempre']},
   {id:'clausulas', label:'Cláusulas', sections:['subir','programados','calendario','vencimientos','oportunidades','clausulas']},
   {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
   {id:'partidos', label:'Partidos', sections:['jornada','partidos']},
@@ -2570,10 +2570,14 @@ const TABS=[
   {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
 ];
 
-// A hash can be a tab (#mercado) or a section (#oportunidades), and the second is what the
+// A hash can be a tab (#comprar) or a section (#oportunidades), and the second is what the
 // links carry, so it has to be resolved to the tab that owns it.
+// The tabs before they were split by direction, so old links and bookmarks still land.
+const TAB_ALIASES={mercado:'comprar', misofertas:'vender'};
+
 function resolveTarget(hash){
-  const id=(hash||'').replace(/^#/,'');
+  let id=(hash||'').replace(/^#/,'');
+  id=TAB_ALIASES[id]||id;
   if(!id) return null;
   if(TABS.some(t=>t.id===id)) return {tab:id, section:null};
   const own=document.getElementById(id);
@@ -2660,7 +2664,7 @@ function wireTabs(){
   let saved=null;
   try{ saved=localStorage.getItem('fantasy-tab'); }catch(e){}
   if(resolveTarget('#'+hashParts().base)) route();
-  else showTab(saved||'decidir');
+  else showTab(TAB_ALIASES[saved]||saved||'decidir');
 }
 
 // ---- push: swap out only what changed -------------------------------------

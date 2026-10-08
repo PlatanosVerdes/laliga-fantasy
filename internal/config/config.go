@@ -50,6 +50,7 @@ var (
 	LogFile        string
 	UsageFile      string
 	ForecastFile   string
+	ClauseFile     string
 )
 
 // APIHeaders are what the official app sends. x-app: 2 is not optional.
@@ -113,6 +114,9 @@ func init() {
 	// What was forecast for each saved eleven before kick-off: once the ball rolls it cannot be
 	// asked again, so losing the file loses that history.
 	ForecastFile = filepath.Join(StateDir, "forecasts.json")
+	// The clauses seen at the last build: the log does not tell a clause paid from an offer
+	// accepted, and the clause before the transfer is the only way to.
+	ClauseFile = filepath.Join(StateDir, "clauses.json")
 }
 
 // resolveDirs honours one override and the XDG spec, in the same order as Python.

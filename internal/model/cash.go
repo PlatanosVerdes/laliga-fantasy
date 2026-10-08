@@ -60,6 +60,9 @@ type Event struct {
 	ValueThen  *float64 `json:"value_then,omitempty"`
 	Premium    *float64 `json:"premium,omitempty"`
 	PremiumAbs *float64 `json:"premium_abs,omitempty"`
+	// Clausulazo marks a transfer paid at the clause rather than agreed: the log calls both
+	// "traspaso". See MarkClausulazos.
+	Clausulazo bool `json:"clausulazo,omitempty"`
 	Raw      map[string]any `json:"raw"`
 }
 

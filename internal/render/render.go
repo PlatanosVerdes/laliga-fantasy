@@ -459,9 +459,8 @@ func TabsWithAmount(cash string, amount *float64) string {
 
 const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
 	`<button class="tab" role="tab" data-tab="decidir" aria-selected="false" type="button">Decidir</button>` +
-	`<button class="tab" role="tab" data-tab="mercado" aria-selected="false" type="button">Mercado</button>` +
-	`<button class="tab" role="tab" data-tab="misofertas" aria-selected="false" type="button">`+
-	`Mis ofertas</button>`+
+	`<button class="tab" role="tab" data-tab="comprar" aria-selected="false" type="button">Comprar</button>` +
+	`<button class="tab" role="tab" data-tab="vender" aria-selected="false" type="button">Vender</button>` +
 	`<button class="tab" role="tab" data-tab="clausulas" aria-selected="false" type="button">Cláusulas</button>` +
 	`<button class="tab" role="tab" data-tab="plantilla" aria-selected="false" type="button">Plantilla</button>` +
 	`<button class="tab" role="tab" data-tab="partidos" aria-selected="false" type="button">Partidos<`+
@@ -1065,6 +1064,10 @@ func FeedRow(event map[string]any) string {
 	if text(event["kind"]) != "recompensa" {
 		size = math.Abs(number(event["amount"]))
 	}
+	kind := text(event["kind"])
+	if truthy(event["clausulazo"]) {
+		kind = "clausulazo"
+	}
 	mark := FeedMarks[text(event["player_id"])]
 	if FeedMe != "" && (text(event["buyer"]) == FeedMe || text(event["seller"]) == FeedMe) {
 		mark = "mine"
@@ -1075,7 +1078,7 @@ func FeedRow(event map[string]any) string {
 	return fmt.Sprintf(`<div class="feed-row%s" data-amount="%.0f"><span class="feed-date">%s</span>`+
 		`<span class="feed-kind">%s</span><span class="feed-body">%s</span>`+
 		`<span class="feed-amount">%s</span>%s</div>`,
-		mark, size, Esc(date), Esc(text(event["kind"])), body, Esc(amount), extra)
+		mark, size, Esc(date), Esc(kind), body, Esc(amount), extra)
 }
 
 // Verdicts are the five recommendations, each with its glyph and status. The glyph is not
