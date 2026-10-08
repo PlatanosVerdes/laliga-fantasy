@@ -322,7 +322,7 @@ func (d Document) saleSwaps() map[string]advice.Clausulazo {
 				continue
 			}
 			move, ok := advice.SwapForSale(players, id, number(offer["offer_amount"]),
-				number(d.Advice["budget"]), window, time.Now(), taken)
+				number(d.Advice["budget"]), window, time.Now(), taken, advice.RivalBankOf(d.Universe))
 			if ok && (bestID == "" || move.Gain > best.Gain) {
 				bestID, best = id, move
 			}
@@ -400,7 +400,7 @@ func (d Document) saleSwapCards() []Card {
 func (d Document) upgradeCards(covered map[string]bool) []Card {
 	window, _ := d.clauseWindow()
 	move, ok := advice.ClauseUpgrade(rows(d.Universe["players"]), number(d.Advice["budget"]),
-		number(d.Advice["squad_ppm_benchmark"]), window, time.Now())
+		number(d.Advice["squad_ppm_benchmark"]), window, time.Now(), advice.RivalBankOf(d.Universe))
 	if !ok || covered["in:"+text(move.In["id"])] {
 		return nil
 	}

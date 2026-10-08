@@ -217,7 +217,7 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 				note += "caduca " + expires[:16]
 			}
 			take, why := offerAdvice(rows, id, float64(amount), number(player["value"]), budget,
-				s.state.ClauseWindow(time.Now()))
+				s.state.ClauseWindow(time.Now()), s.rivalBank())
 			actions = append(actions,
 				map[string]any{"op": "accept_offer", "label": label, "kind": "confirm",
 					"offer_id": text(offer["id"]), "market_id": listing["market_id"],
@@ -636,7 +636,7 @@ func shirtOf(slot map[string]any, known map[string]map[string]any) map[string]an
 // offerAdvice is the card's verdict on an offer: at 1.02x his value or more, and only when the
 // best eleven loses at most one xPts without him.
 func offerAdvice(rows []map[string]any, id string, amount, value, cash float64,
-	window schedule.Window) (bool, string) {
+	window schedule.Window, rivals advice.RivalBank) (bool, string) {
 	if value <= 0 {
 		return false, ""
 	}
@@ -654,7 +654,8 @@ func offerAdvice(rows []map[string]any, id string, amount, value, cash float64,
 		return true, words
 	case ratio >= policies.GoodOverValue:
 		// Selling him is fine when the money takes somebody else's player who covers him.
-		if move, ok := advice.SwapForSale(rows, id, amount, cash, window, time.Now(), nil); ok {
+		if move, ok := advice.SwapForSale(rows, id, amount, cash, window, time.Now(), nil,
+			rivals); ok {
 			return true, fmt.Sprintf("%s si clausulas a %s (%s xPts)", words,
 				text(move.In["name"]), signedOne(move.Gain))
 		}
@@ -793,4 +794,19 @@ func raiseToSafe(value, clause float64) int64 {
 		return 0
 	}
 	return int64(missing / writes.ClauseFactor)
+}
+
+// rivalBank is each rival's estimated cash, for the moves that would pay one of them.
+func (s *Server) rivalBank() advice.RivalBank {
+	out := advice.RivalBank{}
+	universe := s.state.Universe()
+	if universe == nil {
+		return out
+	}
+	for id, team := range universe.LeagueTeams {
+		if team != nil && (universe.MyTeamID == nil || id != *universe.MyTeamID) {
+			out[id] = team.EstimatedCash
+		}
+	}
+	return out
 }
