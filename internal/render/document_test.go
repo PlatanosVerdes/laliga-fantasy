@@ -484,3 +484,22 @@ func TestRaidsSectionIsJustTheLogWhenNothingIsArmed(t *testing.T) {
 		t.Errorf("el registro se queda aunque no haya ordenes vivas: %.300s", section)
 	}
 }
+
+// A lost bid says what the winner paid, read off the log: same player, same buyer, same day.
+func TestEndingsCarryTheWinningPrice(t *testing.T) {
+	document := Document{
+		Universe: map[string]any{"activity": []any{
+			map[string]any{"date": "2026-09-28T19:00:57", "kind": "compra", "player_id": "2661",
+				"buyer": "-papi—", "amount": 30_000_000.0},
+			map[string]any{"date": "2026-08-22T19:00:51", "kind": "compra", "player_id": "2661",
+				"buyer": "-papi—", "amount": 12_000_000.0},
+		}},
+		Endings: []map[string]any{{"at": "2026-09-28T19:02:10", "player_id": "2661",
+			"player": "Djene", "amount": 27_000_000.0, "kind": "puja", "outcome": "perdida",
+			"new_owner": "-papi—"}},
+	}
+	page := Endings(document.endingsWithPrices())
+	if !strings.Contains(page, "por <strong>30.00M</strong> (3.00M mas que tu)") {
+		t.Errorf("falta lo que pago el que gano: %s", page)
+	}
+}

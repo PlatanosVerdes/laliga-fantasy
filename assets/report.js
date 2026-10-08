@@ -1548,6 +1548,36 @@ async function openForecast(week){
   wireDetails(body);
 }
 
+// The league log in one list: newest first as the server sends it, or biggest first.
+const FEED_SORT_KEY='fantasy:feed-sort';
+function sortFeed(order){
+  const rail=document.querySelector('.feed-rail');
+  if(!rail) return;
+  const rows=[...rail.children];
+  rows.forEach((row,i)=>{ if(row.dataset.i==null) row.dataset.i=i; });
+  rows.sort(order==='amount'
+    ? (a,b)=>(+b.dataset.amount||0)-(+a.dataset.amount||0)||a.dataset.i-b.dataset.i
+    : (a,b)=>a.dataset.i-b.dataset.i);
+  rows.forEach(row=>rail.appendChild(row));
+  rail.scrollTop=0;
+  document.querySelectorAll('[data-feed-sort]').forEach(b=>
+    b.classList.toggle('on',b.dataset.feedSort===order));
+}
+
+function wireFeedSort(root=document){
+  root.querySelectorAll('[data-feed-sort]').forEach(button=>{
+    if(button.dataset.wired) return;
+    button.dataset.wired='1';
+    button.addEventListener('click',()=>{
+      try{ localStorage.setItem(FEED_SORT_KEY,button.dataset.feedSort); }catch(e){}
+      sortFeed(button.dataset.feedSort);
+    });
+  });
+  let saved=null;
+  try{ saved=localStorage.getItem(FEED_SORT_KEY); }catch(e){}
+  if(saved==='amount') sortFeed('amount');
+}
+
 function wireMatchdays(root=document){
   root.querySelectorAll('button[data-matchday]').forEach(button=>{
     if(button.dataset.wired) return;
@@ -2682,7 +2712,7 @@ async function swap(){
   wireTables(); wireFilters(); wireOnly(); wireStars(); wireBids(); wireOps();
   wireDetails(); wireRaids();
   wireRaises();
-  wireManagers(); wireMatchdays(); tick();
+  wireManagers(); wireMatchdays(); wireFeedSort(); tick();
   // The chart is the client's, and the rebuild has just put the empty frame back in its place.
   if(seasonData) loadSeason();
   showTab(document.querySelector('.tab.on')?.dataset.tab||'decidir',
@@ -2750,7 +2780,7 @@ function connect(){
 
 wireTables(); wireFilters(); wireOnly(); wireStars(); wireBids(); wireOps();
 wireDetails(); wireRaids();
-wireRaises(); wireManagers(); wireMatchdays();
+wireRaises(); wireManagers(); wireMatchdays(); wireFeedSort();
 wireTabs(); tick(); drawTray();
 {
   const stamped=document.getElementById('tab-cash');

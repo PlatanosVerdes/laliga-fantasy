@@ -202,6 +202,11 @@ th.right{text-align:right}
 /* The whole league log inside a screenful. It is the .feed box itself, so overflow-x stays
    hidden from there and only the vertical axis scrolls. */
 .feed-rail{overflow-y:auto;max-height:62vh;overscroll-behavior:contain}
+.feed-sort{display:inline-flex;gap:2px;margin:0 0 10px;padding:2px;border:1px solid var(--line);
+  border-radius:8px;background:var(--surface)}
+.feed-sort button{font:inherit;font-size:12px;padding:5px 12px;border:0;border-radius:6px;
+  background:transparent;color:var(--ink-2);cursor:pointer}
+.feed-sort button.on{background:var(--plane);color:var(--ink);font-weight:600}
 
 /* Thirteen lines are a crowd, so the season reads as one shape with yours picked out of it and
    whichever one the cursor is on brought forward. Drawn at screen scale rather than in a
@@ -1093,3 +1098,16 @@ button.fc-row{cursor:pointer;width:100%}
 .wk-col{display:inline-flex;flex-direction:column;align-items:center;gap:2px;flex:0 0 auto}
 .wk-fc{font-size:9px;line-height:1;color:var(--muted);font-variant-numeric:tabular-nums;
   min-height:9px}
+/* The rows of the league log that concern me: a bar on the left and a faint fill. */
+.feed-row.feed-mine{box-shadow:inset 3px 0 0 var(--accent);
+  background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.feed-row.feed-bid{box-shadow:inset 3px 0 0 var(--warning);
+  background:color-mix(in srgb,var(--warning) 9%,transparent)}
+.feed-row.feed-fav{box-shadow:inset 3px 0 0 #b37feb;
+  background:color-mix(in srgb,#b37feb 9%,transparent)}
+.feed-legend{display:inline-flex;align-items:center;gap:6px;margin-left:14px;font-size:12px;
+  color:var(--muted)}
+.feed-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-left:6px}
+.feed-legend i.feed-mine{background:var(--accent)}
+.feed-legend i.feed-bid{background:var(--warning)}
+.feed-legend i.feed-fav{background:#b37feb}

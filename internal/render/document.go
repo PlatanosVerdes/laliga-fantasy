@@ -1252,6 +1252,64 @@ func (d Document) seasonSection() string {
 		note, "", "evolucion")
 }
 
+// feedMarks is which players of the log concern me, strongest first: mine (now, or bought or
+// sold by me), one I bid for, one I starred. The manager name is mine too.
+func (d Document) feedMarks() (map[string]string, string) {
+	marks := map[string]string{}
+	for _, player := range rows(d.Universe["players"]) {
+		if truthy(player["starred"]) {
+			marks[text(player["id"])] = "fav"
+		}
+	}
+	for _, ending := range d.Endings {
+		marks[text(ending["player_id"])] = "bid"
+	}
+	for _, player := range rows(d.Universe["players"]) {
+		if market := mapOf(player["market"]); market != nil && market["my_bid"] != nil {
+			marks[text(player["id"])] = "bid"
+		}
+		if truthy(player["is_mine"]) {
+			marks[text(player["id"])] = "mine"
+		}
+	}
+	me := text(mapOf(mapOf(d.Universe["league_teams"])[text(d.Universe["my_team_id"])])["manager"])
+	return marks, me
+}
+
+// endingsWithPrices adds to every lost bid what the winner paid, read off the league log: the
+// price is the part of a lost auction worth learning from.
+func (d Document) endingsWithPrices() []map[string]any {
+	events := rows(d.Universe["activity"])
+	out := make([]map[string]any, 0, len(d.Endings))
+	for _, ending := range d.Endings {
+		row := map[string]any{}
+		for key, value := range ending {
+			row[key] = value
+		}
+		if winner := text(ending["new_owner"]); winner != "" {
+			at, err := time.Parse("2006-01-02T15:04", firstN(text(ending["at"]), 16))
+			for _, event := range events {
+				when, failed := time.Parse("2006-01-02T15:04", firstN(text(event["date"]), 16))
+				if err != nil || failed != nil || text(event["player_id"]) != text(ending["player_id"]) ||
+					text(event["buyer"]) != winner || math.Abs(when.Sub(at).Hours()) > 24 {
+					continue
+				}
+				row["won_for"] = number(event["amount"])
+				break
+			}
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func firstN(value string, n int) string {
+	if len(value) > n {
+		return value[:n]
+	}
+	return value
+}
+
 func (d Document) feedSection() string {
 	events := rows(d.Universe["activity"])
 	if len(events) == 0 {
@@ -1267,6 +1325,7 @@ func (d Document) feedSection() string {
 		}
 	}
 	ManagerTeams = d.managerTeams()
+	FeedMarks, FeedMe = d.feedMarks()
 	return Section("Movimientos de la liga", Feed(events),
 		"Quien ha fichado y vendido, y por cuanto. Las operaciones grandes "+
 			"cuentan quien se esta quedando sin caja.",
@@ -1351,7 +1410,7 @@ func (d Document) marketSections() []string {
 	// it has content cannot be found by somebody looking for where it will appear, and this one
 	// fills days after it is switched on.
 	if d.Mode != "informe" || len(d.Endings) > 0 {
-		out = append(out, Section("Como acabaron", Endings(d.Endings),
+		out = append(out, Section("Como acabaron", Endings(d.endingsWithPrices()),
 			"Tus pujas y ofertas ya resueltas. <strong>Rechazada</strong> es que el dueño dijo "+
 				"no; <strong>perdida</strong> es que se lo quedo otro, y ahi el precio importa "+
 				"mas que el rival; <strong>caducada</strong> es que el anuncio cerro sin venta. "+

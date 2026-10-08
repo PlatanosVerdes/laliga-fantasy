@@ -136,3 +136,25 @@ func TestCalendarWithoutADayShowsEverything(t *testing.T) {
 		t.Errorf("sin fecha de corte se pinta todo: %s", built)
 	}
 }
+
+// The league log is one list the page can reorder: one rail, the toggle, and every row
+// carrying its size, the prize counted as none.
+func TestFeedIsOneSortableList(t *testing.T) {
+	events := []map[string]any{}
+	for i := 0; i < 9; i++ {
+		events = append(events, map[string]any{"kind": "compra", "amount": float64(i) * 1e6,
+			"player": "P", "player_id": "1", "date": "2026-10-07T19:00:00"})
+	}
+	events = append(events, map[string]any{"kind": "recompensa", "amount": 4.8e6,
+		"date": "2026-10-06T03:00:00"})
+	page := Feed(events)
+	if strings.Count(page, `class="feed feed-rail"`) != 1 || strings.Contains(page, "kpi-label") {
+		t.Errorf("una sola lista, sin la de las mas grandes aparte: %s", page)
+	}
+	if !strings.Contains(page, `data-feed-sort="amount"`) || !strings.Contains(page, `data-amount="8000000"`) {
+		t.Error("falta el selector o el importe de cada fila")
+	}
+	if strings.Contains(page, `data-amount="4800000"`) {
+		t.Error("el premio de la jornada no cuenta como operacion")
+	}
+}
