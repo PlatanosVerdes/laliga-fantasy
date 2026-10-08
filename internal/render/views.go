@@ -242,7 +242,7 @@ func (d Document) Views() []string {
 		d.buyView(), moreSection("comprar", "fichajes · en venta · mis pujas · siguiendo · cómo acabaron"),
 		d.sellView(), moreSection("vender", "mis ventas · ofertas · siempre en mercado"),
 		d.clauseView(), moreSection("clausulas", "subir · programados · calendario · vencimientos · oportunidades"),
-		d.squadView(), moreSection("plantilla", "editar la alineación · plantilla · candidatos a vender"),
+		Pitch, d.squadView(), moreSection("plantilla", "plantilla · candidatos a vender"),
 		d.matchesView(), moreSection("partidos", "cómo va la jornada · calendario de partidos"),
 		d.rivalsView(),
 	}
@@ -989,90 +989,71 @@ func (d Document) squadView() string {
 	if len(squad) == 0 {
 		return ""
 	}
-	byID := map[string]map[string]any{}
-	for _, player := range squad {
-		byID[text(player["id"])] = player
-	}
-	choice, total := bestElevenOf(squad)
-	lines := byLines(byID, choice.Attack, choice.Middle, choice.Defence, choice.Keeper)
-	var pitch strings.Builder
-	var weakest map[string]any
-	for _, line := range lines {
-		pitch.WriteString(`<div class="pline">`)
-		for _, player := range line {
-			if weakest == nil || number(player["xpts"]) < number(weakest["xpts"]) {
-				weakest = player
-			}
-			flag := ""
-			if text(mapOf(player["market"])["market_id"]) != "" {
-				flag = `<span class="tok-flag" title="en venta">🏷</span>`
-			}
-			fmt.Fprintf(&pitch, `<span class="tok" data-pid="%s">%s<span class="tok-name">%s</span>`+
-				`<span class="tok-x %s">%s</span>%s</span>`, Esc(text(player["id"])),
-				face(player, "md"), shieldName(player), xptsClass(number(player["xpts"])),
-				esNum(number(player["xpts"]), 1), flag)
+	// Only the ones the advice gives a reason to sell, with that reason.
+	var items []string
+	for _, player := range rows(d.Advice["sells"]) {
+		reasons := asStrings(player["reasons"])
+		if len(reasons) == 0 {
+			continue
 		}
-		pitch.WriteString(`</div>`)
+		listing := mapOf(player["market"])
+		best := 0.0
+		offerID := ""
+		for _, offer := range rows(player["offers"]) {
+			if amount := number(offer["money"]); amount > best {
+				best, offerID = amount, text(offer["id"])
+			}
+		}
+		when := "se puede ya"
+		if truthy(player["sale_locked"]) {
+			when = "🔒 hasta " + esDay(text(player["hold_until"]))
+		}
+		note := "vale " + esMoney(number(player["value"]))
+		if best > 0 {
+			note += " · oferta " + esMoney(best)
+		}
+		var action string
+		switch {
+		case best > 0 && offerID != "":
+			action = button("Aceptar "+esMoney(best), "primary", "op", fmt.Sprintf(
+				` data-op="accept_offer" data-op-market="%s" data-op-offer="%s" data-op-player="%s" `+
+					`data-op-name="%s" data-op-amount="%d"`, Esc(text(listing["market_id"])),
+				Esc(offerID), Esc(text(player["id"])), Esc(text(player["name"])), int64(best)))
+		case text(listing["market_id"]) != "":
+			action = actButton("Quitar", "ghost", text(player["id"]), "withdraw")
+		case !truthy(player["sale_locked"]):
+			action = actButton("Poner en venta", "ghost", text(player["id"]), "sell_to_market")
+		}
+		meta := Esc(text(player["team_short"])) + " · " + Esc(strings.Join(reasons, ", "))
+		items = append(items, row(player, meta, esNum(number(player["xpts"]), 1)+" xPts", note,
+			tag(when, map[bool]string{true: "warn", false: "ok"}[truthy(player["sale_locked"])]),
+			action, ""))
 	}
-	foot := fmt.Sprintf(`<div class="pitch-foot"><span><b>%s</b> xPts por jornada</span>`+
-		`<span>🏷 en venta</span>`, esNum(total, 1))
-	if weakest != nil {
-		foot += fmt.Sprintf(`<span>el más flojo: <b>%s</b> %s</span>`, Esc(text(weakest["name"])),
-			esNum(number(weakest["xpts"]), 1))
+	body := empty("Nadie: el consejo no ve motivo para vender a ninguno.")
+	if len(items) > 0 {
+		body = rowList(items, false)
 	}
-	foot += `</div>`
-	main := block("Tu once · "+Esc(choice.Shape.Name), `<div class="mk-pitch">`+pitch.String()+
-		`</div>`+foot, "el mejor once posible con lo que tienes", -1)
+	main := block("Para vender", body, "", len(items))
 
-	bench := d.benchOf()
-	sort.SliceStable(bench, func(one, two int) bool {
-		return number(bench[one]["xpts"]) > number(bench[two]["xpts"])
-	})
-	var chips strings.Builder
-	for _, player := range bench {
-		fmt.Fprintf(&chips, `<span class="tchip %s" data-pid="%s">%s<span class="tname">%s</span>`+
-			`<span class="tx">%s</span></span>`, xptsClass(number(player["xpts"])),
-			Esc(text(player["id"])), face(player, "xs"), shieldName(player),
-			esNum(number(player["xpts"]), 1))
-	}
-	main += block("Banquillo", `<div class="chips">`+chips.String()+`</div>`, "",
-		len(bench))
-
-	value, clauses, rise := 0.0, 0.0, 0.0
+	value, clauses, change := 0.0, 0.0, 0.0
 	for _, player := range squad {
 		worth := number(player["value"])
 		value += worth
 		clauses += number(player["clause"])
 		if pct := number(player["pct_7d"]); pct > -100 {
-			rise += worth * pct / (100 + pct)
+			change += worth * pct / (100 + pct)
 		}
 	}
-	riseClass := "up"
-	if rise < 0 {
-		riseClass = "down"
+	changeClass, sign := "up", "+"
+	if change < 0 {
+		changeClass, sign = "down", ""
 	}
 	summary := fmt.Sprintf(`<div class="kv"><span>Jugadores</span><b>%d</b></div>`+
 		`<div class="kv"><span>Valor de plantilla</span><b>%s</b></div>`+
 		`<div class="kv"><span>Suma de cláusulas</span><b>%s</b></div>`+
-		`<div class="kv"><span>Subida últimos 7 días</span><b class="%s">%s</b></div>`,
-		len(squad), esMoney(value), esMoney(clauses), riseClass, esMoney(rise))
-	aside := block("Resumen", summary, "", -1)
-
-	var sell []string
-	for index, player := range rows(d.Advice["sells"]) {
-		if index == 5 {
-			break
-		}
-		sell = append(sell, row(player, Esc(startsMeta(player)),
-			esNum(number(player["xpts"]), 1)+" xPts", "vale "+esMoney(number(player["value"])),
-			"", "", ""))
-	}
-	if len(sell) > 0 {
-		aside += block("Para vender", rowList(sell, true)+`<p class="mk-note"><button class="linkish" `+
-			`type="button" data-goto="vender">Ir a Vender →</button></p>`, "",
-			-1)
-	}
-	return view("v-plantilla", "plantilla", main, aside)
+		`<div class="kv"><span>Valor últimos 7 días</span><b class="%s">%s%s</b></div>`,
+		len(squad), esMoney(value), esMoney(clauses), changeClass, sign, esMoney(change))
+	return view("v-plantilla", "plantilla", main, block("Resumen", summary, "", -1))
 }
 
 // --- Partidos --------------------------------------------------------------------------
@@ -1152,8 +1133,10 @@ func (d Document) matchesView() string {
 					int(number(fixture["local_score"])), int(number(fixture["visitor_score"])))
 			}
 			list = append(list, fmt.Sprintf(`<li class="fx"><span class="fx-when">%s</span>`+
-				`<span class="fx-match"><b>%s</b>%s</span><span class="chips">%s</span></li>`,
-				Esc(esHour(text(fixture["kickoff"]))), Esc(match(fixture)), score, chips.String()))
+				`<span class="fx-match">%s<b>%s – %s</b>%s%s</span><span class="chips">%s</span></li>`,
+				Esc(esHour(text(fixture["kickoff"]))), crestOf(text(fixture["local_id"])),
+				Esc(text(fixture["local"])), Esc(text(fixture["visitor"])),
+				crestOf(text(fixture["visitor_id"])), score, chips.String()))
 		}
 		body := `<ul class="fixtures">` + strings.Join(list, "") + `</ul>`
 		if len(idle) > 0 {

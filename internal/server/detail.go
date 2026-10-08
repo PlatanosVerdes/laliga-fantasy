@@ -12,6 +12,7 @@ import (
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
@@ -511,9 +512,41 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	s.json(writer, http.StatusOK, map[string]any{"lines": lines, "bench": bench,
+		"best":      bestLineup(rows),
 		"formation": formation["tacticalFormation"],
 		"formations": map[string]any{"free": free, "premium": premium},
 		"updated_at": payload["updatedAt"], "writes_enabled": s.opts.AllowWrites})
+}
+
+// bestLineup is the best legal eleven of my squad, in the lineup's own lines, so the editor can
+// offer it next to the saved one.
+func bestLineup(rows []map[string]any) map[string]any {
+	players := []eleven.Player{}
+	points := map[string]float64{}
+	for _, row := range rows {
+		if !truthy(row["is_mine"]) {
+			continue
+		}
+		id := text(row["id"])
+		players = append(players, eleven.Player{ID: id, Name: text(row["name"]),
+			Position: int(number(row["position_id"])), XPts: number(row["xpts"]),
+			Available: truthy(row["available"])})
+		points[id] = number(row["xpts"])
+	}
+	choice, ok := eleven.Best(players)
+	if !ok {
+		return nil
+	}
+	total := 0.0
+	for _, id := range choice.IDs() {
+		total += points[id]
+	}
+	return map[string]any{
+		"formation": []int{choice.Shape.Need[2], choice.Shape.Need[3], choice.Shape.Need[4]},
+		"lines": map[string][]string{"goalkeeper": {choice.Keeper}, "defender": choice.Defence,
+			"midfield": choice.Middle, "striker": choice.Attack},
+		"xpts": total,
+	}
 }
 
 // nested walks a chain of keys, because the images live three levels down and any of them can
@@ -587,7 +620,26 @@ func shirtOf(slot map[string]any, known map[string]map[string]any) map[string]an
 		"next_home":         extra["next_home"],
 		"starred":           extra["starred"],
 		"absence":           extra["absence"],
+		"shielded":          extra["shielded"],
+		"shielded_until":    extra["shielded_until"],
+		"sale_locked":       extra["sale_locked"],
+		"hold_until":        extra["hold_until"],
+		"listed_for":        mapOf(extra["market"])["min_bid"],
+		"best_offer":        bestOffer(extra),
 	}
+}
+
+func bestOffer(row map[string]any) any {
+	best := 0.0
+	for _, offer := range listOf(row["offers"]) {
+		if amount := number(offer["money"]); amount > best {
+			best = amount
+		}
+	}
+	if best == 0 {
+		return nil
+	}
+	return best
 }
 
 // fragments serves the page in pieces so a repaint replaces the sections that changed instead

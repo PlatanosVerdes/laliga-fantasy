@@ -56,3 +56,21 @@ func TestRoundWithRoomStillShieldsNow(t *testing.T) {
 		t.Errorf("con un blindaje libre se ofrece blindar ya: %v", actions)
 	}
 }
+
+// The editor offers the best eleven next to the saved one, in the lineup's own lines.
+func TestBestLineupIsTheBestElevenByLine(t *testing.T) {
+	rows := []map[string]any{{"id": "k", "is_mine": true, "available": true, "position_id": 1.0, "xpts": 5.0}}
+	for i, pos := range []float64{2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4} {
+		rows = append(rows, map[string]any{"id": string(rune('a' + i)), "is_mine": true,
+			"available": true, "position_id": pos, "xpts": float64(i)})
+	}
+	best := bestLineup(rows)
+	lines := best["lines"].(map[string][]string)
+	if len(lines["goalkeeper"]) != 1 || lines["goalkeeper"][0] != "k" {
+		t.Errorf("portero: %v", lines["goalkeeper"])
+	}
+	total := len(lines["defender"]) + len(lines["midfield"]) + len(lines["striker"])
+	if total != 10 || best["xpts"].(float64) <= 5 {
+		t.Errorf("diez de campo y su suma: %v", best)
+	}
+}

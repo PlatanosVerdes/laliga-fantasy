@@ -142,7 +142,6 @@ func (d Document) HTML() string {
 	sections = append(sections, d.seasonSection())
 	sections = append(sections, d.feedSection())
 	if hasAdvice {
-		sections = append(sections, Pitch)
 		sections = append(sections, d.squadSection())
 		sections = append(sections, d.marketSections()...)
 		sections = append(sections, d.clauseSections()...)

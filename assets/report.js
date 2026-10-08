@@ -723,54 +723,77 @@ function weekChip(w){
   return `<span class="wk ${cls}" title="Jornada ${w.week}">${p==null?'–':p}</span>`;
 }
 
-// The face identifies faster than the name; the crest stays in the corner because the
-// matchday's opponent is read by club. If the image fails to load, the crest is left alone.
-function faceHtml(player){
-  const crest=`<span class="crest crest-${player.team_id}"></span>`;
-  if(!player.image) return crest;
-  return `<span class="slot-avatar${statusRing(player)}"><img class="slot-face" src="${player.image}" alt=""
-    loading="lazy" onerror="this.remove()">${crest}</span>`;
-}
+function xClass(v){ return v>=6?'x-hi':v>=3.5?'x-mid':v>=2?'x-lo':'x-bad'; }
 
 function shirtHtml(player,line,index){
   if(!player) return `<div class="slot empty gap" data-line="${line}" data-index="${index}"
     title="No tienes con quien cubrir esta plaza">⚠<br>${LINE_LABEL[line]}<br>sin cubrir</div>`;
-  const trend=player.projected_pct||0;
-  const played=(player.weeks||[]).slice(-5);
-  const weeks=played.length
-    ? '<span class="wk-label">J</span>'+played.map(weekChip).join('')
-    : '<span class="wk wk-none">sin jornadas</span>';
-  return `<div class="slot" draggable="true" data-line="${line}"
+  const listed=player.listed_for?`<span class="tok-flag" title="en venta por ${mny(player.listed_for)}">🏷</span>`:'';
+  return `<div class="slot tokslot" draggable="true" data-line="${line}"
     data-index="${index}" data-player="${player.id}" data-pt="${player.player_team_id}"
     title="${player.name}${player.next_rival?(' · vs '+player.next_rival
       +(player.next_home?' (en casa)':' (fuera)')):''}">
-    ${gripHtml()}
-    ${statusBadge(player)}
-    ${faceHtml(player)}
-    <span class="slot-name">${player.name}</span>
-    <span class="slot-weeks">${weeks}</span>
-    <span class="slot-meta">
-      <span>${(player.xpts||0).toFixed(1)} xPts</span>
-      ${player.start_probability!=null?`<span class="tit ${titClass(player.start_probability)}"
-        >${player.start_probability}%</span>`:''}
-      <span class="slot-trend ${trend>=0?'up':'down'}">${trend>=0?'▲':'▼'}${Math.abs(trend).toFixed(1)}%</span>
-    </span>
+    ${gripHtml()}${listed}
+    ${faceOf(player,'md')}
+    <span class="tok-name">${player.name}${shieldMark(player)}</span>
+    <span class="tok-x ${xClass(player.xpts||0)}">${dec(player.xpts||0)}</span>
   </div>`;
 }
 
+// How a reserve stands for selling: the hold rule first, then what is already on the table.
+function sellState(p){
+  if(p.sale_locked&&p.hold_until) return `🔒 hasta ${whenShort(p.hold_until)}`;
+  if(p.best_offer) return `oferta de ${mny(p.best_offer)}`;
+  if(p.listed_for) return `en venta por ${mny(p.listed_for)}`;
+  return 'se puede vender';
+}
+
 function benchHtml(player){
-  const trend=player.projected_pct||0;
+  const pos={1:'POR',2:'DEF',3:'MED',4:'DEL'}[player.position_id]||'ENT';
   return `<div class="bench-item" draggable="true" data-player="${player.id}"
     data-pt="${player.player_team_id}" data-from="bench" title="${player.name}">
     ${gripHtml()}
-    ${faceHtml(player)}
-    <span class="pos pos-${(LINE_LABEL[Object.keys(LINE_POS).find(k=>LINE_POS[k]===player.position_id)]||'ENT').toLowerCase()}">${
-      {1:'POR',2:'DEF',3:'MED',4:'DEL'}[player.position_id]||'ENT'}</span>
-    <span class="bench-name">${player.name}</span>
-    ${statusBadge(player)}
-    <span class="slot-trend ${trend>=0?'up':'down'}" style="margin-left:auto">${
-      (player.xpts||0).toFixed(1)}</span>
+    ${faceOf(player,'sm')}
+    <span class="bench-who"><span class="bench-name">${player.name}${shieldMark(player)}</span>
+      <span class="bench-sell">${sellState(player)}</span></span>
+    <span class="pos pos-${pos.toLowerCase()}">${pos}</span>
+    <span class="tx ${xClass(player.xpts||0)}">${dec(player.xpts||0)}</span>
   </div>`;
+}
+
+// The saved eleven against the best one the squad allows, and the way to load the latter.
+function pitchBest(){
+  const box=document.getElementById('pitch-best');
+  if(!box||!pitchState) return;
+  const best=pitchState.best;
+  const saved=LINE_ORDER.reduce((sum,l)=>sum+(pitchState.lines[l]||[])
+    .reduce((t,p)=>t+(p?(p.xpts||0):0),0),0);
+  if(!best||best.xpts-saved<0.05){ box.hidden=true; return; }
+  box.hidden=false;
+  box.innerHTML=`Tu mejor once suma <b>${dec(best.xpts)}</b>; el que tienes, <b>${dec(saved)}</b>. `
+    +`<button type="button" class="pitch-apply">Poner el mejor</button>`;
+  box.querySelector('.pitch-apply').onclick=applyBest;
+}
+
+function applyBest(){
+  const best=pitchState&&pitchState.best;
+  if(!best) return;
+  const everyone=[...LINE_ORDER.flatMap(l=>(pitchState.lines[l]||[]).filter(Boolean)),
+                  ...(pitchState.bench||[])];
+  const byId=Object.fromEntries(everyone.map(p=>[String(p.id),p]));
+  const used=new Set();
+  const lines={};
+  LINE_ORDER.forEach(l=>{
+    lines[l]=(best.lines[l]||[]).map(id=>{ used.add(String(id)); return byId[String(id)]||null; });
+  });
+  pitchState.lines=lines;
+  pitchState.bench=everyone.filter(p=>!used.has(String(p.id)));
+  pitchState.formation=best.formation;
+  const select=document.getElementById('pitch-formation-select');
+  if(select) select.value=best.formation.join(',');
+  pitchDirty=true;
+  usage.click('alineacion','poner el mejor once');
+  renderPitch();
 }
 
 function renderPitch(){
@@ -792,6 +815,7 @@ function renderPitch(){
   document.getElementById('pitch-status').textContent = pitchDirty
     ? 'cambios sin guardar' : (pitchState.writes_enabled?'':'servidor en solo lectura');
   pitchAlert();
+  pitchBest();
   wireDrag();
 }
 
@@ -2765,7 +2789,7 @@ const FOLDS={
   comprar:['fichajes','enventa','mispujas','seguimiento','resueltas'],
   vender:['misventas','ofertas','siempre'],
   clausulas:['subir','programados','calendario','vencimientos','oportunidades','clausulas'],
-  plantilla:['once','plantilla','ventas'],
+  plantilla:['plantilla','ventas'],
   partidos:['jornada','partidos'],
   rivales:['rivales','pinta'],
   ranking:['ranking','rentabilidad'],
