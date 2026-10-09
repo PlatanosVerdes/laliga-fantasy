@@ -9,7 +9,7 @@ import (
 
 // --- Rivales ---------------------------------------------------------------------------
 
-func (d Document) rivalsView() string { return shell("v-rivales", "rivales", "rivales") }
+func (d Document) rivalsView() SectionView { return shell("v-rivales", "rivales", "rivales") }
 
 // Reach is which of my players a rival's estimated cash reaches, for the popup his chip opens.
 type Reach struct {
@@ -217,7 +217,7 @@ type RivalPick struct {
 // rivalViews is one view per rival, each with his squad whole, behind the picker that shows
 // one at a time. Grouped by manager and not by player on purpose: "what does this one have" is
 // how a league is actually read.
-func (d Document) rivalViews(players []map[string]any) ([]string, map[string]any) {
+func (d Document) rivalViews(players []map[string]any) ([]SectionView, map[string]any) {
 	teams := mapOf(d.Universe["league_teams"])
 	if teams == nil {
 		return nil, nil
@@ -285,7 +285,7 @@ func (d Document) rivalViews(players []map[string]any) ([]string, map[string]any
 	})
 	views := map[string]any{}
 	picks := []RivalPick{}
-	shells := []string{shell("rivalpick", "rivales", "rivalpick")}
+	shells := []SectionView{shell("rivalpick", "rivales", "rivalpick")}
 	for _, team := range ordered {
 		teamID := text(team["team_id"])
 		squad := squads[teamID]

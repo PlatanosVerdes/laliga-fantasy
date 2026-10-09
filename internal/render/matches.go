@@ -8,7 +8,7 @@ import (
 
 // --- Partidos --------------------------------------------------------------------------
 
-func (d Document) matchesView() string { return shell("v-partidos", "partidos", "partidos") }
+func (d Document) matchesView() SectionView { return shell("v-partidos", "partidos", "partidos") }
 
 // FixtureLine is one match of the matchday with the players of mine in it.
 type FixtureLine struct {

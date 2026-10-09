@@ -152,10 +152,8 @@ func TestDecisionCardsComeFromTheAdvice(t *testing.T) {
 
 func TestDecideSectionRendersOneSwappableSection(t *testing.T) {
 	document := decidingDocument()
-	html := document.decideSection()
-	if !strings.HasPrefix(html, `<section id="ahora"`) ||
-		strings.Count(html, "<section") != 1 || strings.Count(html, "</section>") != 1 {
-		t.Fatalf("the live refresh splits on sections, so there must be exactly one: %.200s", html)
+	if section := document.decideSection(); section.ID != "ahora" || section.View != "decidir" {
+		t.Fatalf("Decidir is the section ahora, filled by its view: %+v", section)
 	}
 	view := asJSON(document.DecideData())
 	for _, want := range []string{`"id":"7"`, "Tu once", `"until":"2999-01-01T19:00:00+02:00"`,

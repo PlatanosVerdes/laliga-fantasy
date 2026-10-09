@@ -10,8 +10,8 @@ import (
 // --- Liga ------------------------------------------------------------------------------
 
 // The three sections of Liga, each a view of its own so a link can still land on one.
-func (d Document) leagueShells() []string {
-	out := []string{shell("evolucion", "liga", "evolucion"), shell("movimientos", "liga",
+func (d Document) leagueShells() []SectionView {
+	out := []SectionView{shell("evolucion", "liga", "evolucion"), shell("movimientos", "liga",
 		"movimientos")}
 	if d.HoldDays > 0 || len(d.RuleNotes) > 0 {
 		out = append(out, shell("normas", "liga", "normas"))

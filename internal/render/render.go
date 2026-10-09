@@ -347,124 +347,9 @@ func truthy(value any) bool {
 	return false
 }
 
-// Tabs are the page's groups. Rendered only when there is a session, because a chip
-// that jumps nowhere is worse than no chip.
-const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
-	`<button class="tab" role="tab" data-tab="decidir" aria-selected="false" type="button">Decidir</button>` +
-	`<button class="tab" role="tab" data-tab="comprar" aria-selected="false" type="button">Comprar</button>` +
-	`<button class="tab" role="tab" data-tab="vender" aria-selected="false" type="button">Vender</button>` +
-	`<button class="tab" role="tab" data-tab="clausulas" aria-selected="false" type="button">Cláusulas</button>` +
-	`<button class="tab" role="tab" data-tab="plantilla" aria-selected="false" type="button">Plantilla</button>` +
-	`<button class="tab" role="tab" data-tab="partidos" aria-selected="false" type="button">Partidos<`+
-	`/button>`+
-	`<button class="tab" role="tab" data-tab="rivales" aria-selected="false" type="button">Rivales</button>` +
-	`<button class="tab" role="tab" data-tab="liga" aria-selected="false" type="button">Liga</button>` +
-	`<button class="tab" role="tab" data-tab="ranking" aria-selected="false" type="button">Ranking</button>` +
-	`<button class="tab" role="tab" data-tab="comparador" aria-selected="false" type="button">Comparador</button></div>`
-
-// CompareShell is the comparator's tab, drawn by the browser from the tray it keeps.
-const CompareShell = `<section id="comparador" data-tab="comparador" data-ui="comparador"></section>`
-
 // Build is the version of the binary serving this page, stamped at compile time. Empty renders
 // nothing: a page built by hand should not claim a version it does not have.
 var Build string
-
-
-// Stat is one of the four cards under the tab bar: a label, one figure and a line under it.
-type Stat struct {
-	Icon, Label, Value, Small, Note string
-	// ValueID lets the live refresh rewrite the figure without re-rendering the strip.
-	ValueID string
-	// Deadline turns the figure into a live countdown, outlined in red in its last six hours.
-	Deadline string
-	Tab      string
-}
-
-func StatCard(stat Stat) string {
-	attrs := ""
-	if stat.ValueID != "" {
-		attrs += ` id="` + Esc(stat.ValueID) + `"`
-	}
-	if stat.Deadline != "" {
-		attrs += ` data-deadline="` + Esc(stat.Deadline) + `" data-plain="1"`
-	}
-	value := Esc(stat.Value)
-	if stat.Small != "" {
-		value += ` <small>` + Esc(stat.Small) + `</small>`
-	}
-	label := Esc(stat.Label)
-	if stat.Icon != "" {
-		label = stat.Icon + " " + label
-	}
-	inner := `<span class="k">` + label + `</span><span class="v"` + attrs + `>` + value +
-		`</span><span class="s">` + Esc(stat.Note) + `</span>`
-	if stat.Tab != "" {
-		return `<button class="stat" type="button" data-goto="` + Esc(stat.Tab) + `">` + inner +
-			`</button>`
-	}
-	return `<div class="stat">` + inner + `</div>`
-}
-
-// Header is the tab bar, with the live dot, the balance and the search on its right, and the
-// four cards under it. The live dot starts off: a static file is honest about not being live,
-// and the script turns it on when the push channel connects.
-func Header(stats []string, withTabs bool, cashAmount *float64) string {
-	tabs := ""
-	if withTabs {
-		tabs = Tabs
-	}
-	// The exact balance, for the arithmetic a typed amount needs; the Caja card shows it.
-	attrs := ""
-	if cashAmount != nil {
-		attrs = fmt.Sprintf(` data-cash="%.0f"`, *cashAmount)
-	}
-	// The version rides in the live dot's tooltip rather than taking room in the bar.
-	build := ""
-	if Build != "" {
-		build = ` data-build="` + Esc(Build) + `"`
-	}
-	tip := strings.TrimSuffix("Sin conexión en vivo · "+Build, " · ")
-	find := `<div class="head-find"><button class="find-btn" type="button" ` +
-		`aria-label="Buscar jugador" data-tip="Buscar jugador (tecla /)">` +
-		`<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.6"/>` +
-		`<path d="M10.4 10.4l3.6 3.6"/></svg></button>` +
-		`<div class="find-pop" hidden><input id="find" class="head-input" type="search" ` +
-		`autocomplete="off" spellcheck="false" placeholder="buscar jugador…" ` +
-		`aria-label="Buscar un jugador y abrir su ficha">` +
-		`<div class="cmp-results find-results" hidden></div></div></div>`
-	strip := ""
-	if len(stats) > 0 {
-		strip = `<div class="strip">` + strings.Join(stats, "") + `</div>`
-	}
-	return `<div class="topbar"` + attrs + `>` + tabs + `<div class="topright">` +
-		`<span id="live-dot" class="live-off"` + build + ` data-tip="` + Esc(tip) + `"></span>` +
-		versionTag() + find + `</div></div>` + strip
-}
-
-// PageFoot is where the page comes from and what the server may do, and the figures that did
-// not make the four cards, folded.
-func PageFoot(generated, leagueName string, week int, mode string) string {
-	league := ""
-	if leagueName != "" {
-		league = ` · liga <strong>` + Esc(leagueName) + `</strong>`
-	}
-	return `<header class="topline"><h1>LaLiga Fantasy</h1>` +
-		`<p>` + Esc(generated) + league + fmt.Sprintf(` · jornada %d</p>`, week) +
-		`<span class="live"><span id="live-stamp">estatico</span></span>` +
-		modeChip(mode) + `</header>`
-}
-
-// Footer says what the numbers are and what they are not. xPts is an estimate of ours, and
-// the page has to say so where somebody about to spend money will read it.
-func Footer(currentWeight float64) string {
-	return "<footer>Datos: API oficial de LaLiga Fantasy y futbolfantasy.com. " +
-		"<code>xPts</code> es una estimacion propia: puntos por jornada de la temporada pasada " +
-		fmt.Sprintf("y de la actual (peso actual %.0f%%), ajustados por ", currentWeight*100) +
-		"probabilidad de ser titular, dificultad del proximo rival y confianza del dato. " +
-		"<code>est.</code> marca a quien no tiene historico y se estima por precio. " +
-		"El barrido de valor a 7 dias es una proyeccion amortiguada, no una promesa. " +
-		"Herramienta de consulta: no ejecuta ninguna operacion.</footer>"
-}
 
 // CrestCSS is one rule per team rather than a data URI repeated in every row: the same
 // badge appeared 241 times and the page weighed 1.8 MB.
@@ -488,39 +373,6 @@ func CrestCSS() string {
 // you can open from disk, and a file that has to fetch its own icon is not one file.
 const Favicon = `<link rel="icon" type="image/png" href="data:image/png;base64,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">`
 
-func Page(css, js, crestCSS, header, body, footer, modal, drawer string) string {
-	// Without it a phone lays the page out at a made-up 980px and shrinks it: 13px text
-	// arrives at five real pixels, and no rule inside the document can undo that.
-	return `<meta charset="utf-8">` +
-		`<meta name="viewport" content="width=device-width, initial-scale=1">` +
-		`<title>Fantasy</title>` + Favicon + `<style>` + css + crestCSS + `</style>` +
-		`<div class="wrap">` + header + body + footer + `</div>` +
-		modal + drawer +
-		// Ahead of the inline script, which looks this tag up to import the same module.
-		`<script type="module" src="/assets/ui/main.js?v=` + Esc(Build) + `"></script>` +
-		`<script>` + js + `</script>`
-}
-
-
-// modeChip is the one-word answer to what the server may do. Coloured by how much it can act,
-// because "solo lectura" and "auto" are opposite ends of the same question.
-func modeChip(mode string) string {
-	if mode == "" {
-		return ""
-	}
-	class := "mode-manual"
-	switch mode {
-	case "auto":
-		class = "mode-auto"
-	case "solo lectura", "informe":
-		class = "mode-read"
-	}
-	// data-mode is how the page knows it is being served rather than opened as a file.
-	return fmt.Sprintf(`<span class="mode %s" data-mode="%s" title="Que puede hacer este `+
-		`servidor: auto ejecuta las instrucciones permanentes, manual solo lo que pulses, `+
-		`solo lectura nada">Mode: <b>%s</b></span>`, class, Esc(mode), Esc(mode))
-}
-
 // feedHidden are the log's per-matchday and league-wide notices (types 7 and 10): no money and no
 // player moves, so they are not movements.
 var feedHidden = map[int]bool{7: true, 10: true}
@@ -537,10 +389,10 @@ var Verdicts = map[string]struct{ Label, Icon, Status string }{
 	// out loud when you cannot, because the reason is a rule and not a price.
 	"cash":         {"Cobrar", "€", "good"},
 	"cash_blocked": {"No puedes", "€", "neutral"},
-	"clause":  {"Clausulazo", "◆", "good"},
-	"protect": {"Subir clausula", "!", "warning"},
-	"sell":    {"Vender", "▼", "serious"},
-	"out":     {"Baja", "✕", "critical"},
+	"clause":       {"Clausulazo", "◆", "good"},
+	"protect":      {"Subir clausula", "!", "warning"},
+	"sell":         {"Vender", "▼", "serious"},
+	"out":          {"Baja", "✕", "critical"},
 }
 
 // VerdictOrder is the sort order, worst first, so a table sorted by the column reads as a
@@ -657,7 +509,6 @@ func pays(event map[string]any) bool {
 	return false
 }
 
-
 // PowerBadge is who can actually buy right now. Named, not just coloured.
 func PowerBadge(row map[string]any) string {
 	power := text(row["power"])
@@ -708,7 +559,7 @@ func RaiseVerdict(row map[string]any) string {
 	status := map[string]string{
 		"sube": "warning", "no te llega": "critical", "dejalo ir": "neutral",
 		"no compensa": "neutral",
-		"tranquilo": "good",
+		"tranquilo":   "good",
 	}[verdict]
 	if status == "" {
 		status = "neutral"
@@ -1061,7 +912,6 @@ var weekdays = []string{"lun", "mar", "mie", "jue", "vie", "sab", "dom"}
 // scheduler for one number: this package renders and depends on nothing of ours.
 // See schedule.FinishedMatch, which has to agree.
 const FinishedMatch = 7
-
 
 func crestOf(teamID string) string {
 	if _, known := Crests[teamID]; !known {
@@ -1665,7 +1515,7 @@ func CellIn(value any, kind string, section string) (string, string) {
 		}
 		if text(row["source"]) == "techo" {
 			return fmt.Sprintf(`%d <span class="muted" title="Sin alineacion legible: `+
-				`los once mejores de su plantilla por jugar">techo</span>`, waiting),
+					`los once mejores de su plantilla por jugar">techo</span>`, waiting),
 				fmt.Sprintf("%d", waiting)
 		}
 		return fmt.Sprintf(`%d`, waiting), fmt.Sprintf("%d", waiting)
@@ -1863,13 +1713,4 @@ func asSeries(value any) []float64 {
 		return out
 	}
 	return nil
-}
-
-// versionTag is the build in plain sight: whether a deploy has landed is read at a glance, not
-// hovered for.
-func versionTag() string {
-	if Build == "" {
-		return ""
-	}
-	return `<span class="build-tag">` + Esc(Build) + `</span>`
 }

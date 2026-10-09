@@ -1,19 +1,12 @@
 package render
 
 import (
-	"fmt"
 	"sort"
 )
 
 // --- Comprar ---------------------------------------------------------------------------
 
-// shell is a tab the browser draws from its view: the section is only where it goes.
-func shell(id, tab, name string) string {
-	return fmt.Sprintf(`<section id="%s" data-tab="%s" class="mk" data-view="%s"></section>`,
-		id, tab, name)
-}
-
-func (d Document) buyView() string { return shell("v-comprar", "comprar", "comprar") }
+func (d Document) buyView() SectionView { return shell("v-comprar", "comprar", "comprar") }
 
 // BuyData is Comprar: the free market, the rivals' listings and the clauses, each ranked by
 // what the signing adds to the eleven, beside my bids, how the last ones ended and who I follow.

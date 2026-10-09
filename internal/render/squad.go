@@ -9,16 +9,16 @@ import (
 // --- Plantilla -------------------------------------------------------------------------
 
 // LineupShell is where the lineup editor goes; the browser draws it from /api/lineup.
-const LineupShell = `<section id="once" data-tab="plantilla" class="mk mk-once" data-ui="lineup"></section>`
+var LineupShell = SectionView{ID: "once", Tab: "plantilla", UI: "lineup", Class: "mk mk-once"}
 
-func (d Document) squadView() string {
+func (d Document) squadView() SectionView {
 	if len(rows(d.Advice["squad"])) == 0 {
-		return ""
+		return SectionView{}
 	}
 	return shell("v-plantilla", "plantilla", "plantilla")
 }
 
-func (d Document) squadSection() string { return shell("plantilla", "plantilla", "squad") }
+func (d Document) squadSection() SectionView { return shell("plantilla", "plantilla", "squad") }
 
 // KV is one line of a summary: a label and its figure, coloured when it is a change.
 type KV struct {

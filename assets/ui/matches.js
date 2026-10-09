@@ -1,4 +1,4 @@
-import {html, useState, useEffect, legacy} from './lib.js';
+import {html, useState, useEffect, panel} from './lib.js';
 import {Face, ShieldMark, Countdown, Crest, Empty, ApiFace} from './components.js';
 import {KINDS} from './view.js';
 import {getJSON, useStamp, useView} from './api.js';
@@ -58,7 +58,7 @@ function HistoryBlock({b}) {
     const planned = ((forecast || {}).mine || {}).planned || plannedHere;
     const real = weeks.map((w, i) => ({w, pts: me ? me.points[i] : null, rank: me && me.week_rank ? me.week_rank[i] : null}));
     const scale = Math.max(planned, ...real.map((r) => r.pts || 0)) * 1.05 || 1;
-    const open = (w) => legacy().openWeek(w);
+    const open = (w) => panel().openWeek(w);
     rows = [...real.map((r) => r.pts == null
       ? html`<li class="hist"><span class="hj">J${r.w}</span><span class="bars"></span><span class="hv">—</span></li>`
       : html`<li class="hist" data-week=${r.w} tabindex="0" onClick=${() => open(r.w)}
@@ -114,7 +114,7 @@ export function WeekPopup({week}) {
   const managers = md.managers.slice().sort((a, b) => score(b) - score(a));
   const k = md.kickoff ? new Date(md.kickoff) : null;
   const when = k ? DAYS[k.getDay()] + ' ' + k.getDate() + ' ' + MONTHS[k.getMonth()] : '';
-  const page = legacy();
+  const page = panel();
   return html`<h3 class="pc-title">J${week}${future ? ' · previsión de cada once' : when ? ' · ' + when : ''}</h3>
     <p class="drawer-note" style="margin:0 0 8px">Toca un manager para ver su once${future ? '' : '; en pequeño, lo previsto si se guardó'}.</p>
     ${managers.map((m, i) => {

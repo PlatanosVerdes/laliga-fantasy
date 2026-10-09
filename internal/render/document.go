@@ -28,9 +28,6 @@ type Document struct {
 	Generated  string
 	LeagueName string
 	CSS        string
-	JS         string
-	Modal      string
-	Drawer     string
 	// Plan and Raids are the standing instructions' two tables, already computed.
 	Plan  []map[string]any
 	Raids []map[string]any
@@ -113,17 +110,17 @@ func (d Document) HTML() string {
 // paint needs no request, and the server keeps them for /api/views.
 func (d Document) Render() (string, map[string]any) {
 	views := d.ViewData()
-	universe, advice := d.Universe, d.Advice
+	universe := d.Universe
 	week := mapOf(universe["week"])
 	players := rows(universe["players"])
-	hasAdvice := len(advice) > 0
+	hasAdvice := len(d.Advice) > 0
 
-	var sections []string
+	var sections []SectionView
 	if hasAdvice {
 		sections = append(sections, d.Views()...)
 	}
-	shells := d.leagueShells()
-	sections = append(sections, shells[:2]...)
+	league := d.leagueShells()
+	sections = append(sections, league[:2]...)
 	if hasAdvice {
 		sections = append(sections, d.squadSection())
 		shells, rivals := d.rivalViews(players)
@@ -132,41 +129,24 @@ func (d Document) Render() (string, map[string]any) {
 			views[name] = view
 		}
 	}
-	sections = append(sections, shells[2:]...)
+	sections = append(sections, league[2:]...)
 	for name, view := range d.leagueViews() {
 		views[name] = view
 	}
-	sections = append(sections, shell("v-ranking", "ranking", "ranking"))
+	sections = append(sections, shell("v-ranking", "ranking", "ranking"),
+		SectionView{ID: "comparador", Tab: "comparador", UI: "comparador"})
 	views["ranking"] = d.RankingData(players)
-	sections = append(sections, CompareShell)
 
-	stats := d.widgets(week, players)
-	header := Header(stats, hasAdvice, asFloat(d.Advice["budget"])) + d.pageFacts()
-	footer := PageFoot(d.Generated, d.LeagueName, int(number(week["weekNumber"])), d.Mode) +
-		Footer(number(universe["current_weight"]))
-
+	page := PageData{Stats: d.widgets(week, players), Sections: sections,
+		Foot: Foot{Generated: d.Generated, League: d.LeagueName,
+			Week: int(number(week["weekNumber"])), Mode: d.Mode,
+			Weight: fmt.Sprintf("%.0f%%", number(universe["current_weight"])*100)}}
+	if hasAdvice {
+		page.Tabs = Tabs
+	}
+	views["page"] = page
 	blob, _ := json.Marshal(views)
-	body := IconSprite + strings.Join(filterEmpty(sections), "") +
-		`<script type="application/json" id="views-data">` + string(blob) + `</script>`
-	return Page(d.CSS, d.JS, CrestCSS(), header, body, footer, d.Modal, d.Drawer), views
-}
-
-// pageFacts is what the player card needs to know about the league and cannot ask for: the
-// clause window and the exceptions to the hold rule.
-func (d Document) pageFacts() string {
-	attrs := ""
-	if d.Window != nil {
-		open := "0"
-		if d.Window.Open {
-			open = "1"
-		}
-		attrs += fmt.Sprintf(` data-window-open="%s" data-opens="%s" data-closes="%s"`, open,
-			Esc(d.Window.OpensAt), Esc(d.Window.ClosesAt))
-	}
-	if d.HoldExceptions != "" {
-		attrs += ` data-hold-except="` + Esc(d.HoldExceptions) + `"`
-	}
-	return `<div id="page-facts" hidden` + attrs + `></div>`
+	return Page(d.CSS, CrestCSS(), string(blob)), views
 }
 
 func filterEmpty(values []string) []string {
@@ -179,11 +159,10 @@ func filterEmpty(values []string) []string {
 	return out
 }
 
-
 // --- widgets ---------------------------------------------------------------------------
 
 // widgets are the four cards under the tab bar.
-func (d Document) widgets(week map[string]any, players []map[string]any) []string {
+func (d Document) widgets(week map[string]any, players []map[string]any) []Stat {
 	// The one number on this card that keeps changing is how long is left: to the first
 	// kick-off, then to the last one, then to the close the game stamps hours after it.
 	closing, opening := text(week["closingWeekDate"]), text(week["openingWeekDate"])
@@ -208,19 +187,19 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 		note = "último partido " + esWhen(last)
 	}
 	weekNumber := int(number(week["weekNumber"]))
-	matchday := StatCard(Stat{Label: fmt.Sprintf("Jornada %d", weekNumber),
-		Value: value, Deadline: deadline, Note: note, Tab: "partidos"})
-	clauses := ""
+	matchday := Stat{Label: fmt.Sprintf("Jornada %d", weekNumber),
+		Value: value, Deadline: deadline, Note: note, Tab: "partidos"}
+	var clauses []Stat
 	if stat, ok := d.clauseStat(); ok {
-		clauses = StatCard(stat)
+		clauses = []Stat{stat}
 	}
 
 	if len(d.Advice) == 0 {
-		return filterEmpty([]string{matchday, clauses,
-				StatCard(Stat{Label: "Jugadores", Value: fmt.Sprintf("%d", len(players)),
-					Note: fmt.Sprintf("%d con datos de futbolfantasy",
-						int(number(d.Universe["matched_count"])))}),
-				StatCard(Stat{Label: "Sesión", Value: "sin liga", Note: "solo datos públicos"})})
+		return append(append([]Stat{matchday}, clauses...),
+			Stat{Label: "Jugadores", Value: fmt.Sprintf("%d", len(players)),
+				Note: fmt.Sprintf("%d con datos de futbolfantasy",
+					int(number(d.Universe["matched_count"])))},
+			Stat{Label: "Sesión", Value: "sin liga", Note: "solo datos públicos"})
 	}
 
 	teams := mapOf(d.Universe["league_teams"])
@@ -235,16 +214,12 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []strin
 	if budget != nil {
 		exact = group(fmt.Sprintf("%.0f", *budget)) + " €"
 	}
-	stats := filterEmpty([]string{
-		StatCard(Stat{Label: "Caja", Value: esMoney(number(d.Advice["budget"])), ValueID: "kpi-cash",
-			Note: exact, Tab: "rivales"}),
-		clauses, matchday,
-		StatCard(Stat{Label: "Liga", Value: position + "º",
-			Small: fmt.Sprintf("de %d", len(teams)),
-			Note:  fmt.Sprintf("%d pts", int(number(me["points"]))), Tab: "rivales"}),
-	})
-
-	return stats
+	stats := []Stat{{Label: "Caja", Value: esMoney(number(d.Advice["budget"])), ValueID: "kpi-cash",
+		Note: exact, Tab: "rivales"}}
+	stats = append(stats, clauses...)
+	return append(stats, matchday, Stat{Label: "Liga", Value: position + "º",
+		Small: fmt.Sprintf("de %d", len(teams)),
+		Note:  fmt.Sprintf("%d pts", int(number(me["points"]))), Tab: "rivales"})
 }
 
 // lastKickoff is the matchday's last match, leaving out any moved weeks away from the rest.

@@ -1,4 +1,4 @@
-import {html, legacy} from './lib.js';
+import {html, panel} from './lib.js';
 import {KINDS, ActView, ChipView, Segs, Seg} from './view.js';
 import {Face, ShieldMark, PosTag, Empty} from './components.js';
 
@@ -36,7 +36,7 @@ KINDS.eleven = ({b}) => {
     </div>
     ${(e.warnings || []).map((w) => html`<p class="mk-note plan-warn" data-pid=${w.pid || undefined}>${w.t}</p>`)}
     ${e.place ? html`<p class="mk-note finish">Tu puesto previsto en la J${e.week}: <button class="linkish" type="button" data-wired="1"
-      onClick=${() => legacy().goto('partidos')}><b>${e.place}º</b></button></p>` : null}`;
+      onClick=${() => panel().goto('partidos')}><b>${e.place}º</b></button></p>` : null}`;
 };
 
 const More = ({b}) => html`<nav class="more"><span>Ver todo en</span>${b.data.map((a) => html`<${ActView} a=${{...a, class: ''}}/>`)}</nav>`;

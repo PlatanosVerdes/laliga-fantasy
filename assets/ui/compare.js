@@ -1,4 +1,4 @@
-import {html, render, useState, useEffect, useRef, legacy} from './lib.js';
+import {html, render, useState, useEffect, useRef, panel} from './lib.js';
 import {ApiFace, Empty} from './components.js';
 import {Segs} from './view.js';
 import {getJSON} from './api.js';
@@ -55,17 +55,18 @@ window.panelCompare = compare;
 
 export function useTray() {
   const [value, setValue] = useState(tray.slice());
-  useEffect(() => { watchers.add(setValue); return () => watchers.delete(setValue); }, []);
+  useEffect(() => { watchers.add(setValue); setValue(tray.slice()); return () => watchers.delete(setValue); }, []);
   return value;
 }
 
 // The tab on show, as report.js announces it.
 function useTab() {
-  const current = () => (document.querySelector('.tab.on') || {dataset: {}}).dataset.tab;
+  const current = () => (window.panelNav || {}).tab;
   const [tab, setTab] = useState(current());
   useEffect(() => {
     const sync = () => setTab(current());
     addEventListener('panel:tab', sync);
+    sync();
     return () => removeEventListener('panel:tab', sync);
   }, []);
   return tab;
@@ -141,7 +142,7 @@ function Mine({onTab}) {
   const all = () => {
     for (const p of same) { if (!compare.add(p.id, p.name, p.position)) break; }
     setOpen(false);
-    if (compare.list().length > 1 && !onTab) legacy().openCompare();
+    if (compare.list().length > 1 && !onTab) panel().openCompare();
   };
   const row = (p) => html`<${Hit} p=${p} onPick=${pick} extra=${html`${(p.xpts || 0).toFixed(2)} xPts · <b>${fmt(p.value)}</b>`}/>`;
   return html`<div class="cmp-mine-wrap" ref=${box}>
@@ -160,7 +161,7 @@ function Tray() {
   const tab = useTab();
   const visible = list.length > 0 && tab !== 'comparador';
   useEffect(() => { document.body.classList.toggle('tray-on', visible); }, [visible]);
-  const page = legacy();
+  const page = panel();
   return html`<div id="cmp-tray" class="cmp-tray" hidden=${!visible}>
     <${Find} placeholder="buscar jugador…"/>
     <div class="cmp-chips">${list.map((p) => html`<span class="cmp-chip">${posTag(p.pos)}
@@ -179,7 +180,7 @@ function CompareTab() {
   const tab = useTab();
   const [state, setState] = useState({data: null, error: false});
   const ids = list.map((p) => p.id).join(',');
-  const page = legacy();
+  const page = panel();
   useEffect(() => {
     if (tab !== 'comparador') return;
     // Only the bare tab address follows the tray: with a card open on top it is that card's.
@@ -212,7 +213,7 @@ function CompareTab() {
 }
 
 function CompareView({data}) {
-  const t = data.table, players = data.players, page = legacy();
+  const t = data.table, players = data.players, page = panel();
   return html`<div class="cmp-view">
     <p class="note">${t.note}</p>
     ${t.verdict ? html`<p class="cmp-verdict"><${Segs} list=${t.verdict}/></p>` : null}
@@ -230,14 +231,9 @@ function CompareView({data}) {
   </div>`;
 }
 
-// An address that names who to compare counts only when it is how the page was opened.
-if (window.__cmpAdopt) compare.adopt(window.__cmpAdopt);
 
 const trayHost = document.createElement('div');
 document.body.appendChild(trayHost);
 render(html`<${Tray}/>`, trayHost);
 
-export function mountCompareTab(section) {
-  section.textContent = '';
-  render(html`<${CompareTab}/>`, section);
-}
+export {CompareTab};

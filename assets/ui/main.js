@@ -1,49 +1,27 @@
-import {html, render, legacy} from './lib.js';
+import {html, render} from './lib.js';
 import {ModalRoot} from './components.js';
 import {PlayerPopup} from './player.js';
-import {ViewScreen} from './view.js';
 import {WeekPopup} from './matches.js';
 import {ReachPopup} from './rivals.js';
+import {ManagerView, MatchdayView, ForecastView} from './drawers.js';
+import {CompareTab} from './compare.js';
+import {Lineup} from './lineup.js';
+import {start, registerUI, registerDrawer} from './shell.js';
 import './league.js';
 import './decide.js';
-import {mountCompareTab} from './compare.js';
-import {mountLineup} from './lineup.js';
+
+// The page: the shell draws the frame and every section; the dialogs and notices sit above it.
+registerUI('lineup', Lineup);
+registerUI('comparador', CompareTab);
+registerDrawer('jugador', ({arg, d}) => html`<${PlayerPopup} id=${arg} from=${d.from}/>`);
+registerDrawer('jornada', ({arg}) => html`<${WeekPopup} week=${arg}/>`);
+registerDrawer('alcance', ({arg}) => html`<${ReachPopup} team=${arg}/>`);
+registerDrawer('manager', ({arg}) => html`<${ManagerView} team=${arg}/>`);
+registerDrawer('plantillas', ({arg}) => html`<${MatchdayView} week=${arg}/>`);
+registerDrawer('prevision', ({arg}) => html`<${ForecastView} week=${arg}/>`);
+
+start(document.getElementById('app'));
 
 const dialogs = document.createElement('div');
 document.body.appendChild(dialogs);
 render(html`<${ModalRoot}/>`, dialogs);
-
-// The card is drawn into a host of its own inside the drawer: every other drawer view still
-// writes the drawer's HTML whole, and that has to take the card's tree down with it.
-let host = null;
-const unmount = () => { if (host) { render(null, host); host = null; } };
-
-const DRAWERS = {player: PlayerPopup, week: WeekPopup, reach: ReachPopup};
-
-// A drawer view drawn here: the card, the matchday.
-export function mountDrawer(body, name, props) {
-  unmount();
-  body.textContent = '';
-  host = document.createElement('div');
-  body.appendChild(host);
-  const mine = host;
-  new MutationObserver((changes, observer) => {
-    if (!mine.isConnected) { observer.disconnect(); if (host === mine) unmount(); }
-  }).observe(body, {childList: true});
-  const View = DRAWERS[name];
-  render(html`<${View} key=${JSON.stringify(props)} ...${props}/>`, host);
-}
-
-export const mountPlayer = (body, id, from) => mountDrawer(body, 'player', {id, from});
-
-// Every tab the server hands over as a view is the browser's: drawn from the views the page
-// carries, and again whenever the world moves.
-for (const section of document.querySelectorAll('section[data-view]')) {
-  render(html`<${ViewScreen} name=${section.dataset.view}/>`, section);
-}
-
-const compareTab = document.querySelector('section[data-ui="comparador"]');
-if (compareTab) mountCompareTab(compareTab);
-
-const lineup = document.querySelector('section[data-ui="lineup"]');
-if (lineup) mountLineup(lineup);

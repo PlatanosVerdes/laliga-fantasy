@@ -44,26 +44,27 @@ async function refreshViews() {
 
 export function useCash() {
   const [, setAll] = useState(views);
-  useEffect(() => { viewWatchers.add(setAll); return () => viewWatchers.delete(setAll); }, []);
+  useEffect(() => { viewWatchers.add(setAll); setAll(views); return () => viewWatchers.delete(setAll); }, []);
   return cash;
 }
 export const currentCash = () => cash;
+export const getViews = () => views;
 
 export function useMeta() {
   const [all, setAll] = useState(views);
-  useEffect(() => { viewWatchers.add(setAll); return () => viewWatchers.delete(setAll); }, []);
+  useEffect(() => { viewWatchers.add(setAll); setAll(views); return () => viewWatchers.delete(setAll); }, []);
   return all.meta || {};
 }
 
 export function useView(name) {
   const [all, setAll] = useState(views);
-  useEffect(() => { viewWatchers.add(setAll); return () => viewWatchers.delete(setAll); }, []);
+  useEffect(() => { viewWatchers.add(setAll); setAll(views); return () => viewWatchers.delete(setAll); }, []);
   return all[name];
 }
 
 export function useStamp() {
   const [value, setValue] = useState(stamp);
-  useEffect(() => { watchers.add(setValue); return () => watchers.delete(setValue); }, []);
+  useEffect(() => { watchers.add(setValue); setValue(stamp); return () => watchers.delete(setValue); }, []);
   return value;
 }
 
@@ -95,6 +96,6 @@ export function openDialog(next) { dialog = next; dialogWatchers.forEach((watch)
 export const closeDialog = () => openDialog(null);
 export function useDialog() {
   const [value, setValue] = useState(dialog);
-  useEffect(() => { dialogWatchers.add(setValue); return () => dialogWatchers.delete(setValue); }, []);
+  useEffect(() => { dialogWatchers.add(setValue); setValue(dialog); return () => dialogWatchers.delete(setValue); }, []);
   return value;
 }

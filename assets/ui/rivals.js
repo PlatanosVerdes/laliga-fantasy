@@ -1,4 +1,4 @@
-import {html, useState, useEffect, legacy} from './lib.js';
+import {html, useState, useEffect, panel} from './lib.js';
 import {KINDS, list, Segs, ActView, RowView} from './view.js';
 import {Empty} from './components.js';
 import {useView} from './api.js';
@@ -6,11 +6,9 @@ import {useView} from './api.js';
 // Rivales' own pieces: the picker of rival squads, a squad with its full table, the table, and
 // the popup of whom a rival's cash reaches.
 
-KINDS.rivalpick = ({b}) => {
-  useEffect(() => { const page = legacy(); if (page.applyRivalPick) page.applyRivalPick(); }, []);
-  return html`<div class="pick-bar"><label>Equipo<select id="rival-pick">${
-    b.data.map((o) => html`<option value=${o.value}>${o.label}</option>`)}</select></label></div>`;
-};
+KINDS.rivalpick = ({b}) => html`<div class="pick-bar"><label>Equipo<select id="rival-pick" value=${panel().currentRival()}
+    onChange=${(e) => panel().pickRival(e.currentTarget.value)}>${
+  b.data.map((o) => html`<option value=${o.value}>${o.label}</option>`)}</select></label></div>`;
 
 KINDS.squad = ({b}) => html`${list(b.rows, b.scroll)}<details class="fold"><summary>tabla completa</summary><${TableView} t=${b.data}/></details>`;
 
@@ -34,7 +32,7 @@ export function TableView({t}) {
     const desc = !(order && order.col === col && order.desc);
     setOrder({col, desc});
     const section = event.currentTarget.closest('section[id]');
-    (legacy().usage || {sort() {}}).sort(section ? section.id : '', t.cols[col].label || t.cols[col].kind);
+    (panel().usage || {sort() {}}).sort(section ? section.id : '', t.cols[col].label || t.cols[col].kind);
   };
   return html`<div class=${'table-wrap' + (t.sticky ? ' sticky-first' : '')}><table class="sortable" data-wired="1">
     <thead><tr>${t.cols.map((c, i) => html`<th data-kind=${c.kind} onClick=${(e) => sortBy(i, e)}

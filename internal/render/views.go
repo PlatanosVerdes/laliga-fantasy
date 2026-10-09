@@ -210,12 +210,18 @@ func (d Document) playersByID() map[string]map[string]any {
 }
 
 // Views are every tab's screen.
-func (d Document) Views() []string {
+func (d Document) Views() []SectionView {
 	if len(d.Advice) == 0 {
 		return nil
 	}
-	return []string{d.decideSection(), d.buyView(), d.sellView(), d.clauseView(), LineupShell,
-		d.squadView(), d.matchesView(), d.rivalsView()}
+	var out []SectionView
+	for _, section := range []SectionView{d.decideSection(), d.buyView(), d.sellView(),
+		d.clauseView(), LineupShell, d.squadView(), d.matchesView(), d.rivalsView()} {
+		if section.ID != "" {
+			out = append(out, section)
+		}
+	}
+	return out
 }
 
 // --- Comprar ---------------------------------------------------------------------------

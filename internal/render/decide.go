@@ -9,9 +9,9 @@ import (
 
 // --- Decidir ---------------------------------------------------------------------------
 
-func (d Document) decideSection() string {
+func (d Document) decideSection() SectionView {
 	if len(d.Advice) == 0 {
-		return ""
+		return SectionView{}
 	}
 	return shell("ahora", "decidir", "decidir")
 }

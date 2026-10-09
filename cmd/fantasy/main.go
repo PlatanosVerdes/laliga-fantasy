@@ -94,8 +94,6 @@ func main() {
 		err = cmdModel(rest[1:])
 	case "wake":
 		err = cmdWake(rest[1:])
-	case "section":
-		err = cmdSection(rest[1:])
 	case "plan":
 		err = cmdPlan(rest[1:])
 	case "advise-json":
@@ -136,10 +134,6 @@ func main() {
 		err = cmdReport(rest[1:])
 	case "page":
 		err = cmdPage(rest[1:])
-	case "shell":
-		err = cmdShell(rest[1:])
-	case "cells":
-		err = cmdCells()
 	case "checks":
 		err = cmdChecks()
 	case "calls":
@@ -185,15 +179,12 @@ uso: fantasy [-v|-q] <comando>
                 que haria el planificador con ese payload, para comparar
   calls         la peticion que construiria cada operacion, sin enviarla
   checks        que aceptaria y que rechazaria la guardia, caso por caso
-  cells         como se formatea cada celda, para compararlo con Python
   plan <players.json> [saldo]   que harian las instrucciones permanentes
   advise-json <universe.json> <saldo>   los cubos de consejo en JSON, para comparar
   match <players.json> <ffmarket.json> <teams.json>   emparejar las dos fuentes
   scrape <que> <fichero.html>   parsear una pagina de futbolfantasy y volcarla en JSON
   report [--output f] [--generado t]   la pagina, desde el modelo propio
   page <dump.json> <generado> [liga]   la pagina entera, desde un volcado
-  shell <caso>  cabecera, widget, pie o pestanas, para compararlo
-  section <n> <rows.json>   una seccion renderizada, para compararla
   paths         donde vive cada cosa
 `))
 }
@@ -980,98 +971,7 @@ var validationTable = []struct {
 		writes.Player{Name: "X"}, 50_000_000}},
 }
 
-// cellCases are the inputs both implementations are checked against. The edges are here on
-// purpose: 999_500 must read as millions rather than "1.000K", a negative must keep its
-// sign in front of the separators, and an absent value must be the em dash rather than a
-// zero.
-var cellCases = []struct {
-	Kind  string
-	Value any
-}{
-	{"money", nil}, {"money", 0}, {"money", 1}, {"money", 999.0}, {"money", 1000.0},
-	{"money", 999_499.0}, {"money", 999_500.0}, {"money", 1_000_000.0},
-	{"money", 9_867_495.0}, {"money", 130_960_400.0}, {"money", -2_500_000.0},
-	{"money", -999.0},
-	{"num", nil}, {"num", 0}, {"num", 2.4055}, {"num", -1.5}, {"num", 121.0},
-	{"int", nil}, {"int", 0}, {"int", 211.0}, {"int", -3.0},
-	{"pct", nil}, {"pct", 0}, {"pct", 5.83}, {"pct", -11.4}, {"pct", 12.0}, {"pct", -30.0},
-	{"mag", nil}, {"mag", 0}, {"mag", 0.244}, {"mag", 0.45}, {"mag", 1.7},
-	{"text", nil}, {"text", "Barcelona (casa)"}, {"text", "M. Dituro"},
-	{"text", "O'Neill & co"},
-	{"spark", []any{}}, {"spark", []any{1.0, 2.0, 3.0}},
-	{"spark", []any{9_000_000.0, 9_100_000.0, 8_900_000.0, 9_400_000.0, 9_867_495.0}},
-	{"spark", []any{5.0, 5.0, 5.0, 5.0, 5.0, 5.0}},
-	{"starts", nil}, {"starts", 0}, {"starts", 29.0}, {"starts", 30.0}, {"starts", 50.0},
-	{"starts", 75.0}, {"starts", 100.0},
-	{"star", map[string]any{"id": "1300", "name": "Camavinga", "starred": true}},
-	{"star", map[string]any{"id": "184", "name": "David Soria"}},
-	{"player", map[string]any{"id": "1300", "name": "Camavinga", "team": "Real Madrid",
-		"team_short": "RMA", "team_id": "1", "position": "MED", "position_id": 3.0,
-		"available": true}},
-	{"player", map[string]any{"id": "7", "name": "Lesionado", "team": "Elche CF",
-		"team_short": "ELC", "team_id": "7", "position": "POR", "position_id": 1.0,
-		"available": false, "status": "injured"}},
-	{"player", map[string]any{"id": "8", "name": "Dudoso", "team": "Getafe",
-		"team_short": "GET", "team_id": "17", "position": "DEL", "position_id": 4.0,
-		"available": true, "status": "doubtful", "prior_based": true, "is_mine": true}},
-	// Big and fractional, in a column that renders it as text: the shape that turned into
-	// scientific notation and sorted wrongly while looking fine.
-	{"text", 17761424.4}, {"text", 130960400.0}, {"text", 0.00001},
-	{"num", 17761424.4}, {"money", 17761424.4},
-	{"list", []any{"score bajo", "valor cayendo"}}, {"list", []any{}},
-	{"pct_plain", 5.83}, {"pct_plain", nil},
-	{"ratio", nil}, {"ratio", 0.9}, {"ratio", 1.0}, {"ratio", 1.06}, {"ratio", 1.31},
-	{"ratio_sell", 1.16}, {"ratio_sell", 1.03}, {"ratio_sell", 0.99}, {"ratio_sell", 0.95},
-	{"ratio_sell", 0.5},
-	{"ideal", nil}, {"ideal", 0}, {"ideal", 11_000_000.0},
-}
 
-// cmdSection renders one section from rows handed to it, so the HTML can be compared
-// against Python's for the very same input. Rendering from a live model instead would
-// compare two data reads as much as two renderers.
-func cmdSection(args []string) error {
-	if len(args) < 2 {
-		return fmt.Errorf("uso: section <plantilla|mercado> <rows.json>")
-	}
-	raw, err := os.ReadFile(args[1])
-	if err != nil {
-		return err
-	}
-	var rows []map[string]any
-	if err := json.Unmarshal(raw, &rows); err != nil {
-		return err
-	}
-
-	// Two sections are not tables at all: the calendar is a shape and the feed is a list
-	// of sentences, so they render from the same rows by their own route.
-	switch args[0] {
-	case "calendario":
-		spending := 0.0
-		if len(args) > 2 {
-			parsed, err := strconv.ParseFloat(args[2], 64)
-			if err != nil {
-				return err
-			}
-			spending = parsed
-		}
-		fmt.Print(render.Calendar(rows, spending, time.Now().Format("2006-01-02")))
-		return nil
-	case "movimientos":
-		blob, err := json.MarshalIndent(render.FeedOf(rows), "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(blob))
-		return nil
-	}
-
-	html, err := render.SectionTable(args[0], rows)
-	if err != nil {
-		return err
-	}
-	fmt.Print(html)
-	return nil
-}
 
 // cmdPlan is what the standing instructions would do, and what the scheduled raids would do,
 // from a recorded squad. Nothing is executed: this prints the plan.
@@ -1594,8 +1494,7 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		HoldExceptions: house.HoldExceptions,
 		MaxDebtPct:     house.MaxDebtPct,
 		RuleNotes:      house.Notes,
-		CSS: read("report.css"), JS: read("report.js"),
-		Drawer: read("drawer.html"),
+		CSS: read("report.css"),
 		Plan:     policies.Plan(players, armed, time.Now()),
 		Raids:    policies.RaidPlan(players, armed, cash, clauseWindow(universe.Schedule)),
 		Window:   clauseWindow(universe.Schedule),
@@ -1655,8 +1554,7 @@ func cmdPage(args []string) error {
 		Universe: blob.Universe, Advice: blob.Advice,
 		Swaps: advice.Swaps(blob.Universe, blob.Advice, number(blob.Advice["budget"])),
 		Generated: args[1], LeagueName: league,
-		CSS: read("report.css"), JS: read("report.js"),
-		Drawer: read("drawer.html"),
+		CSS: read("report.css"),
 		Plan: rowsFrom(blob.Advice["_plan"]), Raids: rowsFrom(blob.Advice["_raids"]),
 		Policies: policiesFrom(blob.Advice["_policies"]),
 	}
@@ -1698,39 +1596,7 @@ func policiesFrom(value any) map[string]map[string]any {
 	return out
 }
 
-// cmdShell renders the pieces of the page that are not sections, from arguments rather
-// than from a model, so they can be compared one at a time.
-func cmdShell(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("uso: shell <cabecera|pie|pestanas>")
-	}
-	switch args[0] {
-	case "pestanas":
-		fmt.Print(render.Tabs)
 
-	case "pie":
-		for _, weight := range []float64{0, 0.125, 0.5, 1} {
-			fmt.Println(render.Footer(weight))
-		}
-
-	case "cabecera":
-		fmt.Println(render.Header([]string{`<div class="stat">uno</div>`,
-			`<div class="stat">dos</div>`}, true, nil))
-		fmt.Println(render.PageFoot("18/08/2026 16:20", "Liga Fantasy Comité 2026-", 1, "auto"))
-
-	default:
-		return fmt.Errorf("caso desconocido: %s", args[0])
-	}
-	return nil
-}
-
-func cmdCells() error {
-	for _, row := range cellCases {
-		inner, sort := render.Cell(row.Value, row.Kind)
-		fmt.Printf("%s|%v|%s|%s\n", row.Kind, row.Value, sort, inner)
-	}
-	return nil
-}
 
 func cmdChecks() error {
 	for _, row := range validationTable {

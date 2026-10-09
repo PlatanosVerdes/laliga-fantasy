@@ -1,4 +1,4 @@
-import {html, useState, useEffect, useRef, legacy} from './lib.js';
+import {html, useState, useEffect, useRef, panel} from './lib.js';
 import {Modal} from './components.js';
 import {prepare, confirm, postJSON, changed, closeDialog, openDialog, useCash, useMeta} from './api.js';
 import {exact, group, digits, stampText} from './format.js';
@@ -28,7 +28,7 @@ const AMOUNT_LABEL = {bid: 'Pujas', modify_bid: 'Nueva puja', buy_offer: 'Ofrece
 const MOVES_CASH = new Set(['bid', 'modify_bid', 'buy_offer', 'direct_offer', 'pay_clause', 'accept_offer',
   'raise_clause', 'sell_to_market']);
 
-const usage = () => legacy().usage || {op() {}, click() {}};
+const usage = () => panel().usage || {op() {}, click() {}};
 
 // A bid button of a list: the market takes a bid, a rival's sale an offer, and a bid already
 // placed is changed rather than doubled.
@@ -197,7 +197,7 @@ function ShieldDialog({a, player}) {
   }
   const now = () => {
     closeDialog();
-    legacy().closeDrawer();
+    panel().closeDrawer();
     openDialog({kind: 'confirm', key: ++opened, op: {op: 'shield_player', name: player.name, player_id: player.id}});
   };
   const save = async () => {
@@ -208,7 +208,7 @@ function ShieldDialog({a, player}) {
     catch (e) { setError(e.message || 'No he podido programarlo.'); return; }
     closeDialog();
     changed();
-    legacy().openDetail(player.id);
+    panel().openDetail(player.id);
   };
   return html`<${Modal} label="Blindar jugador" onClose=${closeDialog}>
     <h3>Blindar a <span class="shield-who">${player.name}</span></h3>

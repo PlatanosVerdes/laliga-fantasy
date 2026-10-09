@@ -1,4 +1,4 @@
-import {html, useState, useEffect, useRef, legacy} from './lib.js';
+import {html, useState, useEffect, useRef, panel} from './lib.js';
 import {KINDS, Segs} from './view.js';
 import {getJSON, useStamp} from './api.js';
 
@@ -61,17 +61,20 @@ function SeasonChart() {
       () => setFailed(!seasonAnswer));
   }, [stamp]);
   useEffect(() => {
-    const measure = () => box.current && setWidth(box.current.clientWidth);
-    measure();
+    // Drawn at the width it has: a hidden tab has none, and turning the phone changes it.
+    if (!box.current || !window.ResizeObserver) return undefined;
     let timer;
-    const later = () => { clearTimeout(timer); timer = setTimeout(measure, 200); };
-    addEventListener('resize', later);
-    return () => removeEventListener('resize', later);
-  }, [data]);
+    const watch = new ResizeObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => box.current && setWidth(box.current.clientWidth), 120);
+    });
+    watch.observe(box.current);
+    return () => { clearTimeout(timer); watch.disconnect(); };
+  }, []);
   const change = (next, what) => {
     store(EVO_KEY, JSON.stringify(next));
     setState(next);
-    (legacy().usage || {click() {}}).click('liga', 'evolucion', what);
+    (panel().usage || {click() {}}).click('liga', 'evolucion', what);
   };
   let inner;
   if (failed) inner = html`<p class="empty">No he podido reconstruir la clasificacion.</p>`;

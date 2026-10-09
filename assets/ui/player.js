@@ -1,7 +1,7 @@
-import {html, useState, useEffect, legacy} from './lib.js';
+import {html, useState, useEffect, panel} from './lib.js';
 import {Face, Tags, Role, Crest, Countdown, Button, ShieldMark, Switch, Icon} from './components.js';
 import {dec, mny, fmt, signed, exact, group, digits, whenShort, since, health} from './format.js';
-import {getJSON, postJSON} from './api.js';
+import {getJSON, postJSON, useStamp} from './api.js';
 import {runAction, toggleAlways} from './actions.js';
 import {compare, useTray} from './compare.js';
 
@@ -282,16 +282,18 @@ function CompareButton({p}) {
 
 export function PlayerPopup({id, from}) {
   const [state, setState] = useState({data: null, error: null});
+  // Asked again whenever the world moves, a write of ours included: the card shows what is.
+  const stamp = useStamp();
   useEffect(() => {
     let current = true;
     getJSON('/api/player/' + id).then((data) => current && setState({data, error: null}),
-      (error) => current && setState({data: null, error}));
+      (error) => current && setState((before) => ({data: before.data, error: before.data ? null : error})));
     return () => { current = false; };
-  }, [id]);
+  }, [id, stamp]);
   if (state.error) return html`<p class="empty">Solo disponible en la version servida (<code>fantasy serve</code>).</p>`;
   const data = state.data;
   if (!data) return html`<p class="empty">Cargando…</p>`;
-  const page = legacy();
+  const page = panel();
   const p = data.player, row = data.row || {};
   const owner = p.is_mine ? 'tuyo' : p.owner && p.owner_team_id
     ? html`<button class="p-name" type="button" onClick=${(e) => { e.stopPropagation(); page.openManager(p.owner_team_id); }}>${p.owner}</button>`

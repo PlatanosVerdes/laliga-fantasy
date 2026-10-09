@@ -45,19 +45,19 @@ func TestRivalSectionsOnePerRival(t *testing.T) {
 	if len(shells) != 3 || len(views) != 3 {
 		t.Fatalf("selector y dos rivales, salieron %d secciones", len(shells))
 	}
-	if !strings.Contains(shells[0], `id="rivalpick"`) {
-		t.Fatalf("la primera tiene que ser el desplegable: %.140s", shells[0])
+	if shells[0].ID != "rivalpick" {
+		t.Fatalf("la primera tiene que ser el desplegable: %+v", shells[0])
 	}
 	// Ordered by league position, so second in the table comes first.
-	if !strings.Contains(shells[1], `id="rival-300"`) {
-		t.Errorf("el segundo de la liga deberia ir primero: %.120s", shells[1])
+	if shells[1].ID != "rival-300" {
+		t.Errorf("el segundo de la liga deberia ir primero: %+v", shells[1])
 	}
 	picks := views["rivalpick"].(View).Main[0].Data.([]RivalPick)
 	if picks[0].Value != "rival-300" || picks[1].Value != "rival-200" {
 		t.Error("las opciones tienen que ir en orden de clasificacion")
 	}
 	for _, section := range shells[1:] {
-		if !strings.Contains(section, `data-tab="rivales"`) {
+		if section.Tab != "rivales" {
 			t.Error("una seccion que no dice su pestaña queda invisible")
 		}
 	}

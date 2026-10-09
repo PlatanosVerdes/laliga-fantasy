@@ -1,4 +1,4 @@
-import {legacy} from './lib.js';
+import {panel} from './lib.js';
 import {getJSON, postJSON, openDialog, changed} from './api.js';
 import {stampText} from './format.js';
 import {openBid, openAmount, shieldDialog, raidDialog} from './dialogs.js';
@@ -9,7 +9,7 @@ export function confirmOp(op) { opened += 1; openDialog({kind: 'confirm', key: o
 // One of the player's actions, run exactly as his card always has: the amount dialogs and the
 // shield and raid forms are report.js's; the plain two-step confirmation is ConfirmOp.
 export async function runAction(a, player, {fromCard = false, reopen} = {}) {
-  const page = legacy();
+  const page = panel();
   if (a.op === 'note') return;
   if (a.op === 'raid') {
     raidDialog({id: player.id, name: player.name, suggested: a.suggested, clause: player.clause,
@@ -52,7 +52,7 @@ export async function toggleAlways(player) {
 // A view's button, as render/viewmodel.go described it.
 export async function runAct(a) {
   const x = a.args || {};
-  const page = legacy();
+  const page = panel();
   switch (a.do) {
     case 'op':
       confirmOp({op: x.op, name: x.name, player_id: x.player_id, market_id: x.market_id,

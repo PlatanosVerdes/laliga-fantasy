@@ -1,4 +1,4 @@
-import {html, useState, useEffect, legacy} from './lib.js';
+import {html, useState, useEffect, panel} from './lib.js';
 import {Face, Tags, ShieldMark, PosTag, Countdown, Empty} from './components.js';
 import {useView, postJSON, changed} from './api.js';
 import {runAct, toggleAlways} from './actions.js';
@@ -18,9 +18,9 @@ export function Seg({s}) {
     : s.c && s.c.startsWith('role ') ? html`<i class="rdot"></i>${s.t}` : s.t;
   if (s.href) return html`<a class=${s.c || undefined} href=${s.href} target="_blank" rel="noopener" data-tip=${tip}>${inner}</a>`;
   if (s.pid && s.c === 'p-name') return html`<button class="p-name" type="button" data-wired="1"
-    onClick=${(e) => { e.stopPropagation(); legacy().openDetail(s.pid); }}>${inner}</button>`;
+    onClick=${(e) => { e.stopPropagation(); panel().openDetail(s.pid); }}>${inner}</button>`;
   if (s.team && s.c === 'p-name') return html`<button class="p-name" type="button" data-wired="1"
-    onClick=${(e) => { e.stopPropagation(); legacy().openManager(s.team); }}>${inner}</button>`;
+    onClick=${(e) => { e.stopPropagation(); panel().openManager(s.team); }}>${inner}</button>`;
   if (s.pid || s.team) return html`<span class=${s.c || undefined} data-pid=${s.pid || undefined} data-team=${s.team || undefined} data-tip=${tip}>${inner}</span>`;
   const El = s.el || 'span';
   if (!s.c && !tip && !s.el && !s.style && !s.kids) return s.t;
@@ -130,7 +130,7 @@ const filterWatchers = new Set();
 function setFilters(next) { Object.assign(filters, next); filterWatchers.forEach((watch) => watch({...filters})); }
 function useFilters() {
   const [value, setValue] = useState({...filters});
-  useEffect(() => { filterWatchers.add(setValue); return () => filterWatchers.delete(setValue); }, []);
+  useEffect(() => { filterWatchers.add(setValue); setValue({...filters}); return () => filterWatchers.delete(setValue); }, []);
   return value;
 }
 

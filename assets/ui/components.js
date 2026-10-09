@@ -1,4 +1,4 @@
-import {html, useState, useEffect, useRef, legacy} from './lib.js';
+import {html, useState, useEffect, useRef, panel} from './lib.js';
 import {esWhen, exact, chipText, countdownText, health} from './format.js';
 import {prepare, confirm, changed, closeDialog, useDialog} from './api.js';
 import {DIALOGS, Notices, flash} from './dialogs.js';
@@ -156,7 +156,7 @@ export function ConfirmOp({op}) {
   }, []);
   const send = async () => {
     setStep((s) => ({...s, sending: true, error: ''}));
-    (legacy().usage || {op() {}}).op('confirmar ' + op.op);
+    (panel().usage || {op() {}}).op('confirmar ' + op.op);
     try {
       const data = await confirm(token.current);
       const done = DONE_LABEL[op.op] || 'Hecho';

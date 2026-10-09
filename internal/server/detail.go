@@ -871,20 +871,6 @@ func bestOffer(row map[string]any) any {
 	return best
 }
 
-// fragments serves the page in pieces so a repaint replaces the sections that changed instead
-// of the whole document, which is what lets the pitch keep unsaved changes.
-func (s *Server) fragments(writer http.ResponseWriter, _ *http.Request) {
-	if s.opts.Page == nil {
-		s.json(writer, http.StatusServiceUnavailable, map[string]any{"error": "sin pagina"})
-		return
-	}
-	// The balance travels with the fragments: it is the number every button on the page is
-	// judged against, and the live refresh only replaces sections, so it used to sit there
-	// stale until somebody reloaded by hand.
-	s.json(writer, http.StatusOK, map[string]any{"version": s.state.Health().Version,
-		"cash": s.budget(), "sections": Sections(s.render().HTML)})
-}
-
 // budget is the cash the actions are judged against. Read from the API rather than the built
 // world so a blocked button is blocked on the real balance.
 func (s *Server) budget() float64 {

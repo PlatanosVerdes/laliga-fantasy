@@ -5,63 +5,50 @@ import (
 	"testing"
 )
 
-// The page says which build is serving it, in the live dot's tooltip: without it the only way
-// to tell whether a fix is deployed is to read the container's logs.
-func TestHeaderShowsTheBuildOnlyWhenStamped(t *testing.T) {
-	Build = ""
-	if got := Header(nil, true, nil); strings.Contains(got, `data-build=`) || strings.Contains(got, "build-tag") {
-		t.Errorf("sin sello no deberia anunciar version: %s", got)
-	}
+// The page is a shell: the views as JSON, the module that draws them versioned by the build so
+// a deploy is picked up, and a line for whoever has JavaScript off.
+func TestPageIsAShellAroundTheViews(t *testing.T) {
 	Build = "v2026.08.21.3"
 	defer func() { Build = "" }()
-	got := Header(nil, true, nil)
-	if !strings.Contains(got, `data-build="v2026.08.21.3"`) || !strings.Contains(got, "· v2026.08.21.3") {
-		t.Errorf("el punto en vivo lleva la version: %s", got)
-	}
-	if !strings.Contains(got, `<span class="build-tag">v2026.08.21.3</span>`) {
-		t.Errorf("la version se ve sin pasar el raton: %s", got)
-	}
-}
-
-// The tab bar keeps its room for the tabs: no balance chip (the Caja card has it), the exact
-// figure stamped on the bar for the arithmetic, and the search folded into a magnifier.
-func TestTabBarLeavesRoomForTheTabs(t *testing.T) {
-	amount := 18_205_453.0
-	got := Header(nil, true, &amount)
-	if strings.Contains(got, "tab-cash") || !strings.Contains(got, `data-cash="18205453"`) {
-		t.Errorf("sin chip de saldo, con la cifra exacta: %s", got)
-	}
-	if !strings.Contains(got, `class="find-btn"`) || !strings.Contains(got, `<div class="find-pop" hidden>`) {
-		t.Errorf("la busqueda es una lupa: %s", got)
-	}
-	if strings.Contains(Header(nil, true, nil), "data-cash") {
-		t.Error("sin cifra no se estampa nada")
+	got := Page("body{}", "", `{"a":1}`)
+	for _, want := range []string{`name="viewport"`, `<div class="wrap" id="app"></div>`,
+		`<noscript>`, `<script type="application/json" id="views-data">{"a":1}</script>`,
+		`src="/assets/ui/main.js?v=v2026.08.21.3"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %s in %.300s", want, got)
+		}
 	}
 }
 
-// The tab bar comes first with the search on its right, then the four cards and nothing else:
-// where the page comes from and the other figures go to the foot.
-func TestHeaderIsTabsThenFourCards(t *testing.T) {
-	stats := []string{StatCard(Stat{Label: "Caja", Value: "76,5M", ValueID: "kpi-cash"}),
-		StatCard(Stat{Label: "Jornada 8", Value: "1d 2h", Deadline: "2026-10-09T21:00:00+02:00"})}
-	got := Header(stats, true, nil)
-	tabs := strings.Index(got, `id="tabs"`)
-	find, strip := strings.Index(got, `id="find"`), strings.Index(got, `class="strip"`)
-	if tabs < 0 || find < tabs || strip < find {
-		t.Errorf("orden: pestañas, buscador y tarjetas: %s", got)
+// The page's own data: the tabs with the comparator, the four cards with the balance first and
+// a live countdown, and the sections each naming its tab and what fills it; the build and the
+// mode ride in meta, where the live dot and the dialogs read them.
+func TestPageDataDescribesTheShell(t *testing.T) {
+	Build = "v1"
+	defer func() { Build = "" }()
+	document := decidingDocument()
+	document.Mode = "auto"
+	_, views := document.Render()
+	page := views["page"].(PageData)
+	if len(page.Tabs) != 10 || page.Tabs[9].ID != "comparador" {
+		t.Errorf("tabs: %+v", page.Tabs)
 	}
-	if !strings.Contains(got, `id="live-dot"`) || !strings.Contains(got, `data-deadline=`) {
-		t.Errorf("el punto en vivo y la cuenta atrás siguen siendo enganches del script: %s", got)
+	if len(page.Stats) == 0 || page.Stats[0].ValueID != "kpi-cash" {
+		t.Errorf("the balance first: %+v", page.Stats)
 	}
-	if strings.Contains(got, "más datos") || strings.Contains(got, "LaLiga Fantasy") {
-		t.Error("entre las tarjetas y el contenido no va nada")
+	for _, section := range page.Sections {
+		if section.ID == "" || section.Tab == "" || (section.View == "" && section.UI == "") {
+			t.Errorf("a section says where it goes and what fills it: %+v", section)
+		}
+		if section.View != "" && views[section.View] == nil {
+			t.Errorf("section %s names a view that is not there", section.ID)
+		}
 	}
-	foot := PageFoot("08/10/2026 20:52", "Liga", 8, "auto")
-	if strings.Contains(foot, "más datos") || !strings.Contains(foot, `id="live-stamp"`) ||
-		!strings.Contains(foot, "jornada 8") {
-		t.Errorf("el pie lleva solo la procedencia: %s", foot)
+	meta := views["meta"].(map[string]any)
+	if meta["build"] != "v1" || meta["mode"] != "auto" {
+		t.Errorf("meta: %v", meta)
 	}
-	if !strings.Contains(Tabs, `data-tab="comparador"`) {
-		t.Error("el comparador es una pestaña")
+	if strings.Contains(asJSON(views), "más datos") {
+		t.Error("the foot carries only where the page comes from")
 	}
 }

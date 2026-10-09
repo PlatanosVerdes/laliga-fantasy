@@ -5,19 +5,11 @@ import (
 	"testing"
 )
 
-// The live refresh swaps sections by id with a non-greedy match, so every view has to be one
-// section with nothing nested, and each one names its tab.
-func TestViewsAreFlatSectionsOfTheirTab(t *testing.T) {
+// Every tab with a view of its own has a section that names it.
+func TestEveryTabHasItsSection(t *testing.T) {
 	seen := map[string]bool{}
-	for _, html := range filterEmpty(decidingDocument().Views()) {
-		if strings.Count(html, "<section") != 1 || strings.Count(html, "</section>") != 1 {
-			t.Errorf("one section, nothing nested: %.120s", html)
-		}
-		for _, tab := range ViewTabs {
-			if strings.Contains(html, `data-tab="`+tab+`"`) {
-				seen[tab] = true
-			}
-		}
+	for _, section := range decidingDocument().Views() {
+		seen[section.Tab] = true
 	}
 	for _, tab := range ViewTabs {
 		if !seen[tab] {
@@ -146,16 +138,6 @@ func TestStoodDownRaidsCanBeCancelledAndOrdersAreLogged(t *testing.T) {
 		"Historial de tus órdenes", "Fofana", "15,2M"} {
 		if !strings.Contains(blob, want) {
 			t.Errorf("missing %q", want)
-		}
-	}
-}
-
-// The tables that sat under "Ver detalle" are gone with their switch.
-func TestNoTabFoldsItsOldTables(t *testing.T) {
-	page := strings.Join(decidingDocument().Views(), "")
-	for _, gone := range []string{"Ver detalle", "mk-more", "data-fold"} {
-		if strings.Contains(page, gone) {
-			t.Errorf("%q is still on the page", gone)
 		}
 	}
 }

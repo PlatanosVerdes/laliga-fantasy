@@ -6,7 +6,7 @@ import (
 )
 
 func TestPageDeclaresTheViewport(t *testing.T) {
-	got := Page("", "", "", "", "", "", "", "")
+	got := Page("", "", "{}")
 	if !strings.Contains(got, `name="viewport"`) || !strings.Contains(got, "width=device-width") {
 		t.Errorf("la pagina tiene que declarar el viewport: %.200s", got)
 	}

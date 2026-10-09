@@ -9,7 +9,7 @@ import (
 
 // --- Cláusulas -------------------------------------------------------------------------
 
-func (d Document) clauseView() string { return shell("v-clausulas", "clausulas", "clausulas") }
+func (d Document) clauseView() SectionView { return shell("v-clausulas", "clausulas", "clausulas") }
 
 // ClauseData is Cláusulas: which of my clauses to raise and for how much, the clausulazos I have
 // scheduled, the clauses worth paying today and the cheap ones, and the next week of unlocks.

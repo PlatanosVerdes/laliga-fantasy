@@ -1,4 +1,4 @@
-import {html, render, useState, useEffect, useRef, legacy} from './lib.js';
+import {html, render, useState, useEffect, useRef, panel} from './lib.js';
 import {ApiFace, ShieldMark} from './components.js';
 import {getJSON, postJSON, useStamp} from './api.js';
 import {dec, mny, whenShort, health} from './format.js';
@@ -132,7 +132,7 @@ function Lineup() {
     s.bench = everyone.filter((p) => !used.has(String(p.id)));
     s.formation = best.formation;
     st.dirty = true;
-    (legacy().usage || {click() {}}).click('alineacion', 'poner el mejor once');
+    (panel().usage || {click() {}}).click('alineacion', 'poner el mejor once');
     redraw();
   };
   const save = async () => {
@@ -172,7 +172,7 @@ function Lineup() {
       if (e.target.closest('.slot-grip')) return;
       if (place(from === 'bench' ? {bench: true} : {line, index})) return;
       if (st.justDragged) return;
-      legacy().openDetail(p.id);
+      panel().openDetail(p.id);
     },
   });
   const target = (where) => ({
@@ -295,7 +295,4 @@ function Frame({st, formation = '', best, select, status, onReset, onSave, canSa
     <div class="pitch-wrap">${children}</div></div>`;
 }
 
-export function mountLineup(section) {
-  section.textContent = '';
-  render(html`<${Lineup}/>`, section);
-}
+export {Lineup};

@@ -9,7 +9,7 @@ import (
 
 // --- Vender ----------------------------------------------------------------------------
 
-func (d Document) sellView() string { return shell("v-vender", "vender", "vender") }
+func (d Document) sellView() SectionView { return shell("v-vender", "vender", "vender") }
 
 // SellData is Vender: the offers received with what to do about each, what is on sale, the
 // rest of the squad and the standing listings.
