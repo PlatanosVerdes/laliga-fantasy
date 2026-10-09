@@ -12,7 +12,7 @@ KINDS.rivalpick = ({b}) => html`<div class="pick-bar"><label>Equipo<select id="r
 
 KINDS.squad = ({b}) => html`${list(b.rows, b.scroll)}<details class="fold"><summary>tabla completa</summary><${TableView} t=${b.data}/></details>`;
 
-// The kinds report.js sorted as numbers; any other column sorts as text.
+// The kinds that sort as numbers; any other column sorts as text.
 const NUMERIC = new Set(['money', 'pct', 'num', 'num1', 'int', 'pct_plain', 'spark', 'verdict', 'mag',
   'ideal', 'hours', 'ratio', 'live_points', 'waiting', 'projection']);
 
@@ -34,7 +34,7 @@ export function TableView({t}) {
     const section = event.currentTarget.closest('section[id]');
     (panel().usage || {sort() {}}).sort(section ? section.id : '', t.cols[col].label || t.cols[col].kind);
   };
-  return html`<div class=${'table-wrap' + (t.sticky ? ' sticky-first' : '')}><table class="sortable" data-wired="1">
+  return html`<div class=${'table-wrap' + (t.sticky ? ' sticky-first' : '')}><table class="sortable">
     <thead><tr>${t.cols.map((c, i) => html`<th data-kind=${c.kind} onClick=${(e) => sortBy(i, e)}
       class=${[c.num ? 'right' : '', c.wide ? 'wide-only' : '', order && order.col === i ? (order.desc ? 'sorted-desc' : 'sorted-asc') : ''].filter(Boolean).join(' ') || undefined}>${c.label}</th>`)}</tr></thead>
     <tbody>${rows.map((r) => html`<tr class=${r.me ? 'row-me' : undefined}>${r.cells.map((c) => html`<td class=${c.c || undefined} data-sort=${c.sort}>

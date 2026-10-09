@@ -6,8 +6,8 @@ import {openBid, openAmount, shieldDialog, raidDialog} from './dialogs.js';
 let opened = 0;
 export function confirmOp(op) { opened += 1; openDialog({kind: 'confirm', key: opened, op}); }
 
-// One of the player's actions, run exactly as his card always has: the amount dialogs and the
-// shield and raid forms are report.js's; the plain two-step confirmation is ConfirmOp.
+// One of the player's actions, run exactly as his card always has: the amount, shield and raid
+// dialogs, or the plain two-step confirmation (ConfirmOp).
 export async function runAction(a, player, {fromCard = false, reopen} = {}) {
   const page = panel();
   if (a.op === 'note') return;

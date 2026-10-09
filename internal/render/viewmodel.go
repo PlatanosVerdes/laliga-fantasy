@@ -61,8 +61,8 @@ type Find struct {
 	Text  string  `json:"text"`
 }
 
-// Row is ListRow as data. A player row carries the player (face, name, tags); any other has a
-// Lead where the face would be and its own Name and lines. Head makes it a list's sub-heading.
+// Row is one line of a list. A player row carries the player (face, name, tags); any other has
+// a Lead where the face would be and its own Name and lines. Head makes it a list's sub-heading.
 type Row struct {
 	Player   map[string]any `json:"player,omitempty"`
 	Lead     []Seg          `json:"lead,omitempty"`

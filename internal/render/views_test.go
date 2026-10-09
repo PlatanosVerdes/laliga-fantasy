@@ -20,15 +20,17 @@ func TestEveryTabHasItsSection(t *testing.T) {
 
 // A confirmed absence rings red with its badge, a doubt yellow.
 func TestFacesWearTheStatusRing(t *testing.T) {
-	out := face(map[string]any{"id": "1", "name": "Pedri", "status": "injured",
-		"absence": map[string]any{"kind": "lesionado", "reason": "Rotura"}}, "sm")
-	if !strings.Contains(out, "ring-out") || !strings.Contains(out, "hb-cross") ||
-		!strings.Contains(out, `title="Rotura"`) {
-		t.Errorf("lesionado: %s", out)
+	health := func(player map[string]any) map[string]any {
+		return RowPlayer(player)["health"].(map[string]any)
 	}
-	doubt := face(map[string]any{"id": "2", "name": "Gavi", "status": "doubtful"}, "sm")
-	if !strings.Contains(doubt, "ring-doubt") || strings.Contains(doubt, "hb-") {
-		t.Errorf("duda: %s", doubt)
+	out := health(map[string]any{"id": "1", "name": "Pedri", "status": "injured",
+		"absence": map[string]any{"kind": "lesionado", "reason": "Rotura"}})
+	if out["ring"] != "out" || out["glyph"] != "cross" || out["reason"] != "Rotura" {
+		t.Errorf("lesionado: %v", out)
+	}
+	doubt := health(map[string]any{"id": "2", "name": "Gavi", "status": "doubtful"})
+	if doubt["ring"] != "doubt" || doubt["glyph"] != "" {
+		t.Errorf("duda: %v", doubt)
 	}
 }
 

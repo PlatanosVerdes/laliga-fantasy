@@ -19,9 +19,8 @@ func TestEveryOutcomeHasAnIcon(t *testing.T) {
 		if !strings.Contains(IconSprite, `id="i-`+mark.Symbol+`"`) {
 			t.Errorf("%s points at i-%s, which the sprite lacks", outcome, mark.Symbol)
 		}
-		html := outcomeIcon(outcome, "")
-		if !strings.Contains(html, `<use href="#i-`+mark.Symbol+`">`) || !strings.Contains(html, `data-tip="`) {
-			t.Errorf("%s: %s", outcome, html)
+		if seg := outcomeSeg(outcome, ""); seg.Icon != mark.Symbol || seg.Tip == "" {
+			t.Errorf("%s: %+v", outcome, seg)
 		}
 	}
 	for _, reason := range orderReasons {
@@ -29,19 +28,18 @@ func TestEveryOutcomeHasAnIcon(t *testing.T) {
 			t.Errorf("reason %q points at a missing symbol", reason.Words)
 		}
 	}
-	if html := outcomeIcon("algo_nuevo", ""); !strings.Contains(html, "#i-dot") ||
-		!strings.Contains(html, `data-tip="algo nuevo"`) {
-		t.Errorf("unknown outcome falls back: %s", html)
+	if seg := outcomeSeg("algo_nuevo", ""); seg.Icon != "dot" || seg.Tip != "algo nuevo" {
+		t.Errorf("unknown outcome falls back: %+v", seg)
 	}
-	if html := outcomeIcon("cancelada", "Millou912 lo ha blindado"); !strings.Contains(html, "#i-shield") {
-		t.Errorf("a cancelled order says why: %s", html)
+	if seg := outcomeSeg("cancelada", "Millou912 lo ha blindado"); seg.Icon != "shield" {
+		t.Errorf("a cancelled order says why: %+v", seg)
 	}
 }
 
 // A lost bid says who took him and for how much, when that is known.
 func TestLostBidNamesTheWinner(t *testing.T) {
-	html := outcomeIcon("perdida", "ganó -papi— (30,0M)")
-	if !strings.Contains(html, "#i-person") || !strings.Contains(html, `data-tip="perdida: ganó -papi— (30,0M)"`) {
-		t.Errorf("perdida: %s", html)
+	seg := outcomeSeg("perdida", "ganó -papi— (30,0M)")
+	if seg.Icon != "person" || seg.Tip != "perdida: ganó -papi— (30,0M)" {
+		t.Errorf("perdida: %+v", seg)
 	}
 }

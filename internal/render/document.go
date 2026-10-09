@@ -285,10 +285,6 @@ func (d Document) clauseStat() (Stat, bool) {
 		Note: note + esWhen(deadline), Tab: "clausulas"}, true
 }
 
-// --- the sections ----------------------------------------------------------------------
-
-// actionRows composes the one table that says what to do. This is advice-layer judgement,
-// not rendering, and it is here because the table is meaningless without it.
 // AdequateReplacement is how much of the leaving player's output a stand-in has to keep to
 // count as a replacement rather than a hole.
 const AdequateReplacement = 0.85
@@ -349,6 +345,7 @@ func (d Document) replacementFor(leaving map[string]any, spendable float64) map[
 	return nil
 }
 
+// actionRows are the advice's judgements, one per player, that the decision cards are drawn from.
 func (d Document) actionRows() []map[string]any {
 	var out []map[string]any
 

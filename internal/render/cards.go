@@ -494,6 +494,7 @@ func elevenWithout(squad []map[string]any, id string) float64 {
 	return total
 }
 
+// xptsClass and the es* formatters below have twins in assets/ui/format.js; change both.
 func xptsClass(xpts float64) string {
 	switch {
 	case xpts >= 6:

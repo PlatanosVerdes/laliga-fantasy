@@ -10,13 +10,6 @@ export const Icon = ({name}) =>
 export const Crest = ({id, known = true}) =>
   id && known ? html`<span class=${'crest crest-' + id}></span>` : null;
 
-// Anything with data-tip gets report.js's instant tooltip; this only spells the attribute.
-export const Tip = ({as = 'span', tip, children, ...rest}) =>
-  html`<${as} data-tip=${tip || undefined} ...${rest}>${children}</${as}>`;
-
-export const Chip = ({tone = '', children, tip}) =>
-  html`<span class=${('chip ' + tone).trim()} data-tip=${tip || undefined}>${children}</span>`;
-
 function useNow(every = 1000) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), every); return () => clearInterval(timer); }, [every]);
@@ -34,7 +27,7 @@ export function Countdown({until, kind = 'plain', label = '', cls}) {
     return html`<span class=${cls} title=${(label + ' ' + esWhen(until)).trim()}><span class="left">${chipText(left)}</span></span>`;
   }
   const hours = left / 3600000;
-  // A table's countdown, coloured as a pill the way report.js's ticker always did.
+  // A table's countdown, coloured as a pill: red in its last hour, amber in its last day.
   if (kind === 'pill') {
     const pill = left <= 0 ? 'pill-critical' : hours < 1 ? 'pill-critical' : hours < 24 ? 'pill-warning' : 'pill-neutral';
     return html`<span class=${pill}>${countdownText(left)}</span>`;
@@ -94,22 +87,6 @@ export function Tags({p, owner, roleLink = false, star = false, lock, alerts = t
     ${p.role && p.role.change === 'down' ? html`<span class="tg tg-warn" data-tip=${p.role.note || undefined}>bajó a ${p.role.label}</span>` : null}
     ${alerts && health.ring ? html`<span class=${'tg ' + (health.ring === 'out' ? 'tg-bad' : 'tg-warn')}>${health.reason}</span>` : null}`;
 }
-
-// The panel's list row, the same two zones render.ListRow draws: who on the left, the figure
-// that decides and the buttons on the right.
-export function Row({p, value, note, why, chip, actions, tone = ''}) {
-  return html`<li class=${('r ' + tone).trim()} data-pid=${p.id}>
-    <${Face} p=${p}/>
-    <span class="rwho"><span class="rname"><b>${p.name}<${ShieldMark} p=${p}/></b><${PosTag} p=${p}/></span></span>
-    <span class="tags"><${Tags} p=${p}/></span>
-    ${value || note ? html`<span class="rval" title=${why || undefined}>${value ? html`<b>${value}</b>` : null}${note ? html`<span class="rnote">${note}</span>` : null}</span>` : null}
-    <span class="rtail"><span class="rchip">${chip}</span>${actions ? html`<span class="ract">${actions}</span>` : null}</span>
-  </li>`;
-}
-
-export const Block = ({title, count, sub, children}) => html`<div class="block">
-  <div class="sec-head"><h2>${title}${count != null ? html`<span class="count">${count}</span>` : null}</h2>${sub ? html`<p>${sub}</p>` : null}</div>
-  ${children}</div>`;
 
 export const Empty = ({children}) => html`<p class="mk-empty">${children}</p>`;
 
@@ -202,8 +179,8 @@ export const Switch = ({on, disabled, label, onChange}) => html`<button type="bu
   class=${'tgl' + (on ? ' on' : '')} aria-checked=${on ? 'true' : 'false'} aria-label=${label}
   disabled=${disabled} onClick=${onChange}><span class="tgl-knob"></span></button>`;
 
-// A face from the API's own player shape (matchday, comparator, squads), as report.js's faceOf
-// drew it: the crest behind it when there is no photo, the ring and badge of his status.
+// A face from the API's own player shape (matchday, comparator, squads): the crest behind it
+// when there is no photo, the ring and badge of his status.
 export function ApiFace({p, size = 'xs'}) {
   const h = health(p);
   const [broken, setBroken] = useState(false);

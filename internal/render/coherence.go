@@ -66,11 +66,6 @@ func (d Document) sellCandidates() map[string]bool {
 	return out
 }
 
-// offerPays is whether an offer at this multiple of his value is worth taking.
-func (d Document) offerPays(playerID string, ratio float64) bool {
-	return ratio >= policies.GoodOverValue || (d.sellCandidates()[playerID] && ratio >= SellerFloor)
-}
-
 // offerAdvice is whether to take an offer at this multiple of his value, and why, in words.
 // planned is the swap plan or a replacement counting on the sale.
 func (d Document) offerAdvice(playerID string, ratio float64, planned bool) (bool, string) {

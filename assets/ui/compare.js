@@ -59,7 +59,7 @@ export function useTray() {
   return value;
 }
 
-// The tab on show, as report.js announces it.
+// The tab on show, as the router announces it.
 function useTab() {
   const current = () => (window.panelNav || {}).tab;
   const [tab, setTab] = useState(current());

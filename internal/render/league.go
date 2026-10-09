@@ -116,18 +116,6 @@ func (d Document) feedBlock() Block {
 		Data: feedOf(moves, teams, marks, me)}
 }
 
-// FeedOf is the log's movements as feed lines, for whoever has only the events.
-func FeedOf(events []map[string]any) Feed {
-	var moves []map[string]any
-	for _, event := range events {
-		if !strings.Contains(text(event["kind"]), "alinea") &&
-			!feedHidden[int(number(event["type_id"]))] {
-			moves = append(moves, event)
-		}
-	}
-	return feedOf(moves, nil, nil, "")
-}
-
 func feedOf(moves []map[string]any, teams, marks map[string]string, me string) Feed {
 	feed := Feed{Sortable: len(moves) > 8, Lines: []FeedLine{}}
 	for _, event := range moves {

@@ -1,5 +1,5 @@
-// Figures the Spanish way, written exactly as the Go renderer writes them (cards.go, views.go)
-// so a row drawn here reads the same as one drawn there.
+// Figures the Spanish way. Go writes most of them before they get here (render/cards.go:
+// esMoney, esNum, esWhen, xptsClass); what is formatted on both sides has to read the same.
 
 const DAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -13,15 +13,6 @@ export function esMoney(amount) {
   if (amount >= 1e3) return sign + dots(Math.round(amount / 1e3)) + 'K';
   return sign + Math.round(amount) + ' €';
 }
-
-export function esNum(value, digits = 1) {
-  const scale = 10 ** digits;
-  const rounded = Math.round(value * scale) / scale;
-  const text = Math.abs(rounded).toFixed(digits).replace('.', ',');
-  return rounded < 0 ? '−' + text : text;
-}
-
-export const esRatio = (ratio) => ratio.toFixed(2).replace('.', ',') + 'x';
 
 const parse = (stamp) => { const when = new Date(stamp); return isNaN(when) ? null : when; };
 const pad = (n) => String(n).padStart(2, '0');
@@ -38,7 +29,10 @@ export function esDay(stamp) {
   return when ? `${DAYS[when.getDay()]} ${when.getDate()} ${MONTHS[when.getMonth()]}` : '';
 }
 
-// The card's own helpers, as report.js has always written them.
+// The xPts colour scale, render.xptsClass's thresholds.
+export const xClass = (v) => v >= 6 ? 'x-hi' : v >= 3.5 ? 'x-mid' : v >= 2 ? 'x-lo' : 'x-bad';
+
+// The card's own helpers.
 export const dec = (v, d = 1) => v == null || isNaN(v) ? '—'
   : Number(v).toFixed(d).replace('.', ',').replace('-', '−');
 export const mny = (v) => v == null || isNaN(v) ? '—'
@@ -86,7 +80,7 @@ export function chipText(left) {
   return left <= 0 ? 'cerrado' : d ? `${d} d ${h} h` : h ? `${h} h ${pad(m)} min` : `${m} min`;
 }
 
-// The card's status line, with report.js's words: an injury that is only a doubt is "Tocado".
+// The card's status line, in its own words: an injury that is only a doubt is "Tocado".
 export function health(player) {
   const st = player.status || 'ok', a = player.absence || {};
   if (st === 'suspended' || st === 'sanctioned' || a.kind === 'sancionado')

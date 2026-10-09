@@ -39,7 +39,7 @@ KINDS.eleven = ({b}) => {
       <div class="mk-legend">${e.fresh ? '● fichaje nuevo · ' : ''}xPts por jornada: <span class="x-hi-t">≥6</span> · <span class="x-lo-t">2–3,5</span> · <span class="x-bad-t">${'<2'}</span></div>
     </div>
     ${(e.warnings || []).map((w) => html`<p class="mk-note plan-warn" data-pid=${w.pid || undefined}>${w.t}</p>`)}
-    ${e.place ? html`<p class="mk-note finish">Tu puesto previsto en la J${e.week}: <button class="linkish" type="button" data-wired="1"
+    ${e.place ? html`<p class="mk-note finish">Tu puesto previsto en la J${e.week}: <button class="linkish" type="button"
       onClick=${() => panel().goto('partidos')}><b>${e.place}º</b></button></p>` : null}`;
 };
 

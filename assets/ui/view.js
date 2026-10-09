@@ -18,9 +18,9 @@ export function Seg({s}) {
     : s.c && s.c.startsWith('role ') ? html`<i class="rdot"></i>${s.t}` : s.t;
   if (s.href && s.href.startsWith('#')) return html`<a class=${s.c || undefined} href=${s.href} data-tip=${tip}>${inner}</a>`;
   if (s.href) return html`<a class=${s.c || undefined} href=${s.href} target="_blank" rel="noopener" data-tip=${tip}>${inner}</a>`;
-  if (s.pid && s.c === 'p-name') return html`<button class="p-name" type="button" data-wired="1"
+  if (s.pid && s.c === 'p-name') return html`<button class="p-name" type="button"
     onClick=${(e) => { e.stopPropagation(); panel().openDetail(s.pid); }}>${inner}</button>`;
-  if (s.team && s.c === 'p-name') return html`<button class="p-name" type="button" data-wired="1"
+  if (s.team && s.c === 'p-name') return html`<button class="p-name" type="button"
     onClick=${(e) => { e.stopPropagation(); panel().openManager(s.team); }}>${inner}</button>`;
   if (s.pid || s.team) return html`<span class=${s.c || undefined} data-pid=${s.pid || undefined} data-team=${s.team || undefined} data-tip=${tip}>${inner}</span>`;
   const El = s.el || 'span';
@@ -45,7 +45,7 @@ function Meta({list}) {
 export function ChipView({c}) {
   if (c.icon) return html`<${Seg} s=${c}/>`;
   if (c.do) return html`<button type="button" class=${('mk-chip ' + (c.c || '')).trim()} title=${c.tip || undefined}
-    data-wired="1" onClick=${(e) => { e.stopPropagation(); runAct(c); }}>${c.t}</button>`;
+    onClick=${(e) => { e.stopPropagation(); runAct(c); }}>${c.t}</button>`;
   if (c.until) return html`<${Countdown} kind="chip" until=${c.until} label=${c.label || ''}/>`;
   return html`<span class=${('mk-chip ' + (c.c || '')).trim()} data-tip=${c.tip || undefined}>${c.t}</span>`;
 }
@@ -62,7 +62,7 @@ function AlwaysAct({a}) {
     finally { setBusy(false); }
   };
   const cls = a.class.replace(/\bon\b/, '').trim() + (on ? ' on' : '');
-  return html`<button type="button" class=${cls} data-wired="1" disabled=${busy} data-tip=${a.tip || undefined}
+  return html`<button type="button" class=${cls} disabled=${busy} data-tip=${a.tip || undefined}
     onClick=${flip}>${on ? '● ' : ''}Siempre en mercado</button>`;
 }
 
@@ -71,7 +71,7 @@ function CmpAct({a}) {
   const list = useTray();
   const on = list.some((item) => item.id === String(a.args.id));
   const short = a.class.includes('small');
-  return html`<button type="button" class=${a.class + (on ? ' on' : '')} data-wired="1"
+  return html`<button type="button" class=${a.class + (on ? ' on' : '')}
     title=${on ? 'Quitar del comparador' : 'Añadir al comparador'}
     onClick=${(e) => { e.stopPropagation(); if (on) compare.drop(a.args.id); else compare.add(a.args.id, a.args.name, a.args.pos); }}>${
     on ? (short ? '✓' : '✓ comparando') : (short ? '+' : '+ comparar')}</button>`;
@@ -88,19 +88,18 @@ function StarAct({a}) {
     try { setOn(!!(await postJSON('/api/favourite', {id: a.args.id, name: a.args.name})).starred); changed(); }
     catch (err) { setOn(before); }
   };
-  return html`<button class=${'star' + (on ? ' on' : '')} type="button" data-wired="1" aria-pressed=${on ? 'true' : 'false'}
+  return html`<button class=${'star' + (on ? ' on' : '')} type="button" aria-pressed=${on ? 'true' : 'false'}
     title=${on ? 'Quitar de favoritos' : 'Marcar como favorito'} onClick=${flip}>${on ? '★' : '☆'}</button>`;
 }
 
 export function ActView({a}) {
   if (a.text) return html`<span class=${a.class || undefined}>${a.label}</span>`;
   if (a.do === 'star') return html`<${StarAct} a=${a}/>`;
-  if (a.toggle) return html`<button type="button" class=${a.class} data-wired="1" aria-pressed=${a.pressed ? 'true' : 'false'}
+  if (a.toggle) return html`<button type="button" class=${a.class} aria-pressed=${a.pressed ? 'true' : 'false'}
     onClick=${(e) => { e.stopPropagation(); a.toggle(a.args.id); }}>${a.label}</button>`;
   if (a.do === 'cmp') return html`<${CmpAct} a=${a}/>`;
   if (a.do === 'always') return html`<${AlwaysAct} a=${a}/>`;
-  // data-wired keeps report.js's own wiring off these buttons while both live on the page.
-  const button = html`<button type="button" class=${a.class === '' ? undefined : a.class || 'mb mb-ghost'} data-wired="1"
+  const button = html`<button type="button" class=${a.class === '' ? undefined : a.class || 'mb mb-ghost'}
     disabled=${!!a.off} data-tip=${a.tip || undefined}
     onClick=${(event) => { event.stopPropagation(); runAct(a); }}>${a.label}</button>`;
   return a.wrap ? html`<span data-tip=${a.wrap}>${button}</span>` : button;
@@ -163,7 +162,7 @@ function FilterBar({view}) {
   const state = useFilters();
   const all = [...view.main, ...(view.aside || []), ...(view.row2 || [])].flatMap((b) => (b.rows || []).filter((r) => r.find));
   const shown = all.filter((r) => passes(r, state)).length;
-  return html`<div class="mk-filters"><div class="filters" data-wired="1">
+  return html`<div class="mk-filters"><div class="filters">
     <label>Posición
       <select class="f-pos" value=${state.pos} onInput=${(e) => setFilters({pos: e.currentTarget.value})}>
         <option value="all">todas</option><option value="POR">portero</option><option value="DEF">defensa</option>

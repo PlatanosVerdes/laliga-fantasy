@@ -1,4 +1,4 @@
-import {useState, useEffect, useRef} from './lib.js';
+import {useState, useEffect} from './lib.js';
 
 export async function getJSON(url) {
   const res = await fetch(url, {cache: 'no-store'});
@@ -15,7 +15,7 @@ export async function postJSON(url, body) {
   return data;
 }
 
-// The world's version, as the live refresh in report.js learns it, plus a local bump after a
+// The world's version, as the live refresh learns it, plus a local bump after a
 // write of ours so what changed is asked for at once.
 let stamp = 0;
 const watchers = new Set();
@@ -47,7 +47,6 @@ export function useCash() {
   useEffect(() => { viewWatchers.add(setAll); setAll(views); return () => viewWatchers.delete(setAll); }, []);
   return cash;
 }
-export const currentCash = () => cash;
 export const getViews = () => views;
 
 export function useMeta() {
@@ -66,22 +65,6 @@ export function useStamp() {
   const [value, setValue] = useState(stamp);
   useEffect(() => { watchers.add(setValue); setValue(stamp); return () => watchers.delete(setValue); }, []);
   return value;
-}
-
-// A JSON resource that is asked for again whenever the world moves. The last good answer stays
-// on screen while the next one is on its way.
-export function useResource(url, {live = true, initial = null} = {}) {
-  const tick = useStamp();
-  const [state, setState] = useState({data: initial, error: null});
-  const fresh = useRef(initial != null);
-  useEffect(() => {
-    if (fresh.current) { fresh.current = false; return undefined; }
-    let current = true;
-    getJSON(url).then((data) => current && setState({data, error: null}),
-      (error) => current && setState((before) => ({data: before.data, error})));
-    return () => { current = false; };
-  }, [url, live ? tick : 0]);
-  return state;
 }
 
 // The two-step write: the server checks and hands back a summary and a single-use token, and

@@ -58,14 +58,6 @@ var orderReasons = []struct {
 	{"ya es tuyo", outcomeMark{"check", "good", "cumplida: ya es tuyo"}},
 }
 
-// outcomeIcon is the mark of an outcome, with its words as the tooltip. An outcome the code does
-// not know gets the plain fallback rather than no mark at all.
-func outcomeIcon(outcome, why string) string {
-	mark := outcomeMarkOf(outcome, why)
-	return `<span class="oi oi-` + mark.Tone + `" data-tip="` + Esc(mark.Label) + `">` +
-		`<svg class="ic" aria-hidden="true"><use href="#i-` + mark.Symbol + `"></use></svg></span>`
-}
-
 func outcomeMarkOf(outcome, why string) outcomeMark {
 	mark, known := outcomeMarks[outcome]
 	if !known {

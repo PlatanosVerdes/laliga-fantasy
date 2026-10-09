@@ -2,7 +2,7 @@ import {html, useState, useEffect, panel} from './lib.js';
 import {Face, ShieldMark, Countdown, Crest, Empty, ApiFace} from './components.js';
 import {KINDS} from './view.js';
 import {getJSON, useStamp, useView} from './api.js';
-import {dec} from './format.js';
+import {dec, esDay, xClass} from './format.js';
 
 // Partidos' own blocks, and the matchday popup.
 
@@ -81,11 +81,8 @@ KINDS.history = HistoryBlock;
 
 const XI_LINES = [['striker', 'DEL'], ['midfield', 'MED'], ['defender', 'DEF'], ['goalkeeper', 'POR']];
 const POS = {1: 'POR', 2: 'DEF', 3: 'MED', 4: 'DEL'};
-// Same scale as render.xptsClass for a forecast, and points as the card's strip reads them.
+// Points as the card's strip colours them; a forecast uses the xPts scale.
 const ptsClass = (p) => p == null ? '' : p >= 8 ? 'x-hi' : p >= 4 ? 'x-mid' : p < 0 ? 'x-bad' : 'x-lo';
-const fcClass = (v) => v >= 6 ? 'x-hi' : v >= 3.5 ? 'x-mid' : v >= 2 ? 'x-lo' : 'x-bad';
-const DAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
-const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
 // A matchday, manager by manager: the eleven each fielded with what every player scored, or for
 // a matchday still to come, what each eleven is expected to score.
@@ -113,7 +110,7 @@ export function WeekPopup({week}) {
   const score = (m) => future ? (plans[m.team_id] || 0) : (m.week_points || 0);
   const managers = md.managers.slice().sort((a, b) => score(b) - score(a));
   const k = md.kickoff ? new Date(md.kickoff) : null;
-  const when = k ? DAYS[k.getDay()] + ' ' + k.getDate() + ' ' + MONTHS[k.getMonth()] : '';
+  const when = k ? esDay(k) : '';
   const page = panel();
   return html`<h3 class="pc-title">J${week}${future ? ' · previsión de cada once' : when ? ' · ' + when : ''}</h3>
     <p class="drawer-note" style="margin:0 0 8px">Toca un manager para ver su once${future ? '' : '; en pequeño, lo previsto si se guardó'}.</p>
@@ -126,7 +123,7 @@ export function WeekPopup({week}) {
         return html`<div class="line"><span class=${'pos pos-' + label.toLowerCase()}>${label}</span><div class="chips">${players.map((p) => {
           const f = forecasts[p.id];
           const value = future ? (f != null ? dec(f) : '–') : (p.points ?? '–');
-          const cls = future ? fcClass(f || 0) : ptsClass(p.points);
+          const cls = future ? xClass(f || 0) : ptsClass(p.points);
           return html`<span class=${'tchip ' + cls} data-pid=${p.id}><${ApiFace} p=${p}/><span class="tname">${p.name}</span><span class="tx">${value}</span>${
             !future && f != null ? html` <span class="fcs">${dec(f)}</span>` : null}</span>`;
         })}</div></div>`;

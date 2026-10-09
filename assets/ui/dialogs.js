@@ -173,15 +173,14 @@ function AmountDialog({p}) {
   <//>`;
 }
 
-// The shield: a day and an hour, prefilled with when the cover is worth starting, and the
+// The shield: one moment, prefilled with when the cover is worth starting, and the
 // matchday's two shields counted. "Ahora" goes through the two-step confirmation.
 export function shieldDialog(a, player) { show('shield', {a, player}); }
 
 function ShieldDialog({a, player}) {
   const pad = (n) => String(n).padStart(2, '0');
-  const start = a.suggested ? new Date(a.suggested) : new Date(), today = new Date();
-  const [day, setDay] = useState(`${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`);
-  const [hour, setHour] = useState(`${pad(start.getHours())}:${pad(start.getMinutes())}`);
+  const local = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const [moment, setMoment] = useState(() => local(a.suggested ? new Date(a.suggested) : new Date()));
   const [error, setError] = useState('');
   const help = a.because === 'round' ? 'Los dos blindajes de esta jornada ya están usados: te propongo ' + stampText(a.suggested) + ', cuando empieza la siguiente.'
     : a.because === 'shield' ? 'Su blindaje acaba el ' + stampText(a.suggested) + ': te propongo esa hora para encadenar el siguiente.'
@@ -201,8 +200,8 @@ function ShieldDialog({a, player}) {
     openDialog({kind: 'confirm', key: ++opened, op: {op: 'shield_player', name: player.name, player_id: player.id}});
   };
   const save = async () => {
-    const when = new Date(`${day}T${hour}`);
-    if (!day || !hour || isNaN(when.getTime())) { setError('Elige dia y hora.'); return; }
+    const when = new Date(moment);
+    if (!moment || isNaN(when.getTime())) { setError('Elige dia y hora.'); return; }
     if (when <= new Date()) { setError('Esa hora ya ha pasado: usa "Ahora".'); return; }
     try { await postJSON('/api/shield', {id: player.id, name: player.name, at: when.toISOString()}); }
     catch (e) { setError(e.message || 'No he podido programarlo.'); return; }
@@ -213,12 +212,9 @@ function ShieldDialog({a, player}) {
   return html`<${Modal} label="Blindar jugador" onClose=${closeDialog}>
     <h3>Blindar a <span class="shield-who">${player.name}</span></h3>
     <p class="shield-help">${help}</p>${quota || html`<p class="shield-quota"></p>`}
-    <div class="shield-when">
-      <div class="bid-field"><label for="shield-day">Dia</label>
-        <input id="shield-day" type="date" min=${`${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`} value=${day} onInput=${(e) => setDay(e.currentTarget.value)}/></div>
-      <div class="bid-field"><label for="shield-time">Hora</label>
-        <input id="shield-time" type="time" step="60" value=${hour} onInput=${(e) => setHour(e.currentTarget.value)}/></div>
-    </div>
+    <div class="bid-field shield-when"><label for="shield-at">Cuándo</label>
+      <input id="shield-at" type="datetime-local" step="60" min=${local(new Date())} value=${moment}
+        onInput=${(e) => setMoment(e.currentTarget.value)}/></div>
     <p class="bid-error shield-error">${error}</p>
     <div class="modal-actions">
       <button class="shield-cancel" type="button" onClick=${closeDialog}>Cancelar</button>

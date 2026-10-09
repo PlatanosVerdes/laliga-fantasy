@@ -1,7 +1,7 @@
 import {html, render, useState, useEffect, useRef, panel} from './lib.js';
 import {ApiFace, ShieldMark} from './components.js';
 import {getJSON, postJSON, useStamp} from './api.js';
-import {dec, mny, whenShort, health} from './format.js';
+import {dec, mny, whenShort, health, xClass} from './format.js';
 
 // The lineup editor: the saved eleven from /api/lineup on a pitch, the bench beside it, drag
 // and drop (or lift and tap on a touchscreen), formations, the best eleven the server worked out,
@@ -13,8 +13,6 @@ const LINE_POS = {goalkeeper: 1, defender: 2, midfield: 3, striker: 4};
 const LINE_WORD = {goalkeeper: ['portero', 'porteros'], defender: ['defensa', 'defensas'],
   midfield: ['medio', 'medios'], striker: ['delantero', 'delanteros']};
 const POS_WORD = {1: 'portero', 2: 'defensa', 3: 'medio', 4: 'delantero'};
-// Same scale as render.xptsClass.
-const xClass = (v) => v >= 6 ? 'x-hi' : v >= 3.5 ? 'x-mid' : v >= 2 ? 'x-lo' : 'x-bad';
 // Only a confirmed absence keeps a starter from scoring; a doubt or a knock still plays.
 const cannotPlay = (p) => !!p && (p.available === false || (health(p) || {}).ring === 'out');
 
