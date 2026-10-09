@@ -94,7 +94,8 @@ func (d Document) ViewData() map[string]any {
 	if len(d.Advice) == 0 {
 		return map[string]any{}
 	}
-	return map[string]any{"vender": d.SellData(), "comprar": d.BuyData()}
+	return map[string]any{"vender": d.SellData(), "comprar": d.BuyData(),
+		"clausulas": d.ClauseData()}
 }
 
 // HTML renders the document.

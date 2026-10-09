@@ -34,6 +34,7 @@ function Meta({list}) {
 }
 
 export function ChipView({c}) {
+  if (c.icon) return html`<${Seg} s=${c}/>`;
   if (c.until) return html`<${Countdown} kind="chip" until=${c.until} label=${c.label || ''}/>`;
   return html`<span class=${('mk-chip ' + (c.c || '')).trim()} data-tip=${c.tip || undefined}>${c.t}</span>`;
 }
@@ -141,6 +142,11 @@ function FilterBar({view}) {
 
 export const KINDS = {};
 
+function list(rows, scroll) {
+  const ul = html`<ul class="rows">${rows.map((r) => html`<${RowView} r=${r}/>`)}</ul>`;
+  return scroll ? html`<div class="scrollbox" style=${'max-height:' + scroll + 'px'}>${ul}</div>` : ul;
+}
+
 export function BlockView({b}) {
   const state = useFilters();
   if (!b || (!b.title && !b.kind)) return null;
@@ -153,14 +159,13 @@ export function BlockView({b}) {
   if (Kind) body = html`<${Kind} b=${b}/>`;
   else if (!rows.length) body = filtered && b.rows.length ? html`<p class="mk-empty f-none">Ninguno con este filtro.</p>`
     : b.empty ? html`<${Empty}>${b.empty}<//>` : null;
-  else {
-    const list = html`<ul class="rows">${rows.map((r) => html`<${RowView} r=${r}/>`)}</ul>`;
-    body = b.scroll ? html`<div class="scrollbox" style=${'max-height:' + b.scroll + 'px'}>${list}</div>` : list;
-  }
+  else body = list(rows, b.scroll);
   return html`<div class="block" id=${b.id || undefined}>
     ${b.title ? html`<div class="sec-head"><h2>${b.title}${counted != null ? html`<span class="count">${counted}</span>` : null}</h2>${
       b.sub ? html`<p>${b.sub}</p>` : null}</div>` : null}
     ${body}
+    ${(b.folds || []).map((f) => html`<details class="fold"><summary>${f.summary}</summary>${list(f.rows, f.scroll)}</details>`)}
+    ${b.links && b.links.length ? html`<p class="mk-note">${b.links.map((a) => html`<${ActView} a=${a}/>`)}</p>` : null}
     ${b.note ? html`<p class="mk-note">${b.note}</p>` : null}
   </div>`;
 }
@@ -183,3 +188,9 @@ export function ViewScreen({name}) {
 KINDS.stars = ({b}) => html`<ul class="stars">${b.data.map((item) => html`<li class="mk-star" data-pid=${item.player.id}>
   <${Face} p=${item.player} size="xs"/><span>${item.player.name}<${ShieldMark} p=${item.player}/></span>
   <span class="meta">${item.owner}</span><span class=${'tx ' + item.class}>${item.xpts}</span></li>`)}</ul>`;
+
+KINDS.calendar = ({b}) => !b.data.length ? html`<${Empty}>${b.empty}<//>` : html`<ul class="calendar">${b.data.map((day) => html`
+  <li class="mk-cal"><span class="mk-cal-day">${day.label}</span><span class="mk-cal-body">${
+    day.mine.map((p) => html`<span class="mk-cal-mine" data-pid=${p.id}>🛡 ${p.name}</span>`)}${
+    day.theirs.map((p) => html`<span class="mk-cal-them" data-pid=${p.id}>${p.name} <i>${p.gain}</i></span>`)}<span class="meta">${day.reach} a tu alcance</span></span></li>`)}</ul>
+  <p class="mk-note">🛡 tuyas que se abren · en gris, las de rivales que más suman a tu once (xPts)</p>`;

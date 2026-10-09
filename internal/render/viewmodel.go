@@ -22,6 +22,7 @@ type Seg struct {
 
 // Chip is a row's pill: a live countdown to Until, or fixed text.
 type Chip struct {
+	Icon  string `json:"icon,omitempty"`
 	Until string `json:"until,omitempty"`
 	Label string `json:"label,omitempty"`
 	T     string `json:"t,omitempty"`
@@ -87,6 +88,15 @@ type Block struct {
 	Note   string `json:"note,omitempty"`
 	Kind   string `json:"kind,omitempty"`
 	Data   any    `json:"data,omitempty"`
+	// Folds are lists kept closed under the main one; Links, buttons in a note at the foot.
+	Folds []Fold `json:"folds,omitempty"`
+	Links []Act  `json:"links,omitempty"`
+}
+
+type Fold struct {
+	Summary string `json:"summary"`
+	Rows    []Row  `json:"rows"`
+	Scroll  int    `json:"scroll,omitempty"`
 }
 
 // View is a tab's screen: a main column, an aside, and optionally a second row under both.
@@ -176,4 +186,36 @@ func bidActs(row map[string]any, class, label string) []Act {
 		}
 	}
 	return []Act{{Label: label, Class: class, Do: "bid", Args: args}}
+}
+
+// raidActs is RaidButton as data: schedule a clausulazo on a rival's player.
+func raidActs(row map[string]any, class string) []Act {
+	if truthy(row["is_mine"]) || text(row["owner"]) == "" {
+		return []Act{{Label: Missing, Text: true}}
+	}
+	if truthy(row["shielded"]) {
+		return []Act{{Label: "blindado", Class: "pill-critical", Text: true}}
+	}
+	clause := number(row["clause"])
+	suggested := int64(number(row["max_pay"]))
+	if suggested == 0 {
+		// A fifth over the clause if there is one, half over the value if there is not:
+		// enough headroom that a small raise does not cancel the raid.
+		if clause > 0 {
+			suggested = int64(clause * 1.2)
+		} else {
+			suggested = int64(number(row["value"]) * 1.5)
+		}
+	}
+	label := "Programar"
+	if truthy(row["raid_scheduled"]) {
+		label = "Reprogramar"
+	}
+	return []Act{{Label: label, Class: class, Do: "raid", Args: map[string]any{
+		"id": text(row["id"]), "name": text(row["name"]), "max": suggested,
+		"clause": int64(clause)}}}
+}
+
+func gotoAct(label, target string) Act {
+	return Act{Label: label, Class: "linkish", Do: "goto", Args: map[string]any{"target": target}}
 }

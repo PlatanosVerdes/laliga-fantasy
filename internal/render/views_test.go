@@ -141,10 +141,10 @@ func TestStoodDownRaidsCanBeCancelledAndOrdersAreLogged(t *testing.T) {
 		"owner": "tete", "clause": 30_000_000.0, "max_pay": 17_000_000.0, "action": "cancelada"}}
 	document.Orders = []map[string]any{{"at": "2026-09-14T19:02:00Z", "player_id": "8",
 		"player": "Fofana", "outcome": "pagada", "amount": 15_240_000.0}}
-	html := document.clauseView()
-	for _, want := range []string{`data-op="cancel_raid"`, ">cancelada<",
+	blob := asJSON(document.plannedBlock())
+	for _, want := range []string{`"do":"cancel_raid"`, `"t":"cancelada"`,
 		"Historial de tus órdenes", "Fofana", "15,2M"} {
-		if !strings.Contains(html, want) {
+		if !strings.Contains(blob, want) {
 			t.Errorf("missing %q", want)
 		}
 	}
