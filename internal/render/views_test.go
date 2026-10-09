@@ -128,6 +128,23 @@ func TestBuyBoxesListEveryCandidate(t *testing.T) {
 	}
 }
 
+// The longest route goes beside the aside and the other two under both, in their usual order.
+func TestBuyLongestRouteBesideTheAside(t *testing.T) {
+	view := decidingDocument().BuyData()
+	titles := []string{}
+	for _, block := range append(append([]Block{}, view.Main...), view.Row2...) {
+		titles = append(titles, block.Title)
+	}
+	if len(view.Main) != 1 || len(view.Row2) != 2 {
+		t.Fatalf("one route beside the aside, two under it: %v", titles)
+	}
+	for _, other := range view.Row2 {
+		if len(other.Rows) > len(view.Main[0].Rows) {
+			t.Errorf("%q is longer than %q beside the aside", other.Title, view.Main[0].Title)
+		}
+	}
+}
+
 // Scheduled raids that stood down say so and can be called off; the order log follows them.
 func TestStoodDownRaidsCanBeCancelledAndOrdersAreLogged(t *testing.T) {
 	document := decidingDocument()

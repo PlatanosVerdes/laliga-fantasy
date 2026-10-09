@@ -10,6 +10,7 @@ func (d Document) buyView() SectionView { return shell("v-comprar", "comprar", "
 
 // BuyData is Comprar: the free market, the rivals' listings and the clauses, each ranked by
 // what the signing adds to the eleven, beside my bids, how the last ones ended and who I follow.
+// The longest route sits beside the aside, stretching to its height; an empty one there leaves a gap.
 func (d Document) BuyData() View {
 	window := d.window()
 	clauses, offers, free := d.buyOptions()
@@ -28,11 +29,17 @@ func (d Document) BuyData() View {
 	if stars := d.starredBlock(); stars != nil {
 		aside = append(aside, *stars)
 	}
-	return View{Filters: true,
-		Main:  []Block{d.buyBlockData("Mercado rentable", "puja libre", free, window)},
-		Aside: aside,
-		Row2: []Block{d.buyBlockData("En venta por rivales", "oferta al dueño", offers, window),
-			d.buyBlockData("Cláusulas que puedes pagar", "clausula", clauses, window)}}
+	routes := []Block{d.buyBlockData("Mercado rentable", "puja libre", free, window),
+		d.buyBlockData("En venta por rivales", "oferta al dueño", offers, window),
+		d.buyBlockData("Cláusulas que puedes pagar", "clausula", clauses, window)}
+	longest := 0
+	for i, route := range routes {
+		if len(route.Rows) > len(routes[longest].Rows) {
+			longest = i
+		}
+	}
+	row2 := append(append([]Block{}, routes[:longest]...), routes[longest+1:]...)
+	return View{Filters: true, Main: []Block{routes[longest]}, Aside: aside, Row2: row2}
 }
 
 // buyBlockData is every candidate of one route, best for the eleven first and the ones out of
