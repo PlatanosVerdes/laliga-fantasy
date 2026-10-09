@@ -9,17 +9,11 @@ import {registerDrawer, openDrawer, onLiveDot} from './shell.js';
 const SOURCE_TIP = {env: (s) => 'de la variable ' + s.env, flag: () => 'de --interval al arrancar',
   default: () => 'el valor por defecto'};
 
-// One native time field per row read as a duration, the way the shield dialog asks for an hour:
-// 00:02 is two minutes, 01:00 an hour.
-const pad = (n) => String(n).padStart(2, '0');
-const clockOf = (minutes) => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
-const minutesOf = (clock) => {
-  const [h, m] = clock.split(':').map(Number);
-  return isNaN(h) || isNaN(m) ? null : h * 60 + m;
-};
-
+// One native number field per row, in whole minutes: the registry rounds every value to the
+// minute, so the number shown is the interval that runs.
 function Interval({s, onSaved}) {
-  const shown = clockOf(Math.round(s.seconds / 60));
+  const low = Math.ceil(s.min_seconds / 60), high = Math.floor(s.max_seconds / 60);
+  const shown = String(Math.round(s.seconds / 60));
   const [text, setText] = useState(shown);
   const [error, setError] = useState('');
   const timer = useRef(null);
@@ -31,18 +25,23 @@ function Interval({s, onSaved}) {
     try {
       const list = (await postJSON('/api/services', body)).services;
       const next = list.find((x) => x.key === s.key) || s;
-      setText(clockOf(Math.round(next.seconds / 60)));
+      setText(String(Math.round(next.seconds / 60)));
       onSaved(list);
-    } catch (e) { setError(e.message); }
+    } catch (e) {
+      // The field goes back to what runs; the message says why the new value was refused.
+      setText(shown);
+      setError(e.message);
+    }
   };
   const commit = (value) => {
     clearTimeout(timer.current);
-    if (value === shown) return;
-    const minutes = value ? minutesOf(value) : null;
-    if (minutes == null) { setText(shown); return; }
+    const typed = value.trim();
+    if (typed === shown) return;
+    const minutes = parseInt(typed, 10);
+    if (isNaN(minutes)) { setText(shown); setError(''); return; }
     save({key: s.key, interval: minutes + 'm'});
   };
-  // The field changes on every segment typed or stepped: one write once it settles.
+  // A run of clicks on the stepper adds up to one write.
   const changed = (e) => {
     const value = e.currentTarget.value;
     setText(value);
@@ -50,11 +49,11 @@ function Interval({s, onSaved}) {
     timer.current = setTimeout(() => commit(value), 400);
   };
   return html`<span class="svc-dur" data-tip=${`entre ${s.min} y ${s.max} · ${s.env}`}>
-      <input class=${'svc-in' + (error ? ' bad' : '')} type="time" step="60" value=${text}
-        min=${clockOf(Math.ceil(s.min_seconds / 60))} max=${clockOf(Math.floor(s.max_seconds / 60))}
-        aria-label=${s.label + ', horas y minutos'}
-        onInput=${(e) => setText(e.currentTarget.value)} onChange=${changed}
-        onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(e.currentTarget.value); } }}/></span>
+      <input class=${'svc-in' + (error ? ' bad' : '')} type="number" inputmode="numeric"
+        min=${low} max=${high} step="1" value=${text} aria-label=${s.label + ', en minutos'}
+        onInput=${(e) => { setText(e.currentTarget.value); setError(''); }} onChange=${changed}
+        onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(e.currentTarget.value); } }}/>
+      <span class="svc-unit">min</span></span>
     ${s.source === 'ui'
       ? html`<button type="button" class="svc-reset" data-tip=${'vuelve a ' + s.fallback + ', ' + SOURCE_TIP[s.fallback_source](s)}
           onMouseDown=${(e) => e.preventDefault()} onClick=${() => save({key: s.key, reset: true})}>por defecto</button>`
@@ -72,22 +71,26 @@ function ServicesView() {
   const [list, setList] = useState(null);
   const [error, setError] = useState('');
   const [now, setNow] = useState(Date.now());
+  const reload = useRef(() => {});
   useEffect(() => {
     let live = true;
     const load = () => getJSON('/api/services').then((data) => live && setList(data.services),
       (e) => live && setError('No he podido leer los servicios: ' + e.message));
+    reload.current = load;
     load();
     const ask = setInterval(load, 15000);
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => { live = false; clearInterval(ask); clearInterval(tick); };
   }, []);
+  // The engine replans just after a change, so the next run is asked for again a moment later.
+  const saved = (next) => { setList(next); setTimeout(() => reload.current(), 600); };
   return html`<div class="svc">
     <h3>Servicios</h3>
     <p class="svc-sub">Cada cuánto trabaja el servidor. Se aplica al momento, sin reiniciar.</p>
     ${error ? html`<p class="bid-error">${error}</p>` : null}
     ${list ? html`<ul class="svc-list">${list.filter((s) => s.editable).map((s) => html`<li class="svc-row" key=${s.key}>
         <span class="svc-name">${s.label} <i class="aw-i" data-tip=${s.description}>ⓘ</i></span>
-        <${Interval} s=${s} onSaved=${setList}/>
+        <${Interval} s=${s} onSaved=${saved}/>
         <${When} s=${s} now=${now}/>
       </li>`)}</ul>` : error ? null : html`<p class="svc-sub">Cargando…</p>`}
   </div>`;
