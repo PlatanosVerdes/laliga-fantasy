@@ -889,6 +889,8 @@ header.topline .mode{margin-left:0}
 .drawer.as-pop .drawer-back{margin-bottom:10px}
 .pc-head{display:flex;gap:14px;align-items:center;margin-bottom:12px}
 .pc-who{min-width:0}
+.pc-who h3 .star{font-size:16px;vertical-align:3px;margin-left:2px}
+.rname .fav{color:var(--warning);font-size:13px;margin-left:5px}
 .pc-head h3{margin:0;font-size:20px;letter-spacing:-.015em}
 .pc-sub{display:flex;gap:6px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:13px}
 .pc-sub .cmp-add{margin-left:4px}

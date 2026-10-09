@@ -278,6 +278,7 @@ func RowPlayer(player map[string]any) map[string]any {
 		"initials": initials(text(player["name"])), "pos": slug, "position": position,
 		"team_id": text(player["team_id"]), "team_short": text(player["team_short"]),
 		"crest": crest, "owner": owner, "shielded": truthy(player["shielded"]),
+		"starred":        truthy(player["starred"]),
 		"shielded_until": text(player["shielded_until"]),
 		"health":         map[string]any{"ring": ring, "glyph": glyph, "reason": reason},
 	}
