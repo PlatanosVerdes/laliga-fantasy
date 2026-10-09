@@ -1590,8 +1590,9 @@ table.cmp tr:last-child td{border-bottom:0}
 .mk-filters .f-reset{font:inherit;font-size:12px;background:none;border:1px solid var(--line);color:var(--ink);
   border-radius:8px;padding:5px 10px;cursor:pointer}
 @media (max-width:760px){
-  .mk-filters .filters label{flex:1 1 140px}
-  .mk-filters .filters select,.mk-filters .filters input{max-width:none;width:100%;font-size:16px}
+  .mk-filters .filters label{flex:1 1 100%;display:grid;grid-template-columns:96px minmax(0,1fr)}
+  .mk-filters .filters select,.mk-filters .filters input{max-width:none;width:100%;min-width:0;
+    box-sizing:border-box;font-size:16px}
 }
 .mk .evo,.mk .feed{max-width:none}
 .mk .board .r.me{background:color-mix(in srgb,var(--accent) 7%,transparent)}

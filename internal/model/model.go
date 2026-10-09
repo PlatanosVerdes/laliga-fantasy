@@ -463,15 +463,10 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 
 		player.Starred = state.Starred[id]
 		player.RaidScheduled = state.Raids[id]
-		if face, ok := faces[id]; ok {
-			player.Image = face
-		}
+		player.Image = faceFor(entry, faces[id], ownership[id].Image)
 
 		if owned, ok := ownership[id]; ok {
 			player.Owner = &owned.Owner
-			if owned.Image != "" {
-				player.Image = owned.Image
-			}
 			player.OwnerTeamID = &owned.TeamID
 			player.Clause = owned.Clause
 			player.ClauseUntil = owned.LockedUntil
@@ -555,6 +550,17 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		"owned", len(ownership), "listings", len(universe.Market),
 		"fixtures", len(universe.Fixtures))
 	return universe, nil
+}
+
+// faceFor is the most specific cutout known for him: his squad slot's, then the market's, and
+// otherwise the players list's, which has one for everybody.
+func faceFor(entry map[string]any, market, squad string) string {
+	for _, image := range []string{squad, market, text(entry["image"])} {
+		if image != "" {
+			return image
+		}
+	}
+	return ""
 }
 
 func allPlayers(client *api.Client) ([]map[string]any, error) {
