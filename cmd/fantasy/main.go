@@ -30,6 +30,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/necroporra"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/outcomes"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/render"
@@ -624,11 +625,15 @@ func cmdServe(args []string) error {
 	fmt.Printf("Modo: %s\n", mode)
 
 	league, team, _ := currentLeague(&mu, &leagueID, &teamID)
+	necroCfg := necroporra.Load()
 	panel := server.New(world, server.Options{
 		Host: *host, Port: *port, AllowWrites: allowWrites, Mode: mode,
 		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
 		Client: client, Guard: guard, LeagueID: league, MyTeamID: team,
 		HoldExceptions: rules.For(league).HoldExceptions,
+		NecroCookie:    necroCfg.Cookie,
+		NecroAction:    necroCfg.ActionID,
+		NecroGameweek:  necroCfg.Gameweek,
 		Settle: func(cause string) {
 			// Force it: a write whose effect the fingerprint cannot see still has to make
 			// the page react, or the click looks like it did nothing.
@@ -658,6 +663,12 @@ func cmdServe(args []string) error {
 			return server.Rendered{HTML: page, Views: views}
 		},
 	})
+	// The side game's safety net: on auto, if the round is about to close and you have not
+	// voted, cast the two weakest for you. Manual and read-only never act on their own.
+	if allowWrites && !*noAuto && necroCfg.CanVote() {
+		go autoNecroVote(necroCfg, world.Universe, team)
+	}
+
 	// Nobody is told about a change until the page for it exists: rendering costs about four
 	// seconds here, and the browser was the one paying for it after every write.
 	world.SetWarm(panel.Warm)
@@ -1502,7 +1513,62 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		Raise:    advice.ClausePlan(generic, cash),
 		Policies: policyRows,
 	}
+	necro := necroporra.Load()
+	necroState := necroporra.FetchState(necro)
+	document.NecroGameweek = necroState.Gameweek
+	document.NecroDeadline = necroState.Deadline
+	document.NecroClosesAt = necroState.ClosesAt
+	document.NecroChosen = necroState.Chosen
+	document.NecroRoster = necro.Roster
+	document.NecroCanVote = necro.CanVote()
+	document.NecroPreview = os.Getenv("FANTASY_NECRO_PREVIEW") != ""
 	return document, nil
+}
+
+// autoNecroVote is the side game's standing instruction: while the round's last two hours run
+// and no vote has been cast, send the two weakest predicted teams. It checks every few minutes,
+// casts at most once per gameweek, and does nothing until the window opens.
+func autoNecroVote(cfg necroporra.Config, universe func() *model.Universe, myTeamID string) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	done := map[int]bool{}
+	attempt := func() {
+		state := necroporra.FetchState(cfg)
+		if state.Voted() || done[state.Gameweek] || state.ClosesAt.IsZero() {
+			return
+		}
+		if left := time.Until(state.ClosesAt); left <= 0 || left > 2*time.Hour {
+			return
+		}
+		uni := universe()
+		if uni == nil {
+			return
+		}
+		blob, err := json.Marshal(uni)
+		if err != nil {
+			return
+		}
+		var generic map[string]any
+		if json.Unmarshal(blob, &generic) != nil {
+			return
+		}
+		picks := necroporra.Picks(necroporra.Predict(generic, cfg.Roster, myTeamID))
+		if len(picks) != 2 {
+			return
+		}
+		loggedOut, err := necroporra.CastVote(cfg, state.Gameweek, picks[0].NecroID, picks[1].NecroID)
+		if err != nil {
+			slog.Warn("necroporra auto-vote failed", "logged_out", loggedOut, "reason", err.Error())
+			return
+		}
+		done[state.Gameweek] = true
+		slog.Info("necroporra auto-vote cast", "gameweek", state.Gameweek,
+			"picks", picks[0].Name+", "+picks[1].Name)
+	}
+	attempt()
+	for range ticker.C {
+		attempt()
+	}
 }
 
 // cmdPage renders the whole document from a dump, so it can be compared with Python's

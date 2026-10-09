@@ -16,6 +16,7 @@ export function Seg({s}) {
   if (s.until) return html`<${Countdown} kind="pill" until=${s.until}/>`;
   const inner = s.kids ? html`<${Segs} list=${s.kids}/>`
     : s.c && s.c.startsWith('role ') ? html`<i class="rdot"></i>${s.t}` : s.t;
+  if (s.href && s.href.startsWith('#')) return html`<a class=${s.c || undefined} href=${s.href} data-tip=${tip}>${inner}</a>`;
   if (s.href) return html`<a class=${s.c || undefined} href=${s.href} target="_blank" rel="noopener" data-tip=${tip}>${inner}</a>`;
   if (s.pid && s.c === 'p-name') return html`<button class="p-name" type="button" data-wired="1"
     onClick=${(e) => { e.stopPropagation(); panel().openDetail(s.pid); }}>${inner}</button>`;
@@ -94,6 +95,8 @@ function StarAct({a}) {
 export function ActView({a}) {
   if (a.text) return html`<span class=${a.class || undefined}>${a.label}</span>`;
   if (a.do === 'star') return html`<${StarAct} a=${a}/>`;
+  if (a.toggle) return html`<button type="button" class=${a.class} data-wired="1" aria-pressed=${a.pressed ? 'true' : 'false'}
+    onClick=${(e) => { e.stopPropagation(); a.toggle(a.args.id); }}>${a.label}</button>`;
   if (a.do === 'cmp') return html`<${CmpAct} a=${a}/>`;
   if (a.do === 'always') return html`<${AlwaysAct} a=${a}/>`;
   // data-wired keeps report.js's own wiring off these buttons while both live on the page.

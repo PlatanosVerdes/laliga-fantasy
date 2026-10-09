@@ -293,9 +293,14 @@ function useLive() {
 }
 
 // What a click on the live dot does, when something registers one (it does nothing by itself).
-let liveDotAction = null;
+let liveDotAction = null, liveDotHint = '';
 const liveDotWatchers = new Set();
-export function onLiveDot(action) { liveDotAction = action; liveDotWatchers.forEach((watch) => watch(action)); }
+// The hint is added to the dot's tooltip, so the click it now has is not a secret.
+export function onLiveDot(action, hint = 'pulsa para ver los servicios') {
+  liveDotAction = action;
+  liveDotHint = action ? hint : '';
+  liveDotWatchers.forEach((watch) => watch(action));
+}
 
 function LiveDot({build}) {
   const l = useLive();
@@ -303,7 +308,7 @@ function LiveDot({build}) {
   useEffect(() => { liveDotWatchers.add(setAction); setAction(() => liveDotAction); return () => liveDotWatchers.delete(setAction); }, []);
   const hm = String(l.at.getHours()).padStart(2, '0') + ':' + String(l.at.getMinutes()).padStart(2, '0');
   return html`<span id="live-dot" class=${l.on ? 'live-on' : 'live-off'} data-build=${build || undefined}
-    data-tip=${[l.state, build, 'actualizado ' + hm].filter(Boolean).join(' · ')}
+    data-tip=${[l.state, build, 'actualizado ' + hm, action ? liveDotHint : ''].filter(Boolean).join(' · ')}
     role=${action ? 'button' : undefined} tabindex=${action ? '0' : undefined} style=${action ? 'cursor:pointer' : undefined}
     onClick=${action ? () => action() : undefined}
     onKeyDown=${action ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); action(); } } : undefined}></span>`;

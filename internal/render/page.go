@@ -14,7 +14,7 @@ type TabView struct {
 var Tabs = []TabView{{"decidir", "Decidir"}, {"comprar", "Comprar"}, {"vender", "Vender"},
 	{"clausulas", "Cláusulas"}, {"plantilla", "Plantilla"}, {"partidos", "Partidos"},
 	{"rivales", "Rivales"}, {"liga", "Liga"}, {"ranking", "Ranking"},
-	{"comparador", "Comparador"}}
+	{"necroporra", "Necroporra"}, {"comparador", "Comparador"}}
 
 // SectionView is one section of the page: its id (what an address names), the tab it belongs
 // to, and the view (or the browser's own component, UI) that fills it.

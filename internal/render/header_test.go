@@ -30,6 +30,7 @@ func TestPageDataDescribesTheShell(t *testing.T) {
 	document.Mode = "auto"
 	_, views := document.Render()
 	page := views["page"].(PageData)
+	// Without a side-game round its tab is left out.
 	if len(page.Tabs) != 10 || page.Tabs[9].ID != "comparador" {
 		t.Errorf("tabs: %+v", page.Tabs)
 	}

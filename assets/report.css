@@ -1745,3 +1745,14 @@ a.role:hover,a.role:focus-visible{text-decoration:underline}
   color:var(--muted);padding:1px 6px;border:1px solid var(--line);border-radius:5px;
   white-space:nowrap;cursor:default}
 @media (max-width:640px){.build-tag{display:none}}
+
+/* necroporra: the side game's pick list reuses the panel's row and button styles. */
+.mk .necro-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:12px 0 2px}
+.mk .necro-msg{font-size:12px;color:var(--muted)}
+.mk .necro-msg.ok{color:var(--good)}
+.mk .necro-msg.err{color:var(--warning)}
+.mk button.mb.necro-pick{padding:4px 10px;font-size:12px}
+.mk button.mb.necro-pick.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.mk li.r.pick{background:color-mix(in srgb, var(--accent) 9%, transparent)}
+.mk .necro-remind{margin:0 0 12px;padding:9px 12px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:9px;font-size:13px;background:color-mix(in srgb, var(--accent) 6%, transparent)}
+.mk .necro-remind.warn{border-left-color:var(--warning);background:color-mix(in srgb, var(--warning) 8%, transparent)}

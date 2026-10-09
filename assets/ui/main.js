@@ -9,6 +9,7 @@ import {Lineup} from './lineup.js';
 import {start, registerUI, registerDrawer} from './shell.js';
 import './league.js';
 import './decide.js';
+import './necro.js';
 
 // The page: the shell draws the frame and every section; the dialogs and notices sit above it.
 registerUI('lineup', Lineup);

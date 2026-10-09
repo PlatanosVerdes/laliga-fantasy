@@ -1,6 +1,6 @@
 import {html, panel} from './lib.js';
 import {KINDS, ActView, ChipView, Segs, Seg} from './view.js';
-import {Face, ShieldMark, PosTag, Empty} from './components.js';
+import {Face, ShieldMark, PosTag, Empty, Countdown} from './components.js';
 
 // Decidir's own pieces: the decision cards, the eleven they are about, and the way out to the
 // other tabs.
@@ -19,7 +19,11 @@ function Card({card, rank}) {
   </article>`;
 }
 
-const Cards = ({b}) => html`<div class="sec-head"><h2>Qué hacer ahora</h2></div>${b.data.cards.length
+// The side game's nudge, while its round is open and you have not voted.
+const Remind = ({r}) => html`<div class="necro-remind warn"><b>Necroporra J${r.week}</b>: aún no has votado${
+  r.closes_at ? html` cierra en <b><${Countdown} kind="pill" until=${r.closes_at}/></b>` : null}. <${Segs} list=${r.tail}/></div>`;
+
+const Cards = ({b}) => html`${b.data.remind ? html`<${Remind} r=${b.data.remind}/>` : null}<div class="sec-head"><h2>Qué hacer ahora</h2></div>${b.data.cards.length
   ? html`<div class="cards">${b.data.cards.map((card, i) => html`<${Card} card=${card} rank=${i + 1}/>`)}</div><p class="rest">${b.data.rest}</p>`
   : html`<${Empty}>${b.data.empty}<//>`}`;
 Cards.full = true;

@@ -60,6 +60,19 @@ type Document struct {
 	MaxDebtPct     float64
 	HoldExceptions string
 	RuleNotes      []string
+
+	// Necroporra is the side game: the open round's gameweek and deadline, a manager-name to
+	// tebasfury team-id roster, your current vote (team ids) and whether this server may cast
+	// one. Zero gameweek hides the section.
+	NecroGameweek int
+	NecroDeadline string
+	NecroClosesAt time.Time
+	NecroRoster   map[string]string
+	NecroChosen   []string
+	NecroCanVote  bool
+	// NecroPreview forces the Decidir reminder to show even when you have already voted, for a
+	// local look at the card.
+	NecroPreview bool
 }
 
 func rows(source any) []map[string]any {
@@ -133,16 +146,26 @@ func (d Document) Render() (string, map[string]any) {
 	for name, view := range d.leagueViews() {
 		views[name] = view
 	}
-	sections = append(sections, shell("v-ranking", "ranking", "ranking"),
-		SectionView{ID: "comparador", Tab: "comparador", UI: "comparador"})
+	sections = append(sections, shell("v-ranking", "ranking", "ranking"))
 	views["ranking"] = d.RankingData(players)
+	necro, hasNecro := d.NecroData()
+	if hasNecro {
+		sections = append(sections, shell("necroporra", "necroporra", "necroporra"))
+		views["necroporra"] = necro
+	}
+	sections = append(sections, SectionView{ID: "comparador", Tab: "comparador", UI: "comparador"})
 
 	page := PageData{Stats: d.widgets(week, players), Sections: sections,
 		Foot: Foot{Generated: d.Generated, League: d.LeagueName,
 			Week: int(number(week["weekNumber"])), Mode: d.Mode,
 			Weight: fmt.Sprintf("%.0f%%", number(universe["current_weight"])*100)}}
 	if hasAdvice {
-		page.Tabs = Tabs
+		for _, tab := range Tabs {
+			// The side game's tab only while a round is configured and open.
+			if tab.ID != "necroporra" || hasNecro {
+				page.Tabs = append(page.Tabs, tab)
+			}
+		}
 	}
 	views["page"] = page
 	blob, _ := json.Marshal(views)

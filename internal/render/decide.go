@@ -34,9 +34,11 @@ type CardView struct {
 }
 
 type Cards struct {
-	Cards []CardView `json:"cards"`
-	Rest  string     `json:"rest,omitempty"`
-	Empty string     `json:"empty,omitempty"`
+	// Remind is the side game's nudge, above the cards while its round is open and unvoted.
+	Remind *NecroRemind `json:"remind,omitempty"`
+	Cards  []CardView   `json:"cards"`
+	Rest   string       `json:"rest,omitempty"`
+	Empty  string       `json:"empty,omitempty"`
 }
 
 // DecideData is "Qué hacer ahora": the cards to act on, and beside them the eleven they are
@@ -46,7 +48,7 @@ func (d Document) DecideData() View {
 	if len(cards) > MaxCards {
 		cards = cards[:MaxCards]
 	}
-	data := Cards{Cards: []CardView{}}
+	data := Cards{Cards: []CardView{}, Remind: d.necroReminder()}
 	if len(cards) == 0 {
 		data.Empty = "Nada que decidir ahora: ninguna oferta que cobrar, ninguna cláusula que " +
 			"subir y ningún fichaje que mejore tu once a su precio."
