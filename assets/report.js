@@ -1055,149 +1055,6 @@ function applyFormation(text){
   pitchDirty=true; renderPitch();
 }
 
-// ---- la liga jornada a jornada --------------------------------------------
-// One line per manager over the finished matchdays: the place each of them held after each one.
-// The server rebuilds it from the elevens, so it is asked for once, when the tab is opened.
-let seasonData=null, seasonAsked=false;
-
-async function loadSeason(){
-  const box=document.querySelector('.evo');
-  if(!box) return;
-  if(seasonData){ box.innerHTML=seasonChart(seasonData,box.clientWidth); return; }
-  if(seasonAsked) return;
-  seasonAsked=true;
-  box.innerHTML='<p class="empty">Reconstruyendo la clasificacion…</p>';
-  try{
-    const res=await fetch('/api/season');
-    if(!res.ok) throw new Error(res.status);
-    seasonData=await res.json();
-    // A live refresh during the wait puts a new, empty frame in place of the one asked for.
-    const frame=document.querySelector('.evo')||box;
-    frame.innerHTML=seasonChart(seasonData,frame.clientWidth);
-  }catch(e){
-    seasonAsked=false;
-    box.innerHTML='<p class="empty">No he podido reconstruir la clasificacion.</p>';
-  }
-}
-
-// Drawn at the width it has, so turning the phone has to redraw it.
-let seasonRedraw;
-window.addEventListener('resize',()=>{
-  if(!seasonData) return;
-  clearTimeout(seasonRedraw);
-  seasonRedraw=setTimeout(loadSeason,200);
-});
-
-// The season: every manager in a colour of his own and me in the accent. Picking managers on
-// the chips leaves only those (and me) coloured, the rest thin and grey. Rank or points.
-const EVO_KEY='fantasy:evo', EVO_HUES=11;
-function evoState(){
-  try{ const saved=JSON.parse(localStorage.getItem(EVO_KEY)||'{}');
-       return {mode:saved.mode==='points'?'points':'place', picked:saved.picked||[]}; }
-  catch(e){ return {mode:'place',picked:[]}; }
-}
-function evoSave(state){ try{ localStorage.setItem(EVO_KEY,JSON.stringify(state)); }catch(e){} }
-
-function seasonChart(d,width){
-  const weeks=d.weeks||[];
-  const managers=(d.managers||[]).filter(m=>(m.place||[]).some(p=>p!=null));
-  if(weeks.length<1||!managers.length) return '<p class="empty">Aun no hay jornadas terminadas.</p>';
-  const state=evoState();
-  const picked=state.picked.filter(id=>managers.some(m=>m.team_id===id));
-  // Each manager's colour is fixed, by his place in a stable order, so it never moves.
-  const hue=new Map([...managers].filter(m=>!m.is_me).sort((a,b)=>String(a.team_id).localeCompare(b.team_id))
-    .map((m,i)=>[m.team_id,i%EVO_HUES+1]));
-  const shown=id=>!picked.length||picked.includes(id);
-  const byPoints=state.mode==='points';
-
-  const w=Math.max(300,width||760), narrow=w<560;
-  const padL=byPoints?(narrow?50:58):(narrow?34:44), padR=narrow?78:130, padT=14, padB=24;
-  const rows=managers.length, h=narrow?Math.round(w*0.75):Math.max(260,padT+padB+(rows-1)*22);
-  const step=weeks.length>1?(w-padL-padR)/(weeks.length-1):0;
-  const x=i=>padL+step*i;
-  const top=Math.max(1,...managers.flatMap(m=>(m.total||[]).filter(v=>v!=null)));
-  const y=byPoints
-    ? v=>padT+(h-padT-padB)*(1-v/top)
-    : p=>padT+(h-padT-padB)*(rows>1?(p-1)/(rows-1):0);
-  const valueOf=(m,i)=>byPoints?m.total[i]:m.place[i];
-
-  let grid='';
-  weeks.forEach((week,i)=>{
-    grid+=`<line class="evo-grid" x1="${x(i)}" y1="${padT-6}" x2="${x(i)}" y2="${h-padB+4}"></line>`
-      +`<text class="evo-axis" x="${x(i)}" y="${h-padB+16}" text-anchor="middle">J${week}</text>`;
-  });
-  const ticks=byPoints?[0,Math.round(top/2),Math.round(top)].map(v=>[v,v+' pts']):[[1,'1º'],[rows,rows+'º']];
-  ticks.forEach(([v,label])=>{
-    grid+=`<text class="evo-axis" x="${padL-8}" y="${y(v)+3}" text-anchor="end">${label}</text>`;
-  });
-
-  const kind=m=>!shown(m.team_id)?'rest':m.is_me?'me':'pick';
-  const order={rest:0,pick:1,me:2};
-  const painted=[...managers].sort((a,b)=>order[kind(a)]-order[kind(b)]);
-  const labels=[];
-  const lines=painted.map(m=>{
-    const points=[];
-    (m.place||[]).forEach((place,i)=>{
-      const v=valueOf(m,i);
-      if(place!=null&&v!=null) points.push([x(i),y(v),i,place]);
-    });
-    if(!points.length) return '';
-    const k=kind(m);
-    const cls=k==='me'?'evo-me':k==='pick'?`evo-pick evo-h${hue.get(m.team_id)}`:'evo-rest';
-    const dots=points.map(([px,py,i,place])=>
-      `<circle class="evo-dot" cx="${px}" cy="${py}" r="${k==='rest'?3:4}" tabindex="0" data-tip="${
-        m.manager} · J${weeks[i]} · ${place}º · ${Math.round(m.points[i]||0)} pts · ${
-        Math.round(m.total[i]||0)} acumulados"></circle>`).join('');
-    if(k!=='rest'){
-      const last=points[points.length-1];
-      labels.push({x:last[0]+9,y:last[1]+3.5,name:m.manager,cls});
-    }
-    return `<g class="evo-row ${cls}" data-evo-team="${m.team_id}">
-      <polyline class="evo-line" points="${points.map(p=>p[0]+','+p[1]).join(' ')}"></polyline>
-      <polyline class="evo-hit" points="${points.map(p=>p[0]+','+p[1]).join(' ')}"></polyline>${dots}</g>`;
-  }).join('');
-  // The labels at the right end, pushed apart so no two overlap.
-  labels.sort((a,b)=>a.y-b.y);
-  labels.forEach((label,i)=>{ if(i&&label.y<labels[i-1].y+12) label.y=labels[i-1].y+12; });
-  const cut=name=>narrow&&name.length>9?name.slice(0,9)+'…':name;
-  const names=labels.map(l=>`<text class="evo-name ${l.cls}" x="${l.x}" y="${l.y}">${cut(l.name)}</text>`).join('');
-
-  const chips=[...managers].sort((a,b)=>(b.is_me?1:0)-(a.is_me?1:0)||String(a.manager).localeCompare(b.manager,'es'))
-    .map(m=>{
-      const k=kind(m);
-      const sw=m.is_me?'evo-me':`evo-h${hue.get(m.team_id)}`;
-      return `<button type="button" class="evo-chip ${sw}${picked.includes(m.team_id)?' on':''}" data-evo-pick="${m.team_id}"`
-        +` aria-pressed="${k!=='rest'}"><i class="evo-sw"></i>${m.manager}</button>`;
-    }).join('');
-  const controls=`<div class="evo-controls"><div class="evo-mode" role="group">`
-    +`<button type="button" data-evo-mode="place" class="${byPoints?'':'on'}">Puesto</button>`
-    +`<button type="button" data-evo-mode="points" class="${byPoints?'on':''}">Puntos</button></div>`
-    +`<div class="evo-chips">${chips}${picked.length?'<button type="button" class="evo-clear" data-evo-clear>Todos</button>':''}</div>`
-    +`<p class="evo-hint">${picked.length?'Toca más managers para añadirlos o quitarlos.':'Toca un manager para ver solo su línea.'}</p></div>`;
-  return controls+`<svg class="evo-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"
-    role="img" aria-label="${byPoints?'Puntos acumulados':'Puesto'} de cada manager jornada a jornada">${grid}${lines}${names}</svg>`;
-}
-
-document.addEventListener('click',(event)=>{
-  const t=event.target.closest&&event.target.closest('[data-evo-pick],[data-evo-mode],[data-evo-clear]');
-  if(!t||!t.closest('.evo')) return;
-  const state=evoState();
-  if(t.dataset.evoMode) state.mode=t.dataset.evoMode;
-  else if(t.hasAttribute('data-evo-clear')) state.picked=[];
-  else{
-    const id=t.dataset.evoPick;
-    state.picked=state.picked.includes(id)?state.picked.filter(x=>x!==id):[...state.picked,id];
-  }
-  evoSave(state);
-  usage.click('liga','evolucion',t.dataset.evoMode||t.dataset.evoPick||'limpiar');
-  loadSeason();
-});
-// Hovering a chip brings his line forward.
-document.addEventListener('mouseover',(event)=>{
-  const chip=event.target.closest&&event.target.closest('.evo [data-evo-pick]');
-  document.querySelectorAll('.evo-row.hl').forEach(g=>g.classList.remove('hl'));
-  if(chip) document.querySelector(`.evo-row[data-evo-team="${chip.dataset.evoPick}"]`)?.classList.add('hl');
-});
 
 async function loadPitch(){
   const pitch=document.getElementById('pitch');
@@ -1660,35 +1517,6 @@ async function openForecast(week){
 }
 
 // The league log in one list: newest first as the server sends it, or biggest first.
-const FEED_SORT_KEY='fantasy:feed-sort';
-function sortFeed(order){
-  const rail=document.querySelector('.feed-rail');
-  if(!rail) return;
-  const rows=[...rail.children];
-  rows.forEach((row,i)=>{ if(row.dataset.i==null) row.dataset.i=i; });
-  rows.sort(order==='amount'
-    ? (a,b)=>(+b.dataset.amount||0)-(+a.dataset.amount||0)||a.dataset.i-b.dataset.i
-    : (a,b)=>a.dataset.i-b.dataset.i);
-  rows.forEach(row=>rail.appendChild(row));
-  rail.scrollTop=0;
-  document.querySelectorAll('[data-feed-sort]').forEach(b=>
-    b.classList.toggle('on',b.dataset.feedSort===order));
-}
-
-function wireFeedSort(root=document){
-  root.querySelectorAll('[data-feed-sort]').forEach(button=>{
-    if(button.dataset.wired) return;
-    button.dataset.wired='1';
-    button.addEventListener('click',()=>{
-      try{ localStorage.setItem(FEED_SORT_KEY,button.dataset.feedSort); }catch(e){}
-      sortFeed(button.dataset.feedSort);
-    });
-  });
-  let saved=null;
-  try{ saved=localStorage.getItem(FEED_SORT_KEY); }catch(e){}
-  if(saved==='amount') sortFeed('amount');
-}
-
 function wireMatchdays(root=document){
   root.querySelectorAll('button[data-matchday]').forEach(button=>{
     if(button.dataset.wired) return;
@@ -3101,7 +2929,6 @@ function showTab(id,{section=null,updateHash=true}={}){
   }
   applyRivalPick();
   if(tab.sections.includes('once') && !pitchState) loadPitch();
-  if(tab.sections.includes('evolucion')) loadSeason();
   if(tab.id==='comparador'&&was!=='comparador') renderCompare();
   drawTray();
   if(section){
@@ -3182,9 +3009,7 @@ async function swap(){
   wireTables(); wireFilters(); wireStars(); wireBids(); wireOps();
   wireDetails(); wireRaids();
   wireRaises();
-  wireManagers(); wireMatchdays(); wireFeedSort(); tick();
-  // The chart is the client's, and the rebuild has just put the empty frame back in its place.
-  if(seasonData) loadSeason();
+  wireManagers(); wireMatchdays(); tick();
   showTab(document.querySelector('.tab.on')?.dataset.tab||'decidir',
           {updateHash:false});
   const stamp=document.getElementById('live-stamp');
@@ -3266,7 +3091,7 @@ window.panel={openDetail, openManager, openWeek, openReach, applyRivalPick, open
 
 wireTables(); wireFilters(); wireStars(); wireBids(); wireOps();
 wireDetails(); wireRaids();
-wireRaises(); wireManagers(); wireMatchdays(); wireFeedSort();
+wireRaises(); wireManagers(); wireMatchdays();
 wireTabs(); tick(); drawTray();
 {
   const stamped=document.querySelector('.topbar[data-cash]');

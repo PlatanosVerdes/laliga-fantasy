@@ -4,6 +4,7 @@ import {PlayerPopup} from './player.js';
 import {ViewScreen} from './view.js';
 import {WeekPopup} from './matches.js';
 import {ReachPopup} from './rivals.js';
+import './league.js';
 
 const dialogs = document.createElement('div');
 document.body.appendChild(dialogs);

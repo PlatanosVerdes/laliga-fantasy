@@ -8,7 +8,6 @@
 package render
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -348,90 +347,6 @@ func truthy(value any) bool {
 	return false
 }
 
-// KPI is a widget. `meter` (0..1) draws where you sit in the league for that number,
-// because a figure like "79.76M" only means something next to the other twelve.
-type KPI struct {
-	Label string
-	Value string
-	// ID on the value, for the few whose number the live refresh has to keep honest without
-	// re-rendering the whole strip.
-	ValueID string
-	Hint    string
-	Rank  string
-	Meter *float64
-	Status string
-	Tab    string
-	// Deadline turns the value into a live countdown: the server renders the first value and
-	// stamps the instant, the browser keeps it honest every second.
-	Deadline string
-	// Notes are extra facts, one per line under the hint.
-	Notes []string
-}
-
-func Widget(kpi KPI) string {
-	stamp := ""
-	if kpi.Deadline != "" {
-		stamp = ` data-deadline="` + Esc(kpi.Deadline) + `" data-plain="1"`
-	}
-	ident := ""
-	if kpi.ValueID != "" {
-		ident = ` id="` + Esc(kpi.ValueID) + `"`
-	}
-	parts := []string{
-		`<span class="kpi-label">` + Esc(kpi.Label) + `</span>`,
-		`<span class="kpi-value"` + ident + stamp + `>` + Esc(kpi.Value) + `</span>`,
-	}
-	if kpi.Rank != "" {
-		status := kpi.Status
-		if status == "" {
-			status = "neutral"
-		}
-		parts = append(parts, fmt.Sprintf(`<span class="kpi-rank pill-%s">%s</span>`,
-			status, Esc(kpi.Rank)))
-	}
-	if kpi.Meter != nil {
-		width := math.Max(2.0, math.Min(100.0, *kpi.Meter*100))
-		parts = append(parts, `<span class="kpi-meter" role="presentation">`+
-			fmt.Sprintf(`<span class="kpi-meter-fill" style="width:%.0f%%"></span></span>`, width))
-	}
-	if kpi.Hint != "" {
-		parts = append(parts, `<span class="kpi-hint">`+Esc(kpi.Hint)+`</span>`)
-	}
-	// Several short facts read as a list, not as a sentence with dots: one line each.
-	for _, line := range kpi.Notes {
-		parts = append(parts, `<span class="kpi-note">`+Esc(line)+`</span>`)
-	}
-	if kpi.Tab != "" {
-		// A widget that states a fact should take you to where the fact is explained.
-		return fmt.Sprintf(`<button class="kpi kpi-link" type="button" data-goto="%s">%s</button>`,
-			Esc(kpi.Tab), strings.Join(parts, ""))
-	}
-	return `<div class="kpi">` + strings.Join(parts, "") + `</div>`
-}
-
-// RankOf is where a number sits among the league's: (label, 0..1 position, status).
-func RankOf(value float64, others []float64) (string, float64, string) {
-	total := len(others)
-	if total == 0 {
-		return "", 0, ""
-	}
-	position := 1
-	for _, other := range others {
-		if other > value {
-			position++
-		}
-	}
-	share := 1 - float64(position-1)/math.Max(1, float64(total-1))
-	third := max(1, total/3)
-	status := "neutral"
-	if position <= third {
-		status = "good"
-	} else if position > total-third {
-		status = "critical"
-	}
-	return fmt.Sprintf("%dº de %d", position, total), share, status
-}
-
 // Tabs are the page's groups. Rendered only when there is a session, because a chip
 // that jumps nowhere is worse than no chip.
 const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
@@ -538,20 +453,15 @@ func Header(stats []string, withTabs bool, cashAmount *float64) string {
 
 // PageFoot is where the page comes from and what the server may do, and the figures that did
 // not make the four cards, folded.
-func PageFoot(generated, leagueName string, week int, more []string, mode string) string {
+func PageFoot(generated, leagueName string, week int, mode string) string {
 	league := ""
 	if leagueName != "" {
 		league = ` · liga <strong>` + Esc(leagueName) + `</strong>`
 	}
-	extra := ""
-	if len(more) > 0 {
-		extra = `<details class="kpis-more"><summary>más datos</summary><div class="kpis">` +
-			strings.Join(more, "") + `</div></details>`
-	}
 	return `<header class="topline"><h1>LaLiga Fantasy</h1>` +
 		`<p>` + Esc(generated) + league + fmt.Sprintf(` · jornada %d</p>`, week) +
 		`<span class="live"><span id="live-stamp">estatico</span></span>` +
-		modeChip(mode) + `</header>` + extra
+		modeChip(mode) + `</header>`
 }
 
 // Footer says what the numbers are and what they are not. xPts is an estimate of ours, and
@@ -601,30 +511,6 @@ func Page(css, js, crestCSS, header, body, footer, modal, drawer string) string 
 		`<script>` + js + `</script>`
 }
 
-// HouseRules prints the pact. Only the hold rule changes what the tool proposes; the rest
-// are here because a rule nobody can read is a rule nobody follows — and because the page is
-// where you look before deciding.
-func HouseRules(holdDays int, exceptions string, notes []string) string {
-	var out strings.Builder
-	out.WriteString(`<ul class="rules">`)
-	if holdDays > 0 {
-		line := fmt.Sprintf("Un jugador fichado o clausulado <strong>no se puede vender "+
-			"durante %d dias</strong>. Vale para toda la liga, asi que un rival tampoco "+
-			"puede venderte a quien acaba de fichar: a ese solo se llega por clausula.",
-			holdDays)
-		if exceptions != "" {
-			line += " Excepciones acordadas: " + Esc(exceptions) + "."
-		}
-		fmt.Fprintf(&out, `<li class="rule-live"><span class="rule-tag">se aplica</span>%s</li>`,
-			line)
-	}
-	for _, note := range notes {
-		fmt.Fprintf(&out, `<li><span class="rule-tag rule-social">acuerdo</span>%s</li>`,
-			Esc(note))
-	}
-	out.WriteString(`</ul>`)
-	return out.String()
-}
 
 // modeChip is the one-word answer to what the server may do. Coloured by how much it can act,
 // because "solo lectura" and "auto" are opposite ends of the same question.
@@ -645,159 +531,12 @@ func modeChip(mode string) string {
 		`solo lectura nada">Mode: <b>%s</b></span>`, class, Esc(mode), Esc(mode))
 }
 
-// Feed is the league's movements: who signed and sold, and for how much.
-//
-// Lineup changes are the bulk of the log and say nothing about the market, so they are
-// dropped before anything is counted.
-func Feed(events []map[string]any) string {
-	var moves []map[string]any
-	for _, event := range events {
-		if !strings.Contains(text(event["kind"]), "alinea") && !feedHidden[int(number(event["type_id"]))] {
-			moves = append(moves, event)
-		}
-	}
-	if len(moves) == 0 {
-		return `<p class="empty">Hay actividad en la liga, pero solo cambios de alineacion: ` +
-			`ninguna compra ni venta todavia.</p>`
-	}
-
-	// One list: the newest first, or the biggest first at a click. The page reorders the same
-	// rows, so the valuations on the biggest ones show in both orders.
-	var blocks strings.Builder
-	if len(moves) > 8 {
-		blocks.WriteString(`<div class="feed-sort" role="group" aria-label="Ordenar">` +
-			`<button type="button" data-feed-sort="recent" class="on">Lo último</button>` +
-			`<button type="button" data-feed-sort="amount">Más grandes</button></div>` +
-			`<span class="feed-legend"><i class="feed-mine"></i>tuyo<i class="feed-bid"></i>pujaste` +
-			`<i class="feed-fav"></i>favorito</span>`)
-	}
-	// The whole log, inside a rail that scrolls: cut at twenty it answered "what happened
-	// today" and nothing else, and the season is what the section is for.
-	blocks.WriteString(`<div class="feed feed-rail">`)
-	for _, event := range moves {
-		blocks.WriteString(FeedRow(event))
-	}
-	blocks.WriteString(`</div>`)
-	return blocks.String()
-}
-
 // feedHidden are the log's per-matchday and league-wide notices (types 7 and 10): no money and no
 // player moves, so they are not movements.
 var feedHidden = map[int]bool{7: true, 10: true}
 
 // ShieldType is the log's shield bought (see model.ShieldType): it moves no money.
 const ShieldType = 4
-
-// FeedRow is one movement. The amount alone does not say whether it was a steal or a panic
-// buy, so the player's value on that same day travels with it.
-func FeedRow(event map[string]any) string {
-	// The player is a link too: a move reads "quien y por cuanto", and the next question is
-	// always what that player is worth now.
-	player := PlayerLink(text(event["player"]), text(event["player_id"]))
-	if text(event["player"]) == "" {
-		player = ""
-	}
-	// The feed names people by user id, so the link needs the map. Whoever paid is user1 and
-	// whoever received is user2, which loadActivity already resolved into buyer and seller.
-	buyer := ManagerLink(text(event["buyer"]), ManagerTeams[buyerUser(event)])
-	seller := ManagerLink(text(event["seller"]), ManagerTeams[sellerUser(event)])
-	if text(event["buyer"]) == "" {
-		buyer = ""
-	}
-	if text(event["seller"]) == "" {
-		seller = ""
-	}
-	var body string
-	if int(number(event["type_id"])) == ShieldType {
-		by := ManagerLink(text(event["actor"]), ManagerTeams[text(event["user1"])])
-		return fmt.Sprintf(`<div class="feed-row feed-quiet" data-amount="0">`+
-			`<span class="feed-date">%s</span><span class="feed-kind">blindaje</span>`+
-			`<span class="feed-body">%s · blindado por %s</span><span class="feed-amount"></span></div>`,
-			Esc(feedDate(event)), player, by)
-	}
-	switch {
-	case text(event["kind"]) == "recompensa" && buyer != "":
-		week := ""
-		if raw := mapOf(event["raw"]); raw != nil {
-			if matchday := number(raw["weekNumber"]); matchday > 0 {
-				week = fmt.Sprintf(" por la jornada %.0f", matchday)
-			}
-		}
-		body = buyer + `<span class="feed-then">cobra` + Esc(week) + `</span>`
-	case player != "" && buyer != "" && seller != "":
-		body = fmt.Sprintf(`<strong>%s</strong>: %s &rarr; %s`, player, seller, buyer)
-	case player != "" && buyer != "":
-		body = fmt.Sprintf(`<strong>%s</strong> &rarr; %s`, player, buyer)
-	case player != "" && seller != "":
-		body = fmt.Sprintf(`<strong>%s</strong>, vendido por %s`, player, seller)
-	case player != "":
-		body = fmt.Sprintf(`<strong>%s</strong>`, player)
-	default:
-		// Nobody named: dump what came, so an event shape we do not know yet is visible
-		// rather than an empty row.
-		fallback := text(event["buyer"])
-		if fallback == "" {
-			fallback = text(event["seller"])
-		}
-		if fallback == "" {
-			blob, _ := json.Marshal(event["raw"])
-			fallback = string(blob)
-			if len(fallback) > 110 {
-				fallback = fallback[:110]
-			}
-		}
-		body = Esc(fallback)
-	}
-
-	amount := Missing
-	if value := asFloat(event["amount"]); value != nil && *value != 0 {
-		amount = Money(value)
-	}
-
-	extra := ""
-	if then := asFloat(event["value_then"]); then != nil && *then != 0 {
-		premium := 1.0
-		if value := asFloat(event["premium"]); value != nil {
-			premium = *value
-		}
-		status := "neutral"
-		switch {
-		case premium >= 1.25:
-			status = "critical"
-		case premium >= 1.08:
-			status = "warning"
-		case premium <= 0.98:
-			status = "good"
-		}
-		extra = fmt.Sprintf(`<span class="feed-then">valia <b>%s</b></span>`+
-			`<span class="pill-%s">%.2fx</span>`, Esc(Money(then)), status, premium)
-	}
-
-	date := feedDate(event)
-	// The matchday prize is not an operation: sorted by size it would bury the signings.
-	size := 0.0
-	if text(event["kind"]) != "recompensa" {
-		size = math.Abs(number(event["amount"]))
-	}
-	kind := text(event["kind"])
-	if truthy(event["clausulazo"]) {
-		kind = "clausulazo"
-	}
-	if strings.HasPrefix(kind, "tipo ") {
-		kind = "movimiento"
-	}
-	mark := FeedMarks[text(event["player_id"])]
-	if FeedMe != "" && (text(event["buyer"]) == FeedMe || text(event["seller"]) == FeedMe) {
-		mark = "mine"
-	}
-	if mark != "" {
-		mark = " feed-" + mark
-	}
-	return fmt.Sprintf(`<div class="feed-row%s" data-amount="%.0f"><span class="feed-date">%s</span>`+
-		`<span class="feed-kind">%s</span><span class="feed-body">%s</span>`+
-		`<span class="feed-amount">%s</span>%s</div>`,
-		mark, size, Esc(date), Esc(kind), body, Esc(amount), extra)
-}
 
 // Verdicts are the five recommendations, each with its glyph and status. The glyph is not
 // decoration: it is what carries the meaning where the colour cannot be seen.
@@ -928,15 +667,6 @@ func pays(event map[string]any) bool {
 	return false
 }
 
-// ManagerTeams maps a manager's user id to his team id, which is what the feed carries and what
-// the panel needs. Filled by the caller for the same reason as Crests: this package does not
-// fetch, and the feed's events name people by user.
-var ManagerTeams = map[string]string{}
-
-// FeedMarks is how each player of the log concerns me (mine, bid, fav), and FeedMe my manager
-// name: rows I bought or sold are mine whoever the player is now.
-var FeedMarks = map[string]string{}
-var FeedMe string
 
 // PowerBadge is who can actually buy right now. Named, not just coloured.
 func PowerBadge(row map[string]any) string {

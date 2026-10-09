@@ -1057,7 +1057,11 @@ func cmdSection(args []string) error {
 		fmt.Print(render.Calendar(rows, spending, time.Now().Format("2006-01-02")))
 		return nil
 	case "movimientos":
-		fmt.Print(render.Feed(rows))
+		blob, err := json.MarshalIndent(render.FeedOf(rows), "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(blob))
 		return nil
 	}
 
@@ -1701,7 +1705,7 @@ func policiesFrom(value any) map[string]map[string]any {
 // than from a model, so they can be compared one at a time.
 func cmdShell(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("uso: shell <widgets|cabecera|pie|pestanas|rangos>")
+		return fmt.Errorf("uso: shell <cabecera|pie|pestanas>")
 	}
 	switch args[0] {
 	case "pestanas":
@@ -1712,37 +1716,10 @@ func cmdShell(args []string) error {
 			fmt.Println(render.Footer(weight))
 		}
 
-	case "widgets":
-		half, top := 0.5, 1.0
-		cases := []render.KPI{
-			{Label: "Jornada 1", Value: "en juego", Hint: "J2 desde vie 22 ago 19:30",
-				Rank: "cierra jue 20 ago 03:00", Status: "neutral"},
-			{Label: "Mi puesto", Value: "7º", Hint: "121 puntos", Rank: "7º de 13",
-				Meter: &half, Status: "neutral", Tab: "liga"},
-			{Label: "Mi saldo", Value: "93.62M", Hint: "le llega a la mayoria del mercado",
-				Rank: "3º de 13", Meter: &top, Status: "good", Tab: "liga"},
-			{Label: "Sin rango", Value: "—"},
-		}
-		for _, kpi := range cases {
-			fmt.Println(render.Widget(kpi))
-		}
-
-	case "rangos":
-		others := []float64{130960400, 100600000, 93617740, 55266919, 48869526, 0}
-		for _, value := range []float64{130960400, 93617740, 0, 999} {
-			label, share, status := render.RankOf(value, others)
-			fmt.Printf("%.0f|%s|%.6f|%s\n", value, label, share, status)
-		}
-		// And the degenerate cases, which is where an off-by-one hides.
-		label, share, status := render.RankOf(5, nil)
-		fmt.Printf("vacio|%s|%.6f|%s\n", label, share, status)
-		label, share, status = render.RankOf(5, []float64{5})
-		fmt.Printf("uno|%s|%.6f|%s\n", label, share, status)
-
 	case "cabecera":
 		fmt.Println(render.Header([]string{`<div class="stat">uno</div>`,
 			`<div class="stat">dos</div>`}, true, nil))
-		fmt.Println(render.PageFoot("18/08/2026 16:20", "Liga Fantasy Comité 2026-", 1, nil, "auto"))
+		fmt.Println(render.PageFoot("18/08/2026 16:20", "Liga Fantasy Comité 2026-", 1, "auto"))
 
 	default:
 		return fmt.Errorf("caso desconocido: %s", args[0])

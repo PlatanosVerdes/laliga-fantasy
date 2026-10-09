@@ -18,6 +18,8 @@ export function Seg({s}) {
   if (s.href) return html`<a class=${s.c || undefined} href=${s.href} target="_blank" rel="noopener" data-tip=${tip}>${inner}</a>`;
   if (s.pid && s.c === 'p-name') return html`<button class="p-name" type="button" data-wired="1"
     onClick=${(e) => { e.stopPropagation(); legacy().openDetail(s.pid); }}>${inner}</button>`;
+  if (s.team && s.c === 'p-name') return html`<button class="p-name" type="button" data-wired="1"
+    onClick=${(e) => { e.stopPropagation(); legacy().openManager(s.team); }}>${inner}</button>`;
   if (s.pid || s.team) return html`<span class=${s.c || undefined} data-pid=${s.pid || undefined} data-team=${s.team || undefined} data-tip=${tip}>${inner}</span>`;
   const El = s.el || 'span';
   if (!s.c && !tip && !s.el && !s.style && !s.kids) return s.t;

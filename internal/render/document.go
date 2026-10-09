@@ -3,12 +3,12 @@ package render
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 	"math"
 	"sort"
 	"strings"
 	"time"
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 )
 
 // Document assembles the whole page: the order of the sections, their titles, their notes
@@ -117,8 +117,8 @@ func (d Document) Render() (string, map[string]any) {
 	if hasAdvice {
 		sections = append(sections, d.Views()...)
 	}
-	sections = append(sections, d.seasonSection())
-	sections = append(sections, d.feedSection())
+	shells := d.leagueShells()
+	sections = append(sections, shells[:2]...)
 	if hasAdvice {
 		sections = append(sections, d.squadSection())
 		shells, rivals := d.rivalViews(players)
@@ -127,13 +127,16 @@ func (d Document) Render() (string, map[string]any) {
 			views[name] = view
 		}
 	}
-	sections = append(sections, d.rulesSection())
+	sections = append(sections, shells[2:]...)
+	for name, view := range d.leagueViews() {
+		views[name] = view
+	}
 	sections = append(sections, d.rankingSection(players))
 	sections = append(sections, CompareShell)
 
-	stats, more := d.widgets(week, players)
+	stats := d.widgets(week, players)
 	header := Header(stats, hasAdvice, asFloat(d.Advice["budget"])) + d.pageFacts()
-	footer := PageFoot(d.Generated, d.LeagueName, int(number(week["weekNumber"])), more, d.Mode) +
+	footer := PageFoot(d.Generated, d.LeagueName, int(number(week["weekNumber"])), d.Mode) +
 		Footer(number(universe["current_weight"]))
 
 	blob, _ := json.Marshal(views)
@@ -175,8 +178,8 @@ var Pitch, Filters string
 
 // --- widgets ---------------------------------------------------------------------------
 
-// widgets are the four cards under the tab bar and, apart, the figures behind "más datos".
-func (d Document) widgets(week map[string]any, players []map[string]any) ([]string, []string) {
+// widgets are the four cards under the tab bar.
+func (d Document) widgets(week map[string]any, players []map[string]any) []string {
 	// The one number on this card that keeps changing is how long is left: to the first
 	// kick-off, then to the last one, then to the close the game stamps hours after it.
 	closing, opening := text(week["closingWeekDate"]), text(week["openingWeekDate"])
@@ -213,39 +216,12 @@ func (d Document) widgets(week map[string]any, players []map[string]any) ([]stri
 				StatCard(Stat{Label: "Jugadores", Value: fmt.Sprintf("%d", len(players)),
 					Note: fmt.Sprintf("%d con datos de futbolfantasy",
 						int(number(d.Universe["matched_count"])))}),
-				StatCard(Stat{Label: "Sesión", Value: "sin liga", Note: "solo datos públicos"})}),
-			nil
-	}
-
-	squad := rows(d.Advice["squad"])
-	squadValue := 0.0
-	xpts := make([]float64, 0, len(squad))
-	for _, player := range squad {
-		squadValue += number(player["value"])
-		xpts = append(xpts, number(player["xpts"]))
-	}
-	sort.Sort(sort.Reverse(sort.Float64Slice(xpts)))
-	bestEleven := 0.0
-	for index, value := range xpts {
-		if index >= 11 {
-			break
-		}
-		bestEleven += value
+				StatCard(Stat{Label: "Sesión", Value: "sin liga", Note: "solo datos públicos"})})
 	}
 
 	teams := mapOf(d.Universe["league_teams"])
 	me := mapOf(teams[text(d.Universe["my_team_id"])])
-	var cashes, values, points []float64
-	for _, team := range teams {
-		row := mapOf(team)
-		cashes = append(cashes, number(row["estimated_cash"]))
-		values = append(values, number(row["squad_value"]))
-		points = append(points, number(row["points"]))
-	}
 	budget := asFloat(d.Advice["budget"])
-	cashRank, cashShare, cashStatus := RankOf(number(d.Advice["budget"]), cashes)
-	valueRank, valueShare, valueStatus := RankOf(squadValue, values)
-	pointsRank, pointsShare, pointsStatus := RankOf(number(me["points"]), points)
 
 	position := "?"
 	if seat := asFloat(me["position"]); seat != nil {
@@ -264,55 +240,7 @@ func (d Document) widgets(week map[string]any, players []map[string]any) ([]stri
 			Note:  fmt.Sprintf("%d pts", int(number(me["points"]))), Tab: "rivales"}),
 	})
 
-	more := []string{
-		Widget(KPI{Label: "Mi puesto", Value: position + "º",
-			Hint: fmt.Sprintf("%d puntos", int(number(me["points"]))),
-			Rank: pointsRank, Meter: &pointsShare, Status: pointsStatus, Tab: "rivales"}),
-		Widget(KPI{Label: "Mi saldo", Value: Money(budget),
-			Hint: text(me["power_note"]), Rank: cashRank, Meter: &cashShare,
-			Status: cashStatus, Tab: "rivales"}),
-		Widget(KPI{Label: "Valor de plantilla", Value: Money(&squadValue),
-			Hint: fmt.Sprintf("%d jugadores", len(squad)),
-			Rank: valueRank, Meter: &valueShare, Status: valueStatus, Tab: "plantilla"}),
-	}
-
-	var goodOffers []map[string]any
-	for _, offer := range rows(d.Advice["offers"]) {
-		if truthy(offer["worth_taking"]) {
-			goodOffers = append(goodOffers, offer)
-		}
-	}
-	if len(goodOffers) > 0 {
-		names := make([]string, 0, 3)
-		for index, offer := range goodOffers {
-			if index >= 3 {
-				break
-			}
-			names = append(names, text(offer["name"]))
-		}
-		more = append(more, Widget(KPI{Label: "Ofertas que interesan",
-			Value: fmt.Sprintf("%d", len(goodOffers)), Hint: strings.Join(names, ", "),
-			Rank: "cobra", Status: "good", Tab: "vender"}))
-	}
-
-	bids := rows(d.Advice["bids_now"])
-	asks := rows(d.Advice["asks"])
-	raids := rows(d.Advice["raids"])
-	clauseHint := "desbloqueadas y pagables"
-	if len(raids) == 0 && number(d.Advice["clauses_locked"]) > 0 {
-		from := text(d.Advice["clauses_unlock_from"])
-		if len(from) > 10 {
-			from = from[:10]
-		}
-		clauseHint = "bloqueadas hasta " + from
-	}
-	more = append(more,
-		Widget(KPI{Label: "xPts del mejor 11", Value: Num(&bestEleven, 1), Hint: "por jornada"}),
-		Widget(KPI{Label: "Pujables ahora", Value: fmt.Sprintf("%d", len(bids)),
-			Hint: fmt.Sprintf("%d mas en venta por rivales", len(asks)), Tab: "comprar"}),
-		Widget(KPI{Label: "Cláusulas a tiro", Value: fmt.Sprintf("%d", len(raids)),
-			Hint: clauseHint, Tab: "clausulas"}))
-	return stats, more
+	return stats
 }
 
 // lastKickoff is the matchday's last match, leaving out any moved weeks away from the rest.
@@ -696,17 +624,6 @@ func counted(count int, one, many string) string {
 	return fmt.Sprintf("%d %s", count, many)
 }
 
-// rulesSection is the league's own pact. Everything here is invisible to the API, so if it
-// is not written down it does not exist.
-func (d Document) rulesSection() string {
-	if d.HoldDays == 0 && len(d.RuleNotes) == 0 {
-		return ""
-	}
-	return mkSection("normas", "liga", "Normas de la liga",
-		`<div class="mk-box">`+HouseRules(d.HoldDays, d.HoldExceptions, d.RuleNotes)+`</div>`,
-		"", len(d.RuleNotes)+map[bool]int{true: 1, false: 0}[d.HoldDays > 0])
-}
-
 // managerTeams is the user-id to team-id map the feed needs to make its names clickable. Built
 // from the standings, which is the only place both ids appear together.
 func fallbackText(value, other string) string {
@@ -727,14 +644,6 @@ func (d Document) managerTeams() map[string]string {
 		}
 	}
 	return out
-}
-
-// seasonSection is only the frame: the line of every manager across the season is thirteen
-// lineups per matchday, so it is asked for when the tab is opened and not on every rebuild.
-func (d Document) seasonSection() string {
-	return mkSection("evolucion", "liga", "La liga jornada a jornada",
-		`<div class="evo" data-season="1"><p class="empty">Cargando…</p></div>`,
-		"", -1)
 }
 
 // feedMarks is which players of the log concern me, strongest first: mine (now, or bought or
@@ -759,26 +668,6 @@ func (d Document) feedMarks() (map[string]string, string) {
 	}
 	me := text(mapOf(mapOf(d.Universe["league_teams"])[text(d.Universe["my_team_id"])])["manager"])
 	return marks, me
-}
-
-func (d Document) feedSection() string {
-	events := rows(d.Universe["activity"])
-	if len(events) == 0 {
-		return Section("Movimientos de la liga",
-			`<p class="empty">Sin movimientos todavia. Si la liga ya tiene actividad y esto `+
-				`sigue vacio, la respuesta del API ha cambiado de forma: <code>probe activity</code> `+
-				`la vuelca cruda.</p>`, "", "", "movimientos")
-	}
-	moves := 0
-	for _, event := range events {
-		if !strings.Contains(text(event["kind"]), "alinea") {
-			moves++
-		}
-	}
-	ManagerTeams = d.managerTeams()
-	FeedMarks, FeedMe = d.feedMarks()
-	return mkSection("movimientos", "liga", "Movimientos de la liga", Feed(events),
-		"", moves)
 }
 
 func (d Document) squadSection() string {

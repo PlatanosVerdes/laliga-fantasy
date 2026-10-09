@@ -56,10 +56,10 @@ func TestHeaderIsTabsThenFourCards(t *testing.T) {
 	if strings.Contains(got, "más datos") || strings.Contains(got, "LaLiga Fantasy") {
 		t.Error("entre las tarjetas y el contenido no va nada")
 	}
-	foot := PageFoot("08/10/2026 20:52", "Liga", 8,
-		[]string{Widget(KPI{Label: "Valor de plantilla", Value: "205.39M"})}, "auto")
-	if !strings.Contains(foot, "más datos") || !strings.Contains(foot, `id="live-stamp"`) {
-		t.Errorf("el pie lleva la procedencia y el resto de cifras: %s", foot)
+	foot := PageFoot("08/10/2026 20:52", "Liga", 8, "auto")
+	if strings.Contains(foot, "más datos") || !strings.Contains(foot, `id="live-stamp"`) ||
+		!strings.Contains(foot, "jornada 8") {
+		t.Errorf("el pie lleva solo la procedencia: %s", foot)
 	}
 	if !strings.Contains(Tabs, `data-tab="comparador"`) {
 		t.Error("el comparador es una pestaña")

@@ -69,22 +69,7 @@ header p{margin:0;color:var(--ink-2);font-size:13px}
   margin-bottom:-1px}
 .tab:hover{color:var(--ink)}
 .tab.on{color:var(--ink);border-bottom-color:var(--accent)}
-.kpi-rank{align-self:flex-start;margin-top:2px}
-.kpi-rank.pill-neutral{background:none;color:var(--muted);padding-left:0;padding-right:0}
-.kpi-meter{display:block;height:4px;background:var(--mid);border-radius:2px;margin-top:7px;
-  overflow:hidden}
-.kpi-meter-fill{display:block;height:4px;background:var(--seq-4);border-radius:2px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin:20px 0 0}
-.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;
-  display:flex;flex-direction:column;gap:1px;text-align:left;font:inherit;color:inherit}
-button.kpi-link{cursor:pointer}
-button.kpi-link:hover{border-color:var(--accent)}
-button.kpi-link::after{content:"›";position:absolute;top:10px;right:12px;color:var(--muted);
-  font-size:15px}
-button.kpi-link{position:relative}
 .kpi-label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
-.kpi-value{font-size:21px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.kpi-hint{font-size:11px;color:var(--ink-2);display:block}
 section{margin:40px 0}
 h2{font-size:17px;margin:0 0 6px;display:flex;align-items:center;gap:9px;letter-spacing:-.01em}
 .badge-count{font-size:11px;font-weight:500;color:var(--ink-2);background:var(--mid);
@@ -316,8 +301,6 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .drawer-face{width:38px;height:38px;flex:0 0 auto;border-radius:50%;object-fit:cover;
   object-position:top center;background:color-mix(in srgb,#fff 8%,transparent);
   box-shadow:0 0 0 1px var(--line)}
-/* A widget's figures, one per line: read in a row with dots they are indistinguishable. */
-.kpi-note{display:block;color:var(--muted);font-size:11px;line-height:1.45}
 
 /* The chart answers the cursor: the value and the day of the point under it. */
 .chart-wrap{position:relative;margin-top:14px}
@@ -964,10 +947,6 @@ td .muted,span.muted{color:var(--muted)}
   .note{font-size:12.5px}
   footer{margin-top:40px}
 
-  .kpis{gap:8px;margin-top:14px}
-  .kpi{padding:10px 11px}
-  .kpi-value{font-size:18px}
-
   /* Sticky inside the strip: the nine tabs scroll sideways, the balance never does. */
   .tabs{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
     border-bottom:none;box-shadow:0 1px 0 var(--line);margin-top:16px}
@@ -1140,14 +1119,6 @@ header.topline{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margi
 header.topline h1{font-size:11px;font-weight:600;margin:0;letter-spacing:0;color:var(--ink-2)}
 header.topline p{font-size:11px;color:var(--muted)}
 header.topline .mode{margin-left:0}
-details.kpis-more{margin:2px 0 0}
-details.kpis-more>summary{cursor:pointer;color:var(--muted);font-size:12px;list-style:none;
-  display:inline-block;padding:4px 2px}
-details.kpis-more>summary::-webkit-details-marker{display:none}
-details.kpis-more>summary::before{content:"\25B8 "}
-details.kpis-more[open]>summary::before{content:"\25BE "}
-details.kpis-more .kpis{margin-top:6px;gap:8px}
-details.kpis-more .kpi{padding:9px 12px}
 
 /* Above the card: a dialog opened from it has to be in front of it. */
 .modal{z-index:65}
@@ -1251,7 +1222,10 @@ details.kpis-more .kpi{padding:9px 12px}
 .aw-box .aw-set{border-top:0;padding-top:0}
 .aw-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .aw-label{font-size:13px;font-weight:650;white-space:nowrap}
-.aw-head{cursor:pointer;user-select:none}
+.aw-head{cursor:pointer;user-select:none;border-radius:8px}
+/* A ring says where the keyboard is; after a click it only marks what was clicked. */
+:focus:not(:focus-visible){outline:none}
+.aw-head:focus-visible,.tgl:focus-visible,.pc-group button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .aw-sum{flex:1 1 auto;min-width:0;text-align:right;font-size:12px;color:var(--muted);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .aw-chev{flex:0 0 14px;font-size:14px;line-height:1;color:var(--muted);text-align:center}

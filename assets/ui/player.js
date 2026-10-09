@@ -189,7 +189,7 @@ function AlwaysBlock({a, player, lead}) {
     saved.auto ? 'vende solo' : ''].filter(Boolean).join(' · ') : '';
   return html`<div class="aw-line">${lead && lead.length ? html`<div class="drawer-actions pc-acts aw-lead">${lead}</div>` : null}<div class="aw">
     <div class="aw-row aw-head" role="button" tabindex="0" aria-expanded=${open && on}
-        onClick=${() => on && setOpen(!open)} onKeyDown=${(e) => { if (e.key === 'Enter' && on) setOpen(!open); }}>
+        onMouseDown=${(e) => e.preventDefault()} onClick=${() => on && setOpen(!open)} onKeyDown=${(e) => { if (e.key === 'Enter' && on) setOpen(!open); }}>
       <span class="aw-label">Siempre en mercado <i class="aw-i" data-tip="Lo vuelve a poner en venta cada vez que caduca su anuncio, al precio que digas.">ⓘ</i></span>
       <span class="aw-sum">${summary}</span>
       <span onClick=${(e) => e.stopPropagation()}><${Switch} on=${on} disabled=${busy} label="Siempre en mercado" onChange=${flip}/></span>

@@ -249,8 +249,8 @@ func (d Document) alwaysBlock() Block {
 	}
 	return Block{Title: "Siempre en mercado", Count: count(len(d.Plan)), Rows: lines,
 		Empty: "Ninguna regla activa: se arma con «Siempre en mercado».",
-		Note: "Solo lo mantiene en venta. Para que se venda solo, fija «aceptar desde» o marca " +
-			"la venta automática en su ficha; si no, una buena oferta solo avisa."}
+		Note: "Solo lo mantiene en venta. Para que se venda solo, activa la venta automática en " +
+			"su ficha y fija desde qué oferta."}
 }
 
 // RowPlayer is a player as the client's list row reads him: what face, posTag and playerTags

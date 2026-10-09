@@ -91,14 +91,14 @@ func TestFeedIsOneSortableList(t *testing.T) {
 	}
 	events = append(events, map[string]any{"kind": "recompensa", "amount": 4.8e6,
 		"date": "2026-10-06T03:00:00"})
-	page := Feed(events)
-	if strings.Count(page, `class="feed feed-rail"`) != 1 || strings.Contains(page, "kpi-label") {
-		t.Errorf("una sola lista, sin la de las mas grandes aparte: %s", page)
+	feed := FeedOf(events)
+	if !feed.Sortable || len(feed.Lines) != 10 {
+		t.Errorf("una sola lista, ordenable: %+v", feed)
 	}
-	if !strings.Contains(page, `data-feed-sort="amount"`) || !strings.Contains(page, `data-amount="8000000"`) {
-		t.Error("falta el selector o el importe de cada fila")
+	if feed.Lines[8].Size != 8000000 {
+		t.Error("falta el importe de cada fila")
 	}
-	if strings.Contains(page, `data-amount="4800000"`) {
+	if feed.Lines[9].Size != 0 {
 		t.Error("el premio de la jornada no cuenta como operacion")
 	}
 }
@@ -106,7 +106,7 @@ func TestFeedIsOneSortableList(t *testing.T) {
 // A shield is not a sale: it reads as one, with no amount, and the notices that are not
 // movements stay out of the log; an unknown type still gets a word, not "tipo N".
 func TestFeedNamesShieldsAndHidesNotices(t *testing.T) {
-	page := Feed([]map[string]any{
+	feed := FeedOf([]map[string]any{
 		{"type_id": 4.0, "kind": "tipo 4", "player": "El Hilali", "player_id": "9",
 			"seller": "LamineTheTuareg", "actor": "LamineTheTuareg", "user1": "u1",
 			"date": "2026-10-08T16:36:00"},
@@ -115,14 +115,15 @@ func TestFeedNamesShieldsAndHidesNotices(t *testing.T) {
 		{"type_id": 12.0, "kind": "tipo 12", "player": "Raro", "player_id": "8",
 			"date": "2026-10-08T08:00:00"},
 	})
-	if !strings.Contains(page, ">blindaje<") || !strings.Contains(page, "blindado por") ||
-		strings.Contains(page, "vendido por") || !strings.Contains(page, "feed-quiet") {
+	page := asJSON(feed)
+	if feed.Lines[0].Kind != "blindaje" || !strings.Contains(page, "blindado por") ||
+		strings.Contains(page, "vendido por") || !feed.Lines[0].Quiet {
 		t.Errorf("the shield: %s", page)
 	}
-	if strings.Contains(page, "tipo ") || !strings.Contains(page, ">movimiento<") {
+	if strings.Contains(page, "tipo ") || feed.Lines[1].Kind != "movimiento" {
 		t.Errorf("no 'tipo N' left: %s", page)
 	}
-	if strings.Count(page, `class="feed-row`) != 2 {
+	if len(feed.Lines) != 2 {
 		t.Errorf("types 7 and 10 are not movements: %s", page)
 	}
 }
