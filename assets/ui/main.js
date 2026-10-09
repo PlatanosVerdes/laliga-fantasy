@@ -13,9 +13,9 @@ import './decide.js';
 // The page: the shell draws the frame and every section; the dialogs and notices sit above it.
 registerUI('lineup', Lineup);
 registerUI('comparador', CompareTab);
-registerDrawer('jugador', ({arg, d}) => html`<${PlayerPopup} id=${arg} from=${d.from}/>`);
-registerDrawer('jornada', ({arg}) => html`<${WeekPopup} week=${arg}/>`);
-registerDrawer('alcance', ({arg}) => html`<${ReachPopup} team=${arg}/>`);
+registerDrawer('jugador', ({arg, d}) => html`<${PlayerPopup} id=${arg} from=${d.from}/>`, {popup: true});
+registerDrawer('jornada', ({arg}) => html`<${WeekPopup} week=${arg}/>`, {popup: true});
+registerDrawer('alcance', ({arg}) => html`<${ReachPopup} team=${arg}/>`, {popup: true});
 registerDrawer('manager', ({arg}) => html`<${ManagerView} team=${arg}/>`);
 registerDrawer('plantillas', ({arg}) => html`<${MatchdayView} week=${arg}/>`);
 registerDrawer('prevision', ({arg}) => html`<${ForecastView} week=${arg}/>`);

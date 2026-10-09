@@ -292,11 +292,21 @@ function useLive() {
   return value;
 }
 
+// What a click on the live dot does, when something registers one (it does nothing by itself).
+let liveDotAction = null;
+const liveDotWatchers = new Set();
+export function onLiveDot(action) { liveDotAction = action; liveDotWatchers.forEach((watch) => watch(action)); }
+
 function LiveDot({build}) {
   const l = useLive();
+  const [action, setAction] = useState(() => liveDotAction);
+  useEffect(() => { liveDotWatchers.add(setAction); setAction(() => liveDotAction); return () => liveDotWatchers.delete(setAction); }, []);
   const hm = String(l.at.getHours()).padStart(2, '0') + ':' + String(l.at.getMinutes()).padStart(2, '0');
   return html`<span id="live-dot" class=${l.on ? 'live-on' : 'live-off'} data-build=${build || undefined}
-    data-tip=${[l.state, build, 'actualizado ' + hm].filter(Boolean).join(' · ')}></span>`;
+    data-tip=${[l.state, build, 'actualizado ' + hm].filter(Boolean).join(' · ')}
+    role=${action ? 'button' : undefined} tabindex=${action ? '0' : undefined} style=${action ? 'cursor:pointer' : undefined}
+    onClick=${action ? () => action() : undefined}
+    onKeyDown=${action ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); action(); } } : undefined}></span>`;
 }
 
 function Stat({s}) {
@@ -392,7 +402,15 @@ function App() {
 // ---- the drawer: the card and the other views a name opens --------------------------------
 
 const DRAWER = {};
-export function registerDrawer(name, component) { DRAWER[name] = component; }
+// A view the drawer can show, addressable as #<tab>/<name>[/<arg>]; popup centres it like the card.
+export function registerDrawer(name, component, {popup = false} = {}) {
+  DRAWER[name] = component;
+  DRAWER_VIEWS.add(name);
+  if (popup) POPUPS.add(name);
+}
+
+// Opens a registered drawer view, with its own history entry so Back closes it.
+export const openDrawer = (name, arg = '') => openView(name, arg);
 
 function Drawer() {
   const n = useNav();
@@ -476,7 +494,7 @@ document.addEventListener('click', (event) => {
 
 window.panelNav = nav;
 window.panel = {openDetail, openManager, openWeek, openReach, openMatchday, openForecast, closeDrawer,
-  shutDrawer, goto, usage, openCompare, labelDrawer, pickRival, currentRival,
+  shutDrawer, goto, usage, openCompare, labelDrawer, pickRival, currentRival, openDrawer,
   isView: (name) => DRAWER_VIEWS.has(name), routedTo: (hash) => { routed = hash; }};
 
 export function start(appRoot) {
