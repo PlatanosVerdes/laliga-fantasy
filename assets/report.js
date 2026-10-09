@@ -53,6 +53,12 @@ const usage=(()=>{
   };
 })();
 
+// The parts the browser draws from JSON (the player's card, Vender) live in /assets/ui. Without
+// them (an old browser, the static file) everything below still draws the page on its own.
+const uiScript=document.querySelector('script[type="module"][src*="/assets/ui/"]');
+const uiModule=uiScript&&location.protocol.startsWith('http')
+  ? import(uiScript.src).catch(()=>null) : Promise.resolve(null);
+
 function sectionOf(node){
   return node?.closest?.('section[id]')?.id||'';
 }
@@ -1865,6 +1871,8 @@ async function openDetail(playerId){
   drawer.classList.add('as-pop');
   body.dataset.view='player';
   body.innerHTML='<p class="empty">Cargando…</p>';
+  const ui=await uiModule;
+  if(ui){ ui.mountPlayer(body,String(playerId),drawerFrom); return; }
   let data;
   try{
     const res=await fetch('/api/player/'+playerId);
@@ -3160,6 +3168,7 @@ async function swap(){
     return;
   }
   currentVersion=data.version;
+  dispatchEvent(new CustomEvent('panel:version',{detail:data.version}));
   showCash(data.cash);
   liveTip();
   Object.entries(data.sections).forEach(([id,inner])=>{
@@ -3245,6 +3254,11 @@ function connect(){
     source.close(); setTimeout(connect,5000);
   };
 }
+
+// What /assets/ui borrows from this file: the dialogs it does not redraw and the drawer's routing.
+window.panel={openDetail, openManager, closeDrawer, openAmount, shieldDialog, raidDialog, flash,
+  cmpHas, cmpAdd, cmpDrop, usage,
+  own:(id)=>CLIENT_OWNED.add(id), disown:(id)=>CLIENT_OWNED.delete(id)};
 
 wireTables(); wireFilters(); wireStars(); wireBids(); wireOps();
 wireDetails(); wireRaids();

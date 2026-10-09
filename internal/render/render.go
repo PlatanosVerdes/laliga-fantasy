@@ -596,6 +596,8 @@ func Page(css, js, crestCSS, header, body, footer, modal, drawer string) string 
 		`<title>Fantasy</title>` + Favicon + `<style>` + css + crestCSS + `</style>` +
 		`<div class="wrap">` + header + body + footer + `</div>` +
 		modal + drawer +
+		// Ahead of the inline script, which looks this tag up to import the same module.
+		`<script type="module" src="/assets/ui/main.js?v=` + Esc(Build) + `"></script>` +
 		`<script>` + js + `</script>`
 }
 
