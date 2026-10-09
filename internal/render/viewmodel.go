@@ -64,33 +64,36 @@ type Find struct {
 // Row is ListRow as data. A player row carries the player (face, name, tags); any other has a
 // Lead where the face would be and its own Name and lines. Head makes it a list's sub-heading.
 type Row struct {
-	Player map[string]any `json:"player,omitempty"`
-	Lead   []Seg          `json:"lead,omitempty"`
-	LeadC  string         `json:"lead_c,omitempty"`
-	Name   string         `json:"name,omitempty"`
-	Meta   []Seg          `json:"meta,omitempty"`
-	Sub    []Seg          `json:"sub,omitempty"`
-	Tags   []Seg          `json:"tags,omitempty"`
-	Value  string         `json:"value,omitempty"`
-	Note   []Seg          `json:"note,omitempty"`
-	Why    string         `json:"why,omitempty"`
-	Chips  []Chip         `json:"chips,omitempty"`
-	Acts   []Act          `json:"acts,omitempty"`
-	Tone   string         `json:"tone,omitempty"`
-	Team   string         `json:"team,omitempty"`
-	Pid    string         `json:"pid,omitempty"`
-	Find   *Find          `json:"find,omitempty"`
-	Head   string         `json:"head,omitempty"`
-	HeadC  string         `json:"head_c,omitempty"`
+	Player   map[string]any `json:"player,omitempty"`
+	Lead     []Seg          `json:"lead,omitempty"`
+	LeadC    string         `json:"lead_c,omitempty"`
+	Name     string         `json:"name,omitempty"`
+	Meta     []Seg          `json:"meta,omitempty"`
+	Sub      []Seg          `json:"sub,omitempty"`
+	Tags     []Seg          `json:"tags,omitempty"`
+	Value    string         `json:"value,omitempty"`
+	Note     []Seg          `json:"note,omitempty"`
+	Why      string         `json:"why,omitempty"`
+	Chips    []Chip         `json:"chips,omitempty"`
+	Acts     []Act          `json:"acts,omitempty"`
+	Tone     string         `json:"tone,omitempty"`
+	Team     string         `json:"team,omitempty"`
+	Pid      string         `json:"pid,omitempty"`
+	Find     *Find          `json:"find,omitempty"`
+	Head     string         `json:"head,omitempty"`
+	HeadSegs []Seg          `json:"head_segs,omitempty"`
+	HeadC    string         `json:"head_c,omitempty"`
 }
 
 // Block is a titled box. Kind names a component of its own for what is not a list of rows, and
 // Data is what that component reads.
 type Block struct {
-	ID     string `json:"id,omitempty"`
-	Title  string `json:"title,omitempty"`
-	Count  *int   `json:"count,omitempty"`
-	Sub    string `json:"sub,omitempty"`
+	ID    string `json:"id,omitempty"`
+	Title string `json:"title,omitempty"`
+	Count *int   `json:"count,omitempty"`
+	Sub   string `json:"sub,omitempty"`
+	// Lead is a line of text before the list.
+	Lead   string `json:"lead,omitempty"`
 	Rows   []Row  `json:"rows,omitempty"`
 	Empty  string `json:"empty,omitempty"`
 	Scroll int    `json:"scroll,omitempty"`

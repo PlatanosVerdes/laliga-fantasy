@@ -1,6 +1,6 @@
 import {html, useState, useEffect, legacy} from './lib.js';
 import {Face, Tags, ShieldMark, PosTag, Countdown, Empty} from './components.js';
-import {useView} from './api.js';
+import {useView, postJSON, changed} from './api.js';
 import {runAct, toggleAlways} from './actions.js';
 
 // The renderer of render/viewmodel.go: a tab's blocks, rows, segments, chips and buttons, in the
@@ -81,8 +81,24 @@ function CmpAct({a}) {
     on ? (short ? '✓' : '✓ comparando') : (short ? '+' : '+ comparar')}</button>`;
 }
 
+// A followed player's star, painted at once and confirmed by the answer.
+function StarAct({a}) {
+  const [on, setOn] = useState(!!a.args.on);
+  useEffect(() => setOn(!!a.args.on), [a.args.on]);
+  const flip = async (e) => {
+    e.stopPropagation();
+    const before = on;
+    setOn(!before);
+    try { setOn(!!(await postJSON('/api/favourite', {id: a.args.id, name: a.args.name})).starred); changed(); }
+    catch (err) { setOn(before); }
+  };
+  return html`<button class=${'star' + (on ? ' on' : '')} type="button" data-wired="1" aria-pressed=${on ? 'true' : 'false'}
+    title=${on ? 'Quitar de favoritos' : 'Marcar como favorito'} onClick=${flip}>${on ? '★' : '☆'}</button>`;
+}
+
 export function ActView({a}) {
   if (a.text) return html`<span class=${a.class || undefined}>${a.label}</span>`;
+  if (a.do === 'star') return html`<${StarAct} a=${a}/>`;
   if (a.do === 'cmp') return html`<${CmpAct} a=${a}/>`;
   if (a.do === 'always') return html`<${AlwaysAct} a=${a}/>`;
   // data-wired keeps report.js's own wiring off these buttons while both live on the page.
@@ -93,7 +109,7 @@ export function ActView({a}) {
 }
 
 export function RowView({r}) {
-  if (r.head) return html`<li class=${('line-head ' + (r.head_c || '')).trim()}>${r.head}</li>`;
+  if (r.head || r.head_segs) return html`<li class=${('line-head ' + (r.head_c || '')).trim()}>${r.head_segs ? html`<${Segs} list=${r.head_segs}/>` : r.head}</li>`;
   const p = r.player;
   const lead = p ? html`<${Face} p=${p}/>`
     : html`<span class=${('rank-dot ' + (r.lead_c || '')).trim()}><${Segs} list=${r.lead}/></span>`;
@@ -163,7 +179,7 @@ function FilterBar({view}) {
       <input class="f-text" type="search" placeholder="nombre" title="nombre, equipo o dueño" value=${state.text}
         onInput=${(e) => setFilters({text: e.currentTarget.value})}/></label>
     <button class="f-reset" type="button" onClick=${() => setFilters({pos: 'all', price: '', text: ''})}>Limpiar</button>
-    <span class="kpi-label">${shown} de ${all.length} filas</span>
+    <span class="f-count kpi-label">${shown} de ${all.length} filas</span>
   </div></div>`;
 }
 
@@ -191,7 +207,7 @@ export function BlockView({b}) {
   return html`<div class="block" id=${b.id || undefined}>
     ${b.title ? html`<div class="sec-head"><h2>${b.title}${counted != null ? html`<span class="count">${counted}</span>` : null}</h2>${
       b.sub ? html`<p>${b.sub}</p>` : null}</div>` : null}
-    ${body}
+    ${b.lead ? html`<p class="lead">${b.lead}</p>` : null}${body}
     ${(b.folds || []).map((f) => html`<details class="fold"><summary>${f.summary}</summary>${list(f.rows, f.scroll)}</details>`)}
     ${b.links && b.links.length ? html`<p class="mk-note">${b.links.map((a) => html`<${ActView} a=${a}/>`)}</p>` : null}
     ${b.note ? html`<p class="mk-note">${b.note}</p>` : null}

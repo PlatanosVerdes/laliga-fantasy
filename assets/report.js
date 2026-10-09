@@ -63,9 +63,6 @@ function sectionOf(node){
   return node?.closest?.('section[id]')?.id||'';
 }
 
-// ---- filter state, so it survives a section being swapped out --------------
-const filterState = {pos:'all', price:'', text:''};
-
 function wireTables(root=document){
   root.querySelectorAll('table.sortable').forEach(table=>{
     if(table.dataset.wired) return;
@@ -93,84 +90,6 @@ function wireTables(root=document){
   });
 }
 
-// What people type as a price: "20", "20M", "20,5", "20.000.000". Small numbers are millions;
-// empty is no limit.
-function parsePrice(raw){
-  let text=String(raw||'').trim().toLowerCase().replace(/\s|€/g,'');
-  if(!text) return Infinity;
-  const millions=/m$/.test(text);
-  text=text.replace(/m$/,'');
-  if(/^\d{1,3}(\.\d{3})+$/.test(text)) text=text.replace(/\./g,'');
-  const n=parseFloat(text.replace(',','.'));
-  if(!isFinite(n)) return Infinity;
-  return millions||n<1000 ? n*1e6 : n;
-}
-const plain=t=>String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
-
-function applyFilters(){
-  const maxPrice=parsePrice(filterState.price);
-  const needle=plain(filterState.text.trim());
-  const active=filterState.pos!=='all'||maxPrice!==Infinity||!!needle;
-  document.querySelectorAll('.filters').forEach(bar=>{
-    const scope=bar.closest('section');
-    let shown=0,total=0;
-    // A list keeps its rest folded; a filter has to look through all of it.
-    if(active)
-      scope.querySelectorAll('details.fold').forEach(d=>{ if(d.querySelector('li[data-position]')) d.open=true; });
-    scope.querySelectorAll('tr[data-position], li[data-position]').forEach(row=>{
-      total++;
-      const ok=(filterState.pos==='all'||row.dataset.position===filterState.pos)
-        && parseFloat(row.dataset.price)<=maxPrice
-        && (!needle||plain(row.dataset.find||row.dataset.name).includes(needle));
-      row.hidden=!ok; if(ok) shown++;
-    });
-    // Each box says how many it shows, and says so when the filter leaves it empty.
-    scope.querySelectorAll('.block').forEach(box=>{
-      const rows=[...box.querySelectorAll('li[data-position]')];
-      if(!rows.length) return;
-      const badge=box.querySelector('.sec-head .count');
-      if(badge){
-        if(!badge.dataset.total) badge.dataset.total=badge.textContent;
-        badge.textContent=active?rows.filter(r=>!r.hidden).length:badge.dataset.total;
-      }
-      let none=box.querySelector('.f-none');
-      const empty=active&&rows.every(r=>r.hidden);
-      if(empty&&!none){
-        none=document.createElement('p');
-        none.className='mk-empty f-none';
-        none.textContent='Ninguno con este filtro.';
-        box.appendChild(none);
-      }
-      if(none) none.hidden=!empty;
-      const list=box.querySelector('.scrollbox, .rows');
-      if(list) list.hidden=empty;
-    });
-    const counter=bar.querySelector('.f-count');
-    if(counter) counter.textContent=shown+' de '+total+' filas';
-  });
-}
-
-function wireFilters(root=document){
-  root.querySelectorAll('.filters').forEach(bar=>{
-    if(bar.dataset.wired) return;
-    bar.dataset.wired='1';
-    const pos=bar.querySelector('.f-pos'), price=bar.querySelector('.f-price'),
-          text=bar.querySelector('.f-text'), reset=bar.querySelector('.f-reset');
-    // Without its controls it is not a filter bar: an exception here takes the rest of the
-    // start-up with it (the remaining wiring and the live connection), and the whole page is
-    // left dead with nothing clickable.
-    if(!pos||!price||!text||!reset) return;
-    pos.value=filterState.pos; price.value=filterState.price; text.value=filterState.text;
-    const sync=()=>{ filterState.pos=pos.value; filterState.price=price.value;
-                     filterState.text=text.value; applyFilters(); };
-    [pos,price,text].forEach(el=>el.addEventListener('input',sync));
-    reset.addEventListener('click',()=>{ filterState.pos='all'; filterState.price='';
-      filterState.text=''; pos.value='all'; price.value=''; text.value=''; applyFilters(); });
-  });
-  applyFilters();
-}
-
-// ---- favoritos -------------------------------------------------------------
 function wireStars(root=document){
   root.querySelectorAll('button.star').forEach(button=>{
     if(button.dataset.wired) return;
@@ -2921,7 +2840,6 @@ function showTab(id,{section=null,updateHash=true}={}){
   });
   try{ localStorage.setItem('fantasy-tab',tab.id); }catch(e){}
   usage.tab(tab.id);
-  applyFilters();
   if(updateHash){
     // replaceState, not assignment: we want neither a history entry per click nor
     // disparar hashchange sobre nosotros mismos.
@@ -3006,7 +2924,7 @@ async function swap(){
     if(node&&node.dataset.view) return;
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });
-  wireTables(); wireFilters(); wireStars(); wireBids(); wireOps();
+  wireTables(); wireStars(); wireBids(); wireOps();
   wireDetails(); wireRaids();
   wireRaises();
   wireManagers(); wireMatchdays(); tick();
@@ -3089,7 +3007,7 @@ window.panel={openDetail, openManager, openWeek, openReach, applyRivalPick, open
   goto:(where)=>{ const target=resolveTarget(where);
     if(target) showTab(target.tab,{section:target.section}); else showTab(where); }};
 
-wireTables(); wireFilters(); wireStars(); wireBids(); wireOps();
+wireTables(); wireStars(); wireBids(); wireOps();
 wireDetails(); wireRaids();
 wireRaises(); wireManagers(); wireMatchdays();
 wireTabs(); tick(); drawTray();

@@ -131,7 +131,8 @@ func (d Document) Render() (string, map[string]any) {
 	for name, view := range d.leagueViews() {
 		views[name] = view
 	}
-	sections = append(sections, d.rankingSection(players))
+	sections = append(sections, shell("v-ranking", "ranking", "ranking"))
+	views["ranking"] = d.RankingData(players)
 	sections = append(sections, CompareShell)
 
 	stats := d.widgets(week, players)
@@ -735,39 +736,6 @@ func squadRow(player map[string]any) string {
 
 var positionNames = map[string]string{
 	"1": "Portero", "2": "Defensa", "3": "Centrocampista", "4": "Delantero", "5": "Entrenador",
-}
-
-func (d Document) rankingSection(players []map[string]any) string {
-	available := make([]map[string]any, 0, len(players))
-	for _, player := range players {
-		if truthy(player["available"]) {
-			available = append(available, player)
-		}
-	}
-	top := func(less func(one, two map[string]any) bool, keep func(map[string]any) bool,
-		limit int) []map[string]any {
-		out := []map[string]any{}
-		for _, player := range available {
-			if keep == nil || keep(player) {
-				out = append(out, player)
-			}
-		}
-		sort.SliceStable(out, func(i, j int) bool { return less(out[i], out[j]) })
-		if len(out) > limit {
-			out = out[:limit]
-		}
-		return out
-	}
-	byScore := top(func(one, two map[string]any) bool {
-		return number(one["score"]) > number(two["score"])
-	}, nil, 80)
-	byXPts := top(func(one, two map[string]any) bool {
-		return number(one["xpts"]) > number(two["xpts"])
-	}, nil, 80)
-	byValue := top(func(one, two map[string]any) bool {
-		return number(one["points_value"]) > number(two["points_value"])
-	}, func(player map[string]any) bool { return number(player["value"]) > 0 }, 40)
-	return d.rankingView(byScore, byXPts, byValue)
 }
 
 var _ = math.Abs

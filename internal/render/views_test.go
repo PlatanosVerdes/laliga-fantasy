@@ -70,7 +70,7 @@ func TestRankingOpensWithTheBestAndTheirPrice(t *testing.T) {
 		"xpts": 9.5, "available": true, "owner": "Rival", "clause": 500_000_000.0}
 	cheap := map[string]any{"id": "98", "name": "Barato", "position": "DEL", "position_id": 4.0,
 		"xpts": 6.0, "available": true, "owner": "Rival", "clause": 1_000_000.0, "score": 9.0}
-	html := document.rankingView([]map[string]any{cheap}, []map[string]any{star, cheap}, nil)
+	html := asJSON(document.rankingView([]map[string]any{cheap}, []map[string]any{star, cheap}, nil))
 	if strings.Index(html, "Los mejores") > strings.Index(html, "Chollos") {
 		t.Error("los mejores van primero")
 	}
