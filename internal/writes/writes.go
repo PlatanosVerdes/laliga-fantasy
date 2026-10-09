@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -63,6 +64,8 @@ type Args struct {
 	Midfield   []string
 	Striker    []string
 	Formation  []int
+	// Favourite only: where the star lands.
+	Favourite bool
 }
 
 type operation struct {
@@ -187,6 +190,13 @@ var Operations = map[string]operation{
 				"midfield": a.Midfield, "striker": a.Striker,
 				"tactical_formation": a.Formation}}
 	}, []string{"lineup"}},
+
+	// The app's own favourites, keyed by the team in the league and the player's master id.
+	"favourite": {"favorito", func(a Args) Call {
+		return Call{http.MethodPost,
+			fmt.Sprintf("%s/teams/%s/favourite-players", config.CMP, a.TeamID),
+			map[string]any{"player": numericID(a.PlayerID), "favourite": a.Favourite}}
+	}, []string{"favourites"}},
 
 	"withdraw": {"retirar del mercado", func(a Args) Call {
 		return Call{http.MethodDelete,
@@ -791,4 +801,12 @@ func (g *Guard) Do(name string, args Args, who Player, allowWrites bool) (map[st
 		return nil, err
 	}
 	return g.Confirm(summary.Token, allowWrites, false)
+}
+
+// numericID sends a player id the way the app does, as a number.
+func numericID(id string) any {
+	if number, err := strconv.Atoi(id); err == nil {
+		return number
+	}
+	return id
 }

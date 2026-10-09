@@ -1,6 +1,7 @@
 package writes
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -345,5 +346,18 @@ func TestSummarySaysWhereTheBalanceEndsUp(t *testing.T) {
 	}
 	if listing.CashAfter == nil || *listing.CashAfter != 21_020_000 {
 		t.Errorf("ponerlo en venta suma si te lo compran: %v", listing.CashAfter)
+	}
+}
+
+// The star travels the way the app sends it: the player as a number, the side it lands on.
+func TestFavouriteIsTheAppsCall(t *testing.T) {
+	call, err := Build("favourite", Args{TeamID: "38126981", PlayerID: "2541", Favourite: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob, _ := json.Marshal(call.Body)
+	if call.Method != "POST" || call.Path != "/v1/competition/1/teams/38126981/favourite-players" ||
+		string(blob) != `{"favourite":true,"player":2541}` {
+		t.Errorf("not the app's call: %s %s %s", call.Method, call.Path, blob)
 	}
 }

@@ -41,17 +41,16 @@ var (
 
 // Files, split by nature exactly as the Python side splits them.
 var (
-	TokenFile      string
-	SettingsFile   string
-	FavouritesFile string
-	PolicyFile     string
-	RulesFile      string
-	ReportFile     string
-	LogFile        string
-	UsageFile      string
-	ForecastFile   string
-	ClauseFile     string
-	ServicesFile   string
+	TokenFile    string
+	SettingsFile string
+	PolicyFile   string
+	RulesFile    string
+	ReportFile   string
+	LogFile      string
+	UsageFile    string
+	ForecastFile string
+	ClauseFile   string
+	ServicesFile string
 )
 
 // APIHeaders are what the official app sends. x-app: 2 is not optional.
@@ -90,7 +89,7 @@ func FFHeaders() map[string]string {
 // nothing fails silently — it drops no files and reports success — so the set is
 // declared once and checked against.
 var Tags = map[string]bool{
-	"activity": true, "calendar": true, "formations": true, "leagues": true,
+	"activity": true, "calendar": true, "favourites": true, "formations": true, "leagues": true,
 	"lineup": true, "market": true, "me": true, "money": true, "mv": true,
 	"offers": true, "player": true, "players": true, "reward": true, "squad": true,
 	"standing": true, "teams": true, "week": true,
@@ -102,7 +101,6 @@ func init() {
 	ConfigDir, StateDir, CacheDir = resolveDirs()
 	TokenFile = filepath.Join(ConfigDir, "tokens.json")
 	SettingsFile = filepath.Join(ConfigDir, "settings.json")
-	FavouritesFile = filepath.Join(ConfigDir, "favourites.json")
 	PolicyFile = filepath.Join(ConfigDir, "policies.json")
 	// The league's house rules, per league id: they belong with the session and the
 	// preferences, not with the cache, because nothing can regenerate them.

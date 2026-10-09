@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/favourites"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/outcomes"
@@ -74,14 +73,26 @@ func (s *Server) favourite(writer http.ResponseWriter, request *http.Request) {
 		s.json(writer, http.StatusBadRequest, map[string]any{"error": "falta el id"})
 		return
 	}
-	starred, err := favourites.Toggle(id, body["name"])
-	if err != nil {
-		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+	if s.opts.Guard == nil {
+		s.json(writer, http.StatusNotImplemented, map[string]any{"error": "sin escrituras"})
+		return
+	}
+	starred := true
+	if universe := s.state.Universe(); universe != nil {
+		for _, player := range universe.Players {
+			if player.ID == id {
+				starred = !player.Starred
+			}
+		}
+	}
+	args := writes.Args{TeamID: s.opts.MyTeamID, PlayerID: id, Favourite: starred}
+	if _, err := s.opts.Guard.Do("favourite", args, writes.Player{Name: text(body["name"])},
+		s.opts.AllowWrites); err != nil {
+		s.writeError(writer, err)
 		return
 	}
 	slog.Info("favourite toggled", "player_id", id, "player", text(body["name"]),
 		"starred", starred)
-	// The star is ours, not the API's: it can be true on the page before any rebuild.
 	s.state.Patch("favourite", func(universe *model.Universe) bool {
 		for index := range universe.Players {
 			if universe.Players[index].ID == id {

@@ -267,6 +267,18 @@ func (c *Client) TeamSquad(leagueID, teamID string, ttl time.Duration) (map[stri
 	return squad, err
 }
 
+// FavouritePlayers is the app's starred list: a bare array of player ids.
+func (c *Client) FavouritePlayers(teamID string, ttl time.Duration) ([]string, error) {
+	var ids []json.Number
+	err := c.getList(fmt.Sprintf("%s/teams/%s/favourite-players", config.CMP, teamID), ttl,
+		"favourites", false, &ids)
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, id.String())
+	}
+	return out, err
+}
+
 func (c *Client) Standings(leagueID string, ttl time.Duration) ([]map[string]any, error) {
 	var rows []map[string]any
 	// Singular: /standing. The plural is a 404.
