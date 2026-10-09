@@ -1,5 +1,5 @@
 import {html, useState, useEffect, legacy} from './lib.js';
-import {Face, Tags, Role, Crest, Countdown, Button, ShieldMark, Switch} from './components.js';
+import {Face, Tags, Role, Crest, Countdown, Button, ShieldMark, Switch, Icon} from './components.js';
 import {dec, mny, fmt, signed, exact, group, digits, whenShort, since, health} from './format.js';
 import {getJSON, postJSON} from './api.js';
 import {runAction, toggleAlways} from './actions.js';
@@ -191,25 +191,26 @@ function AlwaysBlock({a, player, lead}) {
     return () => document.removeEventListener('keydown', fold, true);
   }, [open, saved.min]);
   const price = digits(saved.min) || a.value || 0;
-  const label = (price ? (price / 1e6).toFixed(2).replace('.', ',') + 'M' : 'precio') + ' ✎' +
-    (saved.auto ? ' · vende solo' : '');
+  const label = (price ? (price / 1e6).toFixed(2).replace('.', ',') + 'M' : '') + (saved.auto ? ' · vende solo' : '');
   return html`<div class="aw-line">${lead && lead.length ? html`<div class="drawer-actions pc-acts aw-lead">${lead}</div>` : null}
     <div class="aw">
       <div class="aw-row">
         <span class="aw-label">Siempre en mercado <i class="aw-i" data-tip="Lo vuelve a poner en venta cada vez que caduca su anuncio, al precio que digas.">ⓘ</i></span>
-        ${on ? html`<button type="button" class="aw-edit" aria-expanded=${open}
-          onMouseDown=${(e) => e.preventDefault()} onClick=${() => (open ? savePrice() : setOpen(true))}>${label}</button>` : null}
-        <${Switch} on=${on} disabled=${busy} label="Siempre en mercado" onChange=${flip}/>
+        <span class="aw-end">${on ? html`<span class="aw-sum">${label}</span>` : null}
+          <${Switch} on=${on} disabled=${busy} label="Siempre en mercado" onChange=${flip}/>
+          ${on ? html`<button type="button" class="aw-gear" aria-expanded=${open} aria-label="Ajustes" title="Ajustes"
+            onMouseDown=${(e) => e.preventDefault()} onClick=${() => (open ? savePrice() : setOpen(true))}><${Icon} name="gear"/></button>`
+            : html`<span class="aw-gear" aria-hidden="true"></span>`}</span>
       </div>
-      ${on && open ? html`<div class="aw-sub">
-        <label class="aw-price">se vuelve a anunciar a
-          <input type="text" inputmode="numeric" autocomplete="off" value=${min}
-            placeholder=${a.value ? group(a.value) : 'valor de mercado'} onInput=${typed} onBlur=${savePrice}
-            onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}/></label>
-        <span class="aw-auto"><span data-tip=${floorTip}>Venta automática</span>
-          <${Switch} on=${saved.auto} label="Venta automática" onChange=${flipAuto}/></span>
-      </div>` : null}
-    </div></div>
+    </div>
+    ${on && open ? html`<div class="aw aw-sub">
+      <label class="aw-price">se vuelve a anunciar a
+        <input type="text" inputmode="numeric" autocomplete="off" value=${min}
+          placeholder=${a.value ? group(a.value) : 'valor de mercado'} onInput=${typed} onBlur=${savePrice}
+          onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}/></label>
+      <span class="aw-auto"><span data-tip=${floorTip}>Venta automática</span>
+        <${Switch} on=${saved.auto} label="Venta automática" onChange=${flipAuto}/></span>
+    </div>` : null}</div>
     ${error ? html`<p class="bid-error">${error}</p>` : null}`;
 }
 
