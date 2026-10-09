@@ -19,9 +19,31 @@ export async function postJSON(url, body) {
 // write of ours so what changed is asked for at once.
 let stamp = 0;
 const watchers = new Set();
-const moved = () => { stamp += 1; watchers.forEach((watch) => watch(stamp)); };
+const moved = () => { stamp += 1; watchers.forEach((watch) => watch(stamp)); refreshViews(); };
 addEventListener('panel:version', moved);
 export const changed = moved;
+
+// Every tab the browser draws, as the page carried them and then as /api/views answers after
+// each move of the world.
+const seed = document.getElementById('views-data');
+let views = seed ? JSON.parse(seed.textContent || '{}') : {};
+const viewWatchers = new Set();
+let asking = null;
+async function refreshViews() {
+  const mine = asking = getJSON('/api/views');
+  try {
+    const data = await mine;
+    if (asking !== mine) return;
+    views = data.views || {};
+    viewWatchers.forEach((watch) => watch(views));
+  } catch (e) { /* the last good views stay on screen */ }
+}
+
+export function useView(name) {
+  const [all, setAll] = useState(views);
+  useEffect(() => { viewWatchers.add(setAll); return () => viewWatchers.delete(setAll); }, []);
+  return all[name];
+}
 
 export function useStamp() {
   const [value, setValue] = useState(stamp);

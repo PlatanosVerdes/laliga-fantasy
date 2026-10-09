@@ -47,3 +47,47 @@ export async function toggleAlways(player) {
   changed();
   return !!data.always_listed;
 }
+
+// A view's button, as render/viewmodel.go described it.
+export async function runAct(a) {
+  const x = a.args || {};
+  const page = legacy();
+  switch (a.do) {
+    case 'op':
+      confirmOp({op: x.op, name: x.name, player_id: x.player_id, market_id: x.market_id,
+        offer_id: x.offer_id, amount: x.amount || null});
+      return;
+    case 'card': await runCardAction(x.player_id, x.op); return;
+    case 'bid': page.openBid(Object.fromEntries(Object.entries(x).map(([k, v]) => [k, v == null ? '' : String(v)]))); return;
+    case 'raid':
+      page.raidDialog({id: x.id, name: x.name, suggested: x.max, clause: x.clause}, changed);
+      return;
+    case 'raise':
+      page.openAmount({op: 'raise_clause', kind: 'amount', label: 'Subir cláusula', player_id: x.id,
+        player_team_id: x.slot, suggested: x.pay || 0},
+      {id: x.id, name: x.name, clause: x.clause || 0, value: x.clause || 0, ideal_bid: 0});
+      return;
+    case 'cancel_raid':
+      // An instruction of ours, not an operation against LaLiga: no two-step confirmation.
+      if (!confirm('Cancelar el clausulazo programado de ' + x.name + '?')) return;
+      try { await postJSON('/api/raid/cancel', {id: x.player_id, name: x.name}); changed(); }
+      catch (e) { alert('No he podido cancelarlo: ' + e.message); }
+      return;
+    case 'drop_always':
+      if (!confirm('Quitar ' + x.name + ' de siempre-en-mercado?')) return;
+      try {
+        const data = await postJSON('/api/always', {id: x.player_id, name: x.name});
+        // The toggle would have armed it: put it back as it was and say so.
+        if (data.always_listed) {
+          await postJSON('/api/always', {id: x.player_id, name: x.name});
+          throw new Error('no estaba armado');
+        }
+        changed();
+      } catch (e) { alert('No he podido quitarlo: ' + e.message); }
+      return;
+    case 'goto': page.goto(x.target); return;
+    case 'detail': page.openDetail(x.player_id); return;
+    case 'manager': page.openManager(x.team_id); return;
+    default:
+  }
+}

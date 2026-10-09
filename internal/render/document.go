@@ -1,6 +1,7 @@
 package render
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -88,8 +89,24 @@ func mapOf(source any) map[string]any {
 	return nil
 }
 
+// ViewData is every tab the browser draws, by name.
+func (d Document) ViewData() map[string]any {
+	if len(d.Advice) == 0 {
+		return map[string]any{}
+	}
+	return map[string]any{"vender": d.SellData(), "comprar": d.BuyData()}
+}
+
 // HTML renders the document.
 func (d Document) HTML() string {
+	page, _ := d.Render()
+	return page
+}
+
+// Render is the page and the views it carries, built once: the page embeds them so the first
+// paint needs no request, and the server keeps them for /api/views.
+func (d Document) Render() (string, map[string]any) {
+	views := d.ViewData()
 	universe, advice := d.Universe, d.Advice
 	week := mapOf(universe["week"])
 	players := rows(universe["players"])
@@ -114,8 +131,10 @@ func (d Document) HTML() string {
 	footer := PageFoot(d.Generated, d.LeagueName, int(number(week["weekNumber"])), more, d.Mode) +
 		Footer(number(universe["current_weight"]))
 
-	body := IconSprite + strings.Join(filterEmpty(sections), "")
-	return Page(d.CSS, d.JS, CrestCSS(), header, body, footer, d.Modal, d.Drawer)
+	blob, _ := json.Marshal(views)
+	body := IconSprite + strings.Join(filterEmpty(sections), "") +
+		`<script type="application/json" id="views-data">` + string(blob) + `</script>`
+	return Page(d.CSS, d.JS, CrestCSS(), header, body, footer, d.Modal, d.Drawer), views
 }
 
 // pageFacts is what the player card needs to know about the league and cannot ask for: the

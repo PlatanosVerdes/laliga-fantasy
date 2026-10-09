@@ -9,67 +9,16 @@ import (
 
 // --- Vender ----------------------------------------------------------------------------
 
-// SellView is the Vender tab as data: every decision taken here, so the page's client draws the
-// same rows from JSON that sellView draws as HTML.
-type SellView struct {
-	Offers []SellOffer   `json:"offers"`
-	Listed []SellListing `json:"listed"`
-	Rest   []SellRest    `json:"rest"`
-	Always []SellAlways  `json:"always"`
+func (d Document) sellView() string { return shell("v-vender", "vender", "vender") }
+
+// SellData is Vender: the offers received with what to do about each, what is on sale, the
+// rest of the squad and the standing listings.
+func (d Document) SellData() View {
+	return View{Main: []Block{d.offersBlock(), d.restBlock()},
+		Aside: []Block{d.listedBlock(), d.alwaysBlock()}}
 }
 
-type SellOffer struct {
-	Player   map[string]any `json:"player"`
-	MarketID string         `json:"market_id"`
-	OfferID  string         `json:"offer_id"`
-	Amount   float64        `json:"amount"`
-	Value    float64        `json:"value"`
-	Ratio    float64        `json:"ratio"`
-	// Drop is what the best eleven loses without him, zero when it is not worth saying.
-	Drop    float64 `json:"drop"`
-	Facts   string  `json:"facts"`
-	Take    bool    `json:"take"`
-	Why     string  `json:"why"`
-	Tone    string  `json:"tone"`
-	Expires string  `json:"expires"`
-	source  map[string]any
-}
-
-type SellListing struct {
-	Player  map[string]any `json:"player"`
-	Asking  float64        `json:"asking"`
-	Ratio   float64        `json:"ratio"`
-	Best    float64        `json:"best"`
-	Expires string         `json:"expires"`
-	source  map[string]any
-}
-
-type SellRest struct {
-	Player    map[string]any `json:"player"`
-	XPts      float64        `json:"xpts"`
-	Value     float64        `json:"value"`
-	Trend     float64        `json:"trend"`
-	Starter   bool           `json:"starter"`
-	LockedWhy string         `json:"locked_why,omitempty"`
-	Always    bool           `json:"always"`
-	source    map[string]any
-}
-
-type SellAlways struct {
-	Player map[string]any `json:"player"`
-	Amount float64        `json:"amount"`
-	Terms  string         `json:"terms"`
-	Why    string         `json:"why"`
-	source map[string]any
-}
-
-// SellData is what Vender shows, decided once for both renderers.
-func (d Document) SellData() SellView {
-	return SellView{Offers: d.sellOffers(), Listed: d.sellListed(), Rest: d.sellRest(),
-		Always: d.sellAlways()}
-}
-
-func (d Document) sellOffers() []SellOffer {
+func (d Document) offersBlock() Block {
 	offers := rows(d.Advice["offers"])
 	sort.SliceStable(offers, func(one, two int) bool {
 		return number(offers[one]["vs_value"]) > number(offers[two]["vs_value"])
@@ -88,9 +37,13 @@ func (d Document) sellOffers() []SellOffer {
 	}
 	squad := rows(d.Advice["squad"])
 	_, xiNow := bestElevenOf(squad)
-	out := []SellOffer{}
+	lines := []Row{}
 	for _, offer := range offers {
+		amount, value := number(offer["offer_amount"]), number(offer["value"])
 		ratio := number(offer["vs_value"])
+		args := map[string]any{"market_id": text(offer["market_id"]),
+			"offer_id": text(offer["offer_id"]), "player_id": text(offer["id"]),
+			"name": text(offer["name"]), "amount": int64(amount)}
 		// What the offer means beyond its price goes in the figure's tooltip, not in the row.
 		var facts []string
 		if who := text(offer["offer_from"]); who != "" && !truthy(offer["offer_from_market"]) {
@@ -104,9 +57,24 @@ func (d Document) sellOffers() []SellOffer {
 				text(swap.In["name"]), esSigned(swap.Gain))
 			facts = append(facts, "si clausulas a "+text(swap.In["name"]))
 		}
+		// Both buttons, always Aceptar then Rechazar; only the recommended one is filled, and
+		// in the accent colour, since red would read as danger.
+		opArgs := func(op string) map[string]any {
+			out := map[string]any{"op": op}
+			for key, value := range args {
+				out[key] = value
+			}
+			return out
+		}
+		accept := act("Aceptar", "ghost", "op", "op", opArgs("accept_offer"))
+		decline := act("Rechazar", "primary", "op", "op", opArgs("decline_offer"))
+		decline.Tip = "recomendado: " + why
 		tone := ""
 		if take {
 			tone = "good"
+			accept = act("Aceptar", "primary", "op", "op", opArgs("accept_offer"))
+			accept.Tip = "recomendado: " + why
+			decline = act("Rechazar", "ghost", "op", "op", opArgs("decline_offer"))
 		}
 		if planned {
 			facts = append(facts, "si fichas a "+plannedFor[text(offer["id"])])
@@ -115,29 +83,37 @@ func (d Document) sellOffers() []SellOffer {
 		drop := xiNow - elevenWithout(squad, text(offer["id"]))
 		if drop >= 0.05 {
 			facts = append(facts, "tu once pierde "+esNum(drop, 1)+" xPts")
-		} else {
-			drop = 0
 		}
 		if sale := sales[text(offer["offer_id"])]; truthy(sale["match_pending"]) {
 			facts = append(facts, "aún no ha jugado: regalas "+
 				esNum(number(sale["points_at_risk"]), 1)+" xPts")
 		}
-		out = append(out, SellOffer{Player: RowPlayer(offer), MarketID: text(offer["market_id"]),
-			OfferID: text(offer["offer_id"]), Amount: number(offer["offer_amount"]),
-			Value: number(offer["value"]), Ratio: ratio, Drop: drop,
-			Facts: strings.Join(facts, " · "), Take: take, Why: why, Tone: tone,
-			Expires: text(offer["offer_expires"]), source: offer})
+		glyph := "▲"
+		if ratio < 1 {
+			glyph = "▼"
+		}
+		note := []Seg{{T: glyph + " " + esRatio(ratio), C: ratioClass(ratio)},
+			{T: " vale " + esMoney(value)}}
+		if drop >= 0.05 {
+			note = append(note, Seg{T: " · once −" + esNum(drop, 1)})
+		}
+		line := playerLine(offer)
+		line.Value, line.Note, line.Why = esMoney(amount), note, strings.Join(facts, " · ")
+		line.Chips, line.Acts, line.Tone = clockChip(text(offer["offer_expires"]), "caduca"),
+			[]Act{accept, decline}, tone
+		lines = append(lines, line)
 	}
-	return out
+	return Block{Title: "Ofertas recibidas", Count: count(len(lines)), Rows: lines,
+		Empty: "Ninguna oferta ahora mismo."}
 }
 
-func (d Document) sellListed() []SellListing {
+func (d Document) listedBlock() Block {
 	listings := rows(d.Advice["my_listings"])
 	sort.SliceStable(listings, func(one, two int) bool {
 		return text(mapOf(listings[one]["market"])["expires"]) <
 			text(mapOf(listings[two]["market"])["expires"])
 	})
-	out := []SellListing{}
+	lines := []Row{}
 	for _, player := range listings {
 		listing := mapOf(player["market"])
 		asking, value := number(listing["min_bid"]), number(player["value"])
@@ -149,14 +125,29 @@ func (d Document) sellListed() []SellListing {
 		for _, offer := range rows(player["offers"]) {
 			best = math.Max(best, number(offer["money"]))
 		}
-		out = append(out, SellListing{Player: RowPlayer(player), Asking: asking, Ratio: ratio,
-			Best: best, Expires: text(listing["expires"]), source: player})
+		line := playerLine(player)
+		line.Value = esMoney(asking)
+		line.Note = []Seg{{T: esRatio(ratio), C: ratioClass(ratio),
+			Tip: "lo que pides frente a su valor"}}
+		if best > 0 {
+			line.Note = append(line.Note, Seg{T: " · mejor " + esMoney(best)})
+		}
+		line.Chips = clockChip(text(listing["expires"]), "cierra")
+		line.Acts = []Act{cardAct("Quitar", text(player["id"]), "withdraw")}
+		lines = append(lines, line)
 	}
-	return out
+	return Block{Title: "En venta ahora", Count: count(len(lines)), Rows: lines,
+		Empty: "No tienes a nadie en venta."}
 }
 
-// sellRest is every player of mine not on sale, least useful first.
-func (d Document) sellRest() []SellRest {
+// cardAct runs one of the player card's own actions, the same the popup offers.
+func cardAct(label, playerID, op string) Act {
+	return act(label, "ghost", "act", "card", map[string]any{"player_id": playerID, "op": op})
+}
+
+// restBlock is every player of mine not on sale, the bench before the eleven: listing a
+// starter has to be a choice made on purpose.
+func (d Document) restBlock() Block {
 	squad := rows(d.Advice["squad"])
 	choice, _ := bestElevenOf(squad)
 	starter := map[string]bool{}
@@ -173,26 +164,60 @@ func (d Document) sellRest() []SellRest {
 			rest = append(rest, player)
 		}
 	}
+	if len(rest) == 0 {
+		return Block{}
+	}
 	sort.SliceStable(rest, func(one, two int) bool {
 		return number(rest[one]["xpts"]) < number(rest[two]["xpts"])
 	})
-	out := []SellRest{}
+	var bench, eleven []Row
 	for _, player := range rest {
 		id := text(player["id"])
-		locked := ""
-		if truthy(player["sale_locked"]) {
-			locked = "No se puede vender hasta el " + esWhen(text(player["hold_until"]))
+		trend := number(player["pct_7d"])
+		class, sign := "up", "+"
+		if trend < 0 {
+			class, sign = "down", ""
 		}
-		out = append(out, SellRest{Player: RowPlayer(player), XPts: number(player["xpts"]),
-			Value: number(player["value"]), Trend: number(player["pct_7d"]),
-			Starter: starter[id], LockedWhy: locked, Always: always[id], source: player})
+		line := playerLine(player)
+		line.Value = esNum(number(player["xpts"]), 1) + " xPts"
+		line.Note = []Seg{{T: esMoney(number(player["value"])) + " · "},
+			{T: sign + esNum(trend, 1) + " %", C: class}, {T: " 7d"}}
+		sell := cardAct("Poner en venta", id, "sell_to_market")
+		if truthy(player["sale_locked"]) {
+			why := "No se puede vender hasta el " + esWhen(text(player["hold_until"]))
+			sell = Act{Label: "Poner en venta", Class: "mb mb-ghost", Off: true, Tip: why, Wrap: why}
+		}
+		label, class := "Siempre en mercado", "mb mb-ghost act"
+		if always[id] {
+			label, class = "● Siempre en mercado", "mb mb-ghost act on"
+		}
+		toggle := Act{Label: label, Class: class, Do: "always",
+			Args: map[string]any{"player_id": id, "name": text(player["name"]), "on": always[id]},
+			Tip:  "Lo mantiene en venta; importes y venta automática, en su ficha"}
+		line.Acts = []Act{sell, toggle}
+		if starter[id] {
+			eleven = append(eleven, line)
+		} else {
+			bench = append(bench, line)
+		}
 	}
-	return out
+	lines := []Row{}
+	if len(bench) > 0 {
+		lines = append(lines, Row{Head: fmt.Sprintf("Fuera de tu once · %d", len(bench))})
+		lines = append(lines, bench...)
+	}
+	if len(eleven) > 0 {
+		lines = append(lines, Row{Head: fmt.Sprintf("En tu once · %d · venderlos baja tus xPts",
+			len(eleven)), HeadC: "xi-head"})
+		lines = append(lines, eleven...)
+	}
+	return Block{Title: "El resto de tu plantilla", Count: count(len(rest)),
+		Sub: "lo que no tienes en venta", Rows: lines}
 }
 
-func (d Document) sellAlways() []SellAlways {
+func (d Document) alwaysBlock() Block {
 	byID := d.playersByID()
-	out := []SellAlways{}
+	lines := []Row{}
 	for _, rule := range d.Plan {
 		id := fallbackText(text(rule["player_id"]), text(rule["id"]))
 		policy := d.Policies[id]
@@ -213,12 +238,19 @@ func (d Document) sellAlways() []SellAlways {
 		if player == nil {
 			player = map[string]any{"id": id, "name": rule["name"]}
 		}
-		why := strings.ReplaceAll(text(rule["action"]), "_", " ") + " · " +
+		line := playerLine(player)
+		if amount := number(rule["amount"]); amount > 0 {
+			line.Value = esMoney(amount)
+		}
+		line.Note = []Seg{{T: terms}}
+		line.Why = strings.ReplaceAll(text(rule["action"]), "_", " ") + " · " +
 			strings.SplitN(text(rule["why"]), ";", 2)[0]
-		out = append(out, SellAlways{Player: RowPlayer(player), Amount: number(rule["amount"]),
-			Terms: terms, Why: why, source: player})
+		lines = append(lines, line)
 	}
-	return out
+	return Block{Title: "Siempre en mercado", Count: count(len(d.Plan)), Rows: lines,
+		Empty: "Ninguna regla activa: se arma con «Siempre en mercado».",
+		Note: "Solo lo mantiene en venta. Para que se venda solo, fija «aceptar desde» o marca " +
+			"la venta automática en su ficha; si no, una buena oferta solo avisa."}
 }
 
 // RowPlayer is a player as the client's list row reads him: what face, posTag and playerTags
@@ -249,6 +281,9 @@ func RowPlayer(player map[string]any) map[string]any {
 		"shielded_until": text(player["shielded_until"]),
 		"health":         map[string]any{"ring": ring, "glyph": glyph, "reason": reason},
 	}
+	if until := text(player["shielded_until"]); until != "" {
+		out["shielded_when"] = esWhen(until)
+	}
 	if role := mapOf(player["role"]); text(role["key"]) != "" {
 		out["role"] = role
 	}
@@ -257,139 +292,8 @@ func RowPlayer(player map[string]any) map[string]any {
 	}
 	if truthy(player["is_mine"]) && truthy(player["sale_locked"]) {
 		out["locked_until"] = text(player["hold_until"])
+		out["locked_when"] = esWhen(text(player["hold_until"]))
+		out["locked_day"] = esDay(text(player["hold_until"]))
 	}
 	return out
-}
-
-func (d Document) sellView() string {
-	data := d.SellData()
-	var items []string
-	for _, offer := range data.Offers {
-		common := fmt.Sprintf(` data-op-market="%s" data-op-offer="%s" data-op-player="%s" `+
-			`data-op-name="%s" data-op-amount="%d"`, Esc(offer.MarketID), Esc(offer.OfferID),
-			Esc(text(offer.source["id"])), Esc(text(offer.source["name"])), int64(offer.Amount))
-		// Both buttons, always Aceptar then Rechazar; only the recommended one is filled, and
-		// in the accent colour, since red would read as danger.
-		recommend := func(label, kind, op, reason string) string {
-			return button(label, kind, "op", fmt.Sprintf(` data-op="%s" title="recomendado: %s"`,
-				op, Esc(reason))+common)
-		}
-		accept := button("Aceptar", "ghost", "op", ` data-op="accept_offer"`+common)
-		decline := recommend("Rechazar", "primary", "decline_offer", offer.Why)
-		if offer.Take {
-			accept = recommend("Aceptar", "primary", "accept_offer", offer.Why)
-			decline = button("Rechazar", "ghost", "op", ` data-op="decline_offer"`+common)
-		}
-		glyph := "▲"
-		if offer.Ratio < 1 {
-			glyph = "▼"
-		}
-		note := fmt.Sprintf(`<span class="%s">%s %s</span> vale %s`, ratioClass(offer.Ratio),
-			glyph, esRatio(offer.Ratio), esMoney(offer.Value))
-		if offer.Drop > 0 {
-			note += " · once −" + esNum(offer.Drop, 1)
-		}
-		line := playerRow(offer.source)
-		line.Value, line.Note, line.Why = esMoney(offer.Amount), note, Esc(offer.Facts)
-		line.Chip, line.Action, line.Tone = clock(offer.Expires, "caduca"), accept+decline,
-			offer.Tone
-		items = append(items, line.HTML())
-	}
-	body := empty("Ninguna oferta ahora mismo.")
-	if len(items) > 0 {
-		body = rowList(items)
-	}
-	main := block("Ofertas recibidas", body, "", len(items))
-
-	var listed []string
-	for _, listing := range data.Listed {
-		note := fmt.Sprintf(`<span class="%s" title="lo que pides frente a su valor">%s</span>`,
-			ratioClass(listing.Ratio), esRatio(listing.Ratio))
-		if listing.Best > 0 {
-			note += " · mejor " + esMoney(listing.Best)
-		}
-		listed = append(listed, row(listing.source, "", esMoney(listing.Asking), note,
-			clock(listing.Expires, "cierra"),
-			actButton("Quitar", "ghost", text(listing.source["id"]), "withdraw"), ""))
-	}
-	body = empty("No tienes a nadie en venta.")
-	if len(listed) > 0 {
-		body = rowList(listed)
-	}
-	listedBlock := block("En venta ahora", body, "", len(listed))
-	main += restOfSquadHTML(data.Rest)
-
-	return view("v-vender", "vender", main, listedBlock+alwaysAsideHTML(data.Always))
-}
-
-// restOfSquad is every player of mine not on sale, the bench before the eleven: listing a
-// starter has to be a choice made on purpose.
-func (d Document) restOfSquad() string {
-	return restOfSquadHTML(d.sellRest())
-}
-
-func restOfSquadHTML(rest []SellRest) string {
-	if len(rest) == 0 {
-		return ""
-	}
-	var bench, eleven []string
-	for _, item := range rest {
-		id := text(item.source["id"])
-		class, sign := "up", "+"
-		if item.Trend < 0 {
-			class, sign = "down", ""
-		}
-		note := fmt.Sprintf(`%s · <span class="%s">%s%s %%</span> 7d`,
-			esMoney(item.Value), class, sign, esNum(item.Trend, 1))
-		sell := actButton("Poner en venta", "ghost", id, "sell_to_market")
-		if item.LockedWhy != "" {
-			sell = `<span title="` + Esc(item.LockedWhy) + `">` + button("Poner en venta", "ghost",
-				"", ` disabled title="`+Esc(item.LockedWhy)+`"`) + `</span>`
-		}
-		label, on := "Siempre en mercado", ""
-		if item.Always {
-			label, on = "● Siempre en mercado", " on"
-		}
-		toggle := button(label, "ghost", "act"+on, fmt.Sprintf(` data-act="always" `+
-			`data-act-player="%s" title="Lo mantiene en venta; importes y venta automática, en su ficha"`,
-			Esc(id)))
-		line := row(item.source, "", esNum(item.XPts, 1)+" xPts", note, "", sell+toggle, "")
-		if item.Starter {
-			eleven = append(eleven, line)
-		} else {
-			bench = append(bench, line)
-		}
-	}
-	var body strings.Builder
-	body.WriteString(`<ul class="rows">`)
-	if len(bench) > 0 {
-		fmt.Fprintf(&body, `<li class="line-head">Fuera de tu once · %d</li>%s`, len(bench),
-			strings.Join(bench, ""))
-	}
-	if len(eleven) > 0 {
-		fmt.Fprintf(&body, `<li class="line-head xi-head">En tu once · %d · venderlos baja tus `+
-			`xPts</li>%s`, len(eleven), strings.Join(eleven, ""))
-	}
-	body.WriteString(`</ul>`)
-	return block("El resto de tu plantilla", body.String(), "lo que no tienes en venta", len(rest))
-}
-
-func alwaysAsideHTML(rules []SellAlways) string {
-	var items []string
-	for _, rule := range rules {
-		amount := ""
-		if rule.Amount > 0 {
-			amount = esMoney(rule.Amount)
-		}
-		line := playerRow(rule.source)
-		line.Value, line.Note, line.Why = amount, Esc(rule.Terms), Esc(rule.Why)
-		items = append(items, line.HTML())
-	}
-	body := empty("Ninguna regla activa: se arma con «Siempre en mercado».")
-	if len(items) > 0 {
-		body = rowList(items)
-	}
-	body += `<p class="mk-note">Solo lo mantiene en venta. Para que se venda solo, fija «aceptar ` +
-		`desde» o marca la venta automática en su ficha; si no, una buena oferta solo avisa.</p>`
-	return block("Siempre en mercado", body, "", len(rules))
 }

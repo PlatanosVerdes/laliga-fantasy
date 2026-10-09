@@ -663,8 +663,8 @@ func cmdServe(args []string) error {
 				return server.Rendered{
 					HTML: "<title>Error</title><p>No he podido construir la pagina.</p>"}
 			}
-			return server.Rendered{HTML: document.HTML(),
-				Views: map[string]any{"vender": document.SellData()}}
+			page, views := document.Render()
+			return server.Rendered{HTML: page, Views: views}
 		},
 	})
 	// Nobody is told about a change until the page for it exists: rendering costs about four

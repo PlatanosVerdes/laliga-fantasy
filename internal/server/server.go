@@ -126,6 +126,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/season", s.seasonTable)
 	mux.HandleFunc("/api/fragments", s.fragments)
 	mux.HandleFunc("/api/view/", s.view)
+	mux.HandleFunc("/api/views", s.views)
 	mux.HandleFunc("/api/lineup", s.lineup)
 	mux.HandleFunc("/api/session", s.session)
 	mux.HandleFunc("/api/favourite", s.favourite)
@@ -360,6 +361,12 @@ func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	fmt.Fprint(writer, s.render().HTML)
+}
+
+// views is every tab the browser draws, in one answer: a live refresh asks once, not per tab.
+func (s *Server) views(writer http.ResponseWriter, _ *http.Request) {
+	s.json(writer, http.StatusOK, map[string]any{"version": s.state.Health().Version,
+		"views": s.render().Views})
 }
 
 // view is one tab as data, for the tabs the browser draws itself.

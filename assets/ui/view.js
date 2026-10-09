@@ -1,0 +1,185 @@
+import {html, useState, useEffect} from './lib.js';
+import {Face, Tags, ShieldMark, PosTag, Countdown, Empty} from './components.js';
+import {useView} from './api.js';
+import {runAct, toggleAlways} from './actions.js';
+
+// The renderer of render/viewmodel.go: a tab's blocks, rows, segments, chips and buttons, in the
+// same markup the Go renderer wrote, so report.css draws them as before.
+
+const MAKES_CHIP = /^(role|mk-chip|xi-mark)/;
+
+export function Seg({s}) {
+  if (!s) return null;
+  const tip = s.tip || undefined;
+  if (s.icon) return html`<span class=${s.c} data-tip=${tip}><svg class="ic" aria-hidden="true"><use href=${'#i-' + s.icon}></use></svg></span>`;
+  const inner = s.c && s.c.startsWith('role ') ? html`<i class="rdot"></i>${s.t}` : s.t;
+  if (s.href) return html`<a class=${s.c || undefined} href=${s.href} target="_blank" rel="noopener" data-tip=${tip}>${inner}</a>`;
+  if (s.pid || s.team) return html`<span class=${s.c || undefined} data-pid=${s.pid || undefined} data-team=${s.team || undefined} data-tip=${tip}>${inner}</span>`;
+  if (!s.c && !tip) return s.t;
+  return html`<span class=${s.c || undefined} data-tip=${tip}>${inner}</span>`;
+}
+
+export const Segs = ({list}) => (list || []).map((s) => html`<${Seg} s=${s}/>`);
+
+// A row's second line: the first item, then its chips (never cut), then the rest, which is the
+// only part that shortens.
+function Meta({list}) {
+  if (!list || !list.length) return null;
+  const chips = list.filter((s) => MAKES_CHIP.test(s.c || ''));
+  const plain = list.filter((s) => !MAKES_CHIP.test(s.c || ''));
+  if (!plain.length) return html`<span class="meta"><${Segs} list=${chips}/></span>`;
+  const tail = plain.slice(1);
+  return html`<span class="meta"><span class="mhead"><${Seg} s=${plain[0]}/></span><${Segs} list=${chips}/>${
+    tail.length ? html`<span class="mtail">${tail.map((s, i) => html`${i ? ' · ' : ''}<${Seg} s=${s}/>`)}</span>` : null}</span>`;
+}
+
+export function ChipView({c}) {
+  if (c.until) return html`<${Countdown} kind="chip" until=${c.until} label=${c.label || ''}/>`;
+  return html`<span class=${('mk-chip ' + (c.c || '')).trim()} data-tip=${c.tip || undefined}>${c.t}</span>`;
+}
+
+function AlwaysAct({a}) {
+  const [on, setOn] = useState(!!a.args.on);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setOn(!!a.args.on), [a.args.on]);
+  const flip = async () => {
+    setBusy(true);
+    setOn(!on);
+    try { setOn(await toggleAlways({id: a.args.player_id, name: a.args.name})); }
+    catch (e) { setOn(on); alert('No he podido cambiarlo: ' + e.message); }
+    finally { setBusy(false); }
+  };
+  const cls = a.class.replace(/\bon\b/, '').trim() + (on ? ' on' : '');
+  return html`<button type="button" class=${cls} data-wired="1" disabled=${busy} data-tip=${a.tip || undefined}
+    onClick=${flip}>${on ? '● ' : ''}Siempre en mercado</button>`;
+}
+
+export function ActView({a}) {
+  if (a.text) return html`<span class=${a.class || undefined}>${a.label}</span>`;
+  if (a.do === 'always') return html`<${AlwaysAct} a=${a}/>`;
+  // data-wired keeps report.js's own wiring off these buttons while both live on the page.
+  const button = html`<button type="button" class=${a.class || 'mb mb-ghost'} data-wired="1"
+    disabled=${!!a.off} data-tip=${a.tip || undefined}
+    onClick=${(event) => { event.stopPropagation(); runAct(a); }}>${a.label}</button>`;
+  return a.wrap ? html`<span data-tip=${a.wrap}>${button}</span>` : button;
+}
+
+export function RowView({r}) {
+  if (r.head) return html`<li class=${('line-head ' + (r.head_c || '')).trim()}>${r.head}</li>`;
+  const p = r.player;
+  const lead = p ? html`<${Face} p=${p}/>`
+    : html`<span class=${('rank-dot ' + (r.lead_c || '')).trim()}><${Segs} list=${r.lead}/></span>`;
+  const name = p ? html`<b>${p.name}<${ShieldMark} p=${p}/></b><${PosTag} p=${p}/>` : html`<b>${r.name}</b>`;
+  const tags = p || (r.tags && r.tags.length)
+    ? html`<span class="tags">${p ? html`<${Tags} p=${p}/>` : null}<${Segs} list=${r.tags}/></span>` : null;
+  const note = r.note && r.note.length;
+  return html`<li class=${('r ' + (r.tone || '')).trim()} data-pid=${(p && p.id) || r.pid || undefined}
+      data-team=${r.team || undefined}>
+    ${lead}
+    <span class="rwho"><span class="rname">${name}</span><${Meta} list=${r.meta}/><${Meta} list=${r.sub}/></span>
+    ${tags}
+    ${r.value || note ? html`<span class="rval" data-tip=${r.why || undefined}>${r.value ? html`<b>${r.value}</b>` : null}${
+      note ? html`<span class="rnote"><${Segs} list=${r.note}/></span>` : null}</span>` : null}
+    <span class="rtail"><span class="rchip">${(r.chips || []).map((c) => html`<${ChipView} c=${c}/>`)}</span>${
+      r.acts && r.acts.length ? html`<span class="ract">${r.acts.map((a) => html`<${ActView} a=${a}/>`)}</span>` : null}</span>
+  </li>`;
+}
+
+// The filter bar: one state for every tab that has it, as the page always kept it.
+const filters = {pos: 'all', price: '', text: ''};
+const filterWatchers = new Set();
+function setFilters(next) { Object.assign(filters, next); filterWatchers.forEach((watch) => watch({...filters})); }
+function useFilters() {
+  const [value, setValue] = useState({...filters});
+  useEffect(() => { filterWatchers.add(setValue); return () => filterWatchers.delete(setValue); }, []);
+  return value;
+}
+
+// What people type as a price: "20", "20M", "20,5", "20.000.000". Small numbers are millions;
+// empty is no limit.
+function parsePrice(raw) {
+  let text = String(raw || '').trim().toLowerCase().replace(/\s|€/g, '');
+  if (!text) return Infinity;
+  const millions = /m$/.test(text);
+  text = text.replace(/m$/, '');
+  if (/^\d{1,3}(\.\d{3})+$/.test(text)) text = text.replace(/\./g, '');
+  const n = parseFloat(text.replace(',', '.'));
+  if (!isFinite(n)) return Infinity;
+  return millions || n < 1000 ? n * 1e6 : n;
+}
+const plain = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+function passes(row, state) {
+  if (!row.find) return true;
+  const max = parsePrice(state.price), needle = plain(state.text.trim());
+  return (state.pos === 'all' || row.find.pos === state.pos) && row.find.price <= max &&
+    (!needle || plain(row.find.text || row.find.name).includes(needle));
+}
+const filtering = (state) => state.pos !== 'all' || parsePrice(state.price) !== Infinity || !!state.text.trim();
+
+function FilterBar({view}) {
+  const state = useFilters();
+  const all = [...view.main, ...(view.aside || []), ...(view.row2 || [])].flatMap((b) => (b.rows || []).filter((r) => r.find));
+  const shown = all.filter((r) => passes(r, state)).length;
+  return html`<div class="mk-filters"><div class="filters" data-wired="1">
+    <label>Posición
+      <select class="f-pos" value=${state.pos} onInput=${(e) => setFilters({pos: e.currentTarget.value})}>
+        <option value="all">todas</option><option value="POR">portero</option><option value="DEF">defensa</option>
+        <option value="MED">medio</option><option value="DEL">delantero</option>
+      </select></label>
+    <label>Precio máximo
+      <input class="f-price" type="text" inputmode="decimal" autocomplete="off" placeholder="sin límite"
+        title="20, 20M, 20,5 o 20.000.000: en millones si es pequeño" value=${state.price}
+        onInput=${(e) => setFilters({price: e.currentTarget.value})}/></label>
+    <label>Buscar
+      <input class="f-text" type="search" placeholder="nombre" title="nombre, equipo o dueño" value=${state.text}
+        onInput=${(e) => setFilters({text: e.currentTarget.value})}/></label>
+    <button class="f-reset" type="button" onClick=${() => setFilters({pos: 'all', price: '', text: ''})}>Limpiar</button>
+    <span class="kpi-label">${shown} de ${all.length} filas</span>
+  </div></div>`;
+}
+
+export const KINDS = {};
+
+export function BlockView({b}) {
+  const state = useFilters();
+  if (!b || (!b.title && !b.kind)) return null;
+  const Kind = b.kind && KINDS[b.kind];
+  const active = filtering(state);
+  const rows = (b.rows || []).filter((r) => !active || passes(r, state));
+  const filtered = active && (b.rows || []).some((r) => r.find);
+  const counted = b.count == null ? null : filtered ? rows.filter((r) => !r.head).length : b.count;
+  let body;
+  if (Kind) body = html`<${Kind} b=${b}/>`;
+  else if (!rows.length) body = filtered && b.rows.length ? html`<p class="mk-empty f-none">Ninguno con este filtro.</p>`
+    : b.empty ? html`<${Empty}>${b.empty}<//>` : null;
+  else {
+    const list = html`<ul class="rows">${rows.map((r) => html`<${RowView} r=${r}/>`)}</ul>`;
+    body = b.scroll ? html`<div class="scrollbox" style=${'max-height:' + b.scroll + 'px'}>${list}</div>` : list;
+  }
+  return html`<div class="block" id=${b.id || undefined}>
+    ${b.title ? html`<div class="sec-head"><h2>${b.title}${counted != null ? html`<span class="count">${counted}</span>` : null}</h2>${
+      b.sub ? html`<p>${b.sub}</p>` : null}</div>` : null}
+    ${body}
+    ${b.note ? html`<p class="mk-note">${b.note}</p>` : null}
+  </div>`;
+}
+
+const Blocks = ({list}) => (list || []).map((b) => html`<${BlockView} b=${b}/>`);
+
+// A tab's screen: the main column alone, with an aside, or with a second row under both.
+export function ViewScreen({name}) {
+  const view = useView(name);
+  if (!view) return null;
+  const main = html`${view.filters ? html`<${FilterBar} view=${view}/>` : null}<${Blocks} list=${view.main}/>`;
+  if (view.row2 && view.row2.length) return html`<div class="layout with-row"><div class="main">${main}</div>
+    <aside class="side"><${Blocks} list=${view.aside}/></aside>
+    <div class="row2"><div class="duo"><${Blocks} list=${view.row2}/></div></div></div>`;
+  if (view.aside && view.aside.length) return html`<div class="layout"><div class="main">${main}</div>
+    <aside class="side"><${Blocks} list=${view.aside}/></aside></div>`;
+  return html`<div class="main solo">${main}</div>`;
+}
+
+KINDS.stars = ({b}) => html`<ul class="stars">${b.data.map((item) => html`<li class="mk-star" data-pid=${item.player.id}>
+  <${Face} p=${item.player} size="xs"/><span>${item.player.name}<${ShieldMark} p=${item.player}/></span>
+  <span class="meta">${item.owner}</span><span class=${'tx ' + item.class}>${item.xpts}</span></li>`)}</ul>`;

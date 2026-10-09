@@ -3174,6 +3174,7 @@ async function swap(){
   Object.entries(data.sections).forEach(([id,inner])=>{
     if(CLIENT_OWNED.has(id)) return;
     const node=document.getElementById(id);
+    if(node&&node.dataset.view) return;
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });
   wireTables(); wireFilters(); wireStars(); wireBids(); wireOps();
@@ -3256,9 +3257,10 @@ function connect(){
 }
 
 // What /assets/ui borrows from this file: the dialogs it does not redraw and the drawer's routing.
-window.panel={openDetail, openManager, closeDrawer, openAmount, shieldDialog, raidDialog, flash,
-  cmpHas, cmpAdd, cmpDrop, usage,
-  own:(id)=>CLIENT_OWNED.add(id), disown:(id)=>CLIENT_OWNED.delete(id)};
+window.panel={openDetail, openManager, closeDrawer, openAmount, openBid, shieldDialog, raidDialog,
+  flash, cmpHas, cmpAdd, cmpDrop, usage,
+  goto:(where)=>{ const target=resolveTarget(where);
+    if(target) showTab(target.tab,{section:target.section}); else showTab(where); }};
 
 wireTables(); wireFilters(); wireStars(); wireBids(); wireOps();
 wireDetails(); wireRaids();

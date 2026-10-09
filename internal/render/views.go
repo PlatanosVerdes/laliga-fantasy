@@ -603,28 +603,6 @@ func (d Document) buyOptions() (clauses, offers, free []map[string]any) {
 	return clauses, listed(d.Advice["asks"]), listed(d.Advice["bids_now"])
 }
 
-func (d Document) buyView() string {
-	window := d.window()
-	clauses, offers, free := d.buyOptions()
-	main := `<div class="mk-filters">` + Filters + `</div>` +
-		d.buyBlock("Mercado rentable", "puja libre", free, window)
-
-	var bids []string
-	for _, bid := range rows(d.Advice["my_bids"]) {
-		bids = append(bids, row(bid, "",
-			esMoney(number(bid["my_bid"])), "pide "+esMoney(number(bid["asking"])),
-			clock(text(bid["closes"]), "cierra"), BidButton(bid), ""))
-	}
-	bids = append(bids, d.raidRows()...)
-	body := empty("Ninguna ahora mismo.")
-	if len(bids) > 0 {
-		body = rowList(bids)
-	}
-	return viewWithRow("v-comprar", "comprar", main, block("Mis pujas en curso", body, "", -1)+
-		d.endingsAside()+d.starredAside(),
-		d.buyBlock("En venta por rivales", "oferta al dueño", offers, window),
-		d.buyBlock("Cláusulas que puedes pagar", "clausula", clauses, window))
-}
 
 // outcomeRow is a resolved bid, offer or standing order as a list row: the icon of how it
 // ended where the face would be.
@@ -643,101 +621,6 @@ func shortDate(stamp string) string {
 		return when.Format("02/01")
 	}
 	return ""
-}
-
-// raidRows are the scheduled clausulazos still standing, as rows of what I have put up: the
-// limit, the clause today and whether it already passes it, when it opens, and the way out.
-func (d Document) raidRows() []string {
-	byID := d.playersByID()
-	var out []string
-	for _, raid := range d.Raids {
-		if raidsStandingDown[text(raid["action"])] {
-			continue
-		}
-		player := byID[text(raid["player_id"])]
-		if player == nil {
-			player = map[string]any{"id": raid["player_id"], "name": raid["name"],
-				"owner": raid["owner"]}
-		}
-		clause, limit := number(raid["clause"]), number(raid["max_pay"])
-		note := "cláusula " + esMoney(clause)
-		if limit > 0 && clause > limit {
-			note += ` · <span class="down">pasa tu límite</span>`
-		}
-		var chip string
-		switch {
-		case truthy(player["shielded"]):
-			chip = tag("🛡 blindado", "done")
-		case truthy(player["clause_locked"]):
-			chip = clock(text(player["clause_locked_until"]), "se abre su cláusula")
-		default:
-			chip = tag("pagable", "ok")
-		}
-		action := button("Cancelar", "ghost", "op", fmt.Sprintf(` data-op="cancel_raid" `+
-			`data-op-player="%s" data-op-name="%s"`, Esc(text(raid["player_id"])),
-			Esc(text(raid["name"]))))
-		line := playerRow(player)
-		line.Value, line.Note, line.Why = "hasta "+esMoney(limit), note, "clausulazo programado"
-		line.Chip, line.Action = chip, action
-		out = append(out, line.HTML())
-	}
-	return out
-}
-
-func (d Document) endingsAside() string {
-	var lines []string
-	for _, ending := range d.Endings {
-		outcome := text(ending["outcome"])
-		what := outcome
-		switch {
-		case outcome == "perdida" && text(ending["new_owner"]) != "":
-			what = "perdida · ganó " + text(ending["new_owner"])
-			if paid := number(ending["won_for"]); paid > 0 {
-				what += " con " + esMoney(paid)
-			}
-		case outcome == "rechazada" && text(ending["who"]) != "":
-			what = "rechazada por " + text(ending["who"])
-		}
-		detail := ""
-		if outcome == "perdida" && text(ending["new_owner"]) != "" {
-			detail = "ganó " + text(ending["new_owner"])
-			if paid := number(ending["won_for"]); paid > 0 {
-				detail += " (" + esMoney(paid) + ")"
-			}
-		}
-		lines = append(lines, outcomeRow(text(ending["player_id"]), text(ending["player"]),
-			outcome, detail, what, shortDate(text(ending["at"])), number(ending["amount"])))
-	}
-	body := empty("Todavía no se ha resuelto ninguna.")
-	if len(lines) > 0 {
-		body = scrollList(lines, 420)
-	}
-	return block("Cómo acabaron", body, "", len(d.Endings))
-}
-
-func (d Document) starredAside() string {
-	starred := rows(d.Advice["starred"])
-	if len(starred) == 0 {
-		return ""
-	}
-	sort.SliceStable(starred, func(one, two int) bool {
-		return number(starred[one]["xpts"]) > number(starred[two]["xpts"])
-	})
-	var items strings.Builder
-	for _, player := range starred {
-		owner := text(player["owner"])
-		if truthy(player["is_mine"]) {
-			owner = "tuyo"
-		} else if owner == "" {
-			owner = "libre"
-		}
-		fmt.Fprintf(&items, `<li class="mk-star" data-pid="%s">%s<span>%s</span>`+
-			`<span class="meta">%s</span><span class="tx %s">%s</span></li>`,
-			Esc(text(player["id"])), face(player, "xs"), shieldName(player), Esc(owner),
-			xptsClass(number(player["xpts"])), esNum(number(player["xpts"]), 1))
-	}
-	return block("☆ Siguiendo", `<ul class="stars">`+items.String()+`</ul>`, "",
-		len(starred))
 }
 
 // benchOf is the squad outside its best eleven, least useful first.

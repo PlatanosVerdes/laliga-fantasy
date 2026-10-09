@@ -6,38 +6,61 @@ import (
 	"testing"
 )
 
-// Vender as data carries every decision the HTML shows, so the browser's rows cannot drift
-// from the server's: the same offers, the same verdict, the hold rule already worded.
-func TestSellDataMatchesTheView(t *testing.T) {
-	document := decidingDocument()
-	squad := rows(document.Advice["squad"])
-	squad[1]["sale_locked"], squad[1]["hold_until"] = true, "2999-01-04T10:00:00+02:00"
-	document.Advice["squad"] = squad
-	data := document.SellData()
-	html := document.sellView()
-	if len(data.Offers) != strings.Count(html, `data-op="accept_offer"`) {
-		t.Fatalf("offers: %d in the data, %d in the page", len(data.Offers),
-			strings.Count(html, `data-op="accept_offer"`))
+func asJSON(value any) string {
+	blob, _ := json.Marshal(value)
+	return string(blob)
+}
+
+func rowOf(block Block, id string) *Row {
+	if index := indexOf(block, id); index >= 0 {
+		return &block.Rows[index]
 	}
-	for _, offer := range data.Offers {
-		if offer.Why == "" || offer.Player["id"] == "" || offer.OfferID == "" {
-			t.Errorf("an offer without its verdict or ids: %+v", offer)
+	return nil
+}
+
+func indexOf(block Block, id string) int {
+	for index, row := range block.Rows {
+		if row.Player != nil && row.Player["id"] == id {
+			return index
 		}
 	}
-	locked := 0
-	for _, item := range data.Rest {
-		if item.LockedWhy != "" {
-			locked++
-			if item.Player["locked_until"] == nil {
-				t.Errorf("the row's tags lose the padlock: %v", item.Player)
+	return -1
+}
+
+func headAt(block Block, prefix string) int {
+	for index, row := range block.Rows {
+		if strings.HasPrefix(row.Head, prefix) {
+			return index
+		}
+	}
+	return -1
+}
+
+// Every offer comes with both buttons, Aceptar first, and only the recommended one filled, with
+// the reason as its tooltip.
+func TestSellOffersRecommendOneButton(t *testing.T) {
+	block := decidingDocument().offersBlock()
+	if len(block.Rows) == 0 {
+		t.Fatal("no offers")
+	}
+	for _, row := range block.Rows {
+		if len(row.Acts) != 2 || row.Acts[0].Label != "Aceptar" || row.Acts[1].Label != "Rechazar" {
+			t.Fatalf("Aceptar then Rechazar: %+v", row.Acts)
+		}
+		filled := 0
+		for _, button := range row.Acts {
+			if strings.Contains(button.Class, "mb-primary") {
+				filled++
+				if !strings.HasPrefix(button.Tip, "recomendado: ") {
+					t.Errorf("the filled one says why: %+v", button)
+				}
+			}
+			if button.Do != "op" || button.Args["offer_id"] == "" {
+				t.Errorf("both run the two-step operation on the offer: %+v", button)
 			}
 		}
-	}
-	if locked == 0 {
-		t.Error("the hold rule did not reach the data")
-	}
-	blob, err := json.Marshal(data)
-	if err != nil || strings.Contains(string(blob), "source") {
-		t.Errorf("the JSON carries only what the rows draw: %v %.200s", err, blob)
+		if filled != 1 {
+			t.Errorf("one recommendation per offer: %+v", row.Acts)
+		}
 	}
 }

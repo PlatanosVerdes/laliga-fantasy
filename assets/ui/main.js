@@ -1,8 +1,7 @@
 import {html, render, legacy} from './lib.js';
-import {getJSON} from './api.js';
 import {ModalRoot} from './components.js';
 import {PlayerPopup} from './player.js';
-import {Vender} from './vender.js';
+import {ViewScreen} from './view.js';
 
 const dialogs = document.createElement('div');
 document.body.appendChild(dialogs);
@@ -25,15 +24,8 @@ export function mountPlayer(body, id, from) {
   render(html`<${PlayerPopup} key=${id} id=${id} from=${from}/>`, host);
 }
 
-// Vender is the browser's from the first answer on; until then the server's HTML stays.
-async function mountVender() {
-  const section = document.getElementById('v-vender');
-  if (!section) return;
-  legacy().own('v-vender');
-  let initial;
-  try { initial = await getJSON('/api/view/vender'); } catch (e) { legacy().disown('v-vender'); return; }
-  section.textContent = '';
-  render(html`<${Vender} initial=${initial}/>`, section);
+// Every tab the server hands over as a view is the browser's: drawn from the views the page
+// carries, and again whenever the world moves.
+for (const section of document.querySelectorAll('section[data-view]')) {
+  render(html`<${ViewScreen} name=${section.dataset.view}/>`, section);
 }
-
-mountVender();

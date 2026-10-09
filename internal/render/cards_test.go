@@ -344,7 +344,7 @@ func TestSaleSwapCardSellsAndTakes(t *testing.T) {
 		!strings.Contains(swap.Button, `data-op="pay_clause"`) {
 		t.Errorf("las dos patas: %+v", swap)
 	}
-	if !strings.Contains(document.sellView(), "si clausulas a Pedri") {
+	if !strings.Contains(asJSON(document.SellData()), "si clausulas a Pedri") {
 		t.Error("Vender recomienda aceptar nombrando el sustituto")
 	}
 }

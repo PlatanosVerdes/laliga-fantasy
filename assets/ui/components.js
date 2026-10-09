@@ -1,5 +1,5 @@
 import {html, useState, useEffect, useRef, legacy} from './lib.js';
-import {esWhen, esDay, exact, chipText, countdownText} from './format.js';
+import {esWhen, exact, chipText, countdownText} from './format.js';
 import {prepare, confirm, changed, closeDialog, useDialog} from './api.js';
 
 // The sprite render.IconSprite puts once at the top of the page.
@@ -58,7 +58,7 @@ export function Face({p, size = 'sm'}) {
 export const PosTag = ({p}) => html`<span class=${'pos pos-' + p.pos}>${p.position}</span>`;
 
 export const ShieldMark = ({p}) => p.shielded
-  ? html` <span class="shield-mark" data-tip=${'blindado' + (p.shielded_until ? ' hasta ' + esWhen(p.shielded_until) : '')}>🛡</span>`
+  ? html` <span class="shield-mark" data-tip=${'blindado' + (p.shielded_when ? ' hasta ' + p.shielded_when : '')}>🛡</span>`
   : null;
 
 // futbolfantasy's category in his club: a dot in their colour and the word; with the club's
@@ -83,7 +83,7 @@ export function Tags({p, owner, roleLink = false, star = false, lock, alerts = t
       ${p.start_probability != null ? html`<span data-tip="probabilidad de ser titular">${p.start_probability} %</span>` : null}
       ${star ? html`<span>★</span>` : null}
     </span>
-    ${locked ? html`<span class="tg tg-warn" data-tip=${'no se puede vender hasta el ' + esWhen(locked)}>🔒 hasta ${lock || esDay(locked)}</span>` : null}
+    ${locked ? html`<span class="tg tg-warn" data-tip=${'no se puede vender hasta el ' + p.locked_when}>🔒 hasta ${lock || p.locked_day}</span>` : null}
     ${alerts && p.shielded ? html`<span class="tg tg-info">🛡</span>` : null}
     ${p.role && p.role.change === 'down' ? html`<span class="tg tg-warn" data-tip=${p.role.note || undefined}>bajó a ${p.role.label}</span>` : null}
     ${alerts && health.ring ? html`<span class=${'tg ' + (health.ring === 'out' ? 'tg-bad' : 'tg-warn')}>${health.reason}</span>` : null}`;
