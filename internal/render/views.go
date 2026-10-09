@@ -615,17 +615,10 @@ func (d Document) buyView() string {
 			esMoney(number(bid["my_bid"])), "pide "+esMoney(number(bid["asking"])),
 			clock(text(bid["closes"]), "cierra"), BidButton(bid), ""))
 	}
+	bids = append(bids, d.raidRows()...)
 	body := empty("Ninguna ahora mismo.")
 	if len(bids) > 0 {
 		body = rowList(bids)
-	}
-	for _, raid := range d.Raids {
-		if raidsStandingDown[text(raid["action"])] {
-			continue
-		}
-		body += fmt.Sprintf(`<p class="mk-note">Clausulazo programado: <b>%s</b> hasta %s · `+
-			`<button class="linkish" type="button" data-goto="clausulas">ver en Cláusulas</button></p>`,
-			Esc(text(raid["name"])), esMoney(number(raid["max_pay"])))
 	}
 	return viewWithRow("v-comprar", "comprar", main, block("Mis pujas en curso", body, "", -1)+
 		d.endingsAside()+d.starredAside(),
@@ -650,6 +643,45 @@ func shortDate(stamp string) string {
 		return when.Format("02/01")
 	}
 	return ""
+}
+
+// raidRows are the scheduled clausulazos still standing, as rows of what I have put up: the
+// limit, the clause today and whether it already passes it, when it opens, and the way out.
+func (d Document) raidRows() []string {
+	byID := d.playersByID()
+	var out []string
+	for _, raid := range d.Raids {
+		if raidsStandingDown[text(raid["action"])] {
+			continue
+		}
+		player := byID[text(raid["player_id"])]
+		if player == nil {
+			player = map[string]any{"id": raid["player_id"], "name": raid["name"],
+				"owner": raid["owner"]}
+		}
+		clause, limit := number(raid["clause"]), number(raid["max_pay"])
+		note := "cláusula " + esMoney(clause)
+		if limit > 0 && clause > limit {
+			note += ` · <span class="down">pasa tu límite</span>`
+		}
+		var chip string
+		switch {
+		case truthy(player["shielded"]):
+			chip = tag("🛡 blindado", "done")
+		case truthy(player["clause_locked"]):
+			chip = clock(text(player["clause_locked_until"]), "se abre su cláusula")
+		default:
+			chip = tag("pagable", "ok")
+		}
+		action := button("Cancelar", "ghost", "op", fmt.Sprintf(` data-op="cancel_raid" `+
+			`data-op-player="%s" data-op-name="%s"`, Esc(text(raid["player_id"])),
+			Esc(text(raid["name"]))))
+		line := playerRow(player)
+		line.Value, line.Note, line.Why = "hasta "+esMoney(limit), note, "clausulazo programado"
+		line.Chip, line.Action = chip, action
+		out = append(out, line.HTML())
+	}
+	return out
 }
 
 func (d Document) endingsAside() string {

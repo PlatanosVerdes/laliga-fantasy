@@ -1292,7 +1292,16 @@ section.mk{margin:0 0 22px}
   .mk .layout.with-row{grid-template-areas:"m s" "r r";row-gap:0}
   .mk .with-row>.main{grid-area:m} .mk .with-row>.side{grid-area:s;position:static}
   .mk .with-row>.row2{grid-area:r}
+  /* Row 1 is as tall as its taller side: the left list grows into the space, keeping its own
+     scroll, rather than leaving a gap above row 2. */
+  .mk .layout.with-row{align-items:stretch}
+  .mk .with-row>.main{display:flex;flex-direction:column}
+  .mk .with-row>.main>.block:last-child{flex:1;display:flex;flex-direction:column;margin-bottom:22px}
+  .mk .with-row>.main>.block:last-child>.scrollbox{flex:1 0 420px;min-height:0;max-height:none!important;
+    height:0;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+  .mk .with-row>.main>.block:last-child>.scrollbox>.rows{border:0}
 }
+.mk .stars{max-height:190px;overflow-y:auto}
 /* On a phone the second row comes before the aside: the lists first, the boxes after. */
 @media (max-width:999px){
   .mk .layout.with-row{display:flex;flex-direction:column}

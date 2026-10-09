@@ -204,3 +204,22 @@ func TestReachListsWhoARivalCanPay(t *testing.T) {
 		t.Errorf("nobody reached: %s", none)
 	}
 }
+
+// Scheduled clausulazos sit in "Mis pujas en curso" as rows with their limit and a way out, and
+// the box only says it is empty when there is nothing at all.
+func TestScheduledRaidsAreRowsOfMyBids(t *testing.T) {
+	document := decidingDocument()
+	document.Raids = []map[string]any{{"player_id": "8", "name": "O. Rey", "owner": "tete",
+		"clause": 25_000_000.0, "max_pay": 20_000_000.0, "action": "esperando"}}
+	html := document.buyView()
+	box := html[strings.Index(html, "Mis pujas en curso"):]
+	box = box[:strings.Index(box, "Cómo acabaron")]
+	for _, want := range []string{"hasta 20,0M", "pasa tu límite", `data-op="cancel_raid"`} {
+		if !strings.Contains(box, want) {
+			t.Errorf("missing %q in %s", want, box)
+		}
+	}
+	if strings.Contains(box, "Ninguna ahora mismo") || strings.Contains(box, "ver en Cláusulas") {
+		t.Error("with a raid scheduled the box is not empty, and the raid is a row")
+	}
+}
