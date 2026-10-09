@@ -445,6 +445,7 @@ const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
 	`<button class="tab" role="tab" data-tab="rivales" aria-selected="false" type="button">Rivales</button>` +
 	`<button class="tab" role="tab" data-tab="liga" aria-selected="false" type="button">Liga</button>` +
 	`<button class="tab" role="tab" data-tab="ranking" aria-selected="false" type="button">Ranking</button>` +
+	`<button class="tab" role="tab" data-tab="necroporra" aria-selected="false" type="button">Necroporra</button>` +
 	`<button class="tab" role="tab" data-tab="comparador" aria-selected="false" type="button">Comparador</button></div>`
 
 // CompareShell is the comparator's tab. The browser fills it from the tray it keeps, so the

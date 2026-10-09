@@ -62,6 +62,19 @@ type Document struct {
 	MaxDebtPct     float64
 	HoldExceptions string
 	RuleNotes      []string
+
+	// Necroporra is the side game: the open round's gameweek and deadline, a manager-name to
+	// tebasfury team-id roster, your current vote (team ids) and whether this server may cast
+	// one. Zero gameweek hides the section.
+	NecroGameweek int
+	NecroDeadline string
+	NecroClosesAt time.Time
+	NecroRoster   map[string]string
+	NecroChosen   []string
+	NecroCanVote  bool
+	// NecroPreview forces the Decidir reminder to show even when you have already voted, for a
+	// local look at the card.
+	NecroPreview bool
 }
 
 func rows(source any) []map[string]any {
@@ -107,6 +120,7 @@ func (d Document) HTML() string {
 	}
 	sections = append(sections, d.rulesSection())
 	sections = append(sections, d.rankingSection(players))
+	sections = append(sections, d.necroporraSection())
 	sections = append(sections, CompareShell)
 
 	stats, more := d.widgets(week, players)

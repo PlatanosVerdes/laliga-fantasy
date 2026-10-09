@@ -232,6 +232,7 @@ func (d Document) decideSection() string {
 		shown = shown[:MaxCards]
 	}
 	var main strings.Builder
+	main.WriteString(d.necroReminder())
 	main.WriteString(`<div class="sec-head"><h2>Qué hacer ahora</h2></div>`)
 	if len(shown) == 0 {
 		main.WriteString(empty("Nada que decidir ahora: ninguna oferta que cobrar, ninguna " +

@@ -54,6 +54,11 @@ type Options struct {
 	// Adopted runs once a session has just been stored: the world has to be built from
 	// scratch, and the league resolved, before the page can show anything.
 	Adopted func()
+	// Necroporra holds the side game's vote credentials: the external session cookie, the
+	// server-action id and the ballot's gameweek. Empty cookie disables the vote.
+	NecroCookie   string
+	NecroAction   string
+	NecroGameweek int
 }
 
 type Server struct {
@@ -129,6 +134,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/shield/cancel", s.cancelShield)
 	mux.HandleFunc("/api/bid/prepare", s.prepare)
 	mux.HandleFunc("/api/bid/confirm", s.confirm)
+	mux.HandleFunc("/api/necroporra/vote", s.necroVote)
 	mux.HandleFunc("/refresh", s.refresh)
 	mux.HandleFunc("/assets/", s.asset)
 	mux.HandleFunc("/", s.index)

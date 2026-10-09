@@ -164,6 +164,56 @@ function wireFilters(root=document){
   applyFilters();
 }
 
+// ---- necroporra ------------------------------------------------------------
+// Pick exactly two teams and send them. The rows are checkboxes; the button stays disabled
+// until two are ticked, and a third tick is refused rather than silently dropping an earlier
+// one, so what you send is always what you see.
+function wireNecro(root=document){
+  root.querySelectorAll('button.necro-vote').forEach(button=>{
+    if(button.dataset.wired) return;
+    button.dataset.wired='1';
+    const box=button.closest('section')||document.getElementById('necroporra');
+    const msg=box.querySelector('.necro-msg');
+    const toggles=[...box.querySelectorAll('.necro-pick')];
+    // Selection order, so marking a third drops the one picked first, as pickers usually do.
+    const order=toggles.filter(t=>t.classList.contains('on'));
+    const paint=(t,on)=>{
+      t.classList.toggle('on',on);
+      t.setAttribute('aria-pressed',String(on));
+      t.textContent=on?'voto ✓':'votar';
+      const row=t.closest('li'); if(row) row.classList.toggle('pick',on);
+    };
+    const sync=()=>{ button.disabled=order.length!==2; button.textContent='Enviar'; };
+    toggles.forEach(t=>{
+      t.addEventListener('click',()=>{
+        if(t.classList.contains('on')){
+          order.splice(order.indexOf(t),1); paint(t,false);
+        }else{
+          if(order.length>=2){ paint(order.shift(),false); }
+          order.push(t); paint(t,true);
+        }
+        sync();
+      });
+    });
+    button.addEventListener('click', async ()=>{
+      if(order.length!==2) return;
+      button.disabled=true; msg.textContent='Enviando…'; msg.className='necro-msg';
+      try{
+        const res=await fetch('/api/necroporra/vote',{method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({gw:Number(button.dataset.gw),
+            a:order[0].dataset.id, b:order[1].dataset.id})});
+        const data=await res.json().catch(()=>({}));
+        if(!res.ok) throw new Error(data.error||res.status);
+        msg.textContent='Voto enviado ✓'; msg.className='necro-msg ok';
+      }catch(e){
+        msg.textContent=String(e.message||e); msg.className='necro-msg err';
+      }finally{ sync(); }
+    });
+    sync();
+  });
+}
+
 // ---- favoritos -------------------------------------------------------------
 function wireStars(root=document){
   root.querySelectorAll('button.star').forEach(button=>{
@@ -2863,6 +2913,7 @@ const TABS=[
   {id:'rivales', label:'Rivales', sections:['v-rivales']},
   {id:'liga', label:'Liga', sections:['evolucion','movimientos','normas']},
   {id:'ranking', label:'Ranking', sections:['v-ranking']},
+  {id:'necroporra', label:'Necroporra', sections:['necroporra']},
   {id:'comparador', label:'Comparador', sections:['comparador']},
 ];
 
@@ -3170,7 +3221,7 @@ async function swap(){
   wireTables(); wireFilters(); wireStars(); wireBids(); wireOps();
   wireDetails(); wireRaids();
   wireRaises();
-  wireManagers(); wireMatchdays(); wireFeedSort(); tick();
+  wireManagers(); wireMatchdays(); wireFeedSort(); wireNecro(); tick();
   // The chart is the client's, and the rebuild has just put the empty frame back in its place.
   if(seasonData) loadSeason();
   showTab(document.querySelector('.tab.on')?.dataset.tab||'decidir',
@@ -3248,7 +3299,7 @@ function connect(){
 
 wireTables(); wireFilters(); wireStars(); wireBids(); wireOps();
 wireDetails(); wireRaids();
-wireRaises(); wireManagers(); wireMatchdays(); wireFeedSort();
+wireRaises(); wireManagers(); wireMatchdays(); wireFeedSort(); wireNecro();
 wireTabs(); tick(); drawTray();
 {
   const stamped=document.querySelector('.topbar[data-cash]');
