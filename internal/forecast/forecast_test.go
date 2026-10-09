@@ -204,3 +204,32 @@ func TestNothingRecordedIsNoReview(t *testing.T) {
 		t.Errorf("sin nada apuntado no hay repaso: %+v", got)
 	}
 }
+
+// The game scores an eleven locked with fewer than eleven shirts as zero, forecast included.
+func TestAnElevenShortOfElevenScoresZero(t *testing.T) {
+	useTempFile(t)
+	lineup := []model.LineupPlayer{{ID: "1", Name: "Uno", TeamID: "10", Points: points(9)}}
+	log := Log{}
+	Update(log, world(map[string]float64{"1": 5}, lineup), saturday.Add(-time.Hour))
+	if got := log[7]["a"].Saved; got != 1 {
+		t.Fatalf("saved = %d, want 1", got)
+	}
+	week := summarizeWeek(7, log[7], "a", true)
+	if mine := week.Mine; !mine.Short || mine.Planned != 0 || mine.Actual != 0 {
+		t.Errorf("sin 11 cuenta cero: %+v", mine)
+	}
+
+	full := make([]model.LineupPlayer, FullEleven)
+	xpts := map[string]float64{}
+	for i := range full {
+		id := string(rune('a' + i))
+		full[i] = model.LineupPlayer{ID: id, TeamID: "10"}
+		xpts[id] = 1
+	}
+	log = Log{}
+	Update(log, world(xpts, full), saturday.Add(-time.Hour))
+	Update(log, world(xpts, full[:3]), saturday.Add(time.Hour))
+	if mine := summarizeWeek(7, log[7], "a", true).Mine; mine.Short || mine.Planned != 11 {
+		t.Errorf("lo que cuenta es el once al cerrarse: %+v", mine)
+	}
+}

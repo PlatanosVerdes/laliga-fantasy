@@ -33,7 +33,12 @@ type Pick struct {
 type Team struct {
 	Manager string           `json:"manager"`
 	Players map[string]*Pick `json:"players"`
+	// Saved is how many shirts the eleven had when the matchday locked; zero when not recorded.
+	Saved int `json:"saved,omitempty"`
 }
+
+// FullEleven is how many shirts a lineup needs to score: one short and the matchday counts zero.
+const FullEleven = 11
 
 // Log is matchday number to team id to that team's eleven.
 type Log map[int]map[string]*Team
@@ -91,6 +96,7 @@ func Update(log Log, universe *model.Universe, now time.Time) {
 		return
 	}
 	kickoffs := kickoffsOf(universe, week)
+	open := pending(firstOf(kickoffs), now)
 	xpts := make(map[string]float64, len(universe.Players))
 	for _, player := range universe.Players {
 		xpts[player.ID] = player.XPts
@@ -106,6 +112,10 @@ func Update(log Log, universe *model.Universe, now time.Time) {
 		}
 		if name := managerOf(universe, teamID); name != "" {
 			team.Manager = name
+		}
+		// The whole eleven locks at the matchday's first kick-off, not player by player.
+		if open {
+			team.Saved = len(lineup)
 		}
 
 		inLineup := map[string]bool{}
@@ -145,6 +155,17 @@ func Update(log Log, universe *model.Universe, now time.Time) {
 	if len(log[week]) == 0 {
 		delete(log, week)
 	}
+}
+
+func firstOf(kickoffs map[string]string) string {
+	first, earliest := "", time.Time{}
+	for _, kickoff := range kickoffs {
+		when, err := time.Parse(time.RFC3339, kickoff)
+		if err == nil && (earliest.IsZero() || when.Before(earliest)) {
+			first, earliest = kickoff, when
+		}
+	}
+	return first
 }
 
 func pending(kickoff string, now time.Time) bool {
@@ -204,7 +225,9 @@ type Total struct {
 	Counted  int     `json:"counted"`
 	// Planned is the whole eleven's forecast, played or not.
 	Planned float64 `json:"planned"`
-	Players []Line  `json:"players"`
+	// Short is an eleven locked with fewer than eleven shirts, which the game scores as zero.
+	Short   bool   `json:"short"`
+	Players []Line `json:"players"`
 }
 
 // Week is how the forecast of one matchday went.
@@ -330,6 +353,10 @@ func summarizeWeek(week int, teams map[string]*Team, mine string, complete bool)
 			total.Players = append(total.Players, line)
 		}
 		byForecast(total.Players)
+		if team.Saved > 0 && team.Saved < FullEleven {
+			total.Short = true
+			total.Planned, total.Forecast, total.Actual = 0, 0, 0
+		}
 		if total.IsMe {
 			out.Players = total.Players
 		}
