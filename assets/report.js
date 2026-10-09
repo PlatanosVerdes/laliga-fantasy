@@ -1775,8 +1775,14 @@ function whenShort(stamp){
 }
 
 // futbolfantasy's category for a player in his club, in the colour of their icon.
+// The editors' note shows on hover or focus, and the role leads to the club's hierarchy page.
 function roleChip(r){
-  return r&&r.key?`<span class="role role-${r.key}" title="${String(r.note||'').replace(/"/g,'&quot;')}"><i class="rdot"></i>${r.label}</span>`:'';
+  if(!r||!r.key) return '';
+  const tip=r.note?` data-tip="${String(r.note).replace(/"/g,'&quot;')}"`:'';
+  const inner=`<i class="rdot"></i>${r.label}`;
+  return r.team_url
+    ? `<a class="role role-${r.key}" href="${r.team_url}" target="_blank" rel="noopener"${tip}>${inner}</a>`
+    : `<span class="role role-${r.key}"${tip}>${inner}</span>`;
 }
 
 function shieldMark(p){
@@ -1881,9 +1887,6 @@ async function openDetail(playerId){
       ? `<a class="${t.cls||''} t-link" href="${t.href}" target="_blank" rel="noopener" title="Su ficha en futbolfantasy">${inner}</a>`
       : `<div class="${t.cls||''}">${inner}</div>`;
   };
-  const role=p.role?`<div class="pc-role">${roleChip(p.role)}${p.role.change==='down'
-      ?` <span class="tg tg-warn">bajó a ${p.role.label}</span>`:''}${p.role.note?` <span class="pc-role-note">${p.role.note}</span>`:''}${
-      p.role.team_url?` <a href="${p.role.team_url}" target="_blank" rel="noopener">↗ jerarquías</a>`:''}</div>`:'';
   const grid=rowsOfTiles.map(group=>group.filter(Boolean)).filter(group=>group.length)
     .map(group=>`<div class="pc-grid">${group.map(drawTile).join('')}</div>`).join('');
   const actions=data.actions||[];
@@ -1912,7 +1915,6 @@ async function openDetail(playerId){
           data-cmp-pos="${p.position||''}">+ comparar</button></div></div></div>
     ${status}
     <div class="pc-tiles">${grid}</div>
-    ${role}
     ${popWeeks(data.weeks||[])}
     ${(data.history||[]).filter(x=>x.value!=null).length>=3
       ?`<div class="pc-h">Valor · ${(data.history||[]).filter(x=>x.value!=null).length} días</div>`:''}
@@ -2279,6 +2281,11 @@ document.addEventListener('click',(event)=>{
   if(target) showTip(target); else hideTip();
 });
 window.addEventListener('scroll',hideTip,{passive:true});
+document.addEventListener('focusin',(event)=>{
+  const target=event.target.closest&&event.target.closest('[data-tip]');
+  if(target) showTip(target);
+});
+document.addEventListener('focusout',hideTip);
 
 // ---- comparador: un fichaje es siempre "en vez de quien" --------------------
 // The tray lives in localStorage because the panel swaps itself out live, and losing a

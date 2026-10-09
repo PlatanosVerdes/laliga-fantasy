@@ -155,7 +155,7 @@ func roleChip(player map[string]any) string {
 	if key == "" {
 		return ""
 	}
-	return `<span class="role role-` + Esc(key) + `" title="` + Esc(text(role["note"])) + `">` +
+	return `<span class="role role-` + Esc(key) + `" data-tip="` + Esc(text(role["note"])) + `">` +
 		`<i class="rdot"></i>` + Esc(text(role["label"])) + `</span>`
 }
 
