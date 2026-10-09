@@ -4,6 +4,7 @@ import {dec, mny, fmt, signed, exact, group, digits, whenShort, since, health} f
 import {getJSON, postJSON, useStamp} from './api.js';
 import {runAction, toggleAlways} from './actions.js';
 import {compare, useTray} from './compare.js';
+import {StarAct} from './view.js';
 
 const weekClass = (w) => {
   const p = w.points;
@@ -303,9 +304,10 @@ export function PlayerPopup({id, from}) {
   return html`
     ${from ? html`<button class="drawer-back" type="button"
       onClick=${() => { page.usage.click('ficha', 'volver a la plantilla'); page.openManager(from.id); }}>← ${from.label}</button>` : null}
-    <div class="pc-head"><${Face} p=${row} size="xl"/><div class="pc-who"><h3>${p.name}<${ShieldMark} p=${row}/></h3>
+    <div class="pc-head"><${Face} p=${row} size="xl"/><div class="pc-who"><h3>${p.name}<${ShieldMark} p=${row}/>
+      <${StarAct} a=${{args: {id: String(p.id), name: p.name, on: p.starred}}}/></h3>
       <div class="pc-sub"><span class=${'pos pos-' + (p.position || '').toLowerCase().slice(0, 3)}>${p.position}</span>
-        <span class="tags"><${Tags} p=${row} owner=${owner} roleLink star=${p.starred}
+        <span class="tags"><${Tags} p=${row} owner=${owner} roleLink
           lock=${p.hold_until ? whenShort(p.hold_until) : ''} alerts=${false}/></span>
         <${CompareButton} p=${p}/></div></div></div>
     ${h ? html`<div class=${'pc-status ' + h.ring}>${h.glyph === 'card' ? '' : '✚ '}${[h.label, a.reason, a.since, a.until].filter(Boolean).join(' · ')}</div>` : null}

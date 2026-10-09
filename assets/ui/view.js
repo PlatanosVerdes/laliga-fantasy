@@ -78,7 +78,7 @@ function CmpAct({a}) {
 }
 
 // A followed player's star, painted at once and confirmed by the answer.
-function StarAct({a}) {
+export function StarAct({a}) {
   const [on, setOn] = useState(!!a.args.on);
   useEffect(() => setOn(!!a.args.on), [a.args.on]);
   const flip = async (e) => {
@@ -110,7 +110,8 @@ export function RowView({r}) {
   const p = r.player;
   const lead = p ? html`<${Face} p=${p}/>`
     : html`<span class=${('rank-dot ' + (r.lead_c || '')).trim()}><${Segs} list=${r.lead}/></span>`;
-  const name = p ? html`<b>${p.name}<${ShieldMark} p=${p}/></b><${PosTag} p=${p}/>` : html`<b>${r.name}</b>`;
+  const name = p ? html`<b>${p.name}<${ShieldMark} p=${p}/></b><${PosTag} p=${p}/>${
+    p.starred ? html`<span class="fav" title="Favorito">★</span>` : null}` : html`<b>${r.name}</b>`;
   const tags = p || (r.tags && r.tags.length)
     ? html`<span class="tags">${p ? html`<${Tags} p=${p}/>` : null}<${Segs} list=${r.tags}/></span>` : null;
   const note = r.note && r.note.length;
