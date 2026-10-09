@@ -158,6 +158,15 @@ func view(id, tab, main, aside string) string {
 	return fmt.Sprintf(`<section id="%s" data-tab="%s" class="mk">%s</section>`, id, tab, layout)
 }
 
+// viewWithRow is a view with a second row under both columns: two blocks side by side, full
+// width. On a phone it goes before the aside.
+func viewWithRow(id, tab, main, aside, left, right string) string {
+	return fmt.Sprintf(`<section id="%s" data-tab="%s" class="mk"><div class="layout with-row">`+
+		`<div class="main">%s</div><aside class="side">%s</aside>`+
+		`<div class="row2"><div class="duo">%s%s</div></div></div></section>`,
+		id, tab, main, aside, left, right)
+}
+
 func ratioClass(ratio float64) string {
 	if ratio >= 1 {
 		return "up"
@@ -361,7 +370,28 @@ func (d Document) elevenAside() string {
 			week, place)
 	}
 	return block("Tu once", `<div class="pitchlist">`+summary+elevenChips(lines, arriving)+legend+
-		`</div>`+d.planWarnings()+finish, Esc(shape), -1) + d.crackBox() + more
+		`</div>`+d.planWarnings()+roleDrops(lines)+finish, Esc(shape), -1) + d.crackBox() + more
+}
+
+// roleDrops are the starters futbolfantasy's editors just moved down in their club.
+func roleDrops(lines [][]map[string]any) string {
+	var out strings.Builder
+	for _, line := range lines {
+		for _, player := range line {
+			role := mapOf(player["role"])
+			if text(role["change"]) != "down" {
+				continue
+			}
+			note := ""
+			if text(role["note"]) != "" {
+				note = ": " + text(role["note"])
+			}
+			fmt.Fprintf(&out, `<p class="mk-note plan-warn" data-pid="%s">⚠ %s bajó a %s en su `+
+				`equipo%s</p>`, Esc(text(player["id"])), Esc(text(player["name"])),
+				Esc(text(role["label"])), Esc(note))
+		}
+	}
+	return out.String()
 }
 
 // planWarnings are the plan's warnings about the eleven itself: a squad that cannot field
@@ -413,10 +443,9 @@ func (d Document) buyRow(item map[string]any, route string, gain float64,
 	if gain > MinShownGain && d.worthItsPrice(item, route) {
 		kind = "primary"
 	}
-	var meta, chip, action, verb string
+	var chip, action, verb string
 	switch route {
 	case "clausula":
-		meta = "de " + Esc(text(item["owner"]))
 		verb = "Programar"
 		if window.open {
 			verb = "Pagar"
@@ -431,18 +460,13 @@ func (d Document) buyRow(item map[string]any, route string, gain float64,
 				Esc(id), Esc(name), int64(cost), int64(number(item["clause"]))))
 		}
 	case "oferta al dueño":
-		meta = "vende " + Esc(fallbackText(text(listing["seller"]), text(item["seller"])))
 		chip = clock(text(listing["expires"]), "sale del mercado")
 		verb = "Ofrecer"
 		action = d.listingButton(item, "Ofrecer "+esMoney(cost), kind)
 	default:
-		meta = "libre"
 		chip = clock(text(listing["expires"]), "sale del mercado")
 		verb = "Pujar"
 		action = d.listingButton(item, "Pujar "+esMoney(cost), kind)
-	}
-	if starts := asFloat(item["start_probability"]); starts != nil {
-		meta += fmt.Sprintf(" · titular %.0f %%", *starts)
 	}
 	tone := ""
 	switch {
@@ -455,8 +479,7 @@ func (d Document) buyRow(item map[string]any, route string, gain float64,
 		chip = `<span class="mk-chip soon" title="si empiezas la jornada en negativo no puntúas">` +
 			`⚠ en negativo</span>` + chip
 	}
-	return rowWith(item, filterAttrs(item, cost), Esc(text(item["team_short"]))+" · "+meta, value,
-		note, chip, action, tone)
+	return rowWith(item, filterAttrs(item, cost), "", value, note, chip, action, tone)
 }
 
 // worthItsPrice is whether the price is one to recommend: within futbolfantasy's ceiling on the
@@ -584,13 +607,11 @@ func (d Document) buyView() string {
 	window := d.window()
 	clauses, offers, free := d.buyOptions()
 	main := `<div class="mk-filters">` + Filters + `</div>` +
-		d.buyBlock("🔨 Mercado rentable", "puja libre", free, window) +
-		d.buyBlock("🤝 En venta por rivales", "oferta al dueño", offers, window) +
-		d.buyBlock("🔓 Cláusulas que puedes pagar", "clausula", clauses, window)
+		d.buyBlock("🔨 Mercado rentable", "puja libre", free, window)
 
 	var bids []string
 	for _, bid := range rows(d.Advice["my_bids"]) {
-		bids = append(bids, row(bid, Esc(text(bid["team_short"])),
+		bids = append(bids, row(bid, "",
 			esMoney(number(bid["my_bid"])), "pide "+esMoney(number(bid["asking"])),
 			clock(text(bid["closes"]), "cierra"), BidButton(bid), ""))
 	}
@@ -606,8 +627,10 @@ func (d Document) buyView() string {
 			`<button class="linkish" type="button" data-goto="clausulas">ver en Cláusulas</button></p>`,
 			Esc(text(raid["name"])), esMoney(number(raid["max_pay"])))
 	}
-	return view("v-comprar", "comprar", main, block("Mis pujas en curso", body, "", -1)+
-		d.endingsAside()+d.starredAside())
+	return viewWithRow("v-comprar", "comprar", main, block("Mis pujas en curso", body, "", -1)+
+		d.endingsAside()+d.starredAside(),
+		d.buyBlock("🤝 En venta por rivales", "oferta al dueño", offers, window),
+		d.buyBlock("🔓 Cláusulas que puedes pagar", "clausula", clauses, window))
 }
 
 // outcomeRow is a resolved bid, offer or standing order as a list row: a glyph for how it
@@ -714,9 +737,10 @@ func (d Document) sellView() string {
 			`data-op-name="%s" data-op-amount="%d"`, Esc(text(offer["market_id"])),
 			Esc(text(offer["offer_id"])), Esc(text(offer["id"])), Esc(text(offer["name"])),
 			int64(amount))
-		meta := Esc(text(offer["team_short"]))
+		// What the offer means beyond its price goes in the figure's tooltip, not in the row.
+		var facts []string
 		if who := text(offer["offer_from"]); who != "" && !truthy(offer["offer_from_market"]) {
-			meta += " · de " + Esc(who)
+			facts = append(facts, "oferta de "+who)
 		}
 		// Both buttons, always Aceptar then Rechazar; only the recommended one is filled, and
 		// in the accent colour, since red would read as danger.
@@ -730,7 +754,7 @@ func (d Document) sellView() string {
 		if swapped && !planned {
 			why = fmt.Sprintf("%s si clausulas a %s (%s xPts)", ratioNote(ratio),
 				text(swap.In["name"]), esSigned(swap.Gain))
-			meta += " · si clausulas a " + Esc(text(swap.In["name"]))
+			facts = append(facts, "si clausulas a "+text(swap.In["name"]))
 		}
 		tone := ""
 		accept := button("Aceptar", "ghost", "op", ` data-op="accept_offer"`+common)
@@ -742,15 +766,16 @@ func (d Document) sellView() string {
 		}
 		actions := accept + decline
 		if planned {
-			meta += " · si fichas a " + Esc(plannedFor[text(offer["id"])])
+			facts = append(facts, "si fichas a "+plannedFor[text(offer["id"])])
 			tone = "accent"
 		}
-		if drop := xiNow - elevenWithout(squad, text(offer["id"])); drop >= 0.05 {
-			meta += " · tu once −" + esNum(drop, 1) + " xPts"
+		drop := xiNow - elevenWithout(squad, text(offer["id"]))
+		if drop >= 0.05 {
+			facts = append(facts, "tu once pierde "+esNum(drop, 1)+" xPts")
 		}
 		if sale := sales[text(offer["offer_id"])]; truthy(sale["match_pending"]) {
-			meta += " · aún no ha jugado: regalas " + esNum(number(sale["points_at_risk"]), 1) +
-				" xPts"
+			facts = append(facts, "aún no ha jugado: regalas "+
+				esNum(number(sale["points_at_risk"]), 1)+" xPts")
 		}
 		glyph := "▲"
 		if ratio < 1 {
@@ -758,8 +783,13 @@ func (d Document) sellView() string {
 		}
 		note := fmt.Sprintf(`<span class="%s">%s %s</span> vale %s`, ratioClass(ratio), glyph,
 			esRatio(ratio), esMoney(value))
-		items = append(items, row(offer, meta, esMoney(amount), note,
-			clock(expires, "caduca"), actions, tone))
+		if drop >= 0.05 {
+			note += " · once −" + esNum(drop, 1)
+		}
+		line := playerRow(offer)
+		line.Value, line.Note, line.Why = esMoney(amount), note, Esc(strings.Join(facts, " · "))
+		line.Chip, line.Action, line.Tone = clock(expires, "caduca"), actions, tone
+		items = append(items, line.HTML())
 	}
 	sub := ""
 	body := empty("Ninguna oferta ahora mismo.")
@@ -785,13 +815,12 @@ func (d Document) sellView() string {
 		for _, offer := range rows(player["offers"]) {
 			best = math.Max(best, number(offer["money"]))
 		}
-		meta := Esc(text(player["team_short"])) + " · sin ofertas"
+		note := fmt.Sprintf(`<span class="%s" title="lo que pides frente a su valor">%s</span>`,
+			ratioClass(ratio), esRatio(ratio))
 		if best > 0 {
-			meta = Esc(text(player["team_short"])) + " · mejor " + esMoney(best)
+			note += " · mejor " + esMoney(best)
 		}
-		listed = append(listed, row(player, meta, esMoney(asking),
-			fmt.Sprintf(`<span class="%s" title="lo que pides frente a su valor">%s valor</span>`,
-				ratioClass(ratio), esRatio(ratio)),
+		listed = append(listed, row(player, "", esMoney(asking), note,
 			clock(text(listing["expires"]), "cierra"),
 			actButton("Quitar", "ghost", text(player["id"]), "withdraw"), ""))
 	}
@@ -833,13 +862,6 @@ func (d Document) restOfSquad() string {
 	var bench, eleven []string
 	for _, player := range rest {
 		id := text(player["id"])
-		meta := Esc(text(player["team_short"]))
-		if starts := asFloat(player["start_probability"]); starts != nil {
-			meta += fmt.Sprintf(" · titular %.0f %%", *starts)
-		}
-		if starter[id] {
-			meta += ` · <span class="xi-mark">en tu once</span>`
-		}
 		trend := number(player["pct_7d"])
 		class, sign := "up", "+"
 		if trend < 0 {
@@ -847,10 +869,8 @@ func (d Document) restOfSquad() string {
 		}
 		note := fmt.Sprintf(`%s · <span class="%s">%s%s %%</span> 7d`,
 			esMoney(number(player["value"])), class, sign, esNum(trend, 1))
-		chip := ""
 		sell := actButton("Poner en venta", "ghost", id, "sell_to_market")
 		if truthy(player["sale_locked"]) {
-			chip = tag("🔒 hasta "+esDay(text(player["hold_until"])), "warn")
 			why := "No se puede vender hasta el " + esWhen(text(player["hold_until"]))
 			sell = `<span title="` + Esc(why) + `">` + button("Poner en venta", "ghost", "",
 				` disabled title="`+Esc(why)+`"`) + `</span>`
@@ -862,7 +882,7 @@ func (d Document) restOfSquad() string {
 		toggle := button(label, "ghost", "act"+on, fmt.Sprintf(` data-act="always" `+
 			`data-act-player="%s" title="Lo mantiene en venta; importes y venta automática, en su ficha"`,
 			Esc(id)))
-		line := row(player, meta, esNum(number(player["xpts"]), 1)+" xPts", note, chip,
+		line := row(player, "", esNum(number(player["xpts"]), 1)+" xPts", note, "",
 			sell+toggle, "")
 		if starter[id] {
 			eleven = append(eleven, line)
@@ -931,10 +951,11 @@ func (d Document) alwaysAside() string {
 		if player == nil {
 			player = map[string]any{"id": id, "name": rule["name"]}
 		}
-		items = append(items, ListRow{Lead: face(player, "sm"), Name: Esc(text(rule["name"])),
-			Tag: posTag(player), Meta: Esc(strings.ReplaceAll(text(rule["action"]), "_", " ") +
-				" · " + terms), Sub: Esc(strings.SplitN(text(rule["why"]), ";", 2)[0]),
-			Value: amount, Attrs: ` data-pid="` + Esc(id) + `"`}.HTML())
+		line := playerRow(player)
+		line.Value, line.Note = amount, Esc(terms)
+		line.Why = Esc(strings.ReplaceAll(text(rule["action"]), "_", " ") + " · " +
+			strings.SplitN(text(rule["why"]), ";", 2)[0])
+		items = append(items, line.HTML())
 	}
 	body := empty("Ninguna regla activa: se arma con «Siempre en mercado».")
 	if len(items) > 0 {
@@ -995,9 +1016,12 @@ func (d Document) clauseView() string {
 		if !truthy(raise["clause_locked"]) {
 			tone = "critical"
 		}
-		items = append(items, row(raise, Esc(meta), esMoney(number(raise["target_clause"])),
-			fmt.Sprintf("hoy %s · −%s xPts si se va", esMoney(number(raise["clause"])),
-				esNum(number(raise["xi_drop"]), 1)), clock(deadline, label), action, tone))
+		line := playerRow(raise)
+		line.Value = esMoney(number(raise["target_clause"]))
+		line.Note = fmt.Sprintf("hoy %s · −%s xPts si se va", esMoney(number(raise["clause"])),
+			esNum(number(raise["xi_drop"]), 1))
+		line.Why, line.Chip, line.Action, line.Tone = Esc(meta), clock(deadline, label), action, tone
+		items = append(items, line.HTML())
 	}
 	body := empty("Ninguna cláusula tuya merece subirse ahora.")
 	if len(items) > 0 {
@@ -1018,7 +1042,10 @@ func (d Document) clauseView() string {
 						" su valor"))
 			}
 			line := playerRow(raise)
-			line.Meta, line.Sub, line.Value, line.Note = Esc(verdict), Esc(why), cost, note
+			line.Value, line.Note, line.Why = cost, Esc(verdict), Esc(why)
+			if note != "" {
+				line.Note = Esc(verdict) + " · " + note
+			}
 			lines = append(lines, line.HTML())
 		}
 		body += folded(fmt.Sprintf("%d que no merece la pena subir", len(rest)), rowList(lines))
@@ -1030,17 +1057,17 @@ func (d Document) clauseView() string {
 	for _, raid := range d.Raids {
 		player := byID[text(raid["player_id"])]
 		if player == nil {
-			player = map[string]any{"id": raid["player_id"], "name": raid["name"]}
+			player = map[string]any{"id": raid["player_id"], "name": raid["name"],
+				"owner": raid["owner"]}
 		}
 		clause, limit := number(raid["clause"]), number(raid["max_pay"])
-		meta := "de " + Esc(text(raid["owner"]))
 		tone := ""
 		standing := raidsStandingDown[text(raid["action"])]
+		extra, why := "", text(raid["why"])
 		if limit > 0 && clause > limit {
-			meta += " · ⚠ no se pagará: su cláusula pasa tu límite"
+			extra = tg("⚠ pasa tu límite", "tg-warn")
+			why = "no se pagará: su cláusula pasa tu límite"
 			tone = "warn"
-		} else if why := text(raid["why"]); why != "" {
-			meta += " · " + Esc(why)
 		}
 		chip := ""
 		switch {
@@ -1058,8 +1085,11 @@ func (d Document) clauseView() string {
 				`data-op-player="%s" data-op-name="%s"`, Esc(text(raid["player_id"])),
 				Esc(text(raid["name"]))))
 		}
-		scheduled = append(scheduled, row(player, meta, "≤ "+esMoney(limit),
-			"cláusula "+esMoney(clause), chip, action, tone))
+		line := playerRow(player)
+		line.Tags += extra
+		line.Value, line.Note, line.Why = "≤ "+esMoney(limit), "cláusula "+esMoney(clause), Esc(why)
+		line.Chip, line.Action, line.Tone = chip, action, tone
+		scheduled = append(scheduled, line.HTML())
 	}
 	body = empty("Ninguno programado: se programan desde la ficha de un rival.")
 	if len(scheduled) > 0 {
@@ -1140,7 +1170,6 @@ func (d Document) cheapClauses(seen map[string]bool) string {
 	})
 	var items []string
 	for _, item := range found {
-		meta := Esc(text(item["team_short"])) + " · de " + Esc(text(item["owner"]))
 		chip := tag("🔓 pagable", "ok")
 		if stamp := text(item["unlock_at"]); stamp != "" {
 			if when, ok := parseStamp(stamp); ok && when.After(time.Now()) {
@@ -1151,7 +1180,7 @@ func (d Document) cheapClauses(seen map[string]bool) string {
 			esRatio(number(item["vs_market"])))
 		action := strings.Replace(RaidButton(item), `class="raid-btn"`,
 			`class="mb mb-ghost raid-btn"`, 1)
-		items = append(items, row(item, meta, esMoney(number(item["clause"])), note, chip,
+		items = append(items, row(item, "", esMoney(number(item["clause"])), note, chip,
 			action, ""))
 	}
 	return block("Baratas que rentan", scrollList(items, 420), "más puntos por millón que tu plantilla: para el "+
@@ -1273,10 +1302,14 @@ func (d Document) squadView() string {
 		case !truthy(player["sale_locked"]):
 			action = actButton("Poner en venta", "ghost", text(player["id"]), "sell_to_market")
 		}
-		meta := Esc(text(player["team_short"])) + " · " + Esc(strings.Join(reasons, ", "))
-		items = append(items, row(player, meta, esNum(number(player["xpts"]), 1)+" xPts", note,
-			tag(when, map[bool]string{true: "warn", false: "ok"}[truthy(player["sale_locked"])]),
-			action, ""))
+		line := playerRow(player)
+		line.Value, line.Note, line.Why = esNum(number(player["xpts"]), 1)+" xPts", note,
+			Esc(strings.Join(reasons, ", "))
+		if !truthy(player["sale_locked"]) {
+			line.Chip = tag(when, "ok")
+		}
+		line.Action = action
+		items = append(items, line.HTML())
 	}
 	body := empty("Nadie: el consejo no ve motivo para vender a ninguno.")
 	if len(items) > 0 {

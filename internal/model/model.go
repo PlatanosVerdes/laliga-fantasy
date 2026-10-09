@@ -90,6 +90,8 @@ type Player struct {
 	FFName           *string                `json:"ff_name"`
 	FFValue          *float64               `json:"ff_value"`
 	Absence          map[string]any         `json:"absence"`
+	// Role is his place in his club's hierarchy as futbolfantasy's editors see it.
+	Role             map[string]any         `json:"role,omitempty"`
 	ClauseHoursLeft  *float64               `json:"clause_hours_left"`
 	Image            string                 `json:"image"`
 	// When he was signed, read from the league's own log, and when the league's hold rule
@@ -215,8 +217,8 @@ func LoadBridge(client *api.Client, ffTTL time.Duration) (*Bridge, error) {
 	if err != nil {
 		return nil, err
 	}
-	matched, unmatched := matching.MatchMarket(players, market,
-		matching.BuildTeamIndex(teamRows))
+	teamIndex := matching.BuildTeamIndex(teamRows)
+	matched, unmatched := matching.MatchMarket(players, market, teamIndex)
 
 	trends := make(map[string]Trend, len(matched))
 	for id, row := range matched {
@@ -235,7 +237,9 @@ func LoadBridge(client *api.Client, ffTTL time.Duration) (*Bridge, error) {
 	for _, row := range unmatched {
 		loose = append(loose, row)
 	}
-	return &Bridge{Trends: trends, Absences: absences, Unmatched: loose,
+	roles := MatchRoles(players, matched,
+		futbolfantasy.Hierarchies(futbolfantasy.HierarchyTTL), teamIndex)
+	return &Bridge{Trends: trends, Absences: absences, Roles: roles, Unmatched: loose,
 		MatchedCount: len(matched)}, nil
 }
 
@@ -389,6 +393,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 			if absence, ok := bridge.Absences[id]; ok {
 				player.Absence = absence
 			}
+			player.Role = bridge.Roles[id]
 		}
 
 		player.PriorBased = player.LastSeason <= 0
@@ -458,15 +463,10 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 
 		player.Starred = state.Starred[id]
 		player.RaidScheduled = state.Raids[id]
-		if face, ok := faces[id]; ok {
-			player.Image = face
-		}
+		player.Image = faceFor(entry, faces[id], ownership[id].Image)
 
 		if owned, ok := ownership[id]; ok {
 			player.Owner = &owned.Owner
-			if owned.Image != "" {
-				player.Image = owned.Image
-			}
 			player.OwnerTeamID = &owned.TeamID
 			player.Clause = owned.Clause
 			player.ClauseUntil = owned.LockedUntil
@@ -550,6 +550,17 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		"owned", len(ownership), "listings", len(universe.Market),
 		"fixtures", len(universe.Fixtures))
 	return universe, nil
+}
+
+// faceFor is the most specific cutout known for him: his squad slot's, then the market's, and
+// otherwise the players list's, which has one for everybody.
+func faceFor(entry map[string]any, market, squad string) string {
+	for _, image := range []string{squad, market, text(entry["image"])} {
+		if image != "" {
+			return image
+		}
+	}
+	return ""
 }
 
 func allPlayers(client *api.Client) ([]map[string]any, error) {

@@ -267,8 +267,9 @@ func (d Document) crackBox() string {
 				cheapest, cheapestPrice = player, price
 			}
 		}
-		items = append(items, row(player, Esc(owner)+" · "+Esc(how),
-			esNum(number(player["xpts"]), 1)+" xPts", value, "", "", ""))
+		line := playerRow(player)
+		line.Value, line.Note, line.Why = esNum(number(player["xpts"]), 1)+" xPts", value, Esc(how)
+		items = append(items, line.HTML())
 	}
 
 	line := "Con tu caja llegas a " + esMoney(reach)

@@ -1076,61 +1076,116 @@ window.addEventListener('resize',()=>{
   seasonRedraw=setTimeout(loadSeason,200);
 });
 
+// The season: every manager in a colour of his own and me in the accent. Picking managers on
+// the chips leaves only those (and me) coloured, the rest thin and grey. Rank or points.
+const EVO_KEY='fantasy:evo', EVO_HUES=11;
+function evoState(){
+  try{ const saved=JSON.parse(localStorage.getItem(EVO_KEY)||'{}');
+       return {mode:saved.mode==='points'?'points':'place', picked:saved.picked||[]}; }
+  catch(e){ return {mode:'place',picked:[]}; }
+}
+function evoSave(state){ try{ localStorage.setItem(EVO_KEY,JSON.stringify(state)); }catch(e){} }
+
 function seasonChart(d,width){
   const weeks=d.weeks||[];
   const managers=(d.managers||[]).filter(m=>(m.place||[]).some(p=>p!=null));
   if(weeks.length<1||!managers.length) return '<p class="empty">Aun no hay jornadas terminadas.</p>';
-  // At phone width the names do not fit beside the lines, so they are cut rather than dropped:
-  // the shape of the line is the answer and the name only says whose it is.
+  const state=evoState();
+  const picked=state.picked.filter(id=>managers.some(m=>m.team_id===id));
+  // Each manager's colour is fixed, by his place in a stable order, so it never moves.
+  const hue=new Map([...managers].filter(m=>!m.is_me).sort((a,b)=>String(a.team_id).localeCompare(b.team_id))
+    .map((m,i)=>[m.team_id,i%EVO_HUES+1]));
+  const shown=id=>!picked.length||picked.includes(id);
+  const byPoints=state.mode==='points';
+
   const w=Math.max(300,width||760), narrow=w<560;
-  const padL=narrow?22:30, padR=narrow?78:150, padT=14, padB=24;
-  const rows=managers.length, h=padT+padB+(rows-1)*(narrow?18:22);
+  const padL=byPoints?(narrow?50:58):(narrow?34:44), padR=narrow?78:130, padT=14, padB=24;
+  const rows=managers.length, h=narrow?Math.round(w*0.75):Math.max(260,padT+padB+(rows-1)*22);
   const step=weeks.length>1?(w-padL-padR)/(weeks.length-1):0;
   const x=i=>padL+step*i;
-  const y=p=>padT+(h-padT-padB)*(rows>1?(p-1)/(rows-1):0);
-  const cut=(name)=>narrow&&name.length>9?name.slice(0,9)+'…':name;
+  const top=Math.max(1,...managers.flatMap(m=>(m.total||[]).filter(v=>v!=null)));
+  const y=byPoints
+    ? v=>padT+(h-padT-padB)*(1-v/top)
+    : p=>padT+(h-padT-padB)*(rows>1?(p-1)/(rows-1):0);
+  const valueOf=(m,i)=>byPoints?m.total[i]:m.place[i];
 
   let grid='';
   weeks.forEach((week,i)=>{
     grid+=`<line class="evo-grid" x1="${x(i)}" y1="${padT-6}" x2="${x(i)}" y2="${h-padB+4}"></line>`
       +`<text class="evo-axis" x="${x(i)}" y="${h-padB+16}" text-anchor="middle">J${week}</text>`;
   });
-  [1,rows].forEach(place=>{
-    grid+=`<text class="evo-axis" x="${padL-8}" y="${y(place)+3}" text-anchor="end">${place}º</text>`;
+  const ticks=byPoints?[0,Math.round(top/2),Math.round(top)].map(v=>[v,v+' pts']):[[1,'1º'],[rows,rows+'º']];
+  ticks.forEach(([v,label])=>{
+    grid+=`<text class="evo-axis" x="${padL-8}" y="${y(v)+3}" text-anchor="end">${label}</text>`;
   });
 
-  // Eight hues, in fixed order, yours first. There is no ninth colour that tells itself apart
-  // from those eight, so the ninth line takes the first hue again and a broken stroke: the
-  // pair hue+stroke is what names it, and thirteen of those do exist.
-  const rank=new Map();
-  [...managers].sort((a,b)=>(b.is_me?1:0)-(a.is_me?1:0)).forEach((m,i)=>rank.set(m,i));
-  const shade=m=>`evo-s${rank.get(m)%8+1}${rank.get(m)>=8?' evo-dash':''}`;
-
-  // Broken strokes underneath, solid over them, yours on top: where two lines cross, the one
-  // being followed has to be the one that is whole.
-  const painted=[...managers].sort((a,b)=>
-    ((rank.get(a)<8?1:0)-(rank.get(b)<8?1:0))||((a.is_me?1:0)-(b.is_me?1:0)));
-
+  const kind=m=>!shown(m.team_id)?'rest':m.is_me?'me':'pick';
+  const order={rest:0,pick:1,me:2};
+  const painted=[...managers].sort((a,b)=>order[kind(a)]-order[kind(b)]);
+  const labels=[];
   const lines=painted.map(m=>{
     const points=[];
-    (m.place||[]).forEach((place,i)=>{ if(place!=null) points.push([x(i),y(place),i,place]); });
+    (m.place||[]).forEach((place,i)=>{
+      const v=valueOf(m,i);
+      if(place!=null&&v!=null) points.push([x(i),y(v),i,place]);
+    });
     if(!points.length) return '';
-    const last=points[points.length-1];
+    const k=kind(m);
+    const cls=k==='me'?'evo-me':k==='pick'?`evo-pick evo-h${hue.get(m.team_id)}`:'evo-rest';
     const dots=points.map(([px,py,i,place])=>
-      `<circle class="evo-dot" cx="${px}" cy="${py}" r="4"><title>${m.manager} · J${weeks[i]} · `
-      +`${place}º · ${Math.round(m.points[i]||0)} pts · ${Math.round(m.total[i]||0)} acumulados`
-      +`</title></circle>`
-    ).join('');
-    return `<g class="evo-row ${shade(m)}${m.is_me?' evo-me':''}">
+      `<circle class="evo-dot" cx="${px}" cy="${py}" r="${k==='rest'?3:4}" tabindex="0" data-tip="${
+        m.manager} · J${weeks[i]} · ${place}º · ${Math.round(m.points[i]||0)} pts · ${
+        Math.round(m.total[i]||0)} acumulados"></circle>`).join('');
+    if(k!=='rest'){
+      const last=points[points.length-1];
+      labels.push({x:last[0]+9,y:last[1]+3.5,name:m.manager,cls});
+    }
+    return `<g class="evo-row ${cls}" data-evo-team="${m.team_id}">
       <polyline class="evo-line" points="${points.map(p=>p[0]+','+p[1]).join(' ')}"></polyline>
-      ${dots}
-      <text class="evo-name" x="${last[0]+9}" y="${last[1]+3.5}">${cut(m.manager)}</text>
-    </g>`;
+      <polyline class="evo-hit" points="${points.map(p=>p[0]+','+p[1]).join(' ')}"></polyline>${dots}</g>`;
   }).join('');
+  // The labels at the right end, pushed apart so no two overlap.
+  labels.sort((a,b)=>a.y-b.y);
+  labels.forEach((label,i)=>{ if(i&&label.y<labels[i-1].y+12) label.y=labels[i-1].y+12; });
+  const cut=name=>narrow&&name.length>9?name.slice(0,9)+'…':name;
+  const names=labels.map(l=>`<text class="evo-name ${l.cls}" x="${l.x}" y="${l.y}">${cut(l.name)}</text>`).join('');
 
-  return `<svg class="evo-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"
-    role="img" aria-label="Puesto de cada manager jornada a jornada">${grid}${lines}</svg>`;
+  const chips=[...managers].sort((a,b)=>(b.is_me?1:0)-(a.is_me?1:0)||String(a.manager).localeCompare(b.manager,'es'))
+    .map(m=>{
+      const k=kind(m);
+      const sw=m.is_me?'evo-me':`evo-h${hue.get(m.team_id)}`;
+      return `<button type="button" class="evo-chip ${sw}${picked.includes(m.team_id)?' on':''}" data-evo-pick="${m.team_id}"`
+        +` aria-pressed="${k!=='rest'}"><i class="evo-sw"></i>${m.manager}</button>`;
+    }).join('');
+  const controls=`<div class="evo-controls"><div class="evo-mode" role="group">`
+    +`<button type="button" data-evo-mode="place" class="${byPoints?'':'on'}">Puesto</button>`
+    +`<button type="button" data-evo-mode="points" class="${byPoints?'on':''}">Puntos</button></div>`
+    +`<div class="evo-chips">${chips}${picked.length?'<button type="button" class="evo-clear" data-evo-clear>Todos</button>':''}</div>`
+    +`<p class="evo-hint">${picked.length?'Toca más managers para añadirlos o quitarlos.':'Toca un manager para ver solo su línea.'}</p></div>`;
+  return controls+`<svg class="evo-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"
+    role="img" aria-label="${byPoints?'Puntos acumulados':'Puesto'} de cada manager jornada a jornada">${grid}${lines}${names}</svg>`;
 }
+
+document.addEventListener('click',(event)=>{
+  const t=event.target.closest&&event.target.closest('[data-evo-pick],[data-evo-mode],[data-evo-clear]');
+  if(!t||!t.closest('.evo')) return;
+  const state=evoState();
+  if(t.dataset.evoMode) state.mode=t.dataset.evoMode;
+  else if(t.hasAttribute('data-evo-clear')) state.picked=[];
+  else{
+    const id=t.dataset.evoPick;
+    state.picked=state.picked.includes(id)?state.picked.filter(x=>x!==id):[...state.picked,id];
+  }
+  evoSave(state);
+  usage.click('liga','evolucion',t.dataset.evoMode||t.dataset.evoPick||'limpiar');
+  loadSeason();
+});
+// Hovering a chip brings his line forward.
+document.addEventListener('mouseover',(event)=>{
+  const chip=event.target.closest&&event.target.closest('.evo [data-evo-pick]');
+  document.querySelectorAll('.evo-row.hl').forEach(g=>g.classList.remove('hl'));
+  if(chip) document.querySelector(`.evo-row[data-evo-team="${chip.dataset.evoPick}"]`)?.classList.add('hl');
+});
 
 async function loadPitch(){
   const pitch=document.getElementById('pitch');
@@ -1207,6 +1262,7 @@ const VIEWS={
   plantillas: week=>openMatchday(week),
   prevision: week=>typeof openForecast==='function'&&openForecast(week),
   jornada: week=>openWeek(week),
+  alcance: team=>openReach(team),
   // The comparator was a drawer before it had its tab: old links land on the tab.
   comparar: ()=>openCompare({replace:true}),
 };
@@ -1774,6 +1830,17 @@ function whenShort(stamp){
   return soon?`${day} ${hm}`:`${day} ${t.getDate()} ${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][t.getMonth()]} ${hm}`;
 }
 
+// futbolfantasy's category for a player in his club, in the colour of their icon.
+// The editors' note shows on hover or focus, and the role leads to the club's hierarchy page.
+function roleChip(r){
+  if(!r||!r.key) return '';
+  const tip=r.note?` data-tip="${String(r.note).replace(/"/g,'&quot;')}"`:'';
+  const inner=`<i class="rdot"></i>${r.label}`;
+  return r.team_url
+    ? `<a class="role role-${r.key}" href="${r.team_url}" target="_blank" rel="noopener"${tip}>${inner}</a>`
+    : `<span class="role role-${r.key}"${tip}>${inner}</span>`;
+}
+
 function shieldMark(p){
   return p.shielded?` <span class="shield-mark" title="blindado${p.shielded_until?' hasta '+whenShort(p.shielded_until):''}">🛡</span>`:'';
 }
@@ -1807,8 +1874,14 @@ async function openDetail(playerId){
   // whether his offer is worth taking.
   const owner=p.is_mine ? 'tuyo'
     : (p.owner && p.owner_team_id
-        ? `de <button class="p-name" type="button" data-manager="${p.owner_team_id}">${p.owner}</button>`
-        : (p.owner?'de '+p.owner:'libre'));
+        ? `<button class="p-name" type="button" data-manager="${p.owner_team_id}">${p.owner}</button>`
+        : (p.owner||'libre'));
+  // The same tags as the rows: club, owner, role, starting odds, then the states that apply.
+  const tags=`<span class="pl"><span class="pl-team">${p.team_short||p.team||''}</span>`
+    +`<span class="pl-owner">${owner}</span>${p.role?roleChip(p.role):''}`
+    +`${p.start_probability!=null?`<span>${p.start_probability} %</span>`:''}${p.starred?'<span>★</span>':''}</span>`
+    +(p.is_mine&&p.sale_locked&&p.hold_until?`<span class="tg tg-warn">🔒 hasta ${whenShort(p.hold_until)}</span>`:'')
+    +(p.role&&p.role.change==='down'?`<span class="tg tg-warn">bajó a ${p.role.label}</span>`:'');
   const h=health(p), a=p.absence||{};
   const status=h?`<div class="pc-status ${h.ring}">${h.glyph==='card'?'🟥':'✚'} ${
     [h.label,a.reason,a.since,a.until].filter(Boolean).join(' · ')}</div>`:'';
@@ -1824,7 +1897,7 @@ async function openDetail(playerId){
   const xpTile=tile('xPts / jornada', dec(p.xpts), p.rank?`score #${p.rank}`:'',
     xp>=6?'t-good':xp>=3.5?'t-info':xp>=2?'t-warn':'t-bad');
   const startsTile=starts!=null?tile('Titular', starts+' %',
-    p.hierarchy?p.hierarchy:(p.start_probability_source==='ficha'?`J${p.start_week||''} en su ficha`:''),
+    p.role?roleChip(p.role):p.hierarchy?p.hierarchy:(p.start_probability_source==='ficha'?`J${p.start_week||''} en su ficha`:''),
     starts>=75?'t-good':starts>=50?'t-warn':'t-bad'):null;
   const nextTile=p.next_rival?tile('Próximo', p.next_rival, p.next_home?'🏠 en casa':'✈️ fuera'):null;
   const valueTile=tile('Valor', mny(p.value), l.market_id?`en venta por ${mny(l.min_bid)}`:'');
@@ -1893,7 +1966,7 @@ async function openDetail(playerId){
       >← ${drawerFrom.label}</button>`:''}
     <div class="pc-head">${faceOf(p,'xl')}<div class="pc-who"><h3>${p.name}${shieldMark(p)}</h3>
       <div class="pc-sub"><span class="pos pos-${(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
-        ${p.team||''} · ${owner}${p.starred?' · ★':''}
+        <span class="tags">${tags}</span>
         <button class="cmp-add" type="button" data-cmp="${p.id}" data-cmp-name="${p.name}"
           data-cmp-pos="${p.position||''}">+ comparar</button></div></div></div>
     ${status}
@@ -2264,6 +2337,11 @@ document.addEventListener('click',(event)=>{
   if(target) showTip(target); else hideTip();
 });
 window.addEventListener('scroll',hideTip,{passive:true});
+document.addEventListener('focusin',(event)=>{
+  const target=event.target.closest&&event.target.closest('[data-tip]');
+  if(target) showTip(target);
+});
+document.addEventListener('focusout',hideTip);
 
 // ---- comparador: un fichaje es siempre "en vez de quien" --------------------
 // The tray lives in localStorage because the panel swaps itself out live, and losing a
@@ -2895,6 +2973,26 @@ async function fillHistory(){
 const XI_LINES=[['striker','DEL'],['midfield','MED'],['defender','DEF'],['goalkeeper','POR']];
 function ptsClass(p){ return p==null?'':p>=8?'x-hi':p>=4?'x-mid':p<0?'x-bad':'x-lo'; }
 function fcClass(v){ return v>=6?'x-hi':v>=3.5?'x-mid':v>=2?'x-lo':'x-bad'; }
+
+// Which of my players a rival's cash reaches: drawn on the server, kept in the page.
+function openReach(teamId){
+  const source=document.getElementById('reach-'+teamId);
+  if(!drawer||!source) return;
+  markView('alcance',teamId);
+  drawer.hidden=false;
+  panelWide(false);
+  drawer.classList.add('as-pop');
+  const body=drawer.querySelector('.drawer-body');
+  body.dataset.view='reach';
+  body.innerHTML=`<h3 class="pc-title">${source.dataset.title}</h3>`+source.innerHTML;
+}
+document.addEventListener('click',(event)=>{
+  const button=event.target.closest&&event.target.closest('button[data-reach]');
+  if(!button) return;
+  event.stopPropagation();
+  usage.click('rivales','alcance',button.dataset.reach);
+  openReach(button.dataset.reach);
+},true);
 
 async function openWeek(week){
   if(!drawer) return;

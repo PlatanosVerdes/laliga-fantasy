@@ -107,7 +107,7 @@ func TestRestOfSquadPutsTheBenchFirstAndHonoursTheHoldRule(t *testing.T) {
 	keeper := html[strings.Index(html, `data-pid="9"`):]
 	keeper = keeper[:strings.Index(keeper, "</li>")]
 	for _, want := range []string{`data-act="sell_to_market"`, `data-act="always"`,
-		"● Siempre en mercado", "en tu once"} {
+		"● Siempre en mercado"} {
 		if !strings.Contains(keeper, want) {
 			t.Errorf("missing %q: %s", want, keeper)
 		}
@@ -162,5 +162,45 @@ func TestNoTabFoldsItsOldTables(t *testing.T) {
 		if strings.Contains(page, gone) {
 			t.Errorf("%q is still on the page", gone)
 		}
+	}
+}
+
+// futbolfantasy's role rides next to the starting odds, and a starter the editors moved down is
+// flagged in his row and in Decidir.
+func TestRoleChipAndTheDropWarning(t *testing.T) {
+	document := decidingDocument()
+	squad := rows(document.Advice["squad"])
+	squad[6]["role"] = map[string]any{"key": "rotacion", "label": "Rotación", "change": "down",
+		"note": "Pierde el puesto ante el nuevo fichaje."}
+	squad[6]["start_probability"] = 60.0
+	document.Advice["squad"] = squad
+	rest := document.restOfSquad()
+	if !strings.Contains(rest, `role role-rotacion"`) || !strings.Contains(rest, "bajó a Rotación") {
+		t.Errorf("the chip and the warning in my rows: %.400s", rest)
+	}
+	if aside := document.elevenAside(); !strings.Contains(aside, "Portero bajó a Rotación en su equipo") {
+		t.Errorf("a starter moved down is a Decidir note: %.400s", aside)
+	}
+}
+
+// A rival's risk chip opens who of mine his cash reaches, best first, with the top threats
+// marked; when it reaches nobody it says what the cheapest clause is.
+func TestReachListsWhoARivalCanPay(t *testing.T) {
+	squad := []map[string]any{
+		{"id": "1", "name": "Barato", "clause": 5_000_000.0, "xpts": 2.0},
+		{"id": "2", "name": "Bueno", "clause": 9_000_000.0, "xpts": 6.0, "clause_locked": true,
+			"clause_locked_until": "2999-01-01T19:00:00+02:00"},
+		{"id": "3", "name": "Caro", "clause": 50_000_000.0, "xpts": 8.0},
+	}
+	html := reachTemplate("7", "Villaone", 10_000_000, squad, map[string]string{"2": "Villaone"})
+	if !strings.Contains(html, `id="reach-7"`) || strings.Contains(html, "Caro") {
+		t.Fatalf("only who his cash reaches: %s", html)
+	}
+	if strings.Index(html, "Bueno") > strings.Index(html, "Barato") || !strings.Contains(html, "amenaza") {
+		t.Error("best first, the top threat marked")
+	}
+	none := reachTemplate("8", "Pobre", 1_000_000, squad, nil)
+	if !strings.Contains(none, "No le llega a ninguno: tu cláusula más barata es 5,0M") {
+		t.Errorf("nobody reached: %s", none)
 	}
 }
