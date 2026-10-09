@@ -1076,6 +1076,7 @@ button.fc-row{cursor:pointer;width:100%}
 .fc-player .wk{font-size:11px}
 .fc-player .fc-name{padding-left:14px}
 .fc-place{text-align:left;color:var(--muted);font-weight:700}
+.fc-short{color:var(--critical);font-size:.75em;font-weight:700;margin-left:4px}
 .fc-team[open]{margin-bottom:6px}
 .fc-up{color:var(--good)}
 .fc-down{color:var(--critical)}
