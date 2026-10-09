@@ -2,27 +2,8 @@ package server
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 )
-
-// sectionRE matches the page's own `<section id=...>` blocks; the renderer emits nothing else
-// with that shape, so pulling them out is enough to serve the page in pieces.
-// Ids can carry digits and dashes (one section per rival is `rival-1234`) and sections can
-// carry attributes, so neither is assumed away: a section this misses is a section the live
-// refresh silently stops updating.
-var sectionRE = regexp.MustCompile(`(?s)<section id="([a-z][a-z0-9-]*)"[^>]*>(.*?)</section>`)
-
-// Sections pulls each section out of a built page. The server re-renders the whole page (cheap,
-// all in memory) and then serves the pieces, so there is exactly one renderer and the live page
-// and the static file can never drift apart.
-func Sections(page string) map[string]string {
-	out := map[string]string{}
-	for _, match := range sectionRE.FindAllStringSubmatch(page, -1) {
-		out[match[1]] = match[2]
-	}
-	return out
-}
 
 func text(value any) string {
 	switch typed := value.(type) {

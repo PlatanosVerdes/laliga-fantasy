@@ -90,12 +90,12 @@ does. `/healthz` reports how much life it has left, so a blackbox probe against 
 
 | Path | Purpose |
 |---|---|
-| `/` | the page |
+| `/` | the page: a shell the browser draws from the views it carries |
 | `/api/state` | everything as JSON |
 | `/api/lineup` | the lineup, formations and the bench |
 | `/api/player/{id}` | one player: stats, value history and the actions available now |
 | `/api/events` | SSE stream: a message whenever the state version moves |
-| `/api/fragments` | each section rendered, for partial swaps |
+| `/api/views` | every tab as data, with the live balance; asked again on each new version |
 | `/healthz` | `200` while a recent document is being served (`ok`, or `stale` when the last refresh failed), `503` once it is older than 30 minutes; includes session TTL |
 | `/refresh` | force a refresh now |
 | `/api/session` | POST the pasted redirect (or a `tokens.json`) when there is no session |

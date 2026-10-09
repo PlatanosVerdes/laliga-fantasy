@@ -5,19 +5,11 @@ import (
 	"testing"
 )
 
-// The live refresh swaps sections by id with a non-greedy match, so every view has to be one
-// section with nothing nested, and each one names its tab.
-func TestViewsAreFlatSectionsOfTheirTab(t *testing.T) {
+// Every tab with a view of its own has a section that names it.
+func TestEveryTabHasItsSection(t *testing.T) {
 	seen := map[string]bool{}
-	for _, html := range filterEmpty(decidingDocument().Views()) {
-		if strings.Count(html, "<section") != 1 || strings.Count(html, "</section>") != 1 {
-			t.Errorf("one section, nothing nested: %.120s", html)
-		}
-		for _, tab := range ViewTabs {
-			if strings.Contains(html, `data-tab="`+tab+`"`) {
-				seen[tab] = true
-			}
-		}
+	for _, section := range decidingDocument().Views() {
+		seen[section.Tab] = true
 	}
 	for _, tab := range ViewTabs {
 		if !seen[tab] {
@@ -28,15 +20,17 @@ func TestViewsAreFlatSectionsOfTheirTab(t *testing.T) {
 
 // A confirmed absence rings red with its badge, a doubt yellow.
 func TestFacesWearTheStatusRing(t *testing.T) {
-	out := face(map[string]any{"id": "1", "name": "Pedri", "status": "injured",
-		"absence": map[string]any{"kind": "lesionado", "reason": "Rotura"}}, "sm")
-	if !strings.Contains(out, "ring-out") || !strings.Contains(out, "hb-cross") ||
-		!strings.Contains(out, `title="Rotura"`) {
-		t.Errorf("lesionado: %s", out)
+	health := func(player map[string]any) map[string]any {
+		return RowPlayer(player)["health"].(map[string]any)
 	}
-	doubt := face(map[string]any{"id": "2", "name": "Gavi", "status": "doubtful"}, "sm")
-	if !strings.Contains(doubt, "ring-doubt") || strings.Contains(doubt, "hb-") {
-		t.Errorf("duda: %s", doubt)
+	out := health(map[string]any{"id": "1", "name": "Pedri", "status": "injured",
+		"absence": map[string]any{"kind": "lesionado", "reason": "Rotura"}})
+	if out["ring"] != "out" || out["glyph"] != "cross" || out["reason"] != "Rotura" {
+		t.Errorf("lesionado: %v", out)
+	}
+	doubt := health(map[string]any{"id": "2", "name": "Gavi", "status": "doubtful"})
+	if doubt["ring"] != "doubt" || doubt["glyph"] != "" {
+		t.Errorf("duda: %v", doubt)
 	}
 }
 
@@ -50,7 +44,7 @@ func TestMatchdayBoardOrdersByProjectedFinish(t *testing.T) {
 				"points_rank": 2.0, "projection": 50.0, "projection_rank": 1.0, "to_come": 30.0,
 				"waiting": 5.0, "waiting_names": []any{"Pedri"}},
 		}}}}
-	board := document.matchdayBoard()
+	board := asJSON(document.boardBlock())
 	if strings.Index(board, "Yo") > strings.Index(board, "Ana") {
 		t.Error("el que acabaría primero va primero")
 	}
@@ -70,7 +64,7 @@ func TestRankingOpensWithTheBestAndTheirPrice(t *testing.T) {
 		"xpts": 9.5, "available": true, "owner": "Rival", "clause": 500_000_000.0}
 	cheap := map[string]any{"id": "98", "name": "Barato", "position": "DEL", "position_id": 4.0,
 		"xpts": 6.0, "available": true, "owner": "Rival", "clause": 1_000_000.0, "score": 9.0}
-	html := document.rankingView([]map[string]any{cheap}, []map[string]any{star, cheap}, nil)
+	html := asJSON(document.rankingView([]map[string]any{cheap}, []map[string]any{star, cheap}, nil))
 	if strings.Index(html, "Los mejores") > strings.Index(html, "Chollos") {
 		t.Error("los mejores van primero")
 	}
@@ -87,30 +81,25 @@ func TestRestOfSquadPutsTheBenchFirstAndHonoursTheHoldRule(t *testing.T) {
 	squad[1]["sale_locked"], squad[1]["hold_until"] = true, "2999-01-04T10:00:00+02:00"
 	document.Advice["squad"] = squad
 	document.Plan = []map[string]any{{"player_id": "9", "name": "Portero", "action": "ninguna"}}
-	html := document.restOfSquad()
-	if strings.Contains(html, `data-pid="7"`) || strings.Contains(html, `data-pid="13"`) {
+	block := document.restBlock()
+	if rowOf(block, "7") != nil || rowOf(block, "13") != nil {
 		t.Error("the ones already on sale do not belong here")
 	}
-	bench, eleven := strings.Index(html, "Fuera de tu once"), strings.Index(html, "En tu once")
+	bench, eleven := headAt(block, "Fuera de tu once"), headAt(block, "En tu once")
 	if bench < 0 || eleven < 0 || bench > eleven {
-		t.Fatalf("the bench goes before the eleven: %.300s", html)
+		t.Fatalf("the bench goes before the eleven: %+v", block.Rows)
 	}
-	if strings.Index(html, `data-pid="9"`) < eleven {
+	if indexOf(block, "9") < eleven {
 		t.Error("the keeper starts, so he is listed with the eleven")
 	}
-	rey := html[strings.Index(html, `data-pid="8"`):]
-	rey = rey[:strings.Index(rey, "</li>")]
-	if !strings.Contains(rey, "🔒 hasta") || !strings.Contains(rey, "disabled") ||
-		strings.Contains(rey, `data-act="sell_to_market"`) {
-		t.Errorf("a held player cannot be put on sale: %s", rey)
+	rey := rowOf(block, "8")
+	if rey.Player["locked_until"] == nil || !rey.Acts[0].Off || rey.Acts[0].Do != "" {
+		t.Errorf("a held player cannot be put on sale: %+v", rey)
 	}
-	keeper := html[strings.Index(html, `data-pid="9"`):]
-	keeper = keeper[:strings.Index(keeper, "</li>")]
-	for _, want := range []string{`data-act="sell_to_market"`, `data-act="always"`,
-		"● Siempre en mercado"} {
-		if !strings.Contains(keeper, want) {
-			t.Errorf("missing %q: %s", want, keeper)
-		}
+	keeper := rowOf(block, "9")
+	if keeper.Acts[0].Args["op"] != "sell_to_market" || keeper.Acts[1].Do != "always" ||
+		keeper.Acts[1].Label != "● Siempre en mercado" {
+		t.Errorf("the keeper can be sold and is always listed: %+v", keeper.Acts)
 	}
 }
 
@@ -118,23 +107,23 @@ func TestRestOfSquadPutsTheBenchFirstAndHonoursTheHoldRule(t *testing.T) {
 // cannot reach stays at the end, greyed out with what is missing.
 func TestBuyBoxesListEveryCandidate(t *testing.T) {
 	document := decidingDocument()
-	html := document.buyView()
-	if strings.Contains(html, "<details") || !strings.Contains(html, `class="scrollbox"`) ||
-		!strings.Contains(html, `class="mk-filters"`) {
-		t.Fatalf("every candidate in a scroll box under the filter bar: %.300s", html)
+	view := document.BuyData()
+	if !view.Filters || view.Main[0].Scroll == 0 {
+		t.Fatalf("every candidate in a scroll box under the filter bar: %+v", view.Main[0])
 	}
-	if strings.Index(html, "Barato") > strings.Index(html, "Caro") {
+	blob := asJSON(view)
+	if strings.Index(blob, "Barato") > strings.Index(blob, "Caro") {
 		t.Error("the one adding more goes first")
 	}
-	if !strings.Contains(html, "+1,0M de margen") || !strings.Contains(html, `data-price="2000000"`) {
+	if !strings.Contains(blob, "+1,0M de margen") || !strings.Contains(blob, `"price":2000000`) {
 		t.Error("margin to the ceiling and the price the filter reads")
 	}
-	if !strings.Contains(html, `title="te faltan 20,0M"`) {
+	if !strings.Contains(blob, `"wrap":"te faltan 20,0M"`) {
 		t.Error("an unreachable bid is disabled and says what is missing")
 	}
 	document.MaxDebtPct = 30
-	html = document.buyView()
-	if strings.Contains(html, "te faltan") || !strings.Contains(html, "⚠ en negativo") {
+	blob = asJSON(document.BuyData())
+	if strings.Contains(blob, "te faltan") || !strings.Contains(blob, "⚠ en negativo") {
 		t.Error("the allowed debt reaches it, with the warning about starting in the red")
 	}
 }
@@ -146,21 +135,11 @@ func TestStoodDownRaidsCanBeCancelledAndOrdersAreLogged(t *testing.T) {
 		"owner": "tete", "clause": 30_000_000.0, "max_pay": 17_000_000.0, "action": "cancelada"}}
 	document.Orders = []map[string]any{{"at": "2026-09-14T19:02:00Z", "player_id": "8",
 		"player": "Fofana", "outcome": "pagada", "amount": 15_240_000.0}}
-	html := document.clauseView()
-	for _, want := range []string{`data-op="cancel_raid"`, ">cancelada<",
+	blob := asJSON(document.plannedBlock())
+	for _, want := range []string{`"do":"cancel_raid"`, `"t":"cancelada"`,
 		"Historial de tus órdenes", "Fofana", "15,2M"} {
-		if !strings.Contains(html, want) {
+		if !strings.Contains(blob, want) {
 			t.Errorf("missing %q", want)
-		}
-	}
-}
-
-// The tables that sat under "Ver detalle" are gone with their switch.
-func TestNoTabFoldsItsOldTables(t *testing.T) {
-	page := strings.Join(decidingDocument().Views(), "")
-	for _, gone := range []string{"Ver detalle", "mk-more", "data-fold"} {
-		if strings.Contains(page, gone) {
-			t.Errorf("%q is still on the page", gone)
 		}
 	}
 }
@@ -174,11 +153,11 @@ func TestRoleChipAndTheDropWarning(t *testing.T) {
 		"note": "Pierde el puesto ante el nuevo fichaje."}
 	squad[6]["start_probability"] = 60.0
 	document.Advice["squad"] = squad
-	rest := document.restOfSquad()
-	if !strings.Contains(rest, `role role-rotacion"`) || !strings.Contains(rest, "bajó a Rotación") {
+	rest := asJSON(document.restBlock())
+	if !strings.Contains(rest, `"key":"rotacion"`) || !strings.Contains(rest, `"change":"down"`) {
 		t.Errorf("the chip and the warning in my rows: %.400s", rest)
 	}
-	if aside := document.elevenAside(); !strings.Contains(aside, "Portero bajó a Rotación en su equipo") {
+	if aside := asJSON(document.elevenBlock()); !strings.Contains(aside, "Portero bajó a Rotación en su equipo") {
 		t.Errorf("a starter moved down is a Decidir note: %.400s", aside)
 	}
 }
@@ -192,16 +171,17 @@ func TestReachListsWhoARivalCanPay(t *testing.T) {
 			"clause_locked_until": "2999-01-01T19:00:00+02:00"},
 		{"id": "3", "name": "Caro", "clause": 50_000_000.0, "xpts": 8.0},
 	}
-	html := reachTemplate("7", "Villaone", 10_000_000, squad, map[string]string{"2": "Villaone"})
-	if !strings.Contains(html, `id="reach-7"`) || strings.Contains(html, "Caro") {
+	reach := reachOf("Villaone", 10_000_000, squad, map[string]string{"2": "Villaone"})
+	html := asJSON(reach)
+	if reach.Title != "Al alcance de Villaone" || strings.Contains(html, "Caro") {
 		t.Fatalf("only who his cash reaches: %s", html)
 	}
 	if strings.Index(html, "Bueno") > strings.Index(html, "Barato") || !strings.Contains(html, "amenaza") {
 		t.Error("best first, the top threat marked")
 	}
-	none := reachTemplate("8", "Pobre", 1_000_000, squad, nil)
-	if !strings.Contains(none, "No le llega a ninguno: tu cláusula más barata es 5,0M") {
-		t.Errorf("nobody reached: %s", none)
+	none := reachOf("Pobre", 1_000_000, squad, nil)
+	if none.Empty != "No le llega a ninguno: tu cláusula más barata es 5,0M." {
+		t.Errorf("nobody reached: %+v", none)
 	}
 }
 
@@ -211,15 +191,14 @@ func TestScheduledRaidsAreRowsOfMyBids(t *testing.T) {
 	document := decidingDocument()
 	document.Raids = []map[string]any{{"player_id": "8", "name": "O. Rey", "owner": "tete",
 		"clause": 25_000_000.0, "max_pay": 20_000_000.0, "action": "esperando"}}
-	html := document.buyView()
-	box := html[strings.Index(html, "Mis pujas en curso"):]
-	box = box[:strings.Index(box, "Cómo acabaron")]
-	for _, want := range []string{"hasta 20,0M", "pasa tu límite", `data-op="cancel_raid"`} {
-		if !strings.Contains(box, want) {
-			t.Errorf("missing %q in %s", want, box)
+	box := document.BuyData().Aside[0]
+	blob := asJSON(box)
+	for _, want := range []string{"hasta 20,0M", "pasa tu límite", `"do":"cancel_raid"`} {
+		if !strings.Contains(blob, want) {
+			t.Errorf("missing %q in %s", want, blob)
 		}
 	}
-	if strings.Contains(box, "Ninguna ahora mismo") || strings.Contains(box, "ver en Cláusulas") {
+	if len(box.Rows) == 0 {
 		t.Error("with a raid scheduled the box is not empty, and the raid is a row")
 	}
 }

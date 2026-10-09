@@ -13,6 +13,7 @@ import (
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/render"
 )
 
 // A table nobody can read at a glance compares nothing.
@@ -74,8 +75,13 @@ func (s *Server) compare(writer http.ResponseWriter, request *http.Request) {
 	}
 	wait.Wait()
 
-	s.json(writer, http.StatusOK, map[string]any{"players": players, "mine": mine,
-		"matches": search(rows, request.URL.Query().Get("q"))})
+	answer := map[string]any{"players": players, "mine": mine,
+		"matches": search(rows, request.URL.Query().Get("q"))}
+	// The table is decided here, best of each row and verdict, so the browser only draws it.
+	if len(players) > 0 {
+		answer["table"] = render.CompareTable(players)
+	}
+	s.json(writer, http.StatusOK, answer)
 }
 
 // search feeds the tray's box: adding a player should not mean hunting for him in a table

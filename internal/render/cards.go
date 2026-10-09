@@ -35,7 +35,7 @@ type Card struct {
 	Deadline2      string
 	DeadlineLabel2 string
 	Why            []string
-	Button         string
+	Buttons        []Act `json:"buttons"`
 	Impact         string
 	Tone           string
 	// Weight is the impact in xPts per matchday. Money is converted at the squad's own points
@@ -169,12 +169,8 @@ func (d Document) offerCards(actions []map[string]any, rate float64) []Card {
 			NoteClass: ratioClassOf(amount / value),
 			Deadline:  text(row["offer_expires"]), DeadlineLabel: "caduca la oferta",
 			Why: why, Impact: impact, Tone: "good",
-			Button: fmt.Sprintf(`<button class="op op-primary dcard-go" data-op="accept_offer" `+
-				`data-op-market="%s" data-op-offer="%s" data-op-player="%s" data-op-name="%s" `+
-				`data-op-amount="%d" type="button">Aceptar %s</button>`,
-				Esc(text(row["market_id"])), Esc(text(row["offer_id"])), Esc(text(row["id"])),
-				Esc(text(row["name"])), int64(amount), Esc(esMoney(amount))),
-			Weight: math.Max(0, over) / 1e6 * rate, Cash: amount,
+			Buttons: []Act{acceptAct(row, amount, "op op-primary dcard-go")},
+			Weight:  math.Max(0, over) / 1e6 * rate, Cash: amount,
 		})
 	}
 	return out
@@ -217,12 +213,10 @@ func (d Document) raiseCards(now time.Time) []Card {
 			Impact: fmt.Sprintf("retrasa tu crack %s · riesgo %.0f %%", esMoney(pay),
 				number(row["risk"])*100),
 			Tone: "critical",
-			Button: fmt.Sprintf(`<button class="raise dcard-go" data-raise="%s" data-raise-name="%s" `+
-				`data-raise-pay="%d" data-raise-slot="%s" data-raise-clause="%d" `+
-				`data-raise-target="%d" type="button">Subir cláusula · pagas %s</button>`,
-				Esc(text(row["id"])), Esc(text(row["name"])), int64(pay),
-				Esc(text(row["player_team_id"])), int64(clause), int64(target),
-				Esc(esMoney(pay))),
+			Buttons: []Act{{Label: "Subir cláusula · pagas " + esMoney(pay), Class: "raise dcard-go",
+				Do: "raise", Args: map[string]any{"id": text(row["id"]), "name": text(row["name"]),
+					"pay": int64(pay), "slot": text(row["player_team_id"]),
+					"clause": int64(clause), "target": int64(target)}}},
 			Weight: drop, Cash: -pay,
 		})
 	}
@@ -271,14 +265,14 @@ func (d Document) swapCards() []Card {
 			continue
 		}
 		gain, cost := number(move["gain"]), number(move["cost"])
-		button := cardBuyButton(arriving, cost)
-		if button == "" {
+		buttons := cardBuyButton(arriving, cost)
+		if len(buttons) == 0 {
 			continue
 		}
 		card := Card{
 			Kind: "swap", Key: "in:" + text(arriving["id"]), Player: arriving,
 			Big: esSigned(gain) + " xPts", Deadline: text(mapOf(arriving["market"])["expires"]),
-			DeadlineLabel: "sale del mercado", Button: button, Tone: "accent", Weight: gain,
+			DeadlineLabel: "sale del mercado", Buttons: buttons, Tone: "accent", Weight: gain,
 		}
 		if leaving == nil {
 			card.Verb, card.BigNote = "Ficha", "llena un hueco del once"
@@ -375,16 +369,15 @@ func (d Document) signingCards(actions []map[string]any) []Card {
 			}
 			card.Verb = "Paga su cláusula"
 			card.Deadline, card.DeadlineLabel = window.ClosesAt, "cláusulas abiertas"
-			card.Button = fmt.Sprintf(`<button class="op op-primary dcard-go" `+
-				`data-op="pay_clause" data-op-player="%s" data-op-name="%s" data-op-amount="%d" `+
-				`type="button">Pagar %s</button>`, Esc(id), Esc(text(row["name"])), int64(cost),
-				Esc(esMoney(cost)))
+			card.Buttons = []Act{{Label: "Pagar " + esMoney(cost), Class: "op op-primary dcard-go",
+				Do: "op", Args: map[string]any{"op": "pay_clause", "player_id": id,
+					"name": text(row["name"]), "amount": int64(cost)}}}
 			how = fmt.Sprintf("Cláusula de %s: se paga y nadie puede negarse.", text(row["owner"]))
 		case "oferta al dueño":
 			if !backed[id] {
 				continue
 			}
-			card.Button = cardBuyButton(row, cost)
+			card.Buttons = cardBuyButton(row, cost)
 			card.Deadline, card.DeadlineLabel = text(listing["expires"]), "sale del mercado"
 			how = fmt.Sprintf("%s pide %s; decide él si acepta.", text(listing["seller"]),
 				esMoney(number(row["asking"])))
@@ -396,13 +389,13 @@ func (d Document) signingCards(actions []map[string]any) []Card {
 			if !backed[id] {
 				continue
 			}
-			card.Button = cardBuyButton(row, cost)
+			card.Buttons = cardBuyButton(row, cost)
 			card.Deadline, card.DeadlineLabel = text(listing["expires"]), "sale del mercado"
 			how = "Mercado libre: es una subasta y se puede perder."
 		default:
 			continue
 		}
-		if card.Button == "" {
+		if len(card.Buttons) == 0 {
 			continue
 		}
 		card.Why = []string{startsLine(row), how}
@@ -413,16 +406,24 @@ func (d Document) signingCards(actions []map[string]any) []Card {
 
 // cardBuyButton is the listing's own bid or offer button with the amount on it, or nothing when
 // there is no listing or an offer of mine is already on it.
-func cardBuyButton(row map[string]any, cost float64) string {
+func cardBuyButton(row map[string]any, cost float64) []Act {
 	listing := mapOf(row["market"])
 	if text(listing["market_id"]) == "" || text(listing["my_bid_id"]) != "" {
-		return ""
+		return nil
 	}
-	operation, verb := "bid", "Pujar "
+	verb := "Pujar "
 	if text(listing["kind"]) == "venta" {
-		operation, verb = "buy_offer", "Ofrecer "
+		verb = "Ofrecer "
 	}
-	return bidButton(row, "bid dcard-go", operation, "", Esc(verb+esMoney(cost)))
+	return bidActs(row, "bid dcard-go", verb+esMoney(cost))
+}
+
+// acceptAct takes an offer through the two-step confirmation.
+func acceptAct(offer map[string]any, amount float64, class string) Act {
+	return Act{Label: "Aceptar " + esMoney(amount), Class: class, Do: "op", Args: map[string]any{
+		"op": "accept_offer", "market_id": text(offer["market_id"]),
+		"offer_id": text(offer["offer_id"]), "player_id": text(offer["id"]),
+		"name": text(offer["name"]), "amount": int64(amount)}}
 }
 
 // startsLine is how likely he is to play and for whom.
@@ -493,6 +494,7 @@ func elevenWithout(squad []map[string]any, id string) float64 {
 	return total
 }
 
+// xptsClass and the es* formatters below have twins in assets/ui/format.js; change both.
 func xptsClass(xpts float64) string {
 	switch {
 	case xpts >= 6:

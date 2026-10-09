@@ -120,18 +120,18 @@ func TestDecisionCardsComeFromTheAdvice(t *testing.T) {
 	if !ok {
 		t.Fatalf("the offer worth taking has no card: %+v", cards)
 	}
-	if offer.Big != "21,7M" || !strings.Contains(offer.Button, `data-op="accept_offer"`) ||
-		!strings.Contains(offer.Button, `data-op-offer="o1"`) {
-		t.Errorf("offer card = %q / %s", offer.Big, offer.Button)
+	if offer.Big != "21,7M" || offer.Buttons[0].Args["op"] != "accept_offer" ||
+		offer.Buttons[0].Args["offer_id"] != "o1" {
+		t.Errorf("offer card = %q / %+v", offer.Big, offer.Buttons)
 	}
 	raise, ok := kinds["raise:8"]
 	if !ok {
 		t.Fatal("the raise in the plan has no card")
 	}
 	if !strings.Contains(raise.Why[0], "JMjugon tiene 66,2M") ||
-		!strings.Contains(raise.Button, `class="raise dcard-go"`) ||
-		!strings.Contains(raise.Button, `data-raise-pay="2000000"`) {
-		t.Errorf("raise card = %v / %s", raise.Why, raise.Button)
+		raise.Buttons[0].Class != "raise dcard-go" || raise.Buttons[0].Do != "raise" ||
+		raise.Buttons[0].Args["pay"] != int64(2000000) {
+		t.Errorf("raise card = %v / %+v", raise.Why, raise.Buttons)
 	}
 	if raise.Deadline != soonClose {
 		t.Errorf("an open clause is defended until the window shuts, got %q", raise.Deadline)
@@ -145,20 +145,20 @@ func TestDecisionCardsComeFromTheAdvice(t *testing.T) {
 	if _, ok := kinds["sign:21"]; ok {
 		t.Error("one xPts for 50M is under the squad's rate and the plan turns it down")
 	}
-	if !strings.Contains(kinds["sign:20"].Button, `data-operation="bid"`) {
-		t.Errorf("free market signing should bid: %s", kinds["sign:20"].Button)
+	if kinds["sign:20"].Buttons[0].Args["operation"] != "bid" {
+		t.Errorf("free market signing should bid: %+v", kinds["sign:20"].Buttons)
 	}
 }
 
 func TestDecideSectionRendersOneSwappableSection(t *testing.T) {
-	html := decidingDocument().decideSection()
-	if !strings.HasPrefix(html, `<section id="ahora"`) ||
-		strings.Count(html, "<section") != 1 || strings.Count(html, "</section>") != 1 {
-		t.Fatalf("the live refresh splits on sections, so there must be exactly one: %.200s", html)
+	document := decidingDocument()
+	if section := document.decideSection(); section.ID != "ahora" || section.View != "decidir" {
+		t.Fatalf("Decidir is the section ahora, filled by its view: %+v", section)
 	}
-	for _, want := range []string{`data-pid="7"`, "Qué hacer ahora", "Tu once",
-		`data-deadline="2999-01-01T19:00:00+02:00"`, `data-goto="clausulas"`} {
-		if !strings.Contains(html, want) {
+	view := asJSON(document.DecideData())
+	for _, want := range []string{`"id":"7"`, "Tu once", `"until":"2999-01-01T19:00:00+02:00"`,
+		`"target":"clausulas"`} {
+		if !strings.Contains(view, want) {
 			t.Errorf("missing %s", want)
 		}
 	}
@@ -182,13 +182,13 @@ func TestElevenAsideShowsThePlan(t *testing.T) {
 	signing := rows(document.Advice["bids_now"])[0]
 	document.Swaps = map[string]any{"moves": []any{map[string]any{
 		"out": squad[len(squad)-2], "in": signing, "gain": 4.5, "cost": 2_000_000.0}}}
-	html := document.elevenAside()
-	for _, want := range []string{"si haces el plan", `class="from"`, `is-new`, `data-pid="20"`} {
+	html := asJSON(document.elevenBlock())
+	for _, want := range []string{"si haces el plan", `"from":`, `is-new`, `"id":"20"`} {
 		if !strings.Contains(html, want) {
 			t.Errorf("plan aside misses %s", want)
 		}
 	}
-	if strings.Contains(decidingDocument().elevenAside(), "si haces el plan") {
+	if strings.Contains(asJSON(decidingDocument().elevenBlock()), "si haces el plan") {
 		t.Error("without moves the aside is today's eleven")
 	}
 }
@@ -267,7 +267,7 @@ func TestCrackBoxNamesTheBestIDoNotHave(t *testing.T) {
 	crack := map[string]any{"id": "99", "name": "Raphinha", "position_id": 4.0, "xpts": 9.5,
 		"available": true, "owner": "Rival", "clause": 200_000_000.0}
 	document.Universe["players"] = append(toAny(players), crack)
-	box := document.crackBox()
+	box := asJSON(document.crackBlock())
 	if !strings.Contains(box, "Raphinha") || !strings.Contains(box, "200,0M") ||
 		!strings.Contains(box, "te faltan") {
 		t.Errorf("objetivo: %s", box)
@@ -307,7 +307,7 @@ func TestCrackReachIsWhatCanBeRaisedToday(t *testing.T) {
 	crack := map[string]any{"id": "99", "name": "Raphinha", "position_id": 4.0, "xpts": 9.5,
 		"available": true, "owner": "Rival", "clause": 200_000_000.0}
 	document.Universe["players"] = append(toAny(rows(document.Universe["players"])), crack)
-	box := document.crackBox()
+	box := asJSON(document.crackBlock())
 	if strings.Contains(box, "Portero") || strings.Contains(box, "Ángel Pérez") {
 		t.Errorf("alcance: %s", box)
 	}
@@ -340,11 +340,24 @@ func TestSaleSwapCardSellsAndTakes(t *testing.T) {
 	if swap == nil {
 		t.Fatal("falta la carta de vender y clausular")
 	}
-	if text(swap.In["id"]) != "77" || !strings.Contains(swap.Button, `data-op="accept_offer"`) ||
-		!strings.Contains(swap.Button, `data-op="pay_clause"`) {
+	if text(swap.In["id"]) != "77" || swap.Buttons[0].Args["op"] != "accept_offer" ||
+		swap.Buttons[1].Args["op"] != "pay_clause" {
 		t.Errorf("las dos patas: %+v", swap)
 	}
-	if !strings.Contains(document.sellView(), "si clausulas a Pedri") {
+	if !strings.Contains(asJSON(document.SellData()), "si clausulas a Pedri") {
 		t.Error("Vender recomienda aceptar nombrando el sustituto")
+	}
+}
+
+// A card as the browser gets it: the player's shape, both deadlines as chips and its buttons.
+func TestCardViewCarriesWhatTheCardDraws(t *testing.T) {
+	card := Card{Kind: "swap", Player: map[string]any{"id": "1", "name": "Uno", "team_short": "RMA",
+		"xpts": 3.0}, In: map[string]any{"id": "2", "name": "Dos"}, Deadline: "2999-01-01T19:00:00Z",
+		DeadlineLabel: "caduca", Deadline2: "2999-01-02T19:00:00Z", DeadlineLabel2: "se abre",
+		Buttons: []Act{{Label: "Aceptar", Do: "op"}}}
+	view := cardView(card)
+	if view.Tone != "muted" || view.In["id"] != "2" || len(view.Chips) != 2 ||
+		view.Meta != "RMA · 3,0 xPts" || len(view.Buttons) != 1 || view.Why == nil {
+		t.Errorf("card view: %+v", view)
 	}
 }
