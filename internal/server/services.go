@@ -55,6 +55,8 @@ func (s *Server) services(writer http.ResponseWriter, request *http.Request) {
 			}
 		}
 		switch {
+		case errors.Is(err, services.ErrEnvOnly):
+			s.json(writer, http.StatusForbidden, map[string]any{"error": err.Error()})
 		case errors.Is(err, services.ErrUnknown):
 			s.json(writer, http.StatusNotFound, map[string]any{"error": err.Error()})
 		case errors.Is(err, services.ErrBounds) || errors.Is(err, services.ErrInvalid):

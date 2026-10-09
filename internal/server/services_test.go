@@ -75,3 +75,13 @@ func TestServicesRefusesWhatDoesNotFit(t *testing.T) {
 		t.Errorf("un rechazo no cambia nada: %v", server.heartbeat())
 	}
 }
+
+func TestServicesRefusesAnEnvOnlyClock(t *testing.T) {
+	registry := services.New(filepath.Join(t.TempDir(), "services.json"),
+		services.Job{Key: ServiceHeartbeat, Label: "Latido", Default: Heartbeat,
+			Min: 5 * time.Second, Max: time.Minute, EnvOnly: true})
+	server := &Server{opts: Options{Services: registry}}
+	if code, out := call(server, http.MethodPost, `{"key":"heartbeat","interval":"30s"}`); code != http.StatusForbidden {
+		t.Errorf("solo con su variable: %d %v", code, out)
+	}
+}

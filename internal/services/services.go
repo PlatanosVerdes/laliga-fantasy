@@ -38,6 +38,8 @@ type Job struct {
 	Max         time.Duration
 	// FromFlag marks a Default that came from the command line rather than the code.
 	FromFlag bool
+	// EnvOnly jobs are listed but not editable: the page cannot express their unit.
+	EnvOnly bool
 }
 
 // EnvName is the variable that overrides the job's default.
@@ -63,6 +65,7 @@ type Entry struct {
 	// Fallback is what applies once the page's override is dropped: the variable or the default.
 	Fallback       string  `json:"fallback"`
 	FallbackSource string  `json:"fallback_source"`
+	Editable       bool    `json:"editable"`
 	LastRun        *string `json:"last_run"`
 	NextRun        *string `json:"next_run"`
 }
@@ -84,6 +87,7 @@ var (
 	ErrUnknown = errors.New("servicio desconocido")
 	ErrBounds  = errors.New("fuera de los limites")
 	ErrInvalid = errors.New("intervalo no valido")
+	ErrEnvOnly = errors.New("solo se cambia con su variable de entorno")
 )
 
 // New builds the registry from the jobs, the environment and the overrides file at path. A
@@ -110,7 +114,7 @@ func New(path string, jobs ...Job) *Registry {
 	}
 	for key, value := range r.load() {
 		job, ok := r.job(key)
-		if !ok || job.check(value) != nil {
+		if !ok || job.EnvOnly || job.check(value) != nil {
 			slog.Warn("saved interval ignored", "key", key, "value", value.String())
 			continue
 		}
@@ -168,6 +172,9 @@ func (r *Registry) Set(key string, value time.Duration) error {
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrUnknown, key)
 	}
+	if job.EnvOnly {
+		return fmt.Errorf("%w: %s", ErrEnvOnly, job.EnvName())
+	}
 	if err := job.check(value); err != nil {
 		return err
 	}
@@ -176,8 +183,12 @@ func (r *Registry) Set(key string, value time.Duration) error {
 
 // Reset drops the override, so the variable or the default applies again.
 func (r *Registry) Reset(key string) error {
-	if _, ok := r.job(key); !ok {
+	job, ok := r.job(key)
+	if !ok {
 		return fmt.Errorf("%w: %s", ErrUnknown, key)
+	}
+	if job.EnvOnly {
+		return fmt.Errorf("%w: %s", ErrEnvOnly, job.EnvName())
 	}
 	return r.change(key, func() { delete(r.overrides, key) })
 }
@@ -224,7 +235,7 @@ func (r *Registry) List() []Entry {
 	for _, job := range r.jobs {
 		value, source := r.resolve(job.Key)
 		entry := Entry{Key: job.Key, Label: job.Label, Description: job.Description,
-			Env: job.EnvName(), Seconds: value.Seconds(), Interval: Format(value), Source: source,
+			Env: job.EnvName(), Editable: !job.EnvOnly, Seconds: value.Seconds(), Interval: Format(value), Source: source,
 			DefaultSeconds: job.Default.Seconds(), Default: Format(job.Default),
 			MinSeconds: job.Min.Seconds(), Min: Format(job.Min),
 			MaxSeconds: job.Max.Seconds(), Max: Format(job.Max)}

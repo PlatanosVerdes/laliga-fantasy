@@ -24,6 +24,14 @@ func TestServiceDefaultsAreTodaysValues(t *testing.T) {
 			t.Errorf("%s sin texto para el panel", job.Key)
 		}
 	}
+	for _, job := range jobs {
+		if job.EnvOnly != (job.Key == "heartbeat") {
+			t.Errorf("%s: solo el latido va por variable de entorno", job.Key)
+		}
+		if !job.EnvOnly && (job.Min%time.Minute != 0 || job.Max%time.Minute != 0) {
+			t.Errorf("%s: el panel edita minutos enteros, sus limites tambien", job.Key)
+		}
+	}
 	// The deployed command line passes --interval 3600: it has to fit.
 	if poll := serviceJobs(time.Hour, true)[0]; time.Hour > poll.Max {
 		t.Errorf("--interval 3600 no cabe en %v", poll.Max)

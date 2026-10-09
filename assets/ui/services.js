@@ -9,14 +9,17 @@ import {registerDrawer, openDrawer, onLiveDot} from './shell.js';
 const SOURCE_TIP = {env: (s) => 'de la variable ' + s.env, flag: () => 'de --interval al arrancar',
   default: () => 'el valor por defecto'};
 
-// One native number field per row in a fixed unit: seconds for a clock that never passes a
-// minute, minutes for the rest.
-const unitOf = (s) => (s.max_seconds <= 60 ? {size: 1, step: 5, label: 's'} : {size: 60, step: 1, label: 'min'});
+// One native time field per row read as a duration, the way the shield dialog asks for an hour:
+// 00:02 is two minutes, 01:00 an hour.
+const pad = (n) => String(n).padStart(2, '0');
+const clockOf = (minutes) => `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+const minutesOf = (clock) => {
+  const [h, m] = clock.split(':').map(Number);
+  return isNaN(h) || isNaN(m) ? null : h * 60 + m;
+};
 
 function Interval({s, onSaved}) {
-  const unit = unitOf(s);
-  const low = Math.ceil(s.min_seconds / unit.size), high = Math.floor(s.max_seconds / unit.size);
-  const shown = String(Math.round(s.seconds / unit.size));
+  const shown = clockOf(Math.round(s.seconds / 60));
   const [text, setText] = useState(shown);
   const [error, setError] = useState('');
   const timer = useRef(null);
@@ -28,19 +31,18 @@ function Interval({s, onSaved}) {
     try {
       const list = (await postJSON('/api/services', body)).services;
       const next = list.find((x) => x.key === s.key) || s;
-      setText(String(Math.round(next.seconds / unit.size)));
+      setText(clockOf(Math.round(next.seconds / 60)));
       onSaved(list);
     } catch (e) { setError(e.message); }
   };
   const commit = (value) => {
     clearTimeout(timer.current);
-    const typed = value.trim();
-    if (typed === shown) return;
-    const number = parseInt(typed, 10);
-    if (isNaN(number)) { setText(shown); return; }
-    save({key: s.key, interval: number * unit.size + 's'});
+    if (value === shown) return;
+    const minutes = value ? minutesOf(value) : null;
+    if (minutes == null) { setText(shown); return; }
+    save({key: s.key, interval: minutes + 'm'});
   };
-  // A run of clicks on the stepper adds up to one write.
+  // The field changes on every segment typed or stepped: one write once it settles.
   const changed = (e) => {
     const value = e.currentTarget.value;
     setText(value);
@@ -48,13 +50,12 @@ function Interval({s, onSaved}) {
     timer.current = setTimeout(() => commit(value), 400);
   };
   return html`<span class="svc-dur" data-tip=${`entre ${s.min} y ${s.max} · ${s.env}`}>
-      <input class=${'svc-in' + (error ? ' bad' : '')} type="number" inputmode="numeric"
-        min=${low} max=${high} step=${unit.step} value=${text}
-        aria-label=${s.label + ', en ' + (unit.size === 1 ? 'segundos' : 'minutos')}
+      <input class=${'svc-in' + (error ? ' bad' : '')} type="time" step="60" value=${text}
+        min=${clockOf(Math.ceil(s.min_seconds / 60))} max=${clockOf(Math.floor(s.max_seconds / 60))}
+        aria-label=${s.label + ', horas y minutos'}
         onInput=${(e) => setText(e.currentTarget.value)} onChange=${changed}
         onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(e.currentTarget.value); } }}/>
-      <span class="svc-unit">${unit.label}</span>
-      <span class="svc-exact">${s.seconds % unit.size ? s.interval : ''}</span></span>
+      <span class="svc-exact">${s.seconds % 60 ? s.interval : ''}</span></span>
     ${s.source === 'ui'
       ? html`<button type="button" class="svc-reset" data-tip=${'vuelve a ' + s.fallback + ', ' + SOURCE_TIP[s.fallback_source](s)}
           onMouseDown=${(e) => e.preventDefault()} onClick=${() => save({key: s.key, reset: true})}>por defecto</button>`
@@ -85,12 +86,11 @@ function ServicesView() {
     <h3>Servicios</h3>
     <p class="svc-sub">Cada cuánto trabaja el servidor. Se aplica al momento, sin reiniciar.</p>
     ${error ? html`<p class="bid-error">${error}</p>` : null}
-    ${list ? html`<ul class="svc-list">${list.map((s) => html`<li class="svc-row" key=${s.key}>
+    ${list ? html`<ul class="svc-list">${list.filter((s) => s.editable).map((s) => html`<li class="svc-row" key=${s.key}>
         <span class="svc-name">${s.label} <i class="aw-i" data-tip=${s.description}>ⓘ</i></span>
         <${Interval} s=${s} onSaved=${setList}/>
         <${When} s=${s} now=${now}/>
       </li>`)}</ul>` : error ? null : html`<p class="svc-sub">Cargando…</p>`}
-    <p class="modal-note">Lo que pongas aquí manda sobre la variable de entorno, y esta sobre el valor por defecto.</p>
   </div>`;
 }
 

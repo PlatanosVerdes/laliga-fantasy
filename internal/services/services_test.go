@@ -190,3 +190,26 @@ func TestParseAndFormat(t *testing.T) {
 		}
 	}
 }
+
+func TestAnEnvOnlyClockRefusesThePage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "services.json")
+	if err := os.WriteFile(path, []byte(`{"heartbeat":"40s"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	job := Job{Key: "heartbeat", Label: "Latido", Default: 20 * time.Second,
+		Min: 5 * time.Second, Max: time.Minute, EnvOnly: true}
+	t.Setenv("FANTASY_HEARTBEAT_INTERVAL", "30s")
+	r := New(path, job)
+	if got := r.Get("heartbeat"); got != 30*time.Second {
+		t.Fatalf("un valor guardado no aplica a un reloj solo de entorno: %v", got)
+	}
+	if err := r.Set("heartbeat", 10*time.Second); !errors.Is(err, ErrEnvOnly) {
+		t.Errorf("el panel no lo cambia: %v", err)
+	}
+	if err := r.Reset("heartbeat"); !errors.Is(err, ErrEnvOnly) {
+		t.Errorf("ni lo restablece: %v", err)
+	}
+	if entry := r.List()[0]; entry.Editable || entry.Source != SourceEnv {
+		t.Errorf("se lista como no editable, desde la variable: %+v", entry)
+	}
+}

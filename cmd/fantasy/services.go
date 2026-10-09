@@ -19,7 +19,7 @@ const (
 // defaultPoll is --interval's default.
 const defaultPoll = 2 * time.Minute
 
-// serviceJobs is every clock the page can tune. poll is --interval: given explicitly, the flag
+// serviceJobs is every clock the page shows. poll is --interval: given explicitly, the flag
 // replaces the default, and FANTASY_POLL_INTERVAL and the page still win over it, because the
 // Dockerfile bakes the flag into CMD and the variable is the only knob a compose file has.
 func serviceJobs(poll time.Duration, pollFromFlag bool) []services.Job {
@@ -28,11 +28,11 @@ func serviceJobs(poll time.Duration, pollFromFlag bool) []services.Job {
 			Description: "Cada cuánto pregunta a LaLiga si se ha movido la liga o el mercado " +
 				"(dos peticiones). Si nadie tiene la página abierta y no vence nada en 10 min, " +
 				"espera el cuádruple.",
-			Default: poll, FromFlag: pollFromFlag, Min: 30 * time.Second, Max: 6 * time.Hour},
+			Default: poll, FromFlag: pollFromFlag, Min: time.Minute, Max: 6 * time.Hour},
 		{Key: serviceLive, Label: "Partido en juego",
 			Description: "Mientras juega alguno de tus jugadores, cada cuánto se reconstruye " +
 				"para traer los puntos. Solo acorta el sondeo, nunca lo alarga.",
-			Default: schedule.LiveTick, Min: 30 * time.Second, Max: 30 * time.Minute},
+			Default: schedule.LiveTick, Min: time.Minute, Max: 30 * time.Minute},
 		// Capped under state's 30 min staleGrace: past it /healthz answers 503 on a quiet day.
 		{Key: serviceRebuild, Label: "Reconstrucción completa",
 			Description: "Cada cuánto se recalcula todo aunque nada lo anuncie: valores, " +
@@ -41,7 +41,7 @@ func serviceJobs(poll time.Duration, pollFromFlag bool) []services.Job {
 		{Key: server.ServiceHeartbeat, Label: "Latido en vivo",
 			Description: "Cada cuánto se manda un latido por la conexión en vivo, para que " +
 				"ningún proxy la corte por inactiva.",
-			Default: server.Heartbeat, Min: 5 * time.Second, Max: time.Minute},
+			Default: server.Heartbeat, Min: 5 * time.Second, Max: time.Minute, EnvOnly: true},
 	}
 }
 
