@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -18,7 +19,7 @@ func (r ListRow) HTML() string {
 		`</span>`)
 	for _, line := range []string{r.Meta, r.Sub} {
 		if line != "" {
-			who.WriteString(`<span class="meta">` + line + `</span>`)
+			who.WriteString(metaLine(line))
 		}
 	}
 	who.WriteString(`</span>`)
@@ -121,4 +122,28 @@ func roleDrop(player map[string]any) string {
 	}
 	return `<span class="mk-chip warn" title="` + Esc(text(role["note"])) + `">bajó a ` +
 		Esc(text(role["label"])) + `</span>`
+}
+
+// metaChip is a chip inside a row's second line: the role, a warning, the eleven mark.
+var metaChip = regexp.MustCompile(`<span class="(?:role|mk-chip|xi-mark)[^"]*"[^>]*>[^<]*</span>`)
+
+// metaLine lays a second line out so the chips are never cut: the first item (his team, as a
+// rule), the chips, then the rest of the text, which is the only part that shortens.
+func metaLine(line string) string {
+	chips := strings.Join(metaChip.FindAllString(line, -1), "")
+	var parts []string
+	for _, part := range strings.Split(metaChip.ReplaceAllString(line, ""), " · ") {
+		if part = strings.TrimSpace(part); part != "" {
+			parts = append(parts, part)
+		}
+	}
+	if len(parts) == 0 {
+		return `<span class="meta">` + chips + `</span>`
+	}
+	tail := ""
+	if len(parts) > 1 {
+		tail = `<span class="mtail">` + strings.Join(parts[1:], " · ") + `</span>`
+	}
+	return `<span class="meta"><span class="mhead">` + parts[0] + `</span>` + chips + tail +
+		`</span>`
 }

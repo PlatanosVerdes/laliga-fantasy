@@ -130,7 +130,7 @@ func rivalSquad(team map[string]any, manager string, squad []map[string]any, tab
 			number(player["clause"]) > 0 {
 			payable++
 		}
-		meta := Esc(text(player["team_short"]))
+		meta := Esc(text(player["team_short"])) + " " + roleChip(player)
 		if vs, ok := player["vs_mine"]; ok {
 			class := "down"
 			if number(vs) > 0 {

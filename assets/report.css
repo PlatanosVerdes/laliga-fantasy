@@ -1371,8 +1371,12 @@ section.mk{margin:0 0 22px}
 .mk .rname{display:flex;align-items:center;gap:6px;min-width:0}
 .mk .rname b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .mk .rname .pos{flex:none}
-.mk .rwho .meta{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis}
+/* The second line: the chips never shrink, only the plain text after them does. */
+.mk .rwho .meta{display:flex;flex-wrap:nowrap;align-items:center;gap:5px;min-width:0;font-size:12px;color:var(--muted);
+  white-space:nowrap}
+.mk .rwho .meta>*{flex:none}
+.mk .rwho .meta>.mtail{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.mk .rwho .meta>.mtail::before{content:"· "}
 .mk .rval{grid-area:v;display:flex;flex-direction:column;align-items:flex-end;line-height:1.25;
   font-variant-numeric:tabular-nums;min-width:72px}
 .mk .rval b{font-size:17px;letter-spacing:-.01em;white-space:nowrap}
@@ -1419,6 +1423,8 @@ section.mk{margin:0 0 22px}
   .mk .r{grid-template-columns:28px minmax(0,1fr) auto;grid-template-areas:"f w v" "f t t";
     row-gap:6px;column-gap:8px}
   .mk .rtail{grid-area:t;display:flex;justify-content:flex-end;align-items:center;gap:6px}
+  .mk .rval{max-width:150px}
+  .mk .rnote{white-space:normal;text-align:right}
   .mk .rtail:not(:has(*)){display:none}
 }
 .mk .fold{margin-top:6px}

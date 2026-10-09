@@ -452,7 +452,7 @@ func (d Document) buyRow(item map[string]any, route string, gain float64,
 				Esc(id), Esc(name), int64(cost), int64(number(item["clause"]))))
 		}
 	case "oferta al dueño":
-		meta = "vende " + Esc(fallbackText(text(listing["seller"]), text(item["seller"])))
+		meta = "de " + Esc(fallbackText(text(listing["seller"]), text(item["seller"])))
 		chip = clock(text(listing["expires"]), "sale del mercado")
 		verb = "Ofrecer"
 		action = d.listingButton(item, "Ofrecer "+esMoney(cost), kind)
