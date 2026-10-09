@@ -1076,12 +1076,12 @@ window.addEventListener('resize',()=>{
   seasonRedraw=setTimeout(loadSeason,200);
 });
 
-// The season as one shape: me in the accent, everybody else thin and grey, and up to five
-// managers picked from the chips to follow in a colour of their own. Rank or points.
-const EVO_KEY='fantasy:evo', EVO_MAX=5, EVO_HUES=6;
+// The season: every manager in a colour of his own and me in the accent. Picking managers on
+// the chips leaves only those (and me) coloured, the rest thin and grey. Rank or points.
+const EVO_KEY='fantasy:evo', EVO_HUES=11;
 function evoState(){
   try{ const saved=JSON.parse(localStorage.getItem(EVO_KEY)||'{}');
-       return {mode:saved.mode==='points'?'points':'place', picked:(saved.picked||[]).slice(0,EVO_MAX)}; }
+       return {mode:saved.mode==='points'?'points':'place', picked:saved.picked||[]}; }
   catch(e){ return {mode:'place',picked:[]}; }
 }
 function evoSave(state){ try{ localStorage.setItem(EVO_KEY,JSON.stringify(state)); }catch(e){} }
@@ -1092,8 +1092,10 @@ function seasonChart(d,width){
   if(weeks.length<1||!managers.length) return '<p class="empty">Aun no hay jornadas terminadas.</p>';
   const state=evoState();
   const picked=state.picked.filter(id=>managers.some(m=>m.team_id===id));
-  // A picked manager keeps his colour while picked: the slot is his place in the list.
-  const hue=new Map(picked.map((id,i)=>[id,i%EVO_HUES+1]));
+  // Each manager's colour is fixed, by his place in a stable order, so it never moves.
+  const hue=new Map([...managers].filter(m=>!m.is_me).sort((a,b)=>String(a.team_id).localeCompare(b.team_id))
+    .map((m,i)=>[m.team_id,i%EVO_HUES+1]));
+  const shown=id=>!picked.length||picked.includes(id);
   const byPoints=state.mode==='points';
 
   const w=Math.max(300,width||760), narrow=w<560;
@@ -1117,7 +1119,7 @@ function seasonChart(d,width){
     grid+=`<text class="evo-axis" x="${padL-8}" y="${y(v)+3}" text-anchor="end">${label}</text>`;
   });
 
-  const kind=m=>m.is_me?'me':hue.has(m.team_id)?'pick':'rest';
+  const kind=m=>m.is_me?'me':shown(m.team_id)?'pick':'rest';
   const order={rest:0,pick:1,me:2};
   const painted=[...managers].sort((a,b)=>order[kind(a)]-order[kind(b)]);
   const labels=[];
@@ -1151,15 +1153,15 @@ function seasonChart(d,width){
   const chips=[...managers].sort((a,b)=>(b.is_me?1:0)-(a.is_me?1:0)||String(a.manager).localeCompare(b.manager,'es'))
     .map(m=>{
       const k=kind(m);
-      const sw=k==='me'?'evo-me':k==='pick'?`evo-h${hue.get(m.team_id)}`:'evo-rest';
-      return `<button type="button" class="evo-chip ${sw}${k!=='rest'?' on':''}" data-evo-pick="${m.team_id}"`
+      const sw=m.is_me?'evo-me':`evo-h${hue.get(m.team_id)}`;
+      return `<button type="button" class="evo-chip ${sw}${k!=='rest'&&(m.is_me||picked.length)?' on':''}" data-evo-pick="${m.team_id}"`
         +`${m.is_me?' disabled':''} aria-pressed="${k!=='rest'}"><i class="evo-sw"></i>${m.manager}</button>`;
     }).join('');
   const controls=`<div class="evo-controls"><div class="evo-mode" role="group">`
     +`<button type="button" data-evo-mode="place" class="${byPoints?'':'on'}">Puesto</button>`
     +`<button type="button" data-evo-mode="points" class="${byPoints?'on':''}">Puntos</button></div>`
-    +`<div class="evo-chips">${chips}${picked.length?'<button type="button" class="evo-clear" data-evo-clear>Limpiar</button>':''}</div>`
-    +`<p class="evo-hint">${picked.length>=EVO_MAX?'Máximo '+EVO_MAX+' a la vez.':'Toca un manager para seguir su línea.'}</p></div>`;
+    +`<div class="evo-chips">${chips}${picked.length?'<button type="button" class="evo-clear" data-evo-clear>Todos</button>':''}</div>`
+    +`<p class="evo-hint">${picked.length?'Toca más managers para añadirlos o quitarlos.':'Toca un manager para ver solo su línea y la tuya.'}</p></div>`;
   return controls+`<svg class="evo-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"
     role="img" aria-label="${byPoints?'Puntos acumulados':'Puesto'} de cada manager jornada a jornada">${grid}${lines}${names}</svg>`;
 }
@@ -1172,8 +1174,7 @@ document.addEventListener('click',(event)=>{
   else if(t.hasAttribute('data-evo-clear')) state.picked=[];
   else{
     const id=t.dataset.evoPick;
-    state.picked=state.picked.includes(id)?state.picked.filter(x=>x!==id)
-      :state.picked.length<EVO_MAX?[...state.picked,id]:state.picked;
+    state.picked=state.picked.includes(id)?state.picked.filter(x=>x!==id):[...state.picked,id];
   }
   evoSave(state);
   usage.click('liga','evolucion',t.dataset.evoMode||t.dataset.evoPick||'limpiar');

@@ -216,23 +216,24 @@ th.right{text-align:right}
 .evo-svg{display:block}
 .evo-grid{stroke:var(--line);stroke-width:1}
 .evo-axis{fill:var(--muted);font-size:10px}
-/* Everybody else is context, thin and grey; I am the accent; the managers picked from the chips
-   get a hue of their own from six that stay apart in both themes, none of them the accent. */
+/* Every manager has a hue of his own (eleven that read on both themes, none the accent) and I
+   am the accent. Picking managers leaves only them coloured; the rest go thin and grey. */
 .evo-row{--c:var(--line)}
 .evo-line{fill:none;stroke:var(--c);stroke-width:1.2;stroke-linejoin:round;stroke-linecap:round}
 .evo-hit{fill:none;stroke:transparent;stroke-width:10}
 .evo-dot{fill:var(--surface);stroke:var(--c);stroke-width:1.4;cursor:pointer}
 .evo-rest .evo-dot{fill:transparent;stroke:transparent}
 .evo-rest{--c:color-mix(in srgb,var(--muted) 45%,transparent)}
-.evo-pick .evo-line{stroke-width:2.6}
+.evo-pick .evo-line{stroke-width:2.2}
 .evo-me{--c:var(--accent)} .evo-me .evo-line{stroke-width:3.2}
 .evo-rest:hover,.evo-rest.hl{--c:var(--ink-2)}
 .evo-row:hover .evo-line,.evo-row.hl .evo-line{stroke-width:3.4}
 .evo-rest:hover .evo-dot,.evo-rest.hl .evo-dot{fill:var(--surface);stroke:var(--c)}
 .evo-name{fill:var(--ink-2);font-size:10.5px;font-weight:600}
 .evo-name.evo-me{fill:var(--accent);font-weight:700}
-.evo-h1{--c:var(--series-2)} .evo-h2{--c:var(--series-3)} .evo-h3{--c:var(--series-5)}
-.evo-h4{--c:var(--series-4)} .evo-h5{--c:var(--series-7)} .evo-h6{--c:var(--series-8)}
+.evo-h1{--c:#e8590c} .evo-h2{--c:#2f9e44} .evo-h3{--c:#d6336c} .evo-h4{--c:#e0a100}
+.evo-h5{--c:#7048e8} .evo-h6{--c:#e03131} .evo-h7{--c:#0c8599} .evo-h8{--c:#a0522d}
+.evo-h9{--c:#74b816} .evo-h10{--c:#c084fc} .evo-h11{--c:#22b8cf}
 .evo-name.evo-pick{fill:var(--c)}
 .evo-controls{display:grid;gap:8px;padding:2px 14px 10px}
 .evo-mode{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:max-content}
