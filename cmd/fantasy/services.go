@@ -28,16 +28,19 @@ func serviceJobs(poll time.Duration, pollFromFlag bool) []services.Job {
 			Description: "Cada cuánto pregunta a LaLiga si se ha movido la liga o el mercado " +
 				"(dos peticiones). Si nadie tiene la página abierta y no vence nada en 10 min, " +
 				"espera el cuádruple.",
-			Default: poll, FromFlag: pollFromFlag, Min: time.Minute, Max: 6 * time.Hour},
+			Default: poll, FromFlag: pollFromFlag, Min: time.Minute, Max: 6 * time.Hour,
+			Unit: time.Minute},
 		{Key: serviceLive, Label: "Partido en juego",
 			Description: "Mientras juega alguno de tus jugadores, cada cuánto se reconstruye " +
 				"para traer los puntos. Solo acorta el sondeo, nunca lo alarga.",
-			Default: schedule.LiveTick, Min: time.Minute, Max: 30 * time.Minute},
+			Default: schedule.LiveTick, Min: time.Minute, Max: 30 * time.Minute,
+			Unit: time.Minute},
 		// Capped under state's 30 min staleGrace: past it /healthz answers 503 on a quiet day.
 		{Key: serviceRebuild, Label: "Reconstrucción completa",
 			Description: "Cada cuánto se recalcula todo aunque nada lo anuncie: valores, " +
 				"puntos y futbolfantasy cambian sin avisar.",
-			Default: schedule.Ceiling, Min: 5 * time.Minute, Max: 25 * time.Minute},
+			Default: schedule.Ceiling, Min: 5 * time.Minute, Max: 25 * time.Minute,
+			Unit: time.Minute},
 		{Key: server.ServiceHeartbeat, Label: "Latido en vivo",
 			Description: "Cada cuánto se manda un latido por la conexión en vivo, para que " +
 				"ningún proxy la corte por inactiva.",

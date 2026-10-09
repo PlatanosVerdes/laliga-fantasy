@@ -213,3 +213,29 @@ func TestAnEnvOnlyClockRefusesThePage(t *testing.T) {
 		t.Errorf("se lista como no editable, desde la variable: %+v", entry)
 	}
 }
+
+func TestValuesRoundToWholeMinutes(t *testing.T) {
+	job := pollJob()
+	job.Min, job.Unit = time.Minute, time.Minute
+	path := filepath.Join(t.TempDir(), "services.json")
+	if err := os.WriteFile(path, []byte(`{"poll":"1m30s"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r := New(path, job)
+	if got := r.Get("poll"); got != 2*time.Minute {
+		t.Fatalf("1m30s guardado se redondea al minuto: %v", got)
+	}
+	body, _ := os.ReadFile(path)
+	if !strings.Contains(string(body), `"2m"`) {
+		t.Errorf("el fichero se reescribe redondeado: %s", body)
+	}
+
+	t.Setenv("FANTASY_POLL_INTERVAL", "200s")
+	r = New("", job)
+	if got := r.Get("poll"); got != 3*time.Minute {
+		t.Fatalf("la variable tambien se redondea: %v", got)
+	}
+	if err := r.Set("poll", 100*time.Second); err != nil || r.Get("poll") != 2*time.Minute {
+		t.Fatalf("y lo que llega del panel: %v %v", r.Get("poll"), err)
+	}
+}

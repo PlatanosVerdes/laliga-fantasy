@@ -40,6 +40,9 @@ type Job struct {
 	FromFlag bool
 	// EnvOnly jobs are listed but not editable: the page cannot express their unit.
 	EnvOnly bool
+	// Unit, when set, is the granularity every value is rounded to, so what the page shows
+	// is what runs.
+	Unit time.Duration
 }
 
 // EnvName is the variable that overrides the job's default.
@@ -103,6 +106,11 @@ func New(path string, jobs ...Job) *Registry {
 		}
 		value, err := ParseInterval(raw)
 		if err == nil {
+			if rounded := job.round(value); rounded != value {
+				slog.Warn("interval variable rounded", "env", job.EnvName(), "value", raw,
+					"to", Format(rounded))
+				value = rounded
+			}
 			err = job.check(value)
 		}
 		if err != nil {
@@ -112,15 +120,35 @@ func New(path string, jobs ...Job) *Registry {
 		}
 		r.env[job.Key] = value
 	}
+	rewrite := false
 	for key, value := range r.load() {
 		job, ok := r.job(key)
+		if ok {
+			if rounded := job.round(value); rounded != value {
+				slog.Warn("saved interval rounded", "key", key, "value", Format(value),
+					"to", Format(rounded))
+				value, rewrite = rounded, true
+			}
+		}
 		if !ok || job.EnvOnly || job.check(value) != nil {
 			slog.Warn("saved interval ignored", "key", key, "value", value.String())
 			continue
 		}
 		r.overrides[key] = value
 	}
+	if rewrite {
+		if err := r.save(); err != nil {
+			slog.Warn("services file not rewritten", "path", r.path, "reason", err.Error())
+		}
+	}
 	return r
+}
+
+func (j Job) round(value time.Duration) time.Duration {
+	if j.Unit <= 0 {
+		return value
+	}
+	return value.Round(j.Unit)
 }
 
 func (j Job) check(value time.Duration) error {
@@ -175,6 +203,7 @@ func (r *Registry) Set(key string, value time.Duration) error {
 	if job.EnvOnly {
 		return fmt.Errorf("%w: %s", ErrEnvOnly, job.EnvName())
 	}
+	value = job.round(value)
 	if err := job.check(value); err != nil {
 		return err
 	}

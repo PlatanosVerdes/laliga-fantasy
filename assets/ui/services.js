@@ -54,8 +54,7 @@ function Interval({s, onSaved}) {
         min=${clockOf(Math.ceil(s.min_seconds / 60))} max=${clockOf(Math.floor(s.max_seconds / 60))}
         aria-label=${s.label + ', horas y minutos'}
         onInput=${(e) => setText(e.currentTarget.value)} onChange=${changed}
-        onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(e.currentTarget.value); } }}/>
-      <span class="svc-exact">${s.seconds % 60 ? s.interval : ''}</span></span>
+        onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(e.currentTarget.value); } }}/></span>
     ${s.source === 'ui'
       ? html`<button type="button" class="svc-reset" data-tip=${'vuelve a ' + s.fallback + ', ' + SOURCE_TIP[s.fallback_source](s)}
           onMouseDown=${(e) => e.preventDefault()} onClick=${() => save({key: s.key, reset: true})}>por defecto</button>`
