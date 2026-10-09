@@ -1,4 +1,4 @@
-import {html, useState, useEffect} from './lib.js';
+import {html, useState, useEffect, legacy} from './lib.js';
 import {Face, Tags, ShieldMark, PosTag, Countdown, Empty} from './components.js';
 import {useView} from './api.js';
 import {runAct, toggleAlways} from './actions.js';
@@ -12,11 +12,16 @@ export function Seg({s}) {
   if (!s) return null;
   const tip = s.tip || undefined;
   if (s.icon) return html`<span class=${s.c} data-tip=${tip}><svg class="ic" aria-hidden="true"><use href=${'#i-' + s.icon}></use></svg></span>`;
-  const inner = s.c && s.c.startsWith('role ') ? html`<i class="rdot"></i>${s.t}` : s.t;
+  if (s.until) return html`<${Countdown} kind="pill" until=${s.until}/>`;
+  const inner = s.kids ? html`<${Segs} list=${s.kids}/>`
+    : s.c && s.c.startsWith('role ') ? html`<i class="rdot"></i>${s.t}` : s.t;
   if (s.href) return html`<a class=${s.c || undefined} href=${s.href} target="_blank" rel="noopener" data-tip=${tip}>${inner}</a>`;
+  if (s.pid && s.c === 'p-name') return html`<button class="p-name" type="button" data-wired="1"
+    onClick=${(e) => { e.stopPropagation(); legacy().openDetail(s.pid); }}>${inner}</button>`;
   if (s.pid || s.team) return html`<span class=${s.c || undefined} data-pid=${s.pid || undefined} data-team=${s.team || undefined} data-tip=${tip}>${inner}</span>`;
-  if (!s.c && !tip) return s.t;
-  return html`<span class=${s.c || undefined} data-tip=${tip}>${inner}</span>`;
+  const El = s.el || 'span';
+  if (!s.c && !tip && !s.el && !s.style && !s.kids) return s.t;
+  return html`<${El} class=${s.c || undefined} style=${s.style || undefined} data-tip=${tip}>${inner}</${El}>`;
 }
 
 export const Segs = ({list}) => (list || []).map((s) => html`<${Seg} s=${s}/>`);
@@ -35,6 +40,8 @@ function Meta({list}) {
 
 export function ChipView({c}) {
   if (c.icon) return html`<${Seg} s=${c}/>`;
+  if (c.do) return html`<button type="button" class=${('mk-chip ' + (c.c || '')).trim()} title=${c.tip || undefined}
+    data-wired="1" onClick=${(e) => { e.stopPropagation(); runAct(c); }}>${c.t}</button>`;
   if (c.until) return html`<${Countdown} kind="chip" until=${c.until} label=${c.label || ''}/>`;
   return html`<span class=${('mk-chip ' + (c.c || '')).trim()} data-tip=${c.tip || undefined}>${c.t}</span>`;
 }
@@ -55,8 +62,26 @@ function AlwaysAct({a}) {
     onClick=${flip}>${on ? '● ' : ''}Siempre en mercado</button>`;
 }
 
+// The comparator's "+" follows the tray, which report.js keeps and announces.
+function CmpAct({a}) {
+  const page = legacy();
+  const has = () => !!(page.cmpHas && page.cmpHas(a.args.id));
+  const [on, setOn] = useState(has());
+  useEffect(() => {
+    const sync = () => setOn(has());
+    addEventListener('panel:tray', sync);
+    return () => removeEventListener('panel:tray', sync);
+  }, [a.args.id]);
+  const short = a.class.includes('small');
+  return html`<button type="button" class=${a.class + (on ? ' on' : '')} data-wired="1"
+    title=${on ? 'Quitar del comparador' : 'Añadir al comparador'}
+    onClick=${(e) => { e.stopPropagation(); if (has()) page.cmpDrop(a.args.id); else page.cmpAdd(a.args.id, a.args.name, a.args.pos); }}>${
+    on ? (short ? '✓' : '✓ comparando') : (short ? '+' : '+ comparar')}</button>`;
+}
+
 export function ActView({a}) {
   if (a.text) return html`<span class=${a.class || undefined}>${a.label}</span>`;
+  if (a.do === 'cmp') return html`<${CmpAct} a=${a}/>`;
   if (a.do === 'always') return html`<${AlwaysAct} a=${a}/>`;
   // data-wired keeps report.js's own wiring off these buttons while both live on the page.
   const button = html`<button type="button" class=${a.class || 'mb mb-ghost'} data-wired="1"
@@ -142,7 +167,7 @@ function FilterBar({view}) {
 
 export const KINDS = {};
 
-function list(rows, scroll, extra) {
+export function list(rows, scroll, extra) {
   const ul = html`<ul class=${'rows' + (extra ? ' ' + extra : '')}>${rows.map((r) => html`<${RowView} r=${r}/>`)}</ul>`;
   return scroll ? html`<div class="scrollbox" style=${'max-height:' + scroll + 'px'}>${ul}</div>` : ul;
 }
@@ -178,6 +203,7 @@ export function ViewScreen({name}) {
   const view = useView(name);
   if (!view) return null;
   const main = html`${view.filters ? html`<${FilterBar} view=${view}/>` : null}<${Blocks} list=${view.main}/>`;
+  if (view.plain) return html`<div class="main">${main}</div>`;
   if (view.row2 && view.row2.length) return html`<div class="layout with-row"><div class="main">${main}</div>
     <aside class="side"><${Blocks} list=${view.aside}/></aside>
     <div class="row2"><div class="duo"><${Blocks} list=${view.row2}/></div></div></div>`;

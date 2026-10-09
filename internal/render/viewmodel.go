@@ -18,6 +18,12 @@ type Seg struct {
 	// Pid makes it open that player's card; Team, that manager's squad.
 	Pid  string `json:"pid,omitempty"`
 	Team string `json:"team,omitempty"`
+	// Kids nest segments in this one's element; Until makes it a live countdown; El is the
+	// element when it is not a span (b, i); Style is inline, for a bar's length.
+	Kids  []Seg  `json:"kids,omitempty"`
+	Until string `json:"until,omitempty"`
+	El    string `json:"el,omitempty"`
+	Style string `json:"style,omitempty"`
 }
 
 // Chip is a row's pill: a live countdown to Until, or fixed text.
@@ -28,6 +34,9 @@ type Chip struct {
 	T     string `json:"t,omitempty"`
 	C     string `json:"c,omitempty"`
 	Tip   string `json:"tip,omitempty"`
+	// Do makes the chip a button, run like an Act.
+	Do   string         `json:"do,omitempty"`
+	Args map[string]any `json:"args,omitempty"`
 }
 
 // Act is a button: its classes (the look), what it runs (Do) and with what. Text makes it a
@@ -102,6 +111,8 @@ type Fold struct {
 
 // View is a tab's screen: a main column, an aside, and optionally a second row under both.
 type View struct {
+	// Plain is a section with only its main column and no layout around it.
+	Plain   bool    `json:"plain,omitempty"`
 	Filters bool    `json:"filters,omitempty"`
 	Main    []Block `json:"main"`
 	Aside   []Block `json:"aside,omitempty"`

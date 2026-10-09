@@ -33,6 +33,11 @@ export function Countdown({until, kind = 'plain', label = '', cls}) {
     return html`<span class=${cls} title=${(label + ' ' + esWhen(until)).trim()}><span class="left">${chipText(left)}</span></span>`;
   }
   const hours = left / 3600000;
+  // A table's countdown, coloured as a pill the way report.js's ticker always did.
+  if (kind === 'pill') {
+    const pill = left <= 0 ? 'pill-critical' : hours < 1 ? 'pill-critical' : hours < 24 ? 'pill-warning' : 'pill-neutral';
+    return html`<span class=${pill}>${countdownText(left)}</span>`;
+  }
   const color = left <= 0 ? '' : hours < 1 ? 'var(--critical)' : hours < 6 ? 'var(--warning)' : '';
   return html`<span class=${cls} style=${color ? 'color:' + color : ''}>${countdownText(left)}</span>`;
 }

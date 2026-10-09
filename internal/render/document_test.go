@@ -40,44 +40,44 @@ func universeWithRivals() Document {
 
 func TestRivalSectionsOnePerRival(t *testing.T) {
 	document := universeWithRivals()
-	sections := document.rivalSections(rows(document.Universe["players"]))
+	shells, views := document.rivalViews(rows(document.Universe["players"]))
 	// The picker first, then one section per rival behind it.
-	if len(sections) != 3 {
-		t.Fatalf("selector y dos rivales, salieron %d secciones", len(sections))
+	if len(shells) != 3 || len(views) != 3 {
+		t.Fatalf("selector y dos rivales, salieron %d secciones", len(shells))
 	}
-	if !strings.Contains(sections[0], `id="rivalpick"`) ||
-		!strings.Contains(sections[0], `<select id="rival-pick">`) {
-		t.Fatalf("la primera tiene que ser el desplegable: %.140s", sections[0])
+	if !strings.Contains(shells[0], `id="rivalpick"`) {
+		t.Fatalf("la primera tiene que ser el desplegable: %.140s", shells[0])
 	}
 	// Ordered by league position, so second in the table comes first.
-	if !strings.Contains(sections[1], `id="rival-300"`) {
-		t.Errorf("el segundo de la liga deberia ir primero: %.120s", sections[1])
+	if !strings.Contains(shells[1], `id="rival-300"`) {
+		t.Errorf("el segundo de la liga deberia ir primero: %.120s", shells[1])
 	}
-	// And the dropdown offers them in the same order.
-	if strings.Index(sections[0], "rival-300") > strings.Index(sections[0], "rival-200") {
+	picks := views["rivalpick"].(View).Main[0].Data.([]RivalPick)
+	if picks[0].Value != "rival-300" || picks[1].Value != "rival-200" {
 		t.Error("las opciones tienen que ir en orden de clasificacion")
 	}
-	for _, section := range sections[1:] {
+	for _, section := range shells[1:] {
 		if !strings.Contains(section, `data-tab="rivales"`) {
 			t.Error("una seccion que no dice su pestaña queda invisible")
 		}
-		if !strings.Contains(section, "<table") {
-			t.Errorf("seccion sin tabla, que es todo su contenido: %.160s", section)
+	}
+	for name, view := range views {
+		if name != "rivalpick" && len(view.(View).Main[0].Data.(DataTable).Rows) == 0 {
+			t.Errorf("seccion sin tabla, que es todo su contenido: %s", name)
 		}
 	}
 }
 
 func TestRivalSectionsExcludeMineAndFreeAgents(t *testing.T) {
 	document := universeWithRivals()
-	joined := strings.Join(document.rivalSections(rows(document.Universe["players"])), "")
-	// Por id de fila, no por nombre: el mio aparece de todas formas como referencia en la
-	// the "Frente a lo tuyo" column, where it is right for it to appear.
-	for _, absent := range []string{`data-cmp="1"`, `data-cmp="5"`, `id="rival-100"`} {
+	_, views := document.rivalViews(rows(document.Universe["players"]))
+	joined := asJSON(views)
+	for _, absent := range []string{`"id":"1"`, `"id":"5"`, `rival-100`} {
 		if strings.Contains(joined, absent) {
 			t.Errorf("%s no es de un rival y no deberia tener fila", absent)
 		}
 	}
-	for _, present := range []string{`data-cmp="2"`, `data-cmp="3"`, `data-cmp="4"`} {
+	for _, present := range []string{`"id":"2"`, `"id":"3"`, `"id":"4"`} {
 		if !strings.Contains(joined, present) {
 			t.Errorf("falta la fila %s", present)
 		}
@@ -86,16 +86,12 @@ func TestRivalSectionsExcludeMineAndFreeAgents(t *testing.T) {
 
 func TestRivalSectionsSayWhoBeatsMine(t *testing.T) {
 	document := universeWithRivals()
-	sections := document.rivalSections(rows(document.Universe["players"]))
-	var cristian string
-	for _, section := range sections {
-		if strings.Contains(section, `id="rival-200"`) {
-			cristian = section
-		}
-	}
-	if cristian == "" {
+	_, views := document.rivalViews(rows(document.Universe["players"]))
+	view, ok := views["rival-200"]
+	if !ok {
 		t.Fatal("sin seccion de cristian")
 	}
+	cristian := asJSON(view)
 	// 4.5 contra mi 3.0 es un jugador mejor, y 1.0 no: uno solo.
 	if !strings.Contains(cristian, "1 mejora a los tuyos") {
 		t.Errorf("la nota tiene que contar los que te mejoran: %.300s", cristian)
@@ -114,7 +110,7 @@ func TestRivalSectionsSayWhoBeatsMine(t *testing.T) {
 
 func TestRivalSectionsWithoutLeagueTeams(t *testing.T) {
 	document := Document{Universe: map[string]any{"players": []any{}}}
-	if sections := document.rivalSections(nil); sections != nil {
-		t.Errorf("sin liga no hay rivales: %v", sections)
+	if shells, _ := document.rivalViews(nil); shells != nil {
+		t.Errorf("sin liga no hay rivales: %v", shells)
 	}
 }

@@ -86,6 +86,7 @@ export async function runAct(a) {
       } catch (e) { alert('No he podido quitarlo: ' + e.message); }
       return;
     case 'goto': page.goto(x.target); return;
+    case 'reach': (page.usage || {click() {}}).click('rivales', 'alcance', x.team_id); page.openReach(x.team_id); return;
     case 'detail': page.openDetail(x.player_id); return;
     case 'manager': page.openManager(x.team_id); return;
     default:

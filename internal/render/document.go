@@ -95,7 +95,7 @@ func (d Document) ViewData() map[string]any {
 		return map[string]any{}
 	}
 	return map[string]any{"vender": d.SellData(), "comprar": d.BuyData(),
-		"clausulas": d.ClauseData(), "partidos": d.MatchesData()}
+		"clausulas": d.ClauseData(), "partidos": d.MatchesData(), "rivales": d.RivalsData()}
 }
 
 // HTML renders the document.
@@ -121,7 +121,11 @@ func (d Document) Render() (string, map[string]any) {
 	sections = append(sections, d.feedSection())
 	if hasAdvice {
 		sections = append(sections, d.squadSection())
-		sections = append(sections, d.rivalSections(players)...)
+		shells, rivals := d.rivalViews(players)
+		sections = append(sections, shells...)
+		for name, view := range rivals {
+			views[name] = view
+		}
 	}
 	sections = append(sections, d.rulesSection())
 	sections = append(sections, d.rankingSection(players))
@@ -842,127 +846,6 @@ func squadRow(player map[string]any) string {
 
 var positionNames = map[string]string{
 	"1": "Portero", "2": "Defensa", "3": "Centrocampista", "4": "Delantero", "5": "Entrenador",
-}
-
-// rivalSections is one section per rival, each with his squad whole. Grouped by manager and
-// not by player on purpose: "what does this one have" is how a league is actually read, and a
-// single 158-row table answered a different question.
-func (d Document) rivalSections(players []map[string]any) []string {
-	teams := mapOf(d.Universe["league_teams"])
-	if teams == nil {
-		return nil
-	}
-	myTeamID := text(d.Universe["my_team_id"])
-
-	// Your best in each position: the bar every rival's player is read against.
-	best := map[string]map[string]any{}
-	for _, player := range players {
-		if !truthy(player["is_mine"]) {
-			continue
-		}
-		position := text(player["position"])
-		if current, seen := best[position]; !seen ||
-			number(player["xpts"]) > number(current["xpts"]) {
-			best[position] = player
-		}
-	}
-
-	squads := map[string][]map[string]any{}
-	for _, player := range players {
-		owner := text(player["owner_team_id"])
-		if owner == "" || owner == myTeamID || truthy(player["is_mine"]) {
-			continue
-		}
-		row := make(map[string]any, len(player)+4)
-		for key, value := range player {
-			row[key] = value
-		}
-		if value := number(player["value"]); value > 0 {
-			if clause := number(player["clause"]); clause > 0 {
-				row["clause_x"] = clause / value
-			}
-		}
-		// What he is listed at, if he is: a player already on sale is reachable without
-		// paying his clause, and that changes the answer completely.
-		if listing := mapOf(player["market"]); listing != nil {
-			if asking := number(listing["min_bid"]); asking > 0 {
-				row["asking"] = asking
-			}
-		}
-		if mine := best[text(player["position"])]; mine != nil {
-			row["vs_mine"] = number(player["xpts"]) - number(mine["xpts"])
-			row["vs_who"] = mine["name"]
-		}
-		squads[owner] = append(squads[owner], row)
-	}
-	if len(squads) == 0 {
-		return nil
-	}
-
-	// Ordered by the table, so the section order is the one the league is already read in.
-	ordered := make([]map[string]any, 0, len(teams))
-	for _, value := range teams {
-		team := mapOf(value)
-		if team == nil || text(team["team_id"]) == myTeamID {
-			continue
-		}
-		if len(squads[text(team["team_id"])]) == 0 {
-			continue
-		}
-		ordered = append(ordered, team)
-	}
-	sort.SliceStable(ordered, func(one, two int) bool {
-		first, second := number(ordered[one]["position"]), number(ordered[two]["position"])
-		if first != second && first > 0 && second > 0 {
-			return first < second
-		}
-		return number(ordered[one]["points"]) > number(ordered[two]["points"])
-	})
-
-	// One rival at a time: twelve squads stacked is a lot of scrolling to answer a question
-	// about one manager. The picker is the tab's own header, so it never scrolls away with the
-	// squad it governs.
-	options := make([]string, 0, len(ordered))
-	out := make([]string, 0, len(ordered)+1)
-	for _, team := range ordered {
-		teamID := text(team["team_id"])
-		squad := squads[teamID]
-		// Read like a squad: keeper, defence, midfield, attack, and the best of each line first.
-		sort.SliceStable(squad, func(one, two int) bool {
-			first, second := number(squad[one]["position_id"]), number(squad[two]["position_id"])
-			if first != second {
-				return first < second
-			}
-			return number(squad[one]["xpts"]) > number(squad[two]["xpts"])
-		})
-
-		table, err := SectionTable("rivalsquad", squad)
-		if err != nil {
-			continue
-		}
-		manager := text(team["manager"])
-		if manager == "" {
-			manager = text(team["name"])
-		}
-		if manager == "" {
-			manager = teamID
-		}
-		label := manager
-		if position := number(team["position"]); position > 0 {
-			label = fmt.Sprintf("%.0fº · %s", position, manager)
-		}
-		options = append(options, fmt.Sprintf(
-			`<option value="rival-%s">%s · %d jugadores</option>`,
-			Esc(teamID), Esc(label), len(squad)))
-		out = append(out, rivalSquad(team, manager, squad, table))
-	}
-
-	picker := `<div class="pick-bar"><label>Equipo<select id="rival-pick">` +
-		strings.Join(options, "") +
-		`<option value="all">todos a la vez</option></select></label></div>`
-	head := mkSection("rivalpick", "rivales", "Plantillas rivales", picker,
-		"", len(ordered))
-	return append([]string{head}, out...)
 }
 
 func (d Document) rankingSection(players []map[string]any) string {

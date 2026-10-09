@@ -3,6 +3,7 @@ import {ModalRoot} from './components.js';
 import {PlayerPopup} from './player.js';
 import {ViewScreen} from './view.js';
 import {WeekPopup} from './matches.js';
+import {ReachPopup} from './rivals.js';
 
 const dialogs = document.createElement('div');
 document.body.appendChild(dialogs);
@@ -13,7 +14,7 @@ render(html`<${ModalRoot}/>`, dialogs);
 let host = null;
 const unmount = () => { if (host) { render(null, host); host = null; } };
 
-const DRAWERS = {player: PlayerPopup, week: WeekPopup};
+const DRAWERS = {player: PlayerPopup, week: WeekPopup, reach: ReachPopup};
 
 // A drawer view drawn here: the card, the matchday.
 export function mountDrawer(body, name, props) {

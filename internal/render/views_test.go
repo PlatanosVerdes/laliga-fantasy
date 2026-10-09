@@ -187,16 +187,17 @@ func TestReachListsWhoARivalCanPay(t *testing.T) {
 			"clause_locked_until": "2999-01-01T19:00:00+02:00"},
 		{"id": "3", "name": "Caro", "clause": 50_000_000.0, "xpts": 8.0},
 	}
-	html := reachTemplate("7", "Villaone", 10_000_000, squad, map[string]string{"2": "Villaone"})
-	if !strings.Contains(html, `id="reach-7"`) || strings.Contains(html, "Caro") {
+	reach := reachOf("Villaone", 10_000_000, squad, map[string]string{"2": "Villaone"})
+	html := asJSON(reach)
+	if reach.Title != "Al alcance de Villaone" || strings.Contains(html, "Caro") {
 		t.Fatalf("only who his cash reaches: %s", html)
 	}
 	if strings.Index(html, "Bueno") > strings.Index(html, "Barato") || !strings.Contains(html, "amenaza") {
 		t.Error("best first, the top threat marked")
 	}
-	none := reachTemplate("8", "Pobre", 1_000_000, squad, nil)
-	if !strings.Contains(none, "No le llega a ninguno: tu cláusula más barata es 5,0M") {
-		t.Errorf("nobody reached: %s", none)
+	none := reachOf("Pobre", 1_000_000, squad, nil)
+	if none.Empty != "No le llega a ninguno: tu cláusula más barata es 5,0M." {
+		t.Errorf("nobody reached: %+v", none)
 	}
 }
 

@@ -2483,6 +2483,7 @@ function trayLine(){
 }
 
 function drawTray(){
+  dispatchEvent(new Event('panel:tray'));
   const box=trayBox();
   const visible=tray.length>0&&!comparing();
   box.hidden=!visible;
@@ -2995,16 +2996,16 @@ function ptsClass(p){ return p==null?'':p>=8?'x-hi':p>=4?'x-mid':p<0?'x-bad':'x-
 function fcClass(v){ return v>=6?'x-hi':v>=3.5?'x-mid':v>=2?'x-lo':'x-bad'; }
 
 // Which of my players a rival's cash reaches: drawn on the server, kept in the page.
-function openReach(teamId){
-  const source=document.getElementById('reach-'+teamId);
-  if(!drawer||!source) return;
+async function openReach(teamId){
+  if(!drawer) return;
   markView('alcance',teamId);
   drawer.hidden=false;
   panelWide(false);
   drawer.classList.add('as-pop');
   const body=drawer.querySelector('.drawer-body');
   body.dataset.view='reach';
-  body.innerHTML=`<h3 class="pc-title">${source.dataset.title}</h3>`+source.innerHTML;
+  const ui=await uiModule;
+  if(ui) ui.mountDrawer(body,'reach',{team:String(teamId)});
 }
 document.addEventListener('click',(event)=>{
   const button=event.target.closest&&event.target.closest('button[data-reach]');
@@ -3258,7 +3259,7 @@ function connect(){
 }
 
 // What /assets/ui borrows from this file: the dialogs it does not redraw and the drawer's routing.
-window.panel={openDetail, openManager, openWeek, openMatchday, openForecast, closeDrawer, openAmount, openBid, shieldDialog, raidDialog,
+window.panel={openDetail, openManager, openWeek, openReach, applyRivalPick, openMatchday, openForecast, closeDrawer, openAmount, openBid, shieldDialog, raidDialog,
   flash, cmpHas, cmpAdd, cmpDrop, usage,
   goto:(where)=>{ const target=resolveTarget(where);
     if(target) showTab(target.tab,{section:target.section}); else showTab(where); }};
