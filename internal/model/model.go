@@ -73,6 +73,7 @@ type Player struct {
 	StartProbability *float64               `json:"start_probability"`
 	NextWeek         *int                   `json:"next_week"`
 	NextRival        *string                `json:"next_rival"`
+	NextRivalID      string                 `json:"next_rival_id,omitempty"`
 	NextHome         *bool                  `json:"next_home"`
 	FixtureFactor    float64                `json:"fixture_factor"`
 	XPts             float64                `json:"xpts"`
@@ -415,6 +416,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		var rivalStrength *float64
 		if trend != nil && trend.NextRival != nil {
 			if rivalID, ok := teamByName[normalizeTeam(*trend.NextRival)]; ok {
+				player.NextRivalID = rivalID
 				if value, ok := strength[rivalID]; ok {
 					rivalStrength = &value
 				}

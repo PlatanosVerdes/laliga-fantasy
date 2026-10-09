@@ -86,9 +86,9 @@ func face(player map[string]any, size string) string {
 	badge := ""
 	switch glyph {
 	case "cross":
-		badge = `<span class="hb hb-cross">✚</span>`
+		badge = `<span class="hb hb-cross"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.4 2.5h3.2v3.9h3.9v3.2H9.6v3.9H6.4V9.6H2.5V6.4h3.9z"/></svg></span>`
 	case "card":
-		badge = `<span class="hb hb-card"></span>`
+		badge = `<span class="hb hb-card"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4.5" y="2.5" width="7" height="11" rx="1.3"/></svg></span>`
 	}
 	return fmt.Sprintf(`<span class="%s" data-pid="%s"%s><span class="ini">%s</span>%s%s</span>`,
 		class, Esc(text(player["id"])), title, Esc(initials(text(player["name"]))), image, badge)
@@ -112,7 +112,7 @@ func clock(stamp, label string) string {
 		return ""
 	}
 	return fmt.Sprintf(`<span class="mk-chip" data-deadline="%s" data-chip="1" title="%s">`+
-		`<span class="clock">⏱</span><span class="left">%s</span></span>`, Esc(stamp),
+		`<span class="left">%s</span></span>`, Esc(stamp),
 		Esc(strings.TrimSpace(label+" "+esWhen(stamp))), Esc(esWhen(stamp)))
 }
 
@@ -607,7 +607,7 @@ func (d Document) buyView() string {
 	window := d.window()
 	clauses, offers, free := d.buyOptions()
 	main := `<div class="mk-filters">` + Filters + `</div>` +
-		d.buyBlock("🔨 Mercado rentable", "puja libre", free, window)
+		d.buyBlock("Mercado rentable", "puja libre", free, window)
 
 	var bids []string
 	for _, bid := range rows(d.Advice["my_bids"]) {
@@ -615,32 +615,25 @@ func (d Document) buyView() string {
 			esMoney(number(bid["my_bid"])), "pide "+esMoney(number(bid["asking"])),
 			clock(text(bid["closes"]), "cierra"), BidButton(bid), ""))
 	}
+	bids = append(bids, d.raidRows()...)
 	body := empty("Ninguna ahora mismo.")
 	if len(bids) > 0 {
 		body = rowList(bids)
 	}
-	for _, raid := range d.Raids {
-		if raidsStandingDown[text(raid["action"])] {
-			continue
-		}
-		body += fmt.Sprintf(`<p class="mk-note">Clausulazo programado: <b>%s</b> hasta %s · `+
-			`<button class="linkish" type="button" data-goto="clausulas">ver en Cláusulas</button></p>`,
-			Esc(text(raid["name"])), esMoney(number(raid["max_pay"])))
-	}
 	return viewWithRow("v-comprar", "comprar", main, block("Mis pujas en curso", body, "", -1)+
 		d.endingsAside()+d.starredAside(),
-		d.buyBlock("🤝 En venta por rivales", "oferta al dueño", offers, window),
-		d.buyBlock("🔓 Cláusulas que puedes pagar", "clausula", clauses, window))
+		d.buyBlock("En venta por rivales", "oferta al dueño", offers, window),
+		d.buyBlock("Cláusulas que puedes pagar", "clausula", clauses, window))
 }
 
-// outcomeRow is a resolved bid, offer or standing order as a list row: a glyph for how it
+// outcomeRow is a resolved bid, offer or standing order as a list row: the icon of how it
 // ended where the face would be.
-func outcomeRow(id, name, glyph, tone, what, date string, amount float64) string {
+func outcomeRow(id, name, outcome, why, what, date string, amount float64) string {
 	value := ""
 	if amount > 0 {
 		value = esMoney(amount)
 	}
-	return ListRow{Lead: `<span class="rank-dot out-` + tone + `">` + glyph + `</span>`,
+	return ListRow{Lead: `<span class="rank-dot out-icon">` + outcomeIcon(outcome, why) + `</span>`,
 		Name: Esc(name), Meta: Esc(what), Value: value, Note: date,
 		Attrs: ` data-pid="` + Esc(id) + `"`}.HTML()
 }
@@ -652,16 +645,49 @@ func shortDate(stamp string) string {
 	return ""
 }
 
+// raidRows are the scheduled clausulazos still standing, as rows of what I have put up: the
+// limit, the clause today and whether it already passes it, when it opens, and the way out.
+func (d Document) raidRows() []string {
+	byID := d.playersByID()
+	var out []string
+	for _, raid := range d.Raids {
+		if raidsStandingDown[text(raid["action"])] {
+			continue
+		}
+		player := byID[text(raid["player_id"])]
+		if player == nil {
+			player = map[string]any{"id": raid["player_id"], "name": raid["name"],
+				"owner": raid["owner"]}
+		}
+		clause, limit := number(raid["clause"]), number(raid["max_pay"])
+		note := "cláusula " + esMoney(clause)
+		if limit > 0 && clause > limit {
+			note += ` · <span class="down">pasa tu límite</span>`
+		}
+		var chip string
+		switch {
+		case truthy(player["shielded"]):
+			chip = tag("🛡 blindado", "done")
+		case truthy(player["clause_locked"]):
+			chip = clock(text(player["clause_locked_until"]), "se abre su cláusula")
+		default:
+			chip = tag("pagable", "ok")
+		}
+		action := button("Cancelar", "ghost", "op", fmt.Sprintf(` data-op="cancel_raid" `+
+			`data-op-player="%s" data-op-name="%s"`, Esc(text(raid["player_id"])),
+			Esc(text(raid["name"]))))
+		line := playerRow(player)
+		line.Value, line.Note, line.Why = "hasta "+esMoney(limit), note, "clausulazo programado"
+		line.Chip, line.Action = chip, action
+		out = append(out, line.HTML())
+	}
+	return out
+}
+
 func (d Document) endingsAside() string {
-	glyphs := map[string][2]string{"aceptada": {"✓", "good"}, "rechazada": {"✕", "bad"},
-		"perdida": {"✕", "bad"}, "caducada": {"⌛", "muted"}}
 	var lines []string
 	for _, ending := range d.Endings {
 		outcome := text(ending["outcome"])
-		glyph := glyphs[outcome]
-		if glyph[0] == "" {
-			glyph = [2]string{"·", "muted"}
-		}
 		what := outcome
 		switch {
 		case outcome == "perdida" && text(ending["new_owner"]) != "":
@@ -672,8 +698,15 @@ func (d Document) endingsAside() string {
 		case outcome == "rechazada" && text(ending["who"]) != "":
 			what = "rechazada por " + text(ending["who"])
 		}
+		detail := ""
+		if outcome == "perdida" && text(ending["new_owner"]) != "" {
+			detail = "ganó " + text(ending["new_owner"])
+			if paid := number(ending["won_for"]); paid > 0 {
+				detail += " (" + esMoney(paid) + ")"
+			}
+		}
 		lines = append(lines, outcomeRow(text(ending["player_id"]), text(ending["player"]),
-			glyph[0], glyph[1], what, shortDate(text(ending["at"])), number(ending["amount"])))
+			outcome, detail, what, shortDate(text(ending["at"])), number(ending["amount"])))
 	}
 	body := empty("Todavía no se ha resuelto ninguna.")
 	if len(lines) > 0 {
@@ -1072,7 +1105,8 @@ func (d Document) clauseView() string {
 		chip := ""
 		switch {
 		case standing:
-			chip = tag(Esc(strings.ReplaceAll(text(raid["action"]), "_", " ")), "warn")
+			chip = outcomeIcon(text(raid["action"]), text(raid["why"])) +
+				tag(Esc(strings.ReplaceAll(text(raid["action"]), "_", " ")), "warn")
 			tone = "warn"
 		case truthy(player["clause_locked"]):
 			chip = clock(text(player["clause_locked_until"]), "se abre")
@@ -1130,21 +1164,16 @@ func (d Document) orderHistory() string {
 	if len(d.Orders) == 0 {
 		return ""
 	}
-	glyphs := map[string][2]string{"pagada": {"✓", "good"}, "cumplida": {"✓", "good"},
-		"cancelada": {"✕", "muted"}}
 	var lines []string
 	for _, order := range d.Orders {
 		outcome := text(order["outcome"])
-		glyph := glyphs[outcome]
-		if glyph[0] == "" {
-			glyph = [2]string{"·", "muted"}
-		}
 		what := outcome
 		if why := text(order["why"]); why != "" {
 			what += " · " + why
 		}
 		lines = append(lines, outcomeRow(text(order["player_id"]), text(order["player"]),
-			glyph[0], glyph[1], what, shortDate(text(order["at"])), number(order["amount"])))
+			outcome, text(order["why"]), what, shortDate(text(order["at"])),
+			number(order["amount"])))
 	}
 	return folded(fmt.Sprintf("Historial de tus órdenes · %d", len(lines)), scrollList(lines, 320))
 }
@@ -1170,7 +1199,7 @@ func (d Document) cheapClauses(seen map[string]bool) string {
 	})
 	var items []string
 	for _, item := range found {
-		chip := tag("🔓 pagable", "ok")
+		chip := tag("pagable", "ok")
 		if stamp := text(item["unlock_at"]); stamp != "" {
 			if when, ok := parseStamp(stamp); ok && when.After(time.Now()) {
 				chip = clock(stamp, "se abre su cláusula")
@@ -1506,8 +1535,8 @@ func (d Document) comingWeeks(current int) string {
 		entry.yours += count
 		if count > 0 || key == 0 {
 			entry.matches = append(entry.matches, fmt.Sprintf(
-				`<span class="mk-cal-them">%s–%s <i>%d</i></span>`, Esc(text(fixture["local"])),
-				Esc(text(fixture["visitor"])), count))
+				`<span class="mk-cal-them">%s%s–%s%s <i>%d</i></span>`, crestOf(local),
+				Esc(text(fixture["local"])), Esc(text(fixture["visitor"])), crestOf(visitor), count))
 		}
 	}
 	sort.Ints(order)

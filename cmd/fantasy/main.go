@@ -1730,7 +1730,7 @@ func cmdShell(args []string) error {
 
 	case "cabecera":
 		fmt.Println(render.Header([]string{`<div class="stat">uno</div>`,
-			`<div class="stat">dos</div>`}, true, "18.21M", nil))
+			`<div class="stat">dos</div>`}, true, nil))
 		fmt.Println(render.PageFoot("18/08/2026 16:20", "Liga Fantasy Comité 2026-", 1, nil, "auto"))
 
 	default:
