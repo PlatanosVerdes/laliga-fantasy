@@ -1,6 +1,7 @@
 import {html, useState, useEffect, useRef, legacy} from './lib.js';
 import {esWhen, exact, chipText, countdownText, health} from './format.js';
 import {prepare, confirm, changed, closeDialog, useDialog} from './api.js';
+import {DIALOGS, Notices, flash} from './dialogs.js';
 
 // The sprite render.IconSprite puts once at the top of the page.
 export const Icon = ({name}) =>
@@ -161,7 +162,7 @@ export function ConfirmOp({op}) {
       const done = DONE_LABEL[op.op] || 'Hecho';
       if (data.dry_run) { setStep((s) => ({...s, sending: false, done: done + ' (simulacro)'})); return; }
       changed();
-      if (legacy().flash) legacy().flash(done, op.name);
+      flash(done, op.name);
       closeDialog();
     } catch (error) {
       setStep((s) => ({...s, sending: false, error: error.message}));
@@ -191,9 +192,9 @@ export function ConfirmOp({op}) {
 
 export function ModalRoot() {
   const dialog = useDialog();
-  if (!dialog) return null;
-  if (dialog.kind === 'confirm') return html`<${ConfirmOp} key=${dialog.key} op=${dialog.op}/>`;
-  return null;
+  if (!dialog) return html`<${Notices}/>`;
+  const Kind = dialog.kind === 'confirm' ? ConfirmOp : DIALOGS[dialog.kind];
+  return html`<${Notices}/>${Kind ? html`<${Kind} key=${dialog.key} ...${dialog}/>` : null}`;
 }
 
 // A real switch: track and knob, the accent when on.

@@ -365,8 +365,9 @@ func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 
 // views is every tab the browser draws, in one answer: a live refresh asks once, not per tab.
 func (s *Server) views(writer http.ResponseWriter, _ *http.Request) {
+	// The live balance rides along: it is what every amount is judged against.
 	s.json(writer, http.StatusOK, map[string]any{"version": s.state.Health().Version,
-		"views": s.render().Views})
+		"cash": s.budget(), "views": s.render().Views})
 }
 
 // view is one tab as data, for the tabs the browser draws itself.

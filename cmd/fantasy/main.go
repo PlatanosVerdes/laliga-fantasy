@@ -1595,7 +1595,7 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		MaxDebtPct:     house.MaxDebtPct,
 		RuleNotes:      house.Notes,
 		CSS: read("report.css"), JS: read("report.js"),
-		Modal: read("modal.html"), Drawer: read("drawer.html"),
+		Drawer: read("drawer.html"),
 		Plan:     policies.Plan(players, armed, time.Now()),
 		Raids:    policies.RaidPlan(players, armed, cash, clauseWindow(universe.Schedule)),
 		Window:   clauseWindow(universe.Schedule),
@@ -1656,7 +1656,7 @@ func cmdPage(args []string) error {
 		Swaps: advice.Swaps(blob.Universe, blob.Advice, number(blob.Advice["budget"])),
 		Generated: args[1], LeagueName: league,
 		CSS: read("report.css"), JS: read("report.js"),
-		Modal: read("modal.html"), Drawer: read("drawer.html"),
+		Drawer: read("drawer.html"),
 		Plan: rowsFrom(blob.Advice["_plan"]), Raids: rowsFrom(blob.Advice["_raids"]),
 		Policies: policiesFrom(blob.Advice["_policies"]),
 	}

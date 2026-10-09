@@ -27,6 +27,8 @@ export const changed = moved;
 // each move of the world.
 const seed = document.getElementById('views-data');
 let views = seed ? JSON.parse(seed.textContent || '{}') : {};
+// The balance every amount is judged against: the build's, then the live one.
+let cash = views.meta && typeof views.meta.cash === 'number' ? views.meta.cash : null;
 const viewWatchers = new Set();
 let asking = null;
 async function refreshViews() {
@@ -35,8 +37,22 @@ async function refreshViews() {
     const data = await mine;
     if (asking !== mine) return;
     views = data.views || {};
+    if (typeof data.cash === 'number') cash = data.cash;
     viewWatchers.forEach((watch) => watch(views));
   } catch (e) { /* the last good views stay on screen */ }
+}
+
+export function useCash() {
+  const [, setAll] = useState(views);
+  useEffect(() => { viewWatchers.add(setAll); return () => viewWatchers.delete(setAll); }, []);
+  return cash;
+}
+export const currentCash = () => cash;
+
+export function useMeta() {
+  const [all, setAll] = useState(views);
+  useEffect(() => { viewWatchers.add(setAll); return () => viewWatchers.delete(setAll); }, []);
+  return all.meta || {};
 }
 
 export function useView(name) {

@@ -91,10 +91,14 @@ func mapOf(source any) map[string]any {
 
 // ViewData is every tab the browser draws, by name.
 func (d Document) ViewData() map[string]any {
-	if len(d.Advice) == 0 {
-		return map[string]any{}
+	meta := map[string]any{"mode": d.Mode, "build": Build}
+	if budget := asFloat(d.Advice["budget"]); budget != nil {
+		meta["cash"] = *budget
 	}
-	return map[string]any{"vender": d.SellData(), "comprar": d.BuyData(),
+	if len(d.Advice) == 0 {
+		return map[string]any{"meta": meta}
+	}
+	return map[string]any{"meta": meta, "vender": d.SellData(), "comprar": d.BuyData(),
 		"clausulas": d.ClauseData(), "partidos": d.MatchesData(), "rivales": d.RivalsData(),
 		"plantilla": d.SquadData(), "squad": d.MySquadData(), "decidir": d.DecideData()}
 }

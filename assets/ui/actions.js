@@ -1,6 +1,7 @@
 import {legacy} from './lib.js';
 import {getJSON, postJSON, openDialog, changed} from './api.js';
 import {stampText} from './format.js';
+import {openBid, openAmount, shieldDialog, raidDialog} from './dialogs.js';
 
 let opened = 0;
 export function confirmOp(op) { opened += 1; openDialog({kind: 'confirm', key: opened, op}); }
@@ -11,11 +12,11 @@ export async function runAction(a, player, {fromCard = false, reopen} = {}) {
   const page = legacy();
   if (a.op === 'note') return;
   if (a.op === 'raid') {
-    page.raidDialog({id: player.id, name: player.name, suggested: a.suggested, clause: player.clause,
+    raidDialog({id: player.id, name: player.name, suggested: a.suggested, clause: player.clause,
       opens: player.clause_locked_until}, reopen);
     return;
   }
-  if (a.op === 'shield') { page.shieldDialog(a, player); return; }
+  if (a.op === 'shield') { shieldDialog(a, player); return; }
   if (a.op === 'cancel_shield') {
     if (!confirm('Cancelar el blindaje de ' + player.name + ' del ' + stampText(a.at) + '?')) return;
     try { await postJSON('/api/shield/cancel', {id: player.id, at: a.at}); } catch (e) { alert('No he podido cancelarlo.'); return; }
@@ -24,7 +25,7 @@ export async function runAction(a, player, {fromCard = false, reopen} = {}) {
   }
   if (fromCard) page.closeDrawer();
   if (a.kind === 'amount') {
-    page.openAmount(a, player);
+    openAmount(a, player);
   } else {
     confirmOp({op: a.op, name: player.name, player_id: a.player_id || player.id,
       market_id: a.market_id, offer_id: a.offer_id, amount: a.amount || null});
@@ -58,12 +59,12 @@ export async function runAct(a) {
         offer_id: x.offer_id, amount: x.amount || null});
       return;
     case 'card': await runCardAction(x.player_id, x.op); return;
-    case 'bid': page.openBid(Object.fromEntries(Object.entries(x).map(([k, v]) => [k, v == null ? '' : String(v)]))); return;
+    case 'bid': openBid(x); return;
     case 'raid':
-      page.raidDialog({id: x.id, name: x.name, suggested: x.max, clause: x.clause}, changed);
+      raidDialog({id: x.id, name: x.name, suggested: x.max, clause: x.clause});
       return;
     case 'raise':
-      page.openAmount({op: 'raise_clause', kind: 'amount', label: 'Subir cláusula', player_id: x.id,
+      openAmount({op: 'raise_clause', kind: 'amount', label: 'Subir cláusula', player_id: x.id,
         player_team_id: x.slot, suggested: x.pay || 0},
       {id: x.id, name: x.name, clause: x.clause || 0, value: x.clause || 0, ideal_bid: 0});
       return;
