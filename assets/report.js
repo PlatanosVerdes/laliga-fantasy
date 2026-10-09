@@ -1207,6 +1207,7 @@ const VIEWS={
   plantillas: week=>openMatchday(week),
   prevision: week=>typeof openForecast==='function'&&openForecast(week),
   jornada: week=>openWeek(week),
+  alcance: team=>openReach(team),
   // The comparator was a drawer before it had its tab: old links land on the tab.
   comparar: ()=>openCompare({replace:true}),
 };
@@ -2917,6 +2918,26 @@ async function fillHistory(){
 const XI_LINES=[['striker','DEL'],['midfield','MED'],['defender','DEF'],['goalkeeper','POR']];
 function ptsClass(p){ return p==null?'':p>=8?'x-hi':p>=4?'x-mid':p<0?'x-bad':'x-lo'; }
 function fcClass(v){ return v>=6?'x-hi':v>=3.5?'x-mid':v>=2?'x-lo':'x-bad'; }
+
+// Which of my players a rival's cash reaches: drawn on the server, kept in the page.
+function openReach(teamId){
+  const source=document.getElementById('reach-'+teamId);
+  if(!drawer||!source) return;
+  markView('alcance',teamId);
+  drawer.hidden=false;
+  panelWide(false);
+  drawer.classList.add('as-pop');
+  const body=drawer.querySelector('.drawer-body');
+  body.dataset.view='reach';
+  body.innerHTML=`<h3 class="pc-title">${source.dataset.title}</h3>`+source.innerHTML;
+}
+document.addEventListener('click',(event)=>{
+  const button=event.target.closest&&event.target.closest('button[data-reach]');
+  if(!button) return;
+  event.stopPropagation();
+  usage.click('rivales','alcance',button.dataset.reach);
+  openReach(button.dataset.reach);
+},true);
 
 async function openWeek(week){
   if(!drawer) return;

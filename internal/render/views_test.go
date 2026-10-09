@@ -182,3 +182,25 @@ func TestRoleChipAndTheDropWarning(t *testing.T) {
 		t.Errorf("a starter moved down is a Decidir note: %.400s", aside)
 	}
 }
+
+// A rival's risk chip opens who of mine his cash reaches, best first, with the top threats
+// marked; when it reaches nobody it says what the cheapest clause is.
+func TestReachListsWhoARivalCanPay(t *testing.T) {
+	squad := []map[string]any{
+		{"id": "1", "name": "Barato", "clause": 5_000_000.0, "xpts": 2.0},
+		{"id": "2", "name": "Bueno", "clause": 9_000_000.0, "xpts": 6.0, "clause_locked": true,
+			"clause_locked_until": "2999-01-01T19:00:00+02:00"},
+		{"id": "3", "name": "Caro", "clause": 50_000_000.0, "xpts": 8.0},
+	}
+	html := reachTemplate("7", "Villaone", 10_000_000, squad, map[string]string{"2": "Villaone"})
+	if !strings.Contains(html, `id="reach-7"`) || strings.Contains(html, "Caro") {
+		t.Fatalf("only who his cash reaches: %s", html)
+	}
+	if strings.Index(html, "Bueno") > strings.Index(html, "Barato") || !strings.Contains(html, "amenaza") {
+		t.Error("best first, the top threat marked")
+	}
+	none := reachTemplate("8", "Pobre", 1_000_000, squad, nil)
+	if !strings.Contains(none, "No le llega a ninguno: tu cláusula más barata es 5,0M") {
+		t.Errorf("nobody reached: %s", none)
+	}
+}

@@ -36,12 +36,16 @@ func (d Document) rivalsView() string {
 	squad := rows(d.Advice["squad"])
 	// Who each rival is the main threat to, read off the clause plan.
 	threatens := map[string][]string{}
+	threatOf := map[string]string{}
 	for _, raise := range rows(d.Raise["rows"]) {
-		if who := text(raise["top_threat"]); who != "" && !truthy(raise["clause_locked"]) &&
-			!truthy(raise["shielded"]) {
-			threatens[who] = append(threatens[who], text(raise["name"]))
+		if who := text(raise["top_threat"]); who != "" {
+			threatOf[text(raise["id"])] = who
+			if !truthy(raise["clause_locked"]) && !truthy(raise["shielded"]) {
+				threatens[who] = append(threatens[who], text(raise["name"]))
+			}
 		}
 	}
+	var reaches strings.Builder
 	var items []string
 	for _, team := range rivals {
 		cash := number(team["estimated_cash"])
@@ -71,19 +75,24 @@ func (d Document) rivalsView() string {
 		}
 		meta := fmt.Sprintf("%.0f pts · %.0f jugadores · plantilla %s", number(team["points"]),
 			number(team["players"]), esMoney(number(team["squad_value"])))
-		chip, tone := tag("no llega", "done"), ""
+		teamID := text(team["team_id"])
+		label, class, tone := "no llega", "done", ""
 		switch {
 		case len(threatens[manager]) > 0:
-			chip = tag(fmt.Sprintf("amenaza a %d", len(threatens[manager])), "soon")
-			chip = strings.Replace(chip, `class="mk-chip soon"`, fmt.Sprintf(
-				`class="mk-chip soon" title="%s"`, Esc(strings.Join(threatens[manager], ", "))), 1)
-			tone = "critical"
+			label, class, tone = fmt.Sprintf("amenaza a %d", len(threatens[manager])), "soon",
+				"critical"
 		case reach > 0:
-			chip = tag(fmt.Sprintf("llega a %d", reach), "warn")
+			label, class = fmt.Sprintf("llega a %d", reach), "warn"
 		}
+		chip := fmt.Sprintf(`<button type="button" class="mk-chip %s reach-btn" data-reach="%s" `+
+			`title="A quién de los tuyos le llega">%s</button>`, class, Esc(teamID), label)
+		reaches.WriteString(reachTemplate(teamID, manager, cash, squad, threatOf))
 		place := "—"
 		if position := number(team["position"]); position > 0 {
 			place = fmt.Sprintf("%.0fº", position)
+			if position <= 3 {
+				tone += fmt.Sprintf(" podium p%.0f", position)
+			}
 		}
 		note := `<span title="Reconstruida del historial de traspasos: es una estimación">caja estimada</span>`
 		action := fmt.Sprintf(`<button type="button" class="mb mb-ghost" data-goto="rival-%s">`+
@@ -91,8 +100,58 @@ func (d Document) rivalsView() string {
 		items = append(items, teamRow(text(team["team_id"]), place, manager, meta, pays, esMoney(cash),
 			note, chip, action, tone))
 	}
-	main := block("Rivales", rowList(items), "", len(items))
+	main := block("Rivales", rowList(items), "", len(items)) + reaches.String()
 	return view("v-rivales", "rivales", main, d.outlookAside())
+}
+
+// reachTemplate is which of my players a rival's estimated cash reaches, for the popup his risk
+// chip opens: best first, with the state of each clause and whether the plan names him as the
+// top threat.
+func reachTemplate(teamID, manager string, cash float64, squad []map[string]any,
+	threatOf map[string]string) string {
+	var reached []map[string]any
+	cheapest := 0.0
+	for _, player := range squad {
+		clause := number(player["clause"])
+		if clause <= 0 {
+			continue
+		}
+		if cheapest == 0 || clause < cheapest {
+			cheapest = clause
+		}
+		if clause <= cash {
+			reached = append(reached, player)
+		}
+	}
+	sort.SliceStable(reached, func(one, two int) bool {
+		return number(reached[one]["xpts"]) > number(reached[two]["xpts"])
+	})
+	var items []string
+	for _, player := range reached {
+		var chip string
+		switch {
+		case truthy(player["shielded"]):
+			chip = tag("🛡 hasta "+esWhen(text(player["shielded_until"])), "done")
+		case truthy(player["clause_locked"]):
+			chip = clock(text(player["clause_locked_until"]), "se abre su cláusula")
+		default:
+			chip = tag("🔓 pagable", "ok")
+		}
+		extra := ""
+		if threatOf[text(player["id"])] == manager {
+			extra = tg("amenaza", "tg-bad")
+		}
+		items = append(items, row(player, extra, esNum(number(player["xpts"]), 1)+" xPts",
+			"cláusula "+esMoney(number(player["clause"])), chip, "", ""))
+	}
+	body := rowList(items)
+	if len(items) == 0 {
+		body = empty("No le llega a ninguno: tu cláusula más barata es " + esMoney(cheapest) + ".")
+	}
+	return fmt.Sprintf(`<template id="reach-%s" data-title="%s"><div class="mk reach">`+
+		`<p class="mk-note">Caja de %s: <b>%s</b> · estimada del historial de traspasos</p>%s`+
+		`</div></template>`, Esc(teamID), Esc("Al alcance de "+manager), Esc(manager),
+		esMoney(cash), body)
 }
 
 func (d Document) outlookAside() string {

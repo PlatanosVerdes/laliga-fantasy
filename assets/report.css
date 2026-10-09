@@ -1606,9 +1606,12 @@ table.cmp tr:last-child td{border-bottom:0}
 }
 .mk .evo,.mk .feed{max-width:none}
 .mk .board .r.me{background:color-mix(in srgb,var(--accent) 7%,transparent)}
-.mk .board .podium .rank-dot{color:#1a1a19;font-weight:800}
-.mk .board .p1 .rank-dot{background:#e8c25a} .mk .board .p2 .rank-dot{background:#c9ccd1}
-.mk .board .p3 .rank-dot{background:#c99063}
+.mk .podium .rank-dot{color:#1a1a19;font-weight:800}
+.mk .p1 .rank-dot{background:#e8c25a} .mk .p2 .rank-dot{background:#c9ccd1}
+.mk .p3 .rank-dot{background:#c99063}
+button.reach-btn{font:inherit;border:0;cursor:pointer}
+button.reach-btn:hover{filter:brightness(1.1);text-decoration:underline}
+.reach .rows{margin-top:8px}
 .mk .finish{margin-top:8px}
 .mk .finish b{font-size:14px}
 .cmp-tray .cmp-close{font:inherit;font-size:14px;line-height:1;width:32px;height:32px;flex:none;border-radius:50%;
