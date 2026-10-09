@@ -43,6 +43,9 @@ func TestDefaultThenEnvThenPage(t *testing.T) {
 	if got := r.Get("poll"); got != 90*time.Second || source(r, "poll") != SourceUI {
 		t.Fatalf("el panel manda sobre la variable: %v %s", got, source(r, "poll"))
 	}
+	if entry := r.List()[0]; entry.Fallback != "5m" || entry.FallbackSource != SourceEnv {
+		t.Fatalf("sin el panel quedaria la variable: %+v", entry)
+	}
 
 	if err := r.Reset("poll"); err != nil {
 		t.Fatal(err)

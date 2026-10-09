@@ -38,7 +38,7 @@ func serviceJobs(poll time.Duration, pollFromFlag bool) []services.Job {
 			Description: "Cada cuánto se recalcula todo aunque nada lo anuncie: valores, " +
 				"puntos y futbolfantasy cambian sin avisar.",
 			Default: schedule.Ceiling, Min: 5 * time.Minute, Max: 25 * time.Minute},
-		{Key: server.ServiceHeartbeat, Label: "Latido de la conexión en vivo",
+		{Key: server.ServiceHeartbeat, Label: "Latido en vivo",
 			Description: "Cada cuánto se manda un latido por la conexión en vivo, para que " +
 				"ningún proxy la corte por inactiva.",
 			Default: server.Heartbeat, Min: 5 * time.Second, Max: time.Minute},

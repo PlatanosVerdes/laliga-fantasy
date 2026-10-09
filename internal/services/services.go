@@ -60,6 +60,9 @@ type Entry struct {
 	Min            string  `json:"min"`
 	MaxSeconds     float64 `json:"max_seconds"`
 	Max            string  `json:"max"`
+	// Fallback is what applies once the page's override is dropped: the variable or the default.
+	Fallback       string  `json:"fallback"`
+	FallbackSource string  `json:"fallback_source"`
 	LastRun        *string `json:"last_run"`
 	NextRun        *string `json:"next_run"`
 }
@@ -118,7 +121,7 @@ func New(path string, jobs ...Job) *Registry {
 
 func (j Job) check(value time.Duration) error {
 	if value < j.Min || value > j.Max {
-		return fmt.Errorf("%w: %s esta entre %s y %s", ErrBounds, j.Label, Format(j.Min),
+		return fmt.Errorf("%w: %s va de %s a %s", ErrBounds, j.Label, Format(j.Min),
 			Format(j.Max))
 	}
 	return nil
@@ -145,6 +148,10 @@ func (r *Registry) resolve(key string) (time.Duration, string) {
 	if value, ok := r.overrides[key]; ok {
 		return value, SourceUI
 	}
+	return r.fallback(key)
+}
+
+func (r *Registry) fallback(key string) (time.Duration, string) {
 	if value, ok := r.env[key]; ok {
 		return value, SourceEnv
 	}
@@ -223,7 +230,9 @@ func (r *Registry) List() []Entry {
 			MaxSeconds: job.Max.Seconds(), Max: Format(job.Max)}
 		r.mu.RLock()
 		status := r.status[job.Key]
+		fallback, fallbackSource := r.fallback(job.Key)
 		r.mu.RUnlock()
+		entry.Fallback, entry.FallbackSource = Format(fallback), fallbackSource
 		if status != nil {
 			last, next := status()
 			entry.LastRun, entry.NextRun = stamp(last), stamp(next)
