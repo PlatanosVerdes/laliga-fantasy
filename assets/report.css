@@ -1342,7 +1342,6 @@ section.mk{margin:0 0 22px}
 .mk .card-top .mk-chip{align-self:flex-start}
 .mk .mk-chip.soon{background:color-mix(in srgb,var(--critical) 18%,transparent);color:var(--critical)}
 .mk .mk-chip.done{opacity:.5}
-.mk .clock{margin-right:3px}
 .mk .verb{margin-top:8px;font-size:11px;color:var(--ink-2);font-weight:600;text-transform:uppercase;
   letter-spacing:.06em}
 .mk .big{font-size:27px;font-weight:800;letter-spacing:-.025em;line-height:1.15;
@@ -1439,7 +1438,6 @@ section.mk{margin:0 0 22px}
   .mk .r{grid-template-areas:"f w v v a" "f g g c c"}
   .mk .rchip{justify-content:flex-end}
   .mk .rchip .mk-chip{font-size:10px;padding:2px 6px}
-  .mk .rchip .clock{display:none}
   .mk .ract{gap:4px}
   .mk .ract button.mb{font-size:12px;padding:4px 8px;border-radius:7px}
   .mk .ract .star{font-size:14px;padding:0 2px}
@@ -1520,7 +1518,7 @@ section.mk{margin:0 0 22px}
 .mk .tok-x{font-size:12px;font-weight:800;background:rgba(0,0,0,.55);border-radius:999px;padding:0 7px;
   font-variant-numeric:tabular-nums}
 .mk .tok-x.x-mid{color:#fff}
-.mk .tok-flag{position:absolute;top:-4px;right:18px;font-size:12px}
+.mk .tok-flag{position:absolute;top:-4px;right:6px;font-size:9px;font-weight:700;padding:0 4px;border-radius:4px;background:var(--warning);color:#1a1a19;white-space:nowrap}
 .mk .pitch-foot{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}
 .mk .pitch-foot b{color:var(--ink)}
 
@@ -1665,7 +1663,7 @@ button.reach-btn:hover{filter:brightness(1.1);text-decoration:underline}
   font-variant-numeric:tabular-nums;color:#fff}
 .mk-once .tok-x.x-hi{color:var(--good)} .mk-once .tok-x.x-lo{color:var(--warning)}
 .mk-once .tok-x.x-bad{color:var(--critical)}
-.mk-once .tok-flag{position:absolute;top:0;right:8px;font-size:12px}
+.mk-once .tok-flag{position:absolute;top:0;right:0;font-size:9px}
 .mk-once .slot-grip{left:2px;top:2px}
 .mk-once .pitch-wrap{grid-template-columns:minmax(0,1fr) 300px}
 .mk-once .bench{border-radius:14px;padding:12px}

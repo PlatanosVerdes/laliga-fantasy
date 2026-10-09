@@ -182,7 +182,7 @@ func (d Document) widgets(week map[string]any, players []map[string]any) ([]stri
 		note = "último partido " + esWhen(last)
 	}
 	weekNumber := int(number(week["weekNumber"]))
-	matchday := StatCard(Stat{Icon: "⚽", Label: fmt.Sprintf("Jornada %d", weekNumber),
+	matchday := StatCard(Stat{Label: fmt.Sprintf("Jornada %d", weekNumber),
 		Value: value, Deadline: deadline, Note: note, Tab: "partidos"})
 	clauses := ""
 	if stat, ok := d.clauseStat(); ok {
@@ -237,10 +237,10 @@ func (d Document) widgets(week map[string]any, players []map[string]any) ([]stri
 		exact = group(fmt.Sprintf("%.0f", *budget)) + " €"
 	}
 	stats := filterEmpty([]string{
-		StatCard(Stat{Icon: "💶", Label: "Caja", Value: esMoney(number(d.Advice["budget"])), ValueID: "kpi-cash",
+		StatCard(Stat{Label: "Caja", Value: esMoney(number(d.Advice["budget"])), ValueID: "kpi-cash",
 			Note: exact, Tab: "rivales"}),
 		clauses, matchday,
-		StatCard(Stat{Icon: "🏆", Label: "Liga", Value: position + "º",
+		StatCard(Stat{Label: "Liga", Value: position + "º",
 			Small: fmt.Sprintf("de %d", len(teams)),
 			Note:  fmt.Sprintf("%d pts", int(number(me["points"]))), Tab: "rivales"}),
 	})
@@ -325,7 +325,7 @@ func (d Document) clauseStat() (Stat, bool) {
 		return Stat{}, false
 	}
 	window := schedule.Clauses(fixtures, time.Now())
-	icon, label, deadline, note := "🔓", "Cláusulas abiertas", window.ClosesAt, "hasta "
+	icon, label, deadline, note := "", "Cláusulas abiertas", window.ClosesAt, "hasta "
 	if !window.Open {
 		icon, label, deadline, note = "🔒", "Cláusulas cerradas", window.OpensAt, "se abren "
 	}
@@ -810,7 +810,7 @@ func squadRow(player map[string]any) string {
 	note := fmt.Sprintf(`%s · <span class="%s">%s%s %%</span>`, esMoney(number(player["value"])),
 		class, sign, esNum(trend, 1))
 	if asking := number(mapOf(player["market"])["min_bid"]); asking > 0 {
-		note = "🏷 " + esMoney(asking) + " · " + note
+		note = "en venta " + esMoney(asking) + " · " + note
 	}
 	var chip string
 	switch {
@@ -819,7 +819,7 @@ func squadRow(player map[string]any) string {
 	case truthy(player["clause_locked"]):
 		chip = clock(text(player["clause_locked_until"]), "se libera su cláusula")
 	case number(player["clause"]) > 0:
-		chip = tag("🔓 "+esMoney(number(player["clause"])), "warn")
+		chip = tag("pagable "+esMoney(number(player["clause"])), "warn")
 	}
 	return row(player, "", esNum(number(player["xpts"]), 1)+" xPts", note, chip,
 		Star(player)+CompareButton(player), "")

@@ -135,7 +135,7 @@ func reachTemplate(teamID, manager string, cash float64, squad []map[string]any,
 		case truthy(player["clause_locked"]):
 			chip = clock(text(player["clause_locked_until"]), "se abre su cláusula")
 		default:
-			chip = tag("🔓 pagable", "ok")
+			chip = tag("pagable", "ok")
 		}
 		extra := ""
 		if threatOf[text(player["id"])] == manager {
@@ -208,7 +208,7 @@ func rivalSquad(team map[string]any, manager string, squad []map[string]any, tab
 		case number(player["asking"]) > 0:
 			chip = tag("en venta "+esMoney(number(player["asking"])), "")
 		case number(player["clause"]) > 0:
-			chip = tag("🔓 pagable", "ok")
+			chip = tag("pagable", "ok")
 		}
 		action := CompareButton(player)
 		if raid := RaidButton(player); raid != Missing && !strings.HasPrefix(raid, "<span") {

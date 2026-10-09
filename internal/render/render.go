@@ -1326,13 +1326,12 @@ func Section(title, body, note, badge, anchor string) string {
 		body + "</section>"
 }
 
-// Where is home or away in one glyph: a house or a plane. Two words repeated on every row
-// were reading as noise, and the glyph carries a title so it is not colour-alone reasoning.
+// Where is home or away, in words.
 func Where(home bool) string {
 	if home {
-		return "🏠"
+		return "en casa"
 	}
-	return "✈️"
+	return "fuera"
 }
 
 func field(name string) func(map[string]any) any {
@@ -1502,7 +1501,7 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 				if rival == "" {
 					return nil
 				}
-				return rival + " " + Where(truthy(row["next_home"]))
+				return rival + " · " + Where(truthy(row["next_home"]))
 			}, "text"},
 		}
 		return TableIn(columns, rows, "Sin jugadores", "", false), nil

@@ -112,7 +112,7 @@ func clock(stamp, label string) string {
 		return ""
 	}
 	return fmt.Sprintf(`<span class="mk-chip" data-deadline="%s" data-chip="1" title="%s">`+
-		`<span class="clock">⏱</span><span class="left">%s</span></span>`, Esc(stamp),
+		`<span class="left">%s</span></span>`, Esc(stamp),
 		Esc(strings.TrimSpace(label+" "+esWhen(stamp))), Esc(esWhen(stamp)))
 }
 
@@ -607,7 +607,7 @@ func (d Document) buyView() string {
 	window := d.window()
 	clauses, offers, free := d.buyOptions()
 	main := `<div class="mk-filters">` + Filters + `</div>` +
-		d.buyBlock("🔨 Mercado rentable", "puja libre", free, window)
+		d.buyBlock("Mercado rentable", "puja libre", free, window)
 
 	var bids []string
 	for _, bid := range rows(d.Advice["my_bids"]) {
@@ -629,8 +629,8 @@ func (d Document) buyView() string {
 	}
 	return viewWithRow("v-comprar", "comprar", main, block("Mis pujas en curso", body, "", -1)+
 		d.endingsAside()+d.starredAside(),
-		d.buyBlock("🤝 En venta por rivales", "oferta al dueño", offers, window),
-		d.buyBlock("🔓 Cláusulas que puedes pagar", "clausula", clauses, window))
+		d.buyBlock("En venta por rivales", "oferta al dueño", offers, window),
+		d.buyBlock("Cláusulas que puedes pagar", "clausula", clauses, window))
 }
 
 // outcomeRow is a resolved bid, offer or standing order as a list row: a glyph for how it
@@ -654,7 +654,7 @@ func shortDate(stamp string) string {
 
 func (d Document) endingsAside() string {
 	glyphs := map[string][2]string{"aceptada": {"✓", "good"}, "rechazada": {"✕", "bad"},
-		"perdida": {"✕", "bad"}, "caducada": {"⌛", "muted"}}
+		"perdida": {"✕", "bad"}, "caducada": {"·", "muted"}}
 	var lines []string
 	for _, ending := range d.Endings {
 		outcome := text(ending["outcome"])
@@ -1170,7 +1170,7 @@ func (d Document) cheapClauses(seen map[string]bool) string {
 	})
 	var items []string
 	for _, item := range found {
-		chip := tag("🔓 pagable", "ok")
+		chip := tag("pagable", "ok")
 		if stamp := text(item["unlock_at"]); stamp != "" {
 			if when, ok := parseStamp(stamp); ok && when.After(time.Now()) {
 				chip = clock(stamp, "se abre su cláusula")

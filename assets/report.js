@@ -730,7 +730,7 @@ function xClass(v){ return v>=6?'x-hi':v>=3.5?'x-mid':v>=2?'x-lo':'x-bad'; }
 function shirtHtml(player,line,index){
   if(!player) return `<div class="slot empty gap" data-line="${line}" data-index="${index}"
     title="No tienes con quien cubrir esta plaza">⚠<br>${LINE_LABEL[line]}<br>sin cubrir</div>`;
-  const listed=player.listed_for?`<span class="tok-flag" title="en venta por ${mny(player.listed_for)}">🏷</span>`:'';
+  const listed=player.listed_for?`<span class="tok-flag" title="en venta por ${mny(player.listed_for)}">en venta</span>`:'';
   return `<div class="slot tokslot" draggable="true" data-line="${line}"
     data-index="${index}" data-player="${player.id}" data-pt="${player.player_team_id}"
     title="${player.name}${player.next_rival?(' · vs '+player.next_rival
@@ -1883,7 +1883,7 @@ async function openDetail(playerId){
     +(p.is_mine&&p.sale_locked&&p.hold_until?`<span class="tg tg-warn">🔒 hasta ${whenShort(p.hold_until)}</span>`:'')
     +(p.role&&p.role.change==='down'?`<span class="tg tg-warn">bajó a ${p.role.label}</span>`:'');
   const h=health(p), a=p.absence||{};
-  const status=h?`<div class="pc-status ${h.ring}">${h.glyph==='card'?'🟥':'✚'} ${
+  const status=h?`<div class="pc-status ${h.ring}">${h.glyph==='card'?'':'✚ '}${
     [h.label,a.reason,a.since,a.until].filter(Boolean).join(' · ')}</div>`:'';
   const countdown=(stamp)=>`<span data-deadline="${stamp}" data-plain="1">${leftUntil(stamp)}</span>`;
   const past=lastWeekPct(data.history);
@@ -1899,7 +1899,7 @@ async function openDetail(playerId){
   const startsTile=starts!=null?tile('Titular', starts+' %',
     p.role?roleChip(p.role):p.hierarchy?p.hierarchy:(p.start_probability_source==='ficha'?`J${p.start_week||''} en su ficha`:''),
     starts>=75?'t-good':starts>=50?'t-warn':'t-bad'):null;
-  const nextTile=p.next_rival?tile('Próximo', p.next_rival, p.next_home?'🏠 en casa':'✈️ fuera'):null;
+  const nextTile=p.next_rival?tile('Próximo', p.next_rival, p.next_home?'en casa':'fuera'):null;
   const valueTile=tile('Valor', mny(p.value), l.market_id?`en venta por ${mny(l.min_bid)}`:'');
   const ceilingTile=p.is_mine?null:tile('Techo rentable', p.ideal_bid?mny(p.ideal_bid):'sin margen',
     p.ff_url?'↗ futbolfantasy':(p.ideal_bid?'futbolfantasy':''), 't-ceiling', p.ff_url);
@@ -2577,7 +2577,7 @@ const CMP_ROWS=[
   {label:'Valor 7d', get:p=>p.projected_pct,
     fmt:v=>((v||0)>=0?'+':'')+(v||0).toFixed(2)+'%', best:'max'},
   {label:'Proximo rival', get:p=>p.next_rival,
-    fmt:(v,p)=>v?`${v} ${p.next_home?'🏠':'✈️'}`:'—', text:true},
+    fmt:(v,p)=>v?`${v} · ${p.next_home?'en casa':'fuera'}`:'—', text:true},
 ];
 
 function cmpChips(p){
