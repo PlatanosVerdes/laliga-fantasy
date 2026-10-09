@@ -160,9 +160,93 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 		}
 	}
 
+	recommended := recommendedBuy(rows, player)
+	groupActions(actions, truthy(player["is_mine"]))
+	markPrimary(actions, recommended)
+	window := s.state.ClauseWindow(time.Now())
 	s.json(writer, http.StatusOK, map[string]any{"player": player, "offers": offers,
 		"listing": listing, "actions": actions, "history": history, "weeks": weeks,
-		"writes_enabled": s.opts.AllowWrites, "recommended": recommendedBuy(rows, player)})
+		"writes_enabled": s.opts.AllowWrites, "recommended": recommended,
+		"row": render.RowPlayer(player),
+		// What the card needs to know about the league and the page used to stamp in itself.
+		"facts": map[string]any{"window_open": window.Open, "opens": window.OpensAt,
+			"closes": window.ClosesAt, "hold_except": s.opts.HoldExceptions}})
+}
+
+// actionGroups is the topic each button is shown under in the card.
+var actionGroups = map[string]string{
+	"accept_offer": "oferta", "decline_offer": "oferta",
+	"always": "mercado", "sell_to_market": "mercado", "withdraw": "mercado",
+	"raise_clause": "clausula", "shield": "clausula", "cancel_shield": "clausula",
+	"bid": "fichar", "modify_bid": "fichar", "cancel_bid": "fichar", "buy_offer": "fichar",
+	"cancel_offer": "fichar", "direct_offer": "fichar", "raid": "fichar", "pay_clause": "fichar",
+}
+
+// groupActions files every action under its topic. A note says only where it was written, so
+// one without a topic of its own goes with the clause for my players and with signing for
+// anybody else's.
+func groupActions(actions []map[string]any, mine bool) {
+	for _, action := range actions {
+		if text(action["group"]) != "" {
+			continue
+		}
+		group := actionGroups[text(action["op"])]
+		if group == "" {
+			group = "fichar"
+			if mine {
+				group = "clausula"
+			}
+		}
+		action["group"] = group
+	}
+}
+
+// markPrimary picks the one button the card fills: the panel's top recommendation for him, or
+// none. An offer comes first, because it expires; then a signing the panel recommends.
+func markPrimary(actions []map[string]any, recommendedBuy bool) {
+	var pick map[string]any
+	var best, bestTaken map[string]any
+	for _, action := range actions {
+		if text(action["op"]) != "accept_offer" || text(action["why"]) == "" {
+			continue
+		}
+		if best == nil || number(action["amount"]) > number(best["amount"]) {
+			best = action
+		}
+		if truthy(action["take"]) &&
+			(bestTaken == nil || number(action["amount"]) > number(bestTaken["amount"])) {
+			bestTaken = action
+		}
+	}
+	switch {
+	case bestTaken != nil:
+		pick = bestTaken
+	case best != nil:
+		for _, action := range actions {
+			if text(action["op"]) == "decline_offer" &&
+				text(action["offer_id"]) == text(best["offer_id"]) {
+				pick = action
+				action["why"] = best["why"]
+			}
+		}
+	}
+	for _, action := range actions {
+		if pick != nil || truthy(action["blocked"]) {
+			continue
+		}
+		op := text(action["op"])
+		if recommendedBuy && (op == "bid" || op == "buy_offer" || op == "direct_offer") {
+			pick = action
+		}
+	}
+	for _, action := range actions {
+		if pick == nil && truthy(action["recommended"]) && !truthy(action["blocked"]) {
+			pick = action
+		}
+	}
+	if pick != nil {
+		pick["primary"] = true
+	}
 }
 
 func (s *Server) actions(player map[string]any, rows []map[string]any,
@@ -206,6 +290,7 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 				"label": "Quitar del mercado", "kind": "confirm", "market_id": marketID})
 		} else if locked {
 			actions = append(actions, map[string]any{"op": "note", "kind": "note",
+				"group": "mercado",
 				"label": "Lo fichaste hace poco: la norma de la liga no deja venderlo hasta " +
 					"el " + until})
 		} else {
@@ -243,6 +328,7 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 				map[string]any{"op": "accept_offer", "label": label, "kind": "confirm",
 					"offer_id": text(offer["id"]), "market_id": listing["market_id"],
 					"amount": amount, "note": note, "take": take, "why": why,
+					"created": text(offer["createdAt"]), "expires": text(offer["expirationDate"]),
 					"from": who, "from_market": truthy(offer["from_market"])},
 				map[string]any{"op": "decline_offer",
 					"label": "Rechazar la " + from, "kind": "confirm", "danger": true,
