@@ -1682,8 +1682,9 @@ table.cmp tr:last-child td{border-bottom:0}
 .tg-info{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .tg.role{--rc:var(--muted);color:var(--ink);font-weight:700;
   background:color-mix(in srgb,var(--rc) 30%,transparent);border-color:color-mix(in srgb,var(--rc) 80%,transparent)}
-.role-clave{--rc:#3cc4c7} .role-importante{--rc:#d2b54a} .role-rotacion{--rc:#a3a3a3}
-.role-revulsivo{--rc:#b07f4f} .role-reserva{--rc:#c27752} .role-descarte{--rc:#6e6e6e}
+.tg.role-clave,.role-clave{--rc:#3cc4c7} .tg.role-importante,.role-importante{--rc:#d2b54a}
+.tg.role-rotacion,.role-rotacion{--rc:#a3a3a3} .tg.role-revulsivo,.role-revulsivo{--rc:#b07f4f}
+.tg.role-reserva,.role-reserva{--rc:#c27752} .tg.role-descarte,.role-descarte{--rc:#6e6e6e}
 .role-revulsivo::after{content:" ▲";color:#3fae49;font-size:8px}
 .pc-role{margin:8px 0 0;font-size:12px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:4px 6px;
   align-items:baseline;line-height:1.45}
