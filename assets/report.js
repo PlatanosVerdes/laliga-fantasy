@@ -87,21 +87,57 @@ function wireTables(root=document){
   });
 }
 
+// What people type as a price: "20", "20M", "20,5", "20.000.000". Small numbers are millions;
+// empty is no limit.
+function parsePrice(raw){
+  let text=String(raw||'').trim().toLowerCase().replace(/\s|€/g,'');
+  if(!text) return Infinity;
+  const millions=/m$/.test(text);
+  text=text.replace(/m$/,'');
+  if(/^\d{1,3}(\.\d{3})+$/.test(text)) text=text.replace(/\./g,'');
+  const n=parseFloat(text.replace(',','.'));
+  if(!isFinite(n)) return Infinity;
+  return millions||n<1000 ? n*1e6 : n;
+}
+const plain=t=>String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+
 function applyFilters(){
-  const maxPrice=parseFloat(filterState.price)||Infinity;
-  const needle=filterState.text.trim().toLowerCase();
+  const maxPrice=parsePrice(filterState.price);
+  const needle=plain(filterState.text.trim());
+  const active=filterState.pos!=='all'||maxPrice!==Infinity||!!needle;
   document.querySelectorAll('.filters').forEach(bar=>{
     const scope=bar.closest('section');
     let shown=0,total=0;
     // A list keeps its rest folded; a filter has to look through all of it.
-    if(filterState.pos!=='all'||filterState.price||needle)
+    if(active)
       scope.querySelectorAll('details.fold').forEach(d=>{ if(d.querySelector('li[data-position]')) d.open=true; });
     scope.querySelectorAll('tr[data-position], li[data-position]').forEach(row=>{
       total++;
       const ok=(filterState.pos==='all'||row.dataset.position===filterState.pos)
         && parseFloat(row.dataset.price)<=maxPrice
-        && (!needle||row.dataset.name.includes(needle));
+        && (!needle||plain(row.dataset.find||row.dataset.name).includes(needle));
       row.hidden=!ok; if(ok) shown++;
+    });
+    // Each box says how many it shows, and says so when the filter leaves it empty.
+    scope.querySelectorAll('.block').forEach(box=>{
+      const rows=[...box.querySelectorAll('li[data-position]')];
+      if(!rows.length) return;
+      const badge=box.querySelector('.sec-head .count');
+      if(badge){
+        if(!badge.dataset.total) badge.dataset.total=badge.textContent;
+        badge.textContent=active?rows.filter(r=>!r.hidden).length:badge.dataset.total;
+      }
+      let none=box.querySelector('.f-none');
+      const empty=active&&rows.every(r=>r.hidden);
+      if(empty&&!none){
+        none=document.createElement('p');
+        none.className='mk-empty f-none';
+        none.textContent='Ninguno con este filtro.';
+        box.appendChild(none);
+      }
+      if(none) none.hidden=!empty;
+      const list=box.querySelector('.scrollbox, .rows');
+      if(list) list.hidden=empty;
     });
     const counter=bar.querySelector('.f-count');
     if(counter) counter.textContent=shown+' de '+total+' filas';
@@ -1822,14 +1858,19 @@ async function openDetail(playerId){
   const grid=tiles.map(([k,v,sm,cls])=>`<div class="${cls||''}"><span>${k}</span><b>${v}</b>${sm?`<small>${sm}</small>`:''}</div>`).join('');
   const actions=data.actions||[];
   const notes=actions.filter(x=>x.kind==='note'), buttons=actions.filter(x=>x.kind!=='note');
-  // An offer's pair: the button the panel recommends is filled and says why.
+  // An offer's pair, always Aceptar then Rechazar: only the recommended one is filled, in the
+  // accent colour whichever it is, and says why.
   const recommended=new Map();
   buttons.filter(x=>x.op==='accept_offer'&&x.why).forEach(x=>{
     const decline=buttons.find(y=>y.op==='decline_offer'&&y.offer_id===x.offer_id);
-    if(x.take) recommended.set(x,{tone:'good',why:x.why});
-    else if(decline) recommended.set(decline,{tone:'bad',why:x.why});
+    if(x.take) recommended.set(x,{tone:'primary',why:x.why});
+    else if(decline) recommended.set(decline,{tone:'primary',why:x.why});
   });
-  const primary=buttons.find(x=>!isDanger(x)&&x.op!=='always'&&!x.blocked&&x.op!=='accept_offer');
+  // Buying, blue means recommended: he improves the eleven at a price within the ceiling.
+  const BUY_OPS=['bid','buy_offer','direct_offer'];
+  const primary=p.is_mine
+    ? buttons.find(x=>!isDanger(x)&&x.op!=='always'&&!x.blocked&&x.op!=='accept_offer')
+    : data.recommended&&buttons.find(x=>BUY_OPS.includes(x.op)&&!x.blocked);
   body.innerHTML=`
     ${drawerFrom?`<button class="drawer-back" type="button" data-back="${drawerFrom.id}"
       >← ${drawerFrom.label}</button>`:''}

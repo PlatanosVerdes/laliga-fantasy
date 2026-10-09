@@ -409,9 +409,9 @@ func (d Document) buyRow(item map[string]any, route string, gain float64,
 			note += ` · <span class="down">sin margen</span>`
 		}
 	}
-	kind := "primary"
-	if gain <= MinShownGain {
-		kind = "ghost"
+	kind := "ghost"
+	if gain > MinShownGain && d.worthItsPrice(item, route) {
+		kind = "primary"
 	}
 	var meta, chip, action, verb string
 	switch route {
@@ -457,6 +457,23 @@ func (d Document) buyRow(item map[string]any, route string, gain float64,
 	}
 	return rowWith(item, filterAttrs(item, cost), Esc(text(item["team_short"]))+" · "+meta, value,
 		note, chip, action, tone)
+}
+
+// worthItsPrice is whether the price is one to recommend: within futbolfantasy's ceiling on the
+// market, and for a clause the advice's own verdict that it returns more per million than the
+// squad does.
+func (d Document) worthItsPrice(item map[string]any, route string) bool {
+	if route != "clausula" {
+		ceiling := number(item["ideal_bid"])
+		return ceiling > 0 && ceiling >= number(item["entry_cost"])
+	}
+	for _, raid := range append(rows(d.Advice["raids"]), rows(d.Advice["upcoming_raids"])...) {
+		if text(raid["id"]) == text(item["id"]) {
+			verdict := text(raid["verdict"])
+			return verdict == "chollo" || verdict == "renta"
+		}
+	}
+	return false
 }
 
 // buyingPower is today's cash, and what a market bid can reach with the debt the league allows
@@ -522,18 +539,14 @@ func (d Document) buyBlock(title, route string, items []map[string]any, window *
 		return number(first["xpts"]) > number(second["xpts"])
 	})
 	var lines []string
-	reachable := 0
 	for _, item := range items {
-		if number(item["entry_cost"]) <= reach {
-			reachable++
-		}
 		lines = append(lines, d.buyRow(item, route, gains[text(item["id"])], window))
 	}
 	body := empty("Nadie ahora mismo.")
 	if len(lines) > 0 {
 		body = scrollList(lines, 420)
 	}
-	return block(title, body, "", reachable)
+	return block(title, body, "", len(lines))
 }
 
 // gains is what each candidate of a route adds to the best eleven.
@@ -570,11 +583,10 @@ func (d Document) buyOptions() (clauses, offers, free []map[string]any) {
 func (d Document) buyView() string {
 	window := d.window()
 	clauses, offers, free := d.buyOptions()
-	main := `<p class="lead">Ordenado por lo que gana <b>tu once</b> cada jornada, no por el ` +
-		`descuento.</p><div class="mk-filters">` + Filters + `</div>` +
-		d.buyBlock("🔓 Cláusulas que puedes pagar", "clausula", clauses, window) +
+	main := `<div class="mk-filters">` + Filters + `</div>` +
+		d.buyBlock("🔨 Mercado rentable", "puja libre", free, window) +
 		d.buyBlock("🤝 En venta por rivales", "oferta al dueño", offers, window) +
-		d.buyBlock("🔨 Mercado rentable", "puja libre", free, window)
+		d.buyBlock("🔓 Cláusulas que puedes pagar", "clausula", clauses, window)
 
 	var bids []string
 	for _, bid := range rows(d.Advice["my_bids"]) {
@@ -706,7 +718,8 @@ func (d Document) sellView() string {
 		if who := text(offer["offer_from"]); who != "" && !truthy(offer["offer_from_market"]) {
 			meta += " · de " + Esc(who)
 		}
-		// Both buttons, always; the one the panel recommends is filled and says why.
+		// Both buttons, always Aceptar then Rechazar; only the recommended one is filled, and
+		// in the accent colour, since red would read as danger.
 		recommend := func(label, kind, op, reason string) string {
 			return button(label, kind, "op", fmt.Sprintf(` data-op="%s" title="recomendado: %s"`,
 				op, Esc(reason))+common)
@@ -720,13 +733,14 @@ func (d Document) sellView() string {
 			meta += " · si clausulas a " + Esc(text(swap.In["name"]))
 		}
 		tone := ""
-		actions := recommend("Rechazar", "bad", "decline_offer", why) +
-			button("Aceptar", "ghost", "op", ` data-op="accept_offer"`+common)
+		accept := button("Aceptar", "ghost", "op", ` data-op="accept_offer"`+common)
+		decline := recommend("Rechazar", "primary", "decline_offer", why)
 		if take {
 			tone = "good"
-			actions = recommend("Aceptar", "good", "accept_offer", why) +
-				button("Rechazar", "ghost", "op", ` data-op="decline_offer"`+common)
+			accept = recommend("Aceptar", "primary", "accept_offer", why)
+			decline = button("Rechazar", "ghost", "op", ` data-op="decline_offer"`+common)
 		}
+		actions := accept + decline
 		if planned {
 			meta += " · si fichas a " + Esc(plannedFor[text(offer["id"])])
 			tone = "accent"

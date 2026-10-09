@@ -1360,6 +1360,7 @@ section.mk{margin:0 0 22px}
 .mk .r{grid-column:1/-1;display:grid;grid-template-columns:subgrid;grid-template-areas:"f w v c a";
   align-items:center;padding:9px 12px;border-top:1px solid var(--line)}
 .mk .r:first-child{border-top:0}
+.mk .r[hidden],.mk .scrollbox[hidden],.mk .rows[hidden]{display:none}
 .mk .r>.face,.mk .r>.rank-dot{grid-area:f;width:30px;height:30px}
 .mk .rank-dot{border-radius:50%;display:grid;place-items:center;background:var(--surface-2);
   color:var(--ink-2);font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
@@ -1640,10 +1641,6 @@ table.cmp tr:last-child td{border-bottom:0}
   .mk-once .slot.tokslot{width:66px} .mk-once .tok-name{max-width:64px;font-size:11px}
   .mk .fx{grid-template-columns:58px minmax(0,1fr)}
 }
-.mk button.mb.mb-good{background:var(--good);color:#fff;border:1px solid var(--good)}
-.mk button.mb.mb-bad{background:var(--critical);color:#fff;border:1px solid var(--critical)}
-.drawer-actions.pc-acts button.act-good{background:var(--good);border-color:var(--good);color:#fff}
-.drawer-actions.pc-acts button.act-bad{background:var(--critical);border-color:var(--critical);color:#fff}
 .mk .big-note.up{color:var(--good)} .mk .big-note.down{color:var(--critical)}
 
 /* Vender: the rest of the squad, the eleven marked so a sale there is never by accident */

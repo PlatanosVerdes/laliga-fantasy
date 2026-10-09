@@ -18,6 +18,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/render"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
@@ -141,7 +142,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 
 	s.json(writer, http.StatusOK, map[string]any{"player": player, "offers": offers,
 		"listing": listing, "actions": actions, "history": history, "weeks": weeks,
-		"writes_enabled": s.opts.AllowWrites})
+		"writes_enabled": s.opts.AllowWrites, "recommended": recommendedBuy(rows, player)})
 }
 
 func (s *Server) actions(player map[string]any, rows []map[string]any,
@@ -520,6 +521,47 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 		"formation": formation["tacticalFormation"],
 		"formations": map[string]any{"free": free, "premium": premium},
 		"updated_at": payload["updatedAt"], "writes_enabled": s.opts.AllowWrites})
+}
+
+// recommendedBuy is whether bidding for him is what the panel recommends: he improves the best
+// eleven and his price is within futbolfantasy's ceiling. Same rule as the Comprar boxes.
+func recommendedBuy(rows []map[string]any, player map[string]any) bool {
+	listing := mapOf(player["market"])
+	if truthy(player["is_mine"]) || text(listing["market_id"]) == "" {
+		return false
+	}
+	cost := number(listing["min_bid"])
+	if ceiling := number(player["ideal_bid"]); ceiling <= 0 || ceiling < cost {
+		return false
+	}
+	var mine []map[string]any
+	for _, row := range rows {
+		if truthy(row["is_mine"]) {
+			mine = append(mine, row)
+		}
+	}
+	return elevenTotal(append(mine, player))-elevenTotal(mine) > render.MinShownGain
+}
+
+func elevenTotal(squad []map[string]any) float64 {
+	players := []eleven.Player{}
+	points := map[string]float64{}
+	for _, row := range squad {
+		id := text(row["id"])
+		players = append(players, eleven.Player{ID: id, Name: text(row["name"]),
+			Position: int(number(row["position_id"])), XPts: number(row["xpts"]),
+			Available: true})
+		points[id] = number(row["xpts"])
+	}
+	choice, ok := eleven.Best(players)
+	if !ok {
+		return 0
+	}
+	total := 0.0
+	for _, id := range choice.IDs() {
+		total += points[id]
+	}
+	return total
 }
 
 // bestLineup is the best legal eleven of my squad, in the lineup's own lines, so the editor can

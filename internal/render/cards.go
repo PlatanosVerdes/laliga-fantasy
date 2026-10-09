@@ -358,6 +358,9 @@ func (d Document) signingCards(actions []map[string]any) []Card {
 			continue
 		}
 		id := text(row["id"])
+		if route := text(row["route"]); route != "clausula" && !d.worthItsPrice(row, route) {
+			continue
+		}
 		card := Card{
 			Kind: "sign", Key: "in:" + id, Player: row, Verb: "Ficha",
 			Big: esSigned(gain) + " xPts", BigNote: "por jornada en tu once",

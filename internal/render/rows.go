@@ -70,10 +70,14 @@ func teamRow(teamID, place, name, meta, sub, value, note, chip, action, tone str
 		Attrs: ` data-team="` + Esc(teamID) + `"`}.HTML()
 }
 
-// filterAttrs are what the filter bar reads off a row: position, price and name.
+// filterAttrs are what the filter bar reads off a row: position, price, and the words a search
+// matches (name, team, owner or seller).
 func filterAttrs(player map[string]any, price float64) string {
-	return fmt.Sprintf(` data-position="%s" data-price="%.0f" data-name="%s"`,
-		Esc(text(player["position"])), price, Esc(strings.ToLower(text(player["name"]))))
+	words := []string{text(player["name"]), text(player["team_short"]), text(player["team"]),
+		text(player["owner"]), text(mapOf(player["market"])["seller"])}
+	return fmt.Sprintf(` data-position="%s" data-price="%.0f" data-name="%s" data-find="%s"`,
+		Esc(text(player["position"])), price, Esc(strings.ToLower(text(player["name"]))),
+		Esc(strings.ToLower(strings.Join(filterEmpty(words), " "))))
 }
 
 func rowList(items []string) string {
