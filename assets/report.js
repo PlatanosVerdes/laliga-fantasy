@@ -108,40 +108,6 @@ function applyFilters(){
   });
 }
 
-// One section narrowing itself to one kind of move. It owns `hidden` on its own rows, which is
-// safe because the sections with a filter bar are other ones, and it is remembered: a rebuild
-// puts the full table back and the answer you were reading should not disappear with it.
-const ONLY_KEY='fantasy:only';
-function onlyState(){
-  try{ return localStorage.getItem(ONLY_KEY)||''; }catch(e){ return ''; }
-}
-
-function applyOnly(root=document){
-  root.querySelectorAll('button[data-only]').forEach(button=>{
-    const on=onlyState()===button.dataset.only;
-    const scope=button.closest('section');
-    button.classList.toggle('on',on);
-    if(!scope) return;
-    scope.querySelectorAll('tr[data-route]').forEach(row=>{
-      row.hidden = on && !(row.dataset.route===button.dataset.only && row.dataset.afford==='1');
-    });
-  });
-}
-
-function wireOnly(root=document){
-  root.querySelectorAll('button[data-only]').forEach(button=>{
-    if(button.dataset.wired) return;
-    button.dataset.wired='1';
-    button.addEventListener('click',()=>{
-      const next=onlyState()===button.dataset.only?'':button.dataset.only;
-      try{ localStorage.setItem(ONLY_KEY,next); }catch(e){}
-      usage.click('chollos',next?'solo '+next:'todas las vias');
-      applyOnly();
-    });
-  });
-  applyOnly(root);
-}
-
 function wireFilters(root=document){
   root.querySelectorAll('.filters').forEach(bar=>{
     if(bar.dataset.wired) return;
@@ -2005,7 +1971,7 @@ function actionButton(a,primary=false,rec=null){
   return a.op==='always'&&a.on ? button+alwaysPanel(a) : button;
 }
 
-async function runAction(a,player){
+async function runAction(a,player,from=null){
   if(a.op==='note') return;
   if(a.op==='raid'){
     raidDialog({id:player.id, name:player.name, suggested:a.suggested, clause:player.clause,
@@ -2028,12 +1994,14 @@ async function runAction(a,player){
   if(a.op==='always'){
     // Paint before asking: the server confirms in milliseconds, but reloading the whole card
     // made the button look dead.
-    const button=[...document.querySelectorAll('.drawer-actions button')]
+    const button=from||[...document.querySelectorAll('.drawer-actions button')]
       .find(b=>b.textContent.includes('mercado'));
+    const label=on=>from?(on?'● Siempre en mercado':'Siempre en mercado')
+                        :(on?'Quitar de siempre-en-mercado':'Siempre en mercado');
     const turningOn=!a.on;
     if(button){
       button.classList.toggle('on',turningOn);
-      button.textContent=turningOn?'Quitar de siempre-en-mercado':'Siempre en mercado';
+      button.textContent=label(turningOn);
       button.disabled=true;
     }
     try{
@@ -2044,18 +2012,18 @@ async function runAction(a,player){
       const data=await res.json();
       if(button){
         button.classList.toggle('on',!!data.always_listed);
-        button.textContent=data.always_listed?'Quitar de siempre-en-mercado'
-                                             :'Siempre en mercado';
+        button.textContent=label(!!data.always_listed);
       }
       a.on=!!data.always_listed;
       const existing=document.querySelector('.always-panel');
+      if(from) return;
       if(a.on&&!existing&&button){
         button.insertAdjacentHTML('afterend',alwaysPanel(a));
         wireAlways(button.parentElement,player);
       }else if(!a.on&&existing){ existing.remove(); }
     }catch(e){
-      if(button){ button.classList.toggle('on',a.on);
-        button.textContent=a.on?'Quitar de siempre-en-mercado':'Siempre en mercado'; }
+      if(button){ button.classList.toggle('on',a.on); button.textContent=label(a.on); }
+      if(from) alert('No he podido cambiarlo: '+(e.message||e));
     }finally{ if(button) button.disabled=false; }
     return;
   }
@@ -2736,24 +2704,30 @@ function wireFindPlayer(){
 
 // ---- tabs: one view at a time ---------------------------------------------
 const TABS=[
-  {id:'decidir', label:'Decidir', sections:['plan','acciones','caja','chollos']},
+  {id:'decidir', label:'Decidir', sections:['ahora']},
   // By direction: a bid sits with the market it was made in, an offer with the sale it answers.
-  {id:'comprar', label:'Comprar', sections:['fichajes','enventa','mispujas','seguimiento','resueltas']},
-  {id:'vender', label:'Vender', sections:['misventas','ofertas','siempre']},
-  {id:'clausulas', label:'Cláusulas', sections:['subir','programados','calendario','vencimientos','oportunidades','clausulas']},
-  {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
-  {id:'partidos', label:'Partidos', sections:['jornada','partidos']},
+  {id:'comprar', label:'Comprar', sections:['v-comprar']},
+  {id:'vender', label:'Vender', sections:['v-vender']},
+  {id:'clausulas', label:'Cláusulas', sections:['v-clausulas']},
+  {id:'plantilla', label:'Plantilla', sections:['once','v-plantilla','plantilla']},
+  {id:'partidos', label:'Partidos', sections:['v-partidos']},
   // Everyone else's in its place: their whole squads and what they can pay for yours.
-  {id:'rivales', label:'Rivales', sections:['rivales']},
+  {id:'rivales', label:'Rivales', sections:['v-rivales']},
   {id:'liga', label:'Liga', sections:['evolucion','movimientos','normas']},
-  {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
+  {id:'ranking', label:'Ranking', sections:['v-ranking']},
   {id:'comparador', label:'Comparador', sections:['comparador']},
 ];
 
-// A hash can be a tab (#comprar) or a section (#oportunidades), and the second is what the
+// A hash can be a tab (#comprar) or a section (#v-clausulas), and the second is what the
 // links carry, so it has to be resolved to the tab that owns it.
-// The tabs before they were split by direction, so old links and bookmarks still land.
-const TAB_ALIASES={mercado:'comprar', misofertas:'vender'};
+// The tabs before they were split by direction, and the sections of the old tables, so old
+// links and bookmarks still land on the tab that took their place.
+const TAB_ALIASES={mercado:'comprar', misofertas:'vender',
+  plan:'decidir', acciones:'decidir', caja:'decidir', chollos:'comprar',
+  fichajes:'comprar', enventa:'comprar', mispujas:'comprar', seguimiento:'comprar', resueltas:'comprar',
+  misventas:'vender', ofertas:'vender', siempre:'vender', ventas:'plantilla',
+  subir:'clausulas', programados:'clausulas', calendario:'clausulas', vencimientos:'clausulas',
+  oportunidades:'clausulas', jornada:'partidos', pinta:'rivales', rentabilidad:'ranking'};
 
 function resolveTarget(hash){
   let id=(hash||'').replace(/^#/,'');
@@ -2790,44 +2764,6 @@ document.addEventListener('change',(event)=>{
   applyRivalPick();
 });
 
-// ---- each tab's view first, its old tables folded under "Ver detalle" -------------
-// The tables stay sections of their own, so the live refresh still finds them by id; the fold
-// only decides whether they are on screen.
-const FOLDS={
-  decidir:['plan','acciones','caja','chollos'],
-  comprar:['fichajes','enventa','mispujas','seguimiento','resueltas'],
-  vender:['misventas','ofertas','siempre'],
-  clausulas:['subir','programados','calendario','vencimientos','oportunidades','clausulas'],
-  partidos:['jornada','partidos'],
-  rivales:['rivales','pinta'],
-  ranking:['ranking','rentabilidad'],
-};
-const FOLD_KEY='fantasy:detalle:';
-function foldOpen(tab){
-  try{ return localStorage.getItem(FOLD_KEY+tab)==='1'; }catch(e){ return false; }
-}
-function applyFold(tab){
-  const ids=FOLDS[tab];
-  if(!ids) return;
-  const open=foldOpen(tab);
-  document.querySelectorAll(`button[data-fold="${tab}"]`).forEach(button=>{
-    button.setAttribute('aria-expanded',open?'true':'false');
-    button.classList.toggle('on',open);
-  });
-  if(!document.getElementById('mas-'+tab)) return;
-  ids.forEach(id=>{ const node=document.getElementById(id); if(node&&!open) node.hidden=true; });
-}
-document.addEventListener('click',(event)=>{
-  const button=event.target.closest&&event.target.closest('button[data-fold]');
-  if(!button) return;
-  const tab=button.dataset.fold, open=!foldOpen(tab);
-  try{ localStorage.setItem(FOLD_KEY+tab,open?'1':'0'); }catch(e){}
-  usage.click('detalle',(open?'ver detalle ':'ocultar detalle ')+tab);
-  showTab(tab,{updateHash:false});
-  const first=(FOLDS[tab]||[]).map(id=>document.getElementById(id)).find(n=>n&&!n.hidden);
-  if(open&&first) first.scrollIntoView({behavior:'smooth',block:'start'});
-});
-
 // Faces, names and rows in the views open the player's card; a button inside them does its own.
 document.addEventListener('click',(event)=>{
   const target=event.target;
@@ -2856,7 +2792,7 @@ document.addEventListener('click',async(event)=>{
     const data=await res.json();
     const action=(data.actions||[]).find(a=>a.op===button.dataset.act);
     if(!action){ alert('Ahora mismo no se puede: abre su ficha para ver por qué.'); return; }
-    runAction(action,data.player);
+    await runAction(action,data.player,action.op==='always'?button:null);
   }catch(e){
     alert('Solo disponible en la versión servida.');
   }finally{ button.disabled=false; }
@@ -2950,7 +2886,10 @@ async function openWeek(week){
   const when=k?['dom','lun','mar','mié','jue','vie','sáb'][k.getDay()]+' '+k.getDate()+' '
     +['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][k.getMonth()]:'';
   body.innerHTML=`<h3 class="pc-title">J${week}${future?' · previsión de cada once':when?' · '+when:''}</h3>`
-    +`<p class="drawer-note" style="margin:0 0 8px">Toca un manager para ver su once${future?'':'; en pequeño, lo previsto si se guardó'}.</p>${rows}`;
+    +`<p class="drawer-note" style="margin:0 0 8px">Toca un manager para ver su once${future?'':'; en pequeño, lo previsto si se guardó'}.</p>${rows}`
+    +`<p class="drawer-note"><button class="j-squads" type="button" data-matchday="${week}">plantillas</button>`
+    +`${fc&&!future?` <button class="j-squads" type="button" data-forecast="${week}">previsión</button>`:''}</p>`;
+  wireMatchdays(body);
 }
 
 function showTab(id,{section=null,updateHash=true}={}){
@@ -2985,10 +2924,6 @@ function showTab(id,{section=null,updateHash=true}={}){
   if(tab.sections.includes('once') && !pitchState) loadPitch();
   if(tab.sections.includes('evolucion')) loadSeason();
   if(tab.id==='comparador'&&was!=='comparador') renderCompare();
-  if(section&&(FOLDS[tab.id]||[]).includes(section)){
-    try{ localStorage.setItem(FOLD_KEY+tab.id,'1'); }catch(e){}
-  }
-  applyFold(tab.id);
   if(tab.id==='partidos') fillHistory();
   drawTray();
   if(section){
@@ -3064,7 +2999,7 @@ async function swap(){
     const node=document.getElementById(id);
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });
-  wireTables(); wireFilters(); wireOnly(); wireStars(); wireBids(); wireOps();
+  wireTables(); wireFilters(); wireStars(); wireBids(); wireOps();
   wireDetails(); wireRaids();
   wireRaises();
   wireManagers(); wireMatchdays(); wireFeedSort(); tick();
@@ -3133,7 +3068,7 @@ function connect(){
   };
 }
 
-wireTables(); wireFilters(); wireOnly(); wireStars(); wireBids(); wireOps();
+wireTables(); wireFilters(); wireStars(); wireBids(); wireOps();
 wireDetails(); wireRaids();
 wireRaises(); wireManagers(); wireMatchdays(); wireFeedSort();
 wireTabs(); tick(); drawTray();

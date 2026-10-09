@@ -1525,6 +1525,9 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 		if policy.AcceptAbove != nil {
 			row["accept_above"] = *policy.AcceptAbove
 		}
+		if policy.AutoSell {
+			row["auto_sell"] = true
+		}
 		policyRows[id] = row
 	}
 

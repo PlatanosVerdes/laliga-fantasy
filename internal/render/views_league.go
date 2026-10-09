@@ -264,7 +264,7 @@ func bestRow(player map[string]any, reach float64) string {
 		Esc(strings.ToLower(text(player["name"])))), 1)
 }
 
-func (d Document) rankingView(byScore, byXPts []map[string]any) string {
+func (d Document) rankingView(byScore, byXPts, byValue []map[string]any) string {
 	reach, _ := d.crackReach()
 	var top, rest []string
 	for index, player := range byXPts {
@@ -302,6 +302,10 @@ func (d Document) rankingView(byScore, byXPts []map[string]any) string {
 	}
 	aside := block("Los mejores por posición", `<ul class="rows tight">`+byLine.String()+`</ul>`,
 		"", -1)
+	if len(byValue) > 0 {
+		aside += block("Más xPts por millón", `<p class="lead">lo que manda cuando vas justo de `+
+			`caja</p>`+rankList(byValue, 5, false), "", len(byValue))
+	}
 	return view("v-ranking", "ranking", main, aside)
 }
 

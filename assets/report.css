@@ -887,15 +887,6 @@ table.cmp td.cmp-cheap{font-weight:700}
 .effect-line{margin:0;font-size:12.5px;color:var(--ink-2)}
 
 /* The way into the comparator from the header, next to the mode. */
-.head-btn{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.05em;margin-left:8px;padding:3px 10px;border-radius:20px;cursor:pointer;
-  border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
-.head-btn:hover{border-color:var(--baseline);color:var(--ink)}
-/* A narrowed table looks like a short table, so the switch that narrowed it has to be lit. */
-.head-btn.on{color:var(--accent);border-color:var(--accent);
-  background:color-mix(in srgb,var(--accent) 12%,transparent)}
-/* Above its own table rather than beside a heading, which is where the others sit. */
-button[data-only]{margin:0 0 10px}
 
 /* The matchday points on a card: the same chips as a shirt on the pitch, on their own line
    because here there is room for the whole season rather than the last five. */
@@ -963,7 +954,6 @@ td .muted,span.muted{color:var(--muted)}
   .wrap{padding:14px 12px 56px}
   header h1{font-size:19px;line-height:1.25}
   header p{font-size:12px}
-  .head-btn{margin-left:0;margin-top:6px}
   /* At 400px a 150px box does not fit beside the button: it takes a line of its own, and the
      results with it. */
   .head-find{display:block;margin:6px 0 0}
@@ -1507,15 +1497,6 @@ section.mk{margin:0 0 22px}
 .md-xi .chips{display:flex;flex-wrap:wrap;gap:5px}
 .md-xi .fcs{font-size:10px;color:var(--muted);font-weight:500}
 
-/* Ver detalle */
-section.mk-more{margin:4px 0 22px}
-.mk-more .dfold{font:inherit;display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;cursor:pointer;
-  background:none;border:1px dashed var(--line);border-radius:10px;padding:8px 12px;color:var(--ink)}
-.mk-more .dfold:hover{border-color:var(--baseline)}
-.mk-more .dfold-title{font-weight:600;font-size:13px}
-.mk-more .dfold-title::before{content:"▸ ";color:var(--muted)}
-.mk-more .dfold.on .dfold-title::before{content:"▾ "}
-.mk-more .dfold-what{font-size:12px;color:var(--muted)}
 footer,header.topline{margin-top:24px}
 
 @media (max-width:760px){
@@ -1648,3 +1629,10 @@ table.cmp tr:last-child td{border-bottom:0}
 .mk .rows .line-head{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:11px;color:var(--muted);
   background:var(--surface-2);border-top:1px solid var(--line);font-weight:600}
 .mk .rows .line-head:first-child{border-top:0}
+
+/* Vender: the rest of the squad, the eleven marked so a sale there is never by accident */
+.mk .xi-mark{color:var(--accent);font-weight:650}
+.mk .rows .line-head.xi-head{color:var(--accent)}
+.mk .ract button.act.on{border-color:var(--accent);color:var(--accent)}
+.mk .src-rival{color:var(--warning)}
+.mk .mk-note.plan-warn{color:var(--warning)}

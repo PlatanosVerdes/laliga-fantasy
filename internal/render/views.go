@@ -9,8 +9,7 @@ import (
 )
 
 // The tabs' first screens: compact rows, cards and an aside, the way the approved mockup draws
-// them. Every figure is read off the advice layer or the universe; the old tables stay below,
-// folded under "Ver detalle".
+// them. Every figure is read off the advice layer or the universe.
 
 // MinShownGain is the least a signing has to add to the best eleven to be listed: under a third
 // of a point it does not show on the pitch.
@@ -181,14 +180,6 @@ func view(id, tab, main, aside string) string {
 	return fmt.Sprintf(`<section id="%s" data-tab="%s" class="mk">%s</section>`, id, tab, layout)
 }
 
-// moreSection is the tab's "Ver detalle": the old tables, folded until asked for.
-func moreSection(tab, what string) string {
-	return fmt.Sprintf(`<section id="mas-%s" data-tab="%s" class="mk mk-more">`+
-		`<button class="dfold" type="button" data-fold="%s" aria-expanded="false">`+
-		`<span class="dfold-title">Ver detalle</span><span class="dfold-what">%s</span>`+
-		`</button></section>`, tab, tab, tab, Esc(what))
-}
-
 func ratioClass(ratio float64) string {
 	if ratio >= 1 {
 		return "up"
@@ -232,20 +223,13 @@ func (d Document) playersByID() map[string]map[string]any {
 	return out
 }
 
-// Views are every tab's first screen, each followed by its "Ver detalle".
+// Views are every tab's screen.
 func (d Document) Views() []string {
 	if len(d.Advice) == 0 {
 		return nil
 	}
-	return []string{
-		d.decideSection(), moreSection("decidir", "plan ideal · todas las decisiones · caja · chollos"),
-		d.buyView(), moreSection("comprar", "fichajes · en venta · mis pujas · siguiendo · cómo acabaron"),
-		d.sellView(), moreSection("vender", "mis ventas · ofertas · siempre en mercado"),
-		d.clauseView(), moreSection("clausulas", "subir · programados · calendario · vencimientos · oportunidades"),
-		Pitch, d.squadView(),
-		d.matchesView(), moreSection("partidos", "cómo va la jornada · calendario de partidos"),
-		d.rivalsView(),
-	}
+	return []string{d.decideSection(), d.buyView(), d.sellView(), d.clauseView(), Pitch,
+		d.squadView(), d.matchesView(), d.rivalsView()}
 }
 
 // --- Decidir ---------------------------------------------------------------------------
@@ -399,7 +383,17 @@ func (d Document) elevenAside() string {
 			week, place)
 	}
 	return block("Tu once", `<div class="pitchlist">`+summary+elevenChips(lines, arriving)+legend+
-		`</div>`+finish, Esc(shape), -1) + d.crackBox() + more
+		`</div>`+d.planWarnings()+finish, Esc(shape), -1) + d.crackBox() + more
+}
+
+// planWarnings are the plan's warnings about the eleven itself: a squad that cannot field
+// eleven, or a position with nobody to spare.
+func (d Document) planWarnings() string {
+	var out strings.Builder
+	for _, warning := range asStrings(d.Swaps["warnings"]) {
+		out.WriteString(`<p class="mk-note plan-warn">⚠ ` + Esc(warning) + `</p>`)
+	}
+	return out.String()
 }
 
 // --- Comprar ---------------------------------------------------------------------------
@@ -411,6 +405,9 @@ func (d Document) buyRow(item map[string]any, window *windowState) string {
 	listing := mapOf(item["market"])
 	id, name := text(item["id"]), text(item["name"])
 	price := esMoney(cost)
+	if asking := number(item["asking"]); asking > 0 && asking < cost*0.99 {
+		price += " · piden " + esMoney(asking)
+	}
 	if !affordable {
 		price += " · no llegas"
 	}
@@ -550,7 +547,106 @@ func (d Document) buyView() string {
 			Esc(text(raid["name"])), esMoney(number(raid["max_pay"])))
 	}
 	main += block("Mis pujas en curso", body, "", -1)
+	main += d.biddableList()
 	return view("v-comprar", "comprar", main, d.endingsAside()+d.starredAside())
+}
+
+// biddableList is everything that can be bid for today, free market and rivals' listings alike,
+// best first by what it adds to the eleven and by xPts when it does not get in.
+func (d Document) biddableList() string {
+	gains := map[string]float64{}
+	for _, item := range rows(d.Money["bargains"]) {
+		if route := text(item["route"]); route != "clausula" {
+			gains[text(item["id"])] = math.Max(gains[text(item["id"])], number(item["xi_gain"]))
+		}
+	}
+	var listings []map[string]any
+	seen := map[string]bool{}
+	for _, item := range append(rows(d.Advice["bids_now"]), rows(d.Advice["asks"])...) {
+		id := text(item["id"])
+		if seen[id] || truthy(item["is_mine"]) || text(mapOf(item["market"])["market_id"]) == "" {
+			continue
+		}
+		seen[id] = true
+		listings = append(listings, item)
+	}
+	if len(listings) == 0 {
+		return ""
+	}
+	sort.SliceStable(listings, func(one, two int) bool {
+		first, second := gains[text(listings[one]["id"])], gains[text(listings[two]["id"])]
+		if (first > MinShownGain) != (second > MinShownGain) {
+			return first > MinShownGain
+		}
+		if first > MinShownGain && first != second {
+			return first > second
+		}
+		return number(listings[one]["xpts"]) > number(listings[two]["xpts"])
+	})
+	cash := number(d.Advice["budget"])
+	var items []string
+	for _, item := range listings {
+		items = append(items, d.biddableRow(item, gains[text(item["id"])], cash))
+	}
+	shown := min(15, len(items))
+	body := `<div class="mk-filters">` + Filters + `</div>` + rowList(items[:shown], false)
+	if len(items) > shown {
+		body += folded(fmt.Sprintf("%d más", len(items)-shown), rowList(items[shown:], false))
+	}
+	return block("Todo lo que puedes pujar", body, "mercado libre y ventas de rivales, por lo que "+
+		"suma a tu once", len(items))
+}
+
+func (d Document) biddableRow(item map[string]any, gain, cash float64) string {
+	listing := mapOf(item["market"])
+	cost := number(item["entry_cost"])
+	seller := fallbackText(text(item["seller"]), text(listing["seller"]))
+	meta := Esc(text(item["team_short"])) + ` · <span class="src-free">libre</span>`
+	label := "Pujar " + esMoney(cost)
+	if seller != "" {
+		meta = Esc(text(item["team_short"])) + ` · <span class="src-rival">vende ` + Esc(seller) +
+			`</span>`
+		label = "Ofrecer " + esMoney(cost)
+	}
+	if starts := asFloat(item["start_probability"]); starts != nil {
+		meta += fmt.Sprintf(" · titular %.0f %%", *starts)
+	}
+	if bids := int(number(listing["bids"])); bids > 0 {
+		meta += " · " + counted(bids, "puja", "pujas")
+	}
+	value := esNum(number(item["xpts"]), 1) + " xPts"
+	if gain > MinShownGain {
+		value = esSigned(gain) + " xPts"
+		meta += " · " + esNum(number(item["xpts"]), 1) + " xPts"
+	}
+	trend := number(item["projected_pct"])
+	class, sign := "up", "+"
+	if trend < 0 {
+		class, sign = "down", ""
+	}
+	note := fmt.Sprintf(`%s · vale %s · <span class="%s">%s%s %%</span> 7d`, esMoney(cost),
+		esMoney(number(item["value"])), class, sign, esNum(trend, 1))
+	if ceiling := number(item["ideal_bid"]); ceiling > 0 {
+		margin := ceiling - cost
+		marginClass, mark := "up", "+"
+		if margin < 0 {
+			marginClass, mark = "down", ""
+		}
+		note += fmt.Sprintf(` · <span class="%s">%s%s de margen</span>`, marginClass, mark,
+			esMoney(margin))
+	} else {
+		note += ` · <span class="down">sin margen</span>`
+	}
+	kind, tone := "ghost", ""
+	if cost > cash {
+		tone = "dim"
+		note += " · no llegas"
+	}
+	line := row(item, meta, value, note, clock(text(listing["expires"]), "sale del mercado"),
+		d.listingButton(item, label, kind), tone)
+	return strings.Replace(line, `<li class="r `+tone+`" `, fmt.Sprintf(
+		`<li class="r %s" data-position="%s" data-price="%.0f" data-name="%s" `, tone,
+		Esc(text(item["position"])), cost, Esc(strings.ToLower(text(item["name"])))), 1)
 }
 
 func (d Document) endingsAside() string {
@@ -643,6 +739,12 @@ func (d Document) sellView() string {
 			plannedFor[text(out["id"])] = text(in["name"])
 		}
 	}
+	sales := map[string]map[string]any{}
+	for _, sale := range rows(d.Money["sell"]) {
+		sales[text(sale["offer_id"])] = sale
+	}
+	squad := rows(d.Advice["squad"])
+	_, xiNow := bestElevenOf(squad)
 	var items []string
 	for _, offer := range offers {
 		amount, value := number(offer["offer_amount"]), number(offer["value"])
@@ -680,6 +782,13 @@ func (d Document) sellView() string {
 		if planned {
 			meta += " · si fichas a " + Esc(plannedFor[text(offer["id"])])
 			tone = "accent"
+		}
+		if drop := xiNow - elevenWithout(squad, text(offer["id"])); drop >= 0.05 {
+			meta += " · tu once −" + esNum(drop, 1) + " xPts"
+		}
+		if sale := sales[text(offer["offer_id"])]; truthy(sale["match_pending"]) {
+			meta += " · aún no ha jugado: regalas " + esNum(number(sale["points_at_risk"]), 1) +
+				" xPts"
 		}
 		glyph := "▲"
 		if ratio < 1 {
@@ -728,8 +837,88 @@ func (d Document) sellView() string {
 		body = rowList(listed, false)
 	}
 	main += block("En venta ahora", body, "", len(listed))
+	main += d.restOfSquad()
 
-	return view("v-vender", "vender", main, d.idleAside()+d.alwaysAside())
+	return view("v-vender", "vender", main, d.alwaysAside())
+}
+
+// restOfSquad is every player of mine not on sale, the bench before the eleven: listing a
+// starter has to be a choice made on purpose.
+func (d Document) restOfSquad() string {
+	squad := rows(d.Advice["squad"])
+	choice, _ := bestElevenOf(squad)
+	starter := map[string]bool{}
+	for _, id := range choice.IDs() {
+		starter[id] = true
+	}
+	always := map[string]bool{}
+	for _, rule := range d.Plan {
+		always[fallbackText(text(rule["player_id"]), text(rule["id"]))] = true
+	}
+	var rest []map[string]any
+	for _, player := range squad {
+		if text(mapOf(player["market"])["market_id"]) == "" {
+			rest = append(rest, player)
+		}
+	}
+	if len(rest) == 0 {
+		return ""
+	}
+	sort.SliceStable(rest, func(one, two int) bool {
+		return number(rest[one]["xpts"]) < number(rest[two]["xpts"])
+	})
+	var bench, eleven []string
+	for _, player := range rest {
+		id := text(player["id"])
+		meta := Esc(text(player["team_short"]))
+		if starts := asFloat(player["start_probability"]); starts != nil {
+			meta += fmt.Sprintf(" · titular %.0f %%", *starts)
+		}
+		if starter[id] {
+			meta += ` · <span class="xi-mark">en tu once</span>`
+		}
+		trend := number(player["pct_7d"])
+		class, sign := "up", "+"
+		if trend < 0 {
+			class, sign = "down", ""
+		}
+		note := fmt.Sprintf(`%s · <span class="%s">%s%s %%</span> 7d`,
+			esMoney(number(player["value"])), class, sign, esNum(trend, 1))
+		chip := ""
+		sell := actButton("Poner en venta", "ghost", id, "sell_to_market")
+		if truthy(player["sale_locked"]) {
+			chip = tag("🔒 hasta "+esDay(text(player["hold_until"])), "warn")
+			why := "No se puede vender hasta el " + esWhen(text(player["hold_until"]))
+			sell = `<span title="` + Esc(why) + `">` + button("Poner en venta", "ghost", "",
+				` disabled title="`+Esc(why)+`"`) + `</span>`
+		}
+		label, on := "Siempre en mercado", ""
+		if always[id] {
+			label, on = "● Siempre en mercado", " on"
+		}
+		toggle := button(label, "ghost", "act"+on, fmt.Sprintf(` data-act="always" `+
+			`data-act-player="%s" title="Lo mantiene en venta; importes y venta automática, en su ficha"`,
+			Esc(id)))
+		line := row(player, meta, esNum(number(player["xpts"]), 1)+" xPts", note, chip,
+			sell+toggle, "")
+		if starter[id] {
+			eleven = append(eleven, line)
+		} else {
+			bench = append(bench, line)
+		}
+	}
+	var body strings.Builder
+	body.WriteString(`<ul class="rows">`)
+	if len(bench) > 0 {
+		fmt.Fprintf(&body, `<li class="line-head">Fuera de tu once · %d</li>%s`, len(bench),
+			strings.Join(bench, ""))
+	}
+	if len(eleven) > 0 {
+		fmt.Fprintf(&body, `<li class="line-head xi-head">En tu once · %d · venderlos baja tus `+
+			`xPts</li>%s`, len(eleven), strings.Join(eleven, ""))
+	}
+	body.WriteString(`</ul>`)
+	return block("El resto de tu plantilla", body.String(), "lo que no tienes en venta", len(rest))
 }
 
 // benchOf is the squad outside its best eleven, least useful first.
@@ -752,53 +941,40 @@ func (d Document) benchOf() []map[string]any {
 	return out
 }
 
-func startsMeta(player map[string]any) string {
-	meta := fmt.Sprintf("titular %.0f %%", number(player["start_probability"]))
-	if truthy(player["sale_locked"]) {
-		meta += " · 🔒 " + esDay(text(player["hold_until"]))
-	}
-	return meta
-}
-
-func (d Document) idleAside() string {
-	bench := d.benchOf()
-	var items []string
-	for _, player := range bench {
-		action := ""
-		if !truthy(player["sale_locked"]) && text(mapOf(player["market"])["market_id"]) == "" {
-			action = actButton("Poner en venta", "ghost", text(player["id"]), "sell_to_market")
-		}
-		items = append(items, row(player, Esc(startsMeta(player)),
-			esNum(number(player["xpts"]), 1)+" xPts", "vale "+esMoney(number(player["value"])),
-			"", action, ""))
-	}
-	sub := ""
-	if len(items) == 0 {
-		return block("No juegan", empty("Juegan todos."), sub, 0)
-	}
-	return block("No juegan", rowList(items, true), sub, len(items))
-}
-
 func (d Document) alwaysAside() string {
 	var items strings.Builder
-	count := 0
 	for _, rule := range d.Plan {
-		count++
+		id := fallbackText(text(rule["player_id"]), text(rule["id"]))
 		amount := ""
 		if value := number(rule["amount"]); value > 0 {
 			amount = " · " + esMoney(value)
 		}
+		policy := d.Policies[id]
+		terms := "no vende solo"
+		if truthy(policy["auto_sell"]) {
+			terms = "vende solo a lo que pides"
+		}
+		if above := number(policy["accept_above"]); above > 0 {
+			terms = "acepta desde " + esMoney(above)
+		}
+		if floor := number(policy["min_price"]); floor > 0 {
+			terms = "mínimo " + esMoney(floor) + " · " + terms
+		}
+		if result := text(rule["result"]); result != "" {
+			terms += " · " + result
+		}
 		fmt.Fprintf(&items, `<li class="al" data-pid="%s"><b>%s</b><span class="meta">%s%s</span>`+
-			`<span class="small">%s</span></li>`, Esc(text(rule["id"])), Esc(text(rule["name"])),
-			Esc(strings.ReplaceAll(text(rule["action"]), "_", " ")), amount,
-			Esc(strings.SplitN(text(rule["why"]), ";", 2)[0]))
+			`<span class="meta">%s</span><span class="small">%s</span></li>`, Esc(id),
+			Esc(text(rule["name"])), Esc(strings.ReplaceAll(text(rule["action"]), "_", " ")),
+			amount, Esc(terms), Esc(strings.SplitN(text(rule["why"]), ";", 2)[0]))
 	}
-	body := empty("Ninguna regla activa: se arma desde la ficha de cada jugador.")
-	if count > 0 {
-		body = folded(fmt.Sprintf("%d reglas activas", count),
-			`<ul class="always">`+items.String()+`</ul>`)
+	body := empty("Ninguna regla activa: se arma con «Siempre en mercado».")
+	if len(d.Plan) > 0 {
+		body = `<ul class="always">` + items.String() + `</ul>`
 	}
-	return block("Siempre en mercado", body, "", -1)
+	body += `<p class="mk-note">Solo lo mantiene en venta. Para que se venda solo, fija «aceptar ` +
+		`desde» o marca la venta automática en su ficha; si no, una buena oferta solo avisa.</p>`
+	return block("Siempre en mercado", body, "", len(d.Plan))
 }
 
 // --- Cláusulas -------------------------------------------------------------------------
@@ -832,6 +1008,9 @@ func (d Document) clauseView() string {
 		meta := opens
 		if threat := text(raise["top_threat"]); threat != "" {
 			meta += " · " + threat + " tiene " + esMoney(number(raise["top_threat_cash"]))
+		}
+		if risk := number(raise["risk"]); risk > 0 {
+			meta += fmt.Sprintf(" · riesgo %.0f %%", risk*100)
 		}
 		deadline, label := d.raiseDeadline(raise)
 		pay := number(raise["pay"])
@@ -888,6 +1067,7 @@ func (d Document) clauseView() string {
 		clause, limit := number(raid["clause"]), number(raid["max_pay"])
 		meta := "de " + Esc(text(raid["owner"]))
 		tone := ""
+		standing := raidsStandingDown[text(raid["action"])]
 		if limit > 0 && clause > limit {
 			meta += " · ⚠ no se pagará: su cláusula pasa tu límite"
 			tone = "warn"
@@ -895,12 +1075,21 @@ func (d Document) clauseView() string {
 			meta += " · " + Esc(why)
 		}
 		chip := ""
-		if truthy(player["clause_locked"]) {
+		switch {
+		case standing:
+			chip = tag(Esc(strings.ReplaceAll(text(raid["action"]), "_", " ")), "warn")
+			tone = "warn"
+		case truthy(player["clause_locked"]):
 			chip = clock(text(player["clause_locked_until"]), "se abre")
 		}
 		action := button("Cambiar límite", "ghost", "raid-btn", fmt.Sprintf(` data-raid="%s" `+
 			`data-raid-name="%s" data-raid-max="%d" data-raid-clause="%d"`,
 			Esc(text(raid["player_id"])), Esc(text(raid["name"])), int64(limit), int64(clause)))
+		if standing {
+			action += button("Cancelar", "ghost", "op", fmt.Sprintf(` data-op="cancel_raid" `+
+				`data-op-player="%s" data-op-name="%s"`, Esc(text(raid["player_id"])),
+				Esc(text(raid["name"]))))
+		}
 		scheduled = append(scheduled, row(player, meta, "≤ "+esMoney(limit),
 			"cláusula "+esMoney(clause), chip, action, tone))
 	}
@@ -908,12 +1097,16 @@ func (d Document) clauseView() string {
 	if len(scheduled) > 0 {
 		body = rowList(scheduled, false)
 	}
-	main += block("Clausulazos programados", body, "se pagan solos al abrirse", len(scheduled))
+	body += d.orderHistory()
+	main += block("Clausulazos programados", body, "se pagan solos al abrirse, si siguen por "+
+		"debajo de tu límite", len(scheduled))
 
 	clauses, _, _ := d.buyOptions()
 	var payable []string
+	listed := map[string]bool{}
 	for _, item := range clauses {
 		if truthy(item["affordable"]) && len(payable) < 3 {
+			listed[text(item["id"])] = true
 			payable = append(payable, d.buyRow(item, window))
 		}
 	}
@@ -924,7 +1117,87 @@ func (d Document) clauseView() string {
 	body += `<p class="mk-note"><button class="linkish" type="button" data-goto="comprar">` +
 		`Todas en Comprar →</button></p>`
 	main += block("Pagables hoy que mejoran tu once", body, "", -1)
+	main += d.cheapClauses(listed)
 	return view("v-clausulas", "clausulas", main, d.unlockCalendar())
+}
+
+// orderHistory is what became of the standing orders no longer armed: paid or cancelled, and
+// when. The game keeps no record of them.
+func (d Document) orderHistory() string {
+	if len(d.Orders) == 0 {
+		return ""
+	}
+	glyphs := map[string][2]string{"pagada": {"✓", "good"}, "cumplida": {"✓", "good"},
+		"cancelada": {"✕", "muted"}}
+	var lines []string
+	for _, order := range d.Orders {
+		outcome := text(order["outcome"])
+		glyph := glyphs[outcome]
+		if glyph[0] == "" {
+			glyph = [2]string{"·", "muted"}
+		}
+		what := outcome
+		if why := text(order["why"]); why != "" {
+			what += " · " + why
+		}
+		date, amount := "", ""
+		if when, ok := parseStamp(text(order["at"])); ok {
+			date = when.Format("02/01")
+		}
+		if paid := number(order["amount"]); paid > 0 {
+			amount = esMoney(paid)
+		}
+		lines = append(lines, fmt.Sprintf(`<li class="res %s" data-pid="%s"><span class="g">%s</span>`+
+			`<span><b>%s</b><span class="meta">%s · %s</span></span><span class="rv">%s</span></li>`,
+			glyph[1], Esc(text(order["player_id"])), glyph[0], Esc(text(order["player"])),
+			Esc(what), date, amount))
+	}
+	return folded(fmt.Sprintf("Historial de tus órdenes · %d", len(lines)),
+		`<ul class="reslist">`+strings.Join(lines, "")+`</ul>`)
+}
+
+// cheapClauses are the clauses that return more points per million than the squad already
+// does: rarely for the eleven, but the cheap way to fill the bench.
+func (d Document) cheapClauses(seen map[string]bool) string {
+	var found []map[string]any
+	for _, item := range append(rows(d.Advice["raids"]), rows(d.Advice["upcoming_raids"])...) {
+		id := text(item["id"])
+		verdict := text(item["verdict"])
+		if seen[id] || (verdict != "chollo" && verdict != "renta") || truthy(item["shielded"]) {
+			continue
+		}
+		seen[id] = true
+		found = append(found, item)
+	}
+	if len(found) == 0 {
+		return ""
+	}
+	sort.SliceStable(found, func(one, two int) bool {
+		return number(found[one]["vs_market"]) > number(found[two]["vs_market"])
+	})
+	var items []string
+	for _, item := range found {
+		meta := Esc(text(item["team_short"])) + " · de " + Esc(text(item["owner"]))
+		chip := tag("🔓 pagable", "ok")
+		if stamp := text(item["unlock_at"]); stamp != "" {
+			if when, ok := parseStamp(stamp); ok && when.After(time.Now()) {
+				chip = clock(stamp, "se abre su cláusula")
+			}
+		}
+		note := fmt.Sprintf("%s · %s pts/M de tu plantilla", Esc(text(item["verdict"])),
+			esRatio(number(item["vs_market"])))
+		action := strings.Replace(RaidButton(item), `class="raid-btn"`,
+			`class="mb mb-ghost raid-btn"`, 1)
+		items = append(items, row(item, meta, esMoney(number(item["clause"])), note, chip,
+			action, ""))
+	}
+	shown := min(5, len(items))
+	body := rowList(items[:shown], false)
+	if len(items) > shown {
+		body += folded(fmt.Sprintf("%d más", len(items)-shown), rowList(items[shown:], false))
+	}
+	return block("Baratas que rentan", body, "más puntos por millón que tu plantilla: para el "+
+		"banquillo", len(items))
 }
 
 // unlockCalendar is the next seven days of clauses coming unlocked: yours to watch, and the
@@ -1071,6 +1344,14 @@ func (d Document) squadView() string {
 		`<div class="kv"><span>Suma de cláusulas</span><b>%s</b></div>`+
 		`<div class="kv"><span>Valor últimos 7 días</span><b class="%s">%s%s</b></div>`,
 		len(squad), esMoney(value), esMoney(clauses), changeClass, sign, esMoney(change))
+	if projected, ok := d.Money["projected_7d"]; ok {
+		ahead, mark := "up", "+"
+		if number(projected) < 0 {
+			ahead, mark = "down", ""
+		}
+		summary += fmt.Sprintf(`<div class="kv"><span>Previsión próximos 7 días</span>`+
+			`<b class="%s">%s%s</b></div>`, ahead, mark, esMoney(number(projected)))
+	}
 	return view("v-plantilla", "plantilla", main, block("Resumen", summary, "", -1))
 }
 
@@ -1171,6 +1452,92 @@ func (d Document) matchesView() string {
 		`data-week="%d" data-planned="%.2f"><li class="mk-note">Cargando…</li></ul>`+
 		`<p class="mk-legend"><span class="sw real"></span>tus puntos y puesto · `+
 		`<span class="sw fore"></span>previsto · toca una jornada para verla entera</p>`,
-		weekNumber, total), `<span id="pv-sub"></span>`, -1)
-	return view("v-partidos", "partidos", main, aside)
+		weekNumber, total)+d.forecastHit(), `<span id="pv-sub"></span>`, -1)
+	return view("v-partidos", "partidos", main, aside+d.comingWeeks(weekNumber))
+}
+
+// forecastHit is how the last matchday played compared with its forecast, mine and the
+// league's error per player.
+func (d Document) forecastHit() string {
+	last := mapOf(mapOf(d.Universe["forecast_review"])["last"])
+	if number(last["counted"]) == 0 {
+		return ""
+	}
+	line := fmt.Sprintf("Así acertó la previsión en la J%d: ", int(number(last["week"])))
+	if mine := mapOf(last["mine"]); number(mine["counted"]) > 0 {
+		forecast, actual := number(mine["forecast"]), number(mine["actual"])
+		line += fmt.Sprintf("previsto %s · real %s (%s). ", esNum(forecast, 1),
+			esNum(actual, 1), esSigned(actual-forecast))
+	}
+	line += fmt.Sprintf("En la liga falló %s puntos por jugador, de media.",
+		esNum(number(last["mean_abs_error"]), 1))
+	return `<p class="mk-note">` + Esc(line) + `</p>`
+}
+
+// comingWeeks is the fixture list after this matchday: how many of mine play each week and
+// where, plus any match of a past week still to be played.
+func (d Document) comingWeeks(current int) string {
+	mine := map[string]int{}
+	for _, player := range rows(d.Advice["squad"]) {
+		mine[text(player["team_id"])]++
+	}
+	type week struct {
+		label   string
+		kickoff string
+		yours   int
+		matches []string
+	}
+	weeks := map[int]*week{}
+	var order []int
+	for _, fixture := range rows(d.Universe["schedule"]) {
+		round := int(number(fixture["week"]))
+		if int(number(fixture["state"])) == FinishedMatch || round == current {
+			continue
+		}
+		key := round
+		if round < current {
+			key = 0
+		}
+		entry := weeks[key]
+		if entry == nil {
+			entry = &week{label: fmt.Sprintf("J%d", round), kickoff: text(fixture["kickoff"])}
+			if key == 0 {
+				entry.label = "Aplazados"
+			}
+			weeks[key] = entry
+			order = append(order, key)
+		}
+		if text(fixture["kickoff"]) < entry.kickoff {
+			entry.kickoff = text(fixture["kickoff"])
+		}
+		local, visitor := text(fixture["local_id"]), text(fixture["visitor_id"])
+		count := mine[local] + mine[visitor]
+		entry.yours += count
+		if count > 0 || key == 0 {
+			entry.matches = append(entry.matches, fmt.Sprintf(
+				`<span class="mk-cal-them">%s–%s <i>%d</i></span>`, Esc(text(fixture["local"])),
+				Esc(text(fixture["visitor"])), count))
+		}
+	}
+	sort.Ints(order)
+	var items strings.Builder
+	shown := 0
+	for _, key := range order {
+		entry := weeks[key]
+		if key > 0 {
+			if shown == 3 {
+				continue
+			}
+			shown++
+		}
+		fmt.Fprintf(&items, `<li class="mk-cal"><span class="mk-cal-day">%s<span class="meta">%s</span>`+
+			`</span><span class="mk-cal-body">%s<span class="meta">%s</span></span></li>`,
+			entry.label, Esc(esDay(entry.kickoff)), strings.Join(entry.matches, ""),
+			counted(entry.yours, "tuyo", "tuyos"))
+	}
+	if items.Len() == 0 {
+		return ""
+	}
+	return block("Próximas jornadas", `<ul class="calendar">`+items.String()+`</ul>`+
+		`<p class="mk-note">cada partido con cuántos tuyos juegan</p>`, "", -1)
 }
