@@ -1218,7 +1218,7 @@ header.topline .mode{margin-left:0}
 .aw{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:10px}
 .aw-line{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start}
 .aw-line>.aw-lead{margin:0;flex:0 0 auto}
-.aw-line>.aw{flex:1 1 240px;padding:7px 12px;justify-content:center;gap:6px}
+.aw-line>.aw{flex:1 1 280px;padding:7px 12px;justify-content:center;gap:6px}
 .aw-sub{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;font-size:12px;color:var(--ink-2)}
 .aw-price{display:inline-flex;align-items:center;gap:6px}
 .aw-price input{font:inherit;font-size:13px;font-variant-numeric:tabular-nums;width:9.5em;color:var(--ink);
@@ -1227,10 +1227,14 @@ header.topline .mode{margin-left:0}
 .aw-auto{display:inline-flex;align-items:center;gap:6px}
 .aw-auto .tgl{transform:scale(.85)}
 .aw-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.aw-row .aw-label{margin-right:auto}
+.aw-edit{font:inherit;font-size:12px;color:var(--accent);background:none;border:0;padding:2px 0;
+  cursor:pointer;white-space:nowrap}
+.aw-edit:hover{text-decoration:underline;text-underline-offset:2px}
 .aw-label{font-size:13px;font-weight:650;white-space:nowrap}
 /* A ring says where the keyboard is; after a click it only marks what was clicked. */
 :focus:not(:focus-visible){outline:none}
-.tgl:focus-visible,.pc-group button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tgl:focus-visible,.aw-edit:focus-visible,.pc-group button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .aw-i{font-style:normal;color:var(--muted);font-weight:400;margin-left:3px}
 .pc-link{font:inherit;font-size:12px;color:var(--critical);background:none;border:0;padding:0 0 0 4px;
   cursor:pointer;text-decoration:underline;text-underline-offset:2px}

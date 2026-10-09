@@ -130,9 +130,9 @@ function Note({a, extra}) {
   return html`<p class="pc-info">${a.label}${a.deadline ? html` · quedan <${Countdown} until=${a.deadline}/>` : null}${extra}</p>`;
 }
 
-// The standing listing: one switch arms or drops the rule. While it is on, one line under it with
-// the price it is listed at, saved on Enter or on leaving the field, and the automatic sale,
-// saved as it is switched. Same /api/always payloads as the old Guardar.
+// The standing listing: one switch arms or drops the rule; while it is on, the price beside it
+// opens the one line of settings: the price, saved on Enter or on leaving the field, and the
+// automatic sale, saved as it is switched. Same /api/always payloads as the old Guardar.
 function AlwaysBlock({a, player, lead}) {
   const floor = a.good_floor || 0;
   const [on, setOn] = useState(!!a.on);
@@ -141,22 +141,28 @@ function AlwaysBlock({a, player, lead}) {
   const [saved, setSaved] = useState({min: a.min_price ? group(a.min_price) : '',
     auto: !!a.auto_sell || !!a.accept_above, accept: a.accept_above || 0});
   const [min, setMin] = useState(saved.min);
+  const [open, setOpen] = useState(false);
   const flip = async () => {
     setBusy(true);
     setOn(!on);
-    try { setOn(await toggleAlways(player)); } catch (e) { setOn(on); setError('No he podido cambiarlo: ' + e.message); }
+    try {
+      const now = await toggleAlways(player);
+      setOn(now);
+      setOpen(now);
+    } catch (e) { setOn(on); setError('No he podido cambiarlo: ' + e.message); }
     finally { setBusy(false); }
   };
   const amounts = (minText, accept) => postJSON('/api/always', {id: player.id, name: player.name,
     min_price: digits(minText) || 0, accept_above: accept});
   const savePrice = async () => {
-    if (min === saved.min) return;
+    if (min === saved.min) { setOpen(false); return; }
     setError('');
     try {
       const data = await amounts(min, saved.accept);
       const next = data.min_price ? group(data.min_price) : '';
       setMin(next);
       setSaved({...saved, min: next});
+      setOpen(false);
     } catch (e) { setError('No se ha guardado: ' + e.message); }
   };
   const flipAuto = async () => {
@@ -177,13 +183,25 @@ function AlwaysBlock({a, player, lead}) {
   const floorTip = 'Se vende sola si llega una oferta buena: la mayor de lo que pides, su valor ×1,02 y ' +
     'el techo rentable de futbolfantasy. Ahora: ' + (floor ? exact(saved.accept || floor) + ' (' + a.good_source + ')' : 'sin dato') + '.' +
     (a.room <= 0 ? ' Es tu último jugador de esa posición: no lo venderé solo.' : '');
+  // Escape folds the settings before it reaches the card, which would close on it.
+  useEffect(() => {
+    if (!open) return undefined;
+    const fold = (e) => { if (e.key === 'Escape') { e.stopPropagation(); setMin(saved.min); setOpen(false); } };
+    document.addEventListener('keydown', fold, true);
+    return () => document.removeEventListener('keydown', fold, true);
+  }, [open, saved.min]);
+  const price = digits(saved.min) || a.value || 0;
+  const label = (price ? (price / 1e6).toFixed(2).replace('.', ',') + 'M' : 'precio') + ' ✎' +
+    (saved.auto ? ' · vende solo' : '');
   return html`<div class="aw-line">${lead && lead.length ? html`<div class="drawer-actions pc-acts aw-lead">${lead}</div>` : null}
     <div class="aw">
       <div class="aw-row">
         <span class="aw-label">Siempre en mercado <i class="aw-i" data-tip="Lo vuelve a poner en venta cada vez que caduca su anuncio, al precio que digas.">ⓘ</i></span>
+        ${on ? html`<button type="button" class="aw-edit" aria-expanded=${open}
+          onMouseDown=${(e) => e.preventDefault()} onClick=${() => (open ? savePrice() : setOpen(true))}>${label}</button>` : null}
         <${Switch} on=${on} disabled=${busy} label="Siempre en mercado" onChange=${flip}/>
       </div>
-      ${on ? html`<div class="aw-sub">
+      ${on && open ? html`<div class="aw-sub">
         <label class="aw-price">se vuelve a anunciar a
           <input type="text" inputmode="numeric" autocomplete="off" value=${min}
             placeholder=${a.value ? group(a.value) : 'valor de mercado'} onInput=${typed} onBlur=${savePrice}
