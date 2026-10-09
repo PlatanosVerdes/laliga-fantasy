@@ -190,3 +190,8 @@ export function ModalRoot() {
   if (dialog.kind === 'confirm') return html`<${ConfirmOp} key=${dialog.key} op=${dialog.op}/>`;
   return null;
 }
+
+// A real switch: track and knob, the accent when on.
+export const Switch = ({on, disabled, label, onChange}) => html`<button type="button" role="switch"
+  class=${'sw' + (on ? ' on' : '')} aria-checked=${on ? 'true' : 'false'} aria-label=${label}
+  disabled=${disabled} onClick=${onChange}><span class="sw-knob"></span></button>`;

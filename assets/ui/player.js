@@ -1,5 +1,5 @@
 import {html, useState, useEffect, legacy} from './lib.js';
-import {Face, Tags, Role, Crest, Countdown, Button, ShieldMark} from './components.js';
+import {Face, Tags, Role, Crest, Countdown, Button, ShieldMark, Switch} from './components.js';
 import {dec, mny, fmt, signed, exact, group, digits, whenShort, since, health} from './format.js';
 import {getJSON, postJSON} from './api.js';
 import {runAction, toggleAlways} from './actions.js';
@@ -129,82 +129,81 @@ function Note({a, extra}) {
   return html`<p class="pc-info">${a.label}${a.deadline ? html` · quedan <${Countdown} until=${a.deadline}/>` : null}${extra}</p>`;
 }
 
-// What "Siempre en mercado" does with an offer, said in words under the amounts.
-function alwaysFoot(acceptAbove, autoSell) {
-  if (acceptAbove) return html`<b>Vendo desde ese importe</b>, sin preguntar. El importe manda sobre el interruptor de arriba.`;
-  if (autoSell) return html`<b>Vendo si llegan a tu precio de venta.</b> Si prefieres otro numero, ponlo en «aceptar desde».`;
-  return html`No vende solo: si llega una oferta buena <b>te aviso</b> y decides tu.`;
-}
-
-function AlwaysSettings({a, player}) {
-  const [auto, setAuto] = useState(!!a.auto_sell);
-  const [min, setMin] = useState(a.min_price ? group(a.min_price) : '');
-  const [accept, setAccept] = useState(a.accept_above ? group(a.accept_above) : '');
-  const [saved, setSaved] = useState({accept: a.accept_above || 0, label: 'Guardar', busy: false});
+// The standing listing: a switch that arms or drops the rule at once, and under it, while it is
+// on, the price it is listed at and whether it sells by itself. Same /api/always payloads as
+// always: auto_sell on its own, the amounts on their own.
+function AlwaysBlock({a, player}) {
   const floor = a.good_floor || 0;
-  const flipAuto = async () => {
-    const next = !auto;
-    setAuto(next);
-    try {
-      const data = await postJSON('/api/always', {id: player.id, name: player.name, auto_sell: next});
-      setAuto(!!data.auto_sell);
-    } catch (e) { setAuto(!next); }
+  const start = {
+    min: a.min_price ? group(a.min_price) : '',
+    auto: !!a.auto_sell || !!a.accept_above,
+    amount: group(a.accept_above || floor || ''),
   };
-  const typed = (set) => (event) => {
-    const n = digits(event.currentTarget.value);
-    set(isNaN(n) ? '' : group(n));
-    setSaved((s) => ({...s, label: 'Guardar'}));
-  };
-  const save = async () => {
-    setSaved((s) => ({...s, busy: true, label: 'Guardando…'}));
-    try {
-      const data = await postJSON('/api/always', {id: player.id, name: player.name,
-        min_price: digits(min) || 0, accept_above: digits(accept) || 0});
-      setMin(data.min_price ? group(data.min_price) : '');
-      setAccept(data.accept_above ? group(data.accept_above) : '');
-      setSaved({accept: data.accept_above || 0, label: 'Guardado', busy: false});
-    } catch (e) {
-      setSaved((s) => ({...s, busy: false, label: 'No se ha guardado'}));
-    }
-  };
-  return html`<div class="always-panel">
-    <label class="always-check"><input type="checkbox" class="always-auto" checked=${auto} onChange=${flipAuto}/>
-      <span><b>Vender si la oferta es buena</b>${floor ? `: desde ${exact(floor)}` : ''}<br/>
-      <i>${floor ? `el mayor de lo que pides, un 2% sobre su valor y el techo rentable de futbolfantasy — aqui manda ${a.good_source}` : 'para jugadores que te dan igual'}</i>
-      ${a.room <= 0 ? html`<br/><i class="always-warn">ojo: es tu ultimo jugador de esa posicion, no lo vendere solo</i>` : null}</span>
-    </label>
-    <div class="always-grid">
-      <label>Precio de listado
-        <input class="always-min" type="text" inputmode="numeric" autocomplete="off" value=${min}
-          placeholder=${a.value ? group(a.value) : 'valor de mercado'} onInput=${typed(setMin)}/></label>
-      <label>Aceptar desde
-        <input class="always-accept" type="text" inputmode="numeric" autocomplete="off" value=${accept}
-          placeholder="no vendo solo" onInput=${typed(setAccept)}/></label>
-    </div>
-    <div class="always-foot">
-      <p>${alwaysFoot(saved.accept, auto)}</p>
-      <button class=${'always-save' + (saved.label === 'Guardado' ? ' always-saved' : '')} disabled=${saved.busy} onClick=${save}>${saved.label}</button>
-    </div></div>`;
-}
-
-// The standing listing: one switch, and its settings folded until asked for.
-function AlwaysToggle({a, player}) {
   const [on, setOn] = useState(!!a.on);
   const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [saved, setSaved] = useState(start);
+  const [form, setForm] = useState(start);
+  const [error, setError] = useState('');
+  const dirty = form.min !== saved.min || form.auto !== saved.auto ||
+    (form.auto && form.amount !== saved.amount);
   const flip = async () => {
     setBusy(true);
     setOn(!on);
-    try { setOn(await toggleAlways(player)); } catch (e) { setOn(on); alert('No he podido cambiarlo: ' + e.message); }
+    try { setOn(await toggleAlways(player)); } catch (e) { setOn(on); setError('No he podido cambiarlo: ' + e.message); }
     finally { setBusy(false); }
   };
-  return html`
-    <${Button} place="card" className="pc-always" on=${on} disabled=${busy} onClick=${flip}
-      tip=${on ? 'Lo mantiene en venta: tócalo para dejar de hacerlo' : 'Lo mantiene en venta cuando caduque'}>
-      Siempre en mercado ${on ? '●' : '○'}<//>
-    ${on ? html`<button type="button" class="pc-fold" aria-expanded=${open} onClick=${() => setOpen(!open)}>
-      ajustes ${open ? '▴' : '▾'}</button>` : null}
-    ${on && open ? html`<${AlwaysSettings} a=${a} player=${player}/>` : null}`;
+  const typed = (key) => (event) => {
+    const n = digits(event.currentTarget.value);
+    setForm({...form, [key]: isNaN(n) ? '' : group(n)});
+  };
+  const save = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      if (form.auto !== saved.auto) {
+        await postJSON('/api/always', {id: player.id, name: player.name, auto_sell: form.auto});
+      }
+      const amount = digits(form.amount) || 0;
+      // The suggested floor moves with his value; only a number of your own is pinned.
+      const accept = form.auto && amount !== floor ? amount : 0;
+      const before = saved.auto && digits(saved.amount) !== floor ? digits(saved.amount) || 0 : 0;
+      if (form.min !== saved.min || accept !== before) {
+        await postJSON('/api/always', {id: player.id, name: player.name,
+          min_price: digits(form.min) || 0, accept_above: accept});
+      }
+      setSaved(form);
+    } catch (e) {
+      setError('No se ha guardado: ' + e.message);
+    } finally { setBusy(false); }
+  };
+  const floorTip = 'Una oferta buena es la mayor de tres: lo que pides, su valor ×1,02 y el techo ' +
+    'rentable de futbolfantasy. Ahora: ' + (floor ? exact(floor) + ' (' + a.good_source + ')' : 'sin dato') + '.';
+  const status = !form.auto ? 'te aviso si llega una oferta buena y decides tú'
+    : 'se vende solo desde ' + mny(digits(form.amount) || floor);
+  return html`<div class="aw">
+    <div class="aw-row">
+      <span class="aw-label">Siempre en mercado <i class="aw-i" data-tip="Lo vuelve a poner en venta cada vez que caduca su anuncio, al precio que digas.">ⓘ</i></span>
+      <${Switch} on=${on} disabled=${busy} label="Siempre en mercado" onChange=${flip}/>
+    </div>
+    ${on ? html`<div class="aw-set">
+      <label class="aw-field"><span>Precio en venta</span>
+        <input type="text" inputmode="numeric" autocomplete="off" value=${form.min}
+          placeholder=${a.value ? group(a.value) : 'valor de mercado'} onInput=${typed('min')}/></label>
+      <div class="aw-row">
+        <span class="aw-label">Venta automática <i class="aw-i" data-tip=${floorTip}>ⓘ</i></span>
+        <${Switch} on=${form.auto} label="Venta automática" onChange=${() => setForm({...form, auto: !form.auto})}/>
+      </div>
+      ${form.auto ? html`<label class="aw-field aw-inline"><span>si ofrecen</span>
+        <input type="text" inputmode="numeric" autocomplete="off" value=${form.amount} onInput=${typed('amount')}/>
+        <span>o más</span></label>` : null}
+      ${a.room <= 0 ? html`<p class="aw-warn">Es tu último jugador de esa posición: no lo venderé solo.</p>` : null}
+      <div class="aw-foot">
+        <p class="aw-status">${status}</p>
+        <button type="button" class="act aw-save" disabled=${!dirty || busy} onClick=${save}>Guardar</button>
+      </div>
+    </div>` : null}
+    ${error ? html`<p class="bid-error">${error}</p>` : null}
+  </div>`;
 }
 
 const FICHAR_ORDER = ['bid', 'modify_bid', 'cancel_bid', 'buy_offer', 'cancel_offer', 'direct_offer', 'raid', 'pay_clause'];
@@ -252,7 +251,8 @@ function Actions({data, reopen}) {
     const cancelLink = (c) => html` <button type="button" class="pc-link" onClick=${() => run(c)}>cancelar</button>`;
     sections.push(html`<div class="pc-group">
       <div class="pc-gl">${title}</div>
-      ${rest.length || always ? html`<div class="pc-gb drawer-actions pc-acts">${rest.map((a) => button(a))}${always ? html`<${AlwaysToggle} a=${always} player=${p}/>` : null}</div>` : null}
+      ${rest.length ? html`<div class="pc-gb drawer-actions pc-acts">${rest.map((a) => button(a))}</div>` : null}
+      ${always ? html`<${AlwaysBlock} a=${always} player=${p}/>` : null}
       ${mine.filter((a) => a.kind === 'note').map((a) => html`<${Note} a=${a} extra=${cancelFor(a) ? cancelLink(cancelFor(a)) : null}/>`)}
       ${cancels.filter((c) => !mine.some((a) => a.kind === 'note' && a.deadline === c.at))
         .map((c) => html`<p class="pc-info">Blindaje programado ${whenShort(c.at)}${cancelLink(c)}</p>`)}
