@@ -1646,7 +1646,7 @@ async function openForecast(week){
     <div class="fc-rows">${managers.map(m=>`
       <details class="fc-team${m.is_me?' fc-me':''}">
         <summary class="fc-row fc-tinted"${tint(m.counted?m.actual:null,m.forecast)}>${
-          row(m.manager,m.planned,m.counted?m.actual:null,m.forecast,Math.max(m.counted,1),
+          row(m.short?m.manager+' <span class="fc-short" title="Sin 11 alineados: la jornada cuenta 0">sin 11</span>':m.manager,m.planned,m.counted?m.actual:null,m.forecast,Math.max(m.counted,1),
             m.counted?m.place:null)}</summary>
         ${(m.players||[]).map(p=>`<button class="fc-row fc-player fc-tinted" type="button"
           data-detail="${p.id}"${tint(p.points,p.forecast)}>${
