@@ -144,12 +144,17 @@ function AlwaysBlock({a, player}) {
   const [saved, setSaved] = useState(start);
   const [form, setForm] = useState(start);
   const [error, setError] = useState('');
+  const [open, setOpen] = useState(false);
   const dirty = form.min !== saved.min || form.auto !== saved.auto ||
     (form.auto && form.amount !== saved.amount);
   const flip = async () => {
     setBusy(true);
     setOn(!on);
-    try { setOn(await toggleAlways(player)); } catch (e) { setOn(on); setError('No he podido cambiarlo: ' + e.message); }
+    try {
+      const now = await toggleAlways(player);
+      setOn(now);
+      setOpen(now);
+    } catch (e) { setOn(on); setError('No he podido cambiarlo: ' + e.message); }
     finally { setBusy(false); }
   };
   const typed = (key) => (event) => {
@@ -180,12 +185,18 @@ function AlwaysBlock({a, player}) {
     'rentable de futbolfantasy. Ahora: ' + (floor ? exact(floor) + ' (' + a.good_source + ')' : 'sin dato') + '.';
   const status = !form.auto ? 'te aviso si llega una oferta buena y decides tú'
     : 'se vende solo desde ' + mny(digits(form.amount) || floor);
+  const price = digits(saved.min) || a.value || 0;
+  const summary = on ? (price ? (price / 1e6).toFixed(2).replace('.', ',') + 'M · ' : '') +
+    (saved.auto ? 'venta automática' : 'te aviso') : '';
   return html`<div class="aw">
-    <div class="aw-row">
+    <div class="aw-row aw-head" role="button" tabindex="0" aria-expanded=${open && on}
+        onClick=${() => on && setOpen(!open)} onKeyDown=${(e) => { if (e.key === 'Enter' && on) setOpen(!open); }}>
       <span class="aw-label">Siempre en mercado <i class="aw-i" data-tip="Lo vuelve a poner en venta cada vez que caduca su anuncio, al precio que digas.">ⓘ</i></span>
-      <${Switch} on=${on} disabled=${busy} label="Siempre en mercado" onChange=${flip}/>
+      <span class="aw-sum">${summary}</span>
+      <span onClick=${(e) => e.stopPropagation()}><${Switch} on=${on} disabled=${busy} label="Siempre en mercado" onChange=${flip}/></span>
+      <span class="aw-chev" aria-hidden="true">${on ? (open ? '▴' : '▾') : ''}</span>
     </div>
-    ${on ? html`<div class="aw-set">
+    ${open && on ? html`<div class="aw-set">
       <label class="aw-field"><span>Precio en venta</span>
         <input type="text" inputmode="numeric" autocomplete="off" value=${form.min}
           placeholder=${a.value ? group(a.value) : 'valor de mercado'} onInput=${typed('min')}/></label>
