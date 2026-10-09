@@ -5,6 +5,7 @@ import {ViewScreen} from './view.js';
 import {WeekPopup} from './matches.js';
 import {ReachPopup} from './rivals.js';
 import './league.js';
+import './decide.js';
 import {mountCompareTab} from './compare.js';
 import {mountLineup} from './lineup.js';
 

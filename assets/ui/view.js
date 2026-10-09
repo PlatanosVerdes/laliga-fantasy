@@ -97,7 +97,7 @@ export function ActView({a}) {
   if (a.do === 'cmp') return html`<${CmpAct} a=${a}/>`;
   if (a.do === 'always') return html`<${AlwaysAct} a=${a}/>`;
   // data-wired keeps report.js's own wiring off these buttons while both live on the page.
-  const button = html`<button type="button" class=${a.class || 'mb mb-ghost'} data-wired="1"
+  const button = html`<button type="button" class=${a.class === '' ? undefined : a.class || 'mb mb-ghost'} data-wired="1"
     disabled=${!!a.off} data-tip=${a.tip || undefined}
     onClick=${(event) => { event.stopPropagation(); runAct(a); }}>${a.label}</button>`;
   return a.wrap ? html`<span data-tip=${a.wrap}>${button}</span>` : button;

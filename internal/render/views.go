@@ -5,7 +5,6 @@ import (
 	"math"
 	"sort"
 	"strings"
-	"time"
 )
 
 // The tabs' first screens: compact rows, cards and an aside, the way the approved mockup draws
@@ -219,191 +218,6 @@ func (d Document) Views() []string {
 		d.squadView(), d.matchesView(), d.rivalsView()}
 }
 
-// --- Decidir ---------------------------------------------------------------------------
-
-// decideSection is "Qué hacer ahora": the cards, and beside them the eleven they are about.
-func (d Document) decideSection() string {
-	if len(d.Advice) == 0 {
-		return ""
-	}
-	cards := d.decisionCards(time.Now())
-	shown := cards
-	if len(shown) > MaxCards {
-		shown = shown[:MaxCards]
-	}
-	var main strings.Builder
-	main.WriteString(`<div class="sec-head"><h2>Qué hacer ahora</h2></div>`)
-	if len(shown) == 0 {
-		main.WriteString(empty("Nada que decidir ahora: ninguna oferta que cobrar, ninguna " +
-			"cláusula que subir y ningún fichaje que mejore tu once a su precio."))
-	} else {
-		main.WriteString(`<div class="cards">`)
-		cash := number(d.Advice["budget"])
-		for index, card := range shown {
-			main.WriteString(cardHTML(index+1, card))
-			cash += card.Cash
-		}
-		main.WriteString(`</div>`)
-		count := []string{"", "la", "las dos", "las tres", "las cuatro", "las cinco"}[len(shown)]
-		rest := fmt.Sprintf("Haciendo %s te quedan %s en caja. Lo demás puede esperar.", count,
-			esMoney(cash))
-		if len(shown) == 1 {
-			rest = fmt.Sprintf("Haciéndolo te quedan %s en caja. Lo demás puede esperar.",
-				esMoney(cash))
-		}
-		main.WriteString(`<p class="rest">` + Esc(rest) + `</p>`)
-	}
-	return view("ahora", "decidir", main.String(), d.elevenAside())
-}
-
-func cardHTML(rank int, card Card) string {
-	player := card.Player
-	faces := face(player, "lg")
-	if card.In != nil {
-		faces = `<span class="swap">` + face(player, "md") + `<span class="arrow">→</span>` +
-			face(card.In, "md") + `</span>`
-	}
-	meta := fmt.Sprintf(`%s%s · %s xPts`, posTag(player), Esc(text(player["team_short"])),
-		esNum(number(player["xpts"]), 1))
-	note := ""
-	if card.BigNote != "" {
-		note = `<span class="big-note ` + card.NoteClass + `">` + Esc(card.BigNote) + `</span>`
-	}
-	var why strings.Builder
-	for _, line := range card.Why {
-		why.WriteString(`<li>` + Esc(line) + `</li>`)
-	}
-	tone := card.Tone
-	if tone == "" {
-		tone = "muted"
-	}
-	return fmt.Sprintf(`<article class="card tone-%s" data-kind="%s"><div class="rank">%d</div>`+
-		`<div class="card-top">%s<div class="who" data-pid="%s"><b>%s</b>`+
-		`<span class="meta">%s</span></div>%s</div>`+
-		`<div class="verb">%s</div><div class="big">%s%s</div><ul class="why">%s</ul>`+
-		`<div class="card-foot">%s<span class="impact">%s</span></div></article>`,
-		tone, card.Kind, rank, faces, Esc(text(player["id"])), shieldName(player), meta,
-		clock(card.Deadline, card.DeadlineLabel)+clock(card.Deadline2, card.DeadlineLabel2),
-		Esc(card.Verb), Esc(card.Big), note,
-		why.String(), card.Button, Esc(card.Impact))
-}
-
-// elevenChips is an eleven by line, attack first, each chip coloured by its xPts.
-func elevenChips(lines [][]map[string]any, arriving map[string]bool) string {
-	labels := []string{"del", "med", "def", "por"}
-	var out strings.Builder
-	for index, line := range lines {
-		var chips strings.Builder
-		for _, player := range line {
-			class := xptsClass(number(player["xpts"]))
-			if arriving[text(player["id"])] {
-				class += " is-new"
-			}
-			fmt.Fprintf(&chips, `<span class="tchip %s" data-pid="%s">%s<span class="tname">%s</span>`+
-				`<span class="tx">%s</span></span>`, class, Esc(text(player["id"])),
-				face(player, "xs"), shieldName(player), esNum(number(player["xpts"]), 1))
-		}
-		fmt.Fprintf(&out, `<div class="line"><span class="pos pos-%s">%s</span>`+
-			`<div class="chips">%s</div></div>`, labels[index], strings.ToUpper(labels[index]),
-			chips.String())
-	}
-	return out.String()
-}
-
-// byLines turns a choice into its four lines of players, attack first, best first.
-func byLines(byID map[string]map[string]any, attack, middle, defence []string,
-	keeper string) [][]map[string]any {
-	pick := func(ids []string) []map[string]any {
-		out := []map[string]any{}
-		for _, id := range ids {
-			if player := byID[id]; player != nil {
-				out = append(out, player)
-			}
-		}
-		sort.SliceStable(out, func(one, two int) bool {
-			return number(out[one]["xpts"]) > number(out[two]["xpts"])
-		})
-		return out
-	}
-	return [][]map[string]any{pick(attack), pick(middle), pick(defence), pick([]string{keeper})}
-}
-
-// elevenAside is the best eleven the squad can field, or the one the plan leaves.
-func (d Document) elevenAside() string {
-	squad := rows(d.Advice["squad"])
-	if len(squad) == 0 {
-		return ""
-	}
-	byID := map[string]map[string]any{}
-	for _, player := range squad {
-		byID[text(player["id"])] = player
-	}
-	_, now := bestElevenOf(squad)
-	planned, arriving := planSquad(squad, rows(d.Swaps["moves"]))
-	for _, player := range planned {
-		byID[text(player["id"])] = player
-	}
-	choice, total := bestElevenOf(planned)
-	shape := choice.Shape.Name
-	summary := `<div class="total"><span class="to">` + esNum(total, 1) + ` xPts</span></div>`
-	if len(arriving) > 0 {
-		shape += " si haces el plan"
-		summary = `<div class="total"><span class="from">` + esNum(now, 1) + `</span>` +
-			`<span class="to">` + esNum(total, 1) + ` xPts</span><span class="gain">` +
-			esSigned(total-now) + `</span></div>`
-	}
-	fresh := ""
-	if len(arriving) > 0 {
-		fresh = "● fichaje nuevo · "
-	}
-	legend := `<div class="mk-legend">` + fresh + `xPts por jornada: <span class="x-hi-t">≥6</span> · ` +
-		`<span class="x-lo-t">2–3,5</span> · <span class="x-bad-t">&lt;2</span></div>`
-	lines := byLines(byID, choice.Attack, choice.Middle, choice.Defence, choice.Keeper)
-	more := `<nav class="more"><span>Ver todo en</span>` +
-		`<button type="button" data-goto="clausulas">Cláusulas</button>` +
-		`<button type="button" data-goto="comprar">Comprar</button>` +
-		`<button type="button" data-goto="vender">Vender</button></nav>`
-	finish := ""
-	if week, place := d.myFinish(); place > 0 {
-		finish = fmt.Sprintf(`<p class="mk-note finish">Tu puesto previsto en la J%d: `+
-			`<button class="linkish" type="button" data-goto="partidos"><b>%dº</b></button></p>`,
-			week, place)
-	}
-	return block("Tu once", `<div class="pitchlist">`+summary+elevenChips(lines, arriving)+legend+
-		`</div>`+d.planWarnings()+roleDrops(lines)+finish, Esc(shape), -1) + d.crackBox() + more
-}
-
-// roleDrops are the starters futbolfantasy's editors just moved down in their club.
-func roleDrops(lines [][]map[string]any) string {
-	var out strings.Builder
-	for _, line := range lines {
-		for _, player := range line {
-			role := mapOf(player["role"])
-			if text(role["change"]) != "down" {
-				continue
-			}
-			note := ""
-			if text(role["note"]) != "" {
-				note = ": " + text(role["note"])
-			}
-			fmt.Fprintf(&out, `<p class="mk-note plan-warn" data-pid="%s">⚠ %s bajó a %s en su `+
-				`equipo%s</p>`, Esc(text(player["id"])), Esc(text(player["name"])),
-				Esc(text(role["label"])), Esc(note))
-		}
-	}
-	return out.String()
-}
-
-// planWarnings are the plan's warnings about the eleven itself: a squad that cannot field
-// eleven, or a position with nobody to spare.
-func (d Document) planWarnings() string {
-	var out strings.Builder
-	for _, warning := range asStrings(d.Swaps["warnings"]) {
-		out.WriteString(`<p class="mk-note plan-warn">⚠ ` + Esc(warning) + `</p>`)
-	}
-	return out.String()
-}
-
 // --- Comprar ---------------------------------------------------------------------------
 
 // buyRow is a signing ranked by what it adds to the eleven, with the button that makes it.
@@ -603,7 +417,6 @@ func (d Document) buyOptions() (clauses, offers, free []map[string]any) {
 	return clauses, listed(d.Advice["asks"]), listed(d.Advice["bids_now"])
 }
 
-
 // outcomeRow is a resolved bid, offer or standing order as a list row: the icon of how it
 // ended where the face would be.
 func outcomeRow(id, name, outcome, why, what, date string, amount float64) string {
@@ -642,4 +455,3 @@ func (d Document) benchOf() []map[string]any {
 	})
 	return out
 }
-

@@ -173,7 +173,7 @@ func TestRoleChipAndTheDropWarning(t *testing.T) {
 	if !strings.Contains(rest, `"key":"rotacion"`) || !strings.Contains(rest, `"change":"down"`) {
 		t.Errorf("the chip and the warning in my rows: %.400s", rest)
 	}
-	if aside := document.elevenAside(); !strings.Contains(aside, "Portero bajó a Rotación en su equipo") {
+	if aside := asJSON(document.elevenBlock()); !strings.Contains(aside, "Portero bajó a Rotación en su equipo") {
 		t.Errorf("a starter moved down is a Decidir note: %.400s", aside)
 	}
 }

@@ -159,8 +159,8 @@ func (d Document) plannedBlock() Block {
 		lines = append(lines, line)
 	}
 	block := Block{Title: "Clausulazos programados", Count: count(len(lines)),
-		Sub:   "se pagan solos al abrirse, si siguen por debajo de tu límite",
-		Rows:  lines, Empty: "Ninguno programado: se programan desde la ficha de un rival."}
+		Sub:  "se pagan solos al abrirse, si siguen por debajo de tu límite",
+		Rows: lines, Empty: "Ninguno programado: se programan desde la ficha de un rival."}
 	if len(d.Orders) > 0 {
 		history := []Row{}
 		for _, order := range d.Orders {

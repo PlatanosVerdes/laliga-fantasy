@@ -214,88 +214,6 @@ func (d Document) crackReach() (float64, []string) {
 	return reach, sold
 }
 
-// crackBox is the goal: the three best players I do not have, what each costs today, how far
-// my cash and my sales reach, and what the cheapest would add to my eleven.
-func (d Document) crackBox() string {
-	squad := rows(d.Advice["squad"])
-	if len(squad) == 0 {
-		return ""
-	}
-	var others []map[string]any
-	for _, player := range rows(d.Universe["players"]) {
-		if !truthy(player["is_mine"]) && truthy(player["available"]) {
-			others = append(others, player)
-		}
-	}
-	sort.SliceStable(others, func(one, two int) bool {
-		return number(others[one]["xpts"]) > number(others[two]["xpts"])
-	})
-	// The ones who would actually improve my eleven: a keeper below mine is no crack.
-	_, base := bestElevenOf(squad)
-	gains := map[string]float64{}
-	var picked []map[string]any
-	for _, player := range others {
-		if len(picked) == 3 {
-			break
-		}
-		_, with := bestElevenOf(append(append([]map[string]any{}, squad...), player))
-		if with-base > 0.05 {
-			gains[text(player["id"])] = with - base
-			picked = append(picked, player)
-		}
-	}
-	others = picked
-	if len(others) == 0 {
-		return ""
-	}
-
-	reach, sold := d.crackReach()
-
-	var items []string
-	var cheapest map[string]any
-	cheapestPrice := 0.0
-	for _, player := range others {
-		price, how := crackPrice(player)
-		owner := text(player["owner"])
-		if owner == "" {
-			owner = "libre"
-		}
-		value := "no se puede"
-		if price > 0 {
-			value = esMoney(price)
-			if cheapest == nil || price < cheapestPrice {
-				cheapest, cheapestPrice = player, price
-			}
-		}
-		line := playerRow(player)
-		line.Value, line.Note, line.Why = esNum(number(player["xpts"]), 1)+" xPts", value, Esc(how)
-		items = append(items, line.HTML())
-	}
-
-	line := "Con tu caja llegas a " + esMoney(reach)
-	if len(sold) > 0 {
-		names := sold
-		if len(names) > 4 {
-			names = append(names[:4:4], fmt.Sprintf("%d más", len(sold)-4))
-		}
-		line = fmt.Sprintf("Con tu caja y vendiendo %s llegas a %s", strings.Join(names, ", "),
-			esMoney(reach))
-	}
-	if cheapest != nil {
-		gap := cheapestPrice - reach
-		if gap > 0 {
-			line += fmt.Sprintf("; a %s te faltan %s", text(cheapest["name"]), esMoney(gap))
-		} else {
-			line += fmt.Sprintf("; %s te llega", text(cheapest["name"]))
-		}
-		line += fmt.Sprintf(" (%s xPts a tu once).", esSigned(gains[text(cheapest["id"])]))
-	} else {
-		line += "; hoy ninguno se puede fichar."
-	}
-	return block("Objetivo: un crack", rowList(items)+`<p class="mk-note">`+Esc(line)+`</p>`,
-		"", -1)
-}
-
 // --- selling a starter by taking somebody else's ---------------------------------------
 
 // saleSwaps are, for each offer that pays but costs the eleven too much, the rival's player
@@ -338,16 +256,16 @@ func (d Document) saleSwaps() map[string]advice.Clausulazo {
 }
 
 // clauseButton pays his clause now, or schedules the clausulazo for when it opens.
-func clauseButton(player map[string]any, cost float64, opens, class string) string {
-	id, name := Esc(text(player["id"])), Esc(text(player["name"]))
+func clauseButton(player map[string]any, cost float64, opens, class string) Act {
+	id, name := text(player["id"]), text(player["name"])
 	if opens == "" {
-		return fmt.Sprintf(`<button class="op %s" data-op="pay_clause" data-op-player="%s" `+
-			`data-op-name="%s" data-op-amount="%d" type="button">Pagar cláusula %s</button>`,
-			class, id, name, int64(cost), Esc(esMoney(cost)))
+		return Act{Label: "Pagar cláusula " + esMoney(cost), Class: "op " + class, Do: "op",
+			Args: map[string]any{"op": "pay_clause", "player_id": id, "name": name,
+				"amount": int64(cost)}}
 	}
-	return fmt.Sprintf(`<button class="raid-btn %s" data-raid="%s" data-raid-name="%s" `+
-		`data-raid-max="%d" data-raid-clause="%d" type="button">Programar clausulazo</button>`,
-		class, id, name, int64(cost), int64(number(player["clause"])))
+	return Act{Label: "Programar clausulazo", Class: "raid-btn " + class, Do: "raid",
+		Args: map[string]any{"id": id, "name": name, "max": int64(cost),
+			"clause": int64(number(player["clause"]))}}
 }
 
 // swapCards are the sales the eleven only survives with a clausulazo: both legs on one card.
@@ -370,11 +288,7 @@ func (d Document) saleSwapCards() []Card {
 		if move.Opens != "" {
 			order = "Acepta la oferta antes de que caduque y programa el clausulazo para cuando se abra."
 		}
-		accept := fmt.Sprintf(`<button class="op op-primary dcard-go" data-op="accept_offer" `+
-			`data-op-market="%s" data-op-offer="%s" data-op-player="%s" data-op-name="%s" `+
-			`data-op-amount="%d" type="button">Aceptar %s</button>`,
-			Esc(text(offer["market_id"])), Esc(text(offer["offer_id"])), Esc(id),
-			Esc(text(offer["name"])), int64(amount), Esc(esMoney(amount)))
+		accept := acceptAct(offer, amount, "op op-primary dcard-go")
 		out = append(out, Card{
 			Kind: "swap", Key: "own:" + id, Player: offer, In: in,
 			Verb: "Vende y clausula", Big: esSigned(move.Gain) + " xPts",
@@ -389,9 +303,9 @@ func (d Document) saleSwapCards() []Card {
 			},
 			Impact: fmt.Sprintf("tu once %s xPts · te quedan %s", esSigned(move.Gain),
 				esMoney(move.CashAfter)),
-			Tone:   "accent",
-			Button: accept + clauseButton(in, move.Cost, move.Opens, "dcard-go dcard-second"),
-			Weight: move.Gain, Cash: amount - move.Cost,
+			Tone:    "accent",
+			Buttons: []Act{accept, clauseButton(in, move.Cost, move.Opens, "dcard-go dcard-second")},
+			Weight:  move.Gain, Cash: amount - move.Cost,
 		})
 	}
 	return out
@@ -417,7 +331,7 @@ func (d Document) upgradeCards(covered map[string]bool) []Card {
 		Why: []string{fmt.Sprintf("Su cláusula (de %s) cuesta %s y nadie puede negarse.",
 			text(in["owner"]), esMoney(move.Cost))},
 		Impact: "te quedan " + esMoney(move.CashAfter), Tone: "accent",
-		Button: clauseButton(in, move.Cost, move.Opens, "dcard-go"),
-		Weight: move.Gain, Cash: -move.Cost,
+		Buttons: []Act{clauseButton(in, move.Cost, move.Opens, "dcard-go")},
+		Weight:  move.Gain, Cash: -move.Cost,
 	}}
 }
