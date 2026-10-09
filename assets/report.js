@@ -1119,7 +1119,7 @@ function seasonChart(d,width){
     grid+=`<text class="evo-axis" x="${padL-8}" y="${y(v)+3}" text-anchor="end">${label}</text>`;
   });
 
-  const kind=m=>m.is_me?'me':shown(m.team_id)?'pick':'rest';
+  const kind=m=>!shown(m.team_id)?'rest':m.is_me?'me':'pick';
   const order={rest:0,pick:1,me:2};
   const painted=[...managers].sort((a,b)=>order[kind(a)]-order[kind(b)]);
   const labels=[];
@@ -1154,14 +1154,14 @@ function seasonChart(d,width){
     .map(m=>{
       const k=kind(m);
       const sw=m.is_me?'evo-me':`evo-h${hue.get(m.team_id)}`;
-      return `<button type="button" class="evo-chip ${sw}${k!=='rest'&&(m.is_me||picked.length)?' on':''}" data-evo-pick="${m.team_id}"`
-        +`${m.is_me?' disabled':''} aria-pressed="${k!=='rest'}"><i class="evo-sw"></i>${m.manager}</button>`;
+      return `<button type="button" class="evo-chip ${sw}${picked.includes(m.team_id)?' on':''}" data-evo-pick="${m.team_id}"`
+        +` aria-pressed="${k!=='rest'}"><i class="evo-sw"></i>${m.manager}</button>`;
     }).join('');
   const controls=`<div class="evo-controls"><div class="evo-mode" role="group">`
     +`<button type="button" data-evo-mode="place" class="${byPoints?'':'on'}">Puesto</button>`
     +`<button type="button" data-evo-mode="points" class="${byPoints?'on':''}">Puntos</button></div>`
     +`<div class="evo-chips">${chips}${picked.length?'<button type="button" class="evo-clear" data-evo-clear>Todos</button>':''}</div>`
-    +`<p class="evo-hint">${picked.length?'Toca más managers para añadirlos o quitarlos.':'Toca un manager para ver solo su línea y la tuya.'}</p></div>`;
+    +`<p class="evo-hint">${picked.length?'Toca más managers para añadirlos o quitarlos.':'Toca un manager para ver solo su línea.'}</p></div>`;
   return controls+`<svg class="evo-svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"
     role="img" aria-label="${byPoints?'Puntos acumulados':'Puesto'} de cada manager jornada a jornada">${grid}${lines}${names}</svg>`;
 }
