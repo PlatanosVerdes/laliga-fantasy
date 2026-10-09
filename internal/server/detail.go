@@ -55,10 +55,15 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	// The profitable ceiling lives on futbolfantasy's page, not in the model, so the drawer
 	// only knows it if the server puts it here: without it the dialog reads "sin margen" and
 	// warns about every amount, however small.
-	if _, present := player["ideal_bid"]; !present {
-		if ffID := text(player["ff_id"]); ffID != "" {
-			if detail, err := futbolfantasy.PlayerDetail(ffID, futbolfantasy.DetailTTL); err == nil {
+	// The link is the page the ceiling was read from, so it comes with it rather than from a
+	// slug of his name, which a short or shared name gets wrong.
+	if ffID := text(player["ff_id"]); ffID != "" {
+		if detail, err := futbolfantasy.PlayerDetail(ffID, futbolfantasy.DetailTTL); err == nil {
+			if _, present := player["ideal_bid"]; !present {
 				player["ideal_bid"] = number(detail["ideal_bid"])
+			}
+			if url, ok := detail["ff_url"].(*string); ok && url != nil {
+				player["ff_url"] = *url
 			}
 		}
 	}
@@ -68,9 +73,14 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	var ffMatches []map[string]any
 	if name := fallback(text(player["ff_name"]), text(player["name"])); name != "" {
 		slug := matching.SlugifyFF(name)
+		if url := text(player["ff_url"]); url != "" {
+			slug = url[strings.LastIndex(url, "/")+1:]
+		}
 		if page, err := futbolfantasy.PlayerPageFor(slug, text(player["ff_id"]),
 			futbolfantasy.DetailTTL); err == nil {
-			player["ff_url"] = strings.ReplaceAll(config.FFPlayerURL, "{slug}", slug)
+			if _, known := player["ff_url"]; !known {
+				player["ff_url"] = strings.ReplaceAll(config.FFPlayerURL, "{slug}", slug)
+			}
 			if rank := page["hierarchy"]; rank != nil {
 				player["hierarchy"] = text(rank)
 				player["hierarchy_rank"] = number(page["hierarchy_rank"])

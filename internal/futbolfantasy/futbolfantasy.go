@@ -217,6 +217,10 @@ var (
 )
 
 // ParseDetail reads the numbers the page leaves in its own JavaScript.
+// playerLink is the player's own page as the market detail links it: the page the profitable
+// ceiling belongs to, whatever his name slugifies to.
+var playerLink = regexp.MustCompile(`href="(https://www\.futbolfantasy\.com/jugadores/[^"?#/]+)"`)
+
 func ParseDetail(page string) map[string]any {
 	jsNumber := func(name string) *float64 {
 		pattern := regexp.MustCompile(`\b` + name + `\s*=\s*(-?\d+(?:\.\d+)?)`)
@@ -254,6 +258,11 @@ func ParseDetail(page string) map[string]any {
 		return out
 	}
 
+	var url *string
+	if found := playerLink.FindStringSubmatch(page); found != nil {
+		url = &found[1]
+	}
+
 	ideal := 0
 	if found := idealBidCall.FindStringSubmatch(page); found != nil {
 		ideal, _ = strconv.Atoi(found[1])
@@ -280,6 +289,7 @@ func ParseDetail(page string) map[string]any {
 
 	return map[string]any{
 		"ideal_bid":           ideal,
+		"ff_url":              url,
 		"max_value":           jsNumber("max_valor"),
 		"min_value":           jsNumber("min_valor"),
 		"max_date":            jsString("max_date"),
