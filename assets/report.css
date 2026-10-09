@@ -735,9 +735,10 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .mode-auto{color:var(--pole-pos);background:color-mix(in srgb,var(--pole-pos) 14%,transparent)}
 .mode-manual{color:var(--warning);background:color-mix(in srgb,var(--warning) 14%,transparent)}
 .mode-read{color:var(--muted)}
-/* The binary's version: there to be looked up, not read, so it goes without a pill. */
-.build{margin-left:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;
-  letter-spacing:0;color:var(--baseline);opacity:.7;cursor:help}
+/* The binary's version: there to be looked up, so discreet but legible in both themes. */
+.build{margin-left:10px;align-self:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:11px;letter-spacing:0;color:var(--muted);padding:2px 7px;border-radius:6px;
+  border:1px solid var(--line);cursor:default;white-space:nowrap}
 
 /* A squad reads by lines, like a pitch: keeper, defence, midfield, attack. */
 .md-line,.squad-line{display:grid;grid-template-columns:38px 1fr;gap:8px;align-items:start;
@@ -887,15 +888,6 @@ table.cmp td.cmp-cheap{font-weight:700}
 .effect-line{margin:0;font-size:12.5px;color:var(--ink-2)}
 
 /* The way into the comparator from the header, next to the mode. */
-.head-btn{font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.05em;margin-left:8px;padding:3px 10px;border-radius:20px;cursor:pointer;
-  border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
-.head-btn:hover{border-color:var(--baseline);color:var(--ink)}
-/* A narrowed table looks like a short table, so the switch that narrowed it has to be lit. */
-.head-btn.on{color:var(--accent);border-color:var(--accent);
-  background:color-mix(in srgb,var(--accent) 12%,transparent)}
-/* Above its own table rather than beside a heading, which is where the others sit. */
-button[data-only]{margin:0 0 10px}
 
 /* The matchday points on a card: the same chips as a shirt on the pitch, on their own line
    because here there is room for the whole season rather than the last five. */
@@ -963,7 +955,6 @@ td .muted,span.muted{color:var(--muted)}
   .wrap{padding:14px 12px 56px}
   header h1{font-size:19px;line-height:1.25}
   header p{font-size:12px}
-  .head-btn{margin-left:0;margin-top:6px}
   /* At 400px a 150px box does not fit beside the button: it takes a line of its own, and the
      results with it. */
   .head-find{display:block;margin:6px 0 0}
@@ -1201,10 +1192,11 @@ details.kpis-more .kpi{padding:9px 12px}
   border-radius:999px;padding:3px 10px;margin:0 0 12px}
 .pc-status.out{background:color-mix(in srgb,var(--critical) 18%,transparent);color:var(--critical)}
 .pc-status.doubt{background:color-mix(in srgb,var(--warning) 20%,transparent);color:var(--warning)}
+.pc-tiles{display:grid;gap:6px}
 .pc-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
-.pc-grid>div{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+.pc-grid>*{background:var(--surface);border:1px solid var(--line);border-radius:10px;
   padding:7px 10px;min-width:0}
-.pc-grid>div>span:first-child{display:block;font-size:11px;color:var(--muted)}
+.pc-grid>*>span:first-child{display:block;font-size:11px;color:var(--muted)}
 .pc-grid b{font-size:16px;font-variant-numeric:tabular-nums}
 .pc-grid small{display:block;font-size:11px;color:var(--ink-2);overflow-wrap:anywhere}
 .pc-grid .up{color:var(--good)} .pc-grid .down{color:var(--critical)}
@@ -1357,33 +1349,77 @@ section.mk{margin:0 0 22px}
 .mk button.mb[disabled]{opacity:.45;cursor:not-allowed}
 .mk .ract .mine-bid{font-size:12px;color:var(--muted)}
 
-/* Compact rows */
+/* ---- The one list row (rows.go) ------------------------------------------------------
+   Every list in every tab is this markup, in two zones: who on the left, truncated rather
+   than wrapped, and on the right the figure, the chip and the buttons. The list is a grid and
+   each row a subgrid of it, so the right zone's columns line up across every row of a list;
+   the list is also a container, so a narrow one draws the same row smaller. The 42px lead is
+   the face plus the row's padding, which a subgrid lays over its edge tracks. */
 .mk .rows{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);
-  border-radius:12px;overflow:hidden}
-.mk .r{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;grid-template-areas:"f w v c" "f w v a";
-  column-gap:10px;row-gap:4px;align-items:center;padding:9px 12px;border-top:1px solid var(--line)}
+  border-radius:12px;overflow:hidden;container:rows/inline-size;display:grid;
+  grid-template-columns:42px minmax(0,1fr) max-content max-content max-content;column-gap:10px}
+.mk .r{grid-column:1/-1;display:grid;grid-template-columns:subgrid;grid-template-areas:"f w v c a";
+  align-items:center;padding:9px 12px;border-top:1px solid var(--line)}
 .mk .r:first-child{border-top:0}
-.mk .r>.face{grid-area:f}
+.mk .r[hidden],.mk .scrollbox[hidden],.mk .rows[hidden]{display:none}
+.mk .r>.face,.mk .r>.rank-dot{grid-area:f;width:30px;height:30px}
+.mk .rank-dot{border-radius:50%;display:grid;place-items:center;background:var(--surface-2);
+  color:var(--ink-2);font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.mk .rank-dot.out-good{color:var(--good)} .mk .rank-dot.out-bad{color:var(--critical)}
+.mk .rank-dot.out-muted{color:var(--muted)}
 .mk .rwho{grid-area:w;display:flex;flex-direction:column;min-width:0;line-height:1.3}
-.mk .rwho b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mk .rname{display:flex;align-items:center;gap:6px;min-width:0}
+.mk .rname b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.mk .rname .pos{flex:none}
+.mk .rwho .meta{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
 .mk .rval{grid-area:v;display:flex;flex-direction:column;align-items:flex-end;line-height:1.25;
-  font-variant-numeric:tabular-nums}
+  font-variant-numeric:tabular-nums;min-width:72px}
 .mk .rval b{font-size:17px;letter-spacing:-.01em;white-space:nowrap}
 .mk .rnote{font-size:11px;color:var(--muted);white-space:nowrap}
-.mk .r>.mk-chip{grid-area:c;justify-self:end}
+.mk .rtail{display:contents}
+.mk .rchip{grid-area:c;display:flex;gap:4px;justify-content:center}
 .mk .ract{grid-area:a;display:flex;gap:6px;justify-content:flex-end;align-items:center}
+.mk .ract .mine-bid{font-size:12px;color:var(--muted)}
+.mk .ract .star{font-size:16px;padding:2px 6px}
+.mk .ract .cmp-add.small{width:28px;height:28px}
+.mk .ract button.act.on{border-color:var(--accent);color:var(--accent)}
 .mk .r.critical{box-shadow:inset 3px 0 0 var(--critical)}
 .mk .r.good{box-shadow:inset 3px 0 0 var(--good)}
 .mk .r.accent{box-shadow:inset 3px 0 0 var(--accent)}
 .mk .r.warn{box-shadow:inset 3px 0 0 var(--warning)}
-.mk .r.dim{opacity:.55}
+.mk .r.dim>:not(.rtail),.mk .r.dim .rchip{opacity:.5}
+.mk .r[data-team]{cursor:pointer}
+.mk .r[data-team]:hover{background:color-mix(in srgb,var(--accent) 5%,transparent)}
 .mk .up{color:var(--good)} .mk .down{color:var(--critical)}
-.mk .rows.tight .r{padding:7px 12px}
-.mk .side .r{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"f w v" "f a a"}
-.mk .side .r .ract:empty,.mk .side .r .ract:not(:has(*)){display:none}
-@media (min-width:1000px){
-  .mk .main .r{grid-template-columns:auto minmax(0,1fr) auto 112px auto;grid-template-areas:"f w v c a"}
-  .mk .main .r>.mk-chip{justify-self:center}
+.mk .rows .line-head{grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:6px 12px;
+  font-size:11px;color:var(--muted);background:var(--surface-2);border-top:1px solid var(--line);
+  font-weight:600}
+.mk .rows .line-head:first-child{border-top:0}
+.mk .rows .line-head.xi-head{color:var(--accent)}
+.mk .scrollbox{overflow-y:auto;overscroll-behavior:contain;border-radius:12px}
+/* A narrow list (an aside): the same zones, smaller. */
+@container rows (max-width:640px){
+  .mk .r{padding:7px 10px}
+  .mk .r>.face,.mk .r>.rank-dot{width:28px;height:28px}
+  .mk .rname{gap:4px}
+  .mk .rwho .meta{font-size:11px}
+  .mk .rval{min-width:56px}
+  .mk .rval b{font-size:14px}
+  .mk .rnote{font-size:10.5px}
+  .mk .rchip .mk-chip{font-size:10px;padding:2px 6px}
+  .mk .rchip .clock{display:none}
+  .mk .ract{gap:4px}
+  .mk .ract button.mb{font-size:12px;padding:4px 8px;border-radius:7px}
+  .mk .ract .star{font-size:14px;padding:0 2px}
+  .mk .ract .cmp-add.small{width:24px;height:24px}
+}
+/* A phone has no room for both zones on one line: the chip and buttons go under, right. */
+@media (max-width:560px){
+  .mk .r{grid-template-columns:28px minmax(0,1fr) auto;grid-template-areas:"f w v" "f t t";
+    row-gap:6px;column-gap:8px}
+  .mk .rtail{grid-area:t;display:flex;justify-content:flex-end;align-items:center;gap:6px}
+  .mk .rtail:not(:has(*)){display:none}
 }
 .mk .fold{margin-top:6px}
 .mk .fold summary{cursor:pointer;color:var(--muted);font-size:12px;padding:6px 2px;list-style:none}
@@ -1393,22 +1429,12 @@ section.mk{margin:0 0 22px}
 .mk .fold .rows{margin-top:4px}
 
 /* Aside lists */
-.mk .reslist,.mk .stars,.mk .always,.mk .calendar,.mk .history,.mk .fixtures{list-style:none;margin:0;padding:0}
-.mk .res{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 0;
-  border-top:1px solid var(--line)}
-.mk .res:first-child{border-top:0}
-.mk .res>span{display:flex;flex-direction:column;min-width:0}
-.mk .res span.meta{display:block}
-.mk .res .g{font-weight:800;text-align:center}
-.mk .res.good .g{color:var(--good)} .mk .res.bad .g{color:var(--critical)} .mk .res.muted .g{color:var(--muted)}
-.mk .res .rv{font-variant-numeric:tabular-nums;font-weight:600}
+.mk .stars,.mk .calendar,.mk .history,.mk .fixtures{list-style:none;margin:0;padding:0}
 .mk .stars{display:flex;flex-wrap:wrap;gap:6px}
 .mk .mk-star{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);
   border-radius:999px;padding:2px 9px 2px 2px;font-size:13px}
 .mk .mk-star .meta{font-size:11px}
 .mk .mk-star .tx{font-weight:700}
-.mk .always .al{display:flex;flex-direction:column;padding:6px 0;border-top:1px solid var(--line)}
-.mk .always .al:first-child{border-top:0}
 .mk .small{font-size:12px;color:var(--ink-2)}
 .mk .kv{display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)}
 .mk .kv:first-of-type{border-top:0}
@@ -1507,15 +1533,6 @@ section.mk{margin:0 0 22px}
 .md-xi .chips{display:flex;flex-wrap:wrap;gap:5px}
 .md-xi .fcs{font-size:10px;color:var(--muted);font-weight:500}
 
-/* Ver detalle */
-section.mk-more{margin:4px 0 22px}
-.mk-more .dfold{font:inherit;display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;cursor:pointer;
-  background:none;border:1px dashed var(--line);border-radius:10px;padding:8px 12px;color:var(--ink)}
-.mk-more .dfold:hover{border-color:var(--baseline)}
-.mk-more .dfold-title{font-weight:600;font-size:13px}
-.mk-more .dfold-title::before{content:"▸ ";color:var(--muted)}
-.mk-more .dfold.on .dfold-title::before{content:"▾ "}
-.mk-more .dfold-what{font-size:12px;color:var(--muted)}
 footer,header.topline{margin-top:24px}
 
 @media (max-width:760px){
@@ -1523,9 +1540,6 @@ footer,header.topline{margin-top:24px}
   .topbar .topright .head-find{flex:1;width:auto;padding:0}
   .mk .big{font-size:25px}
   .mk .card-foot button{flex:1}
-  .mk .r,.mk .main .r{grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"f w v" "f c a"}
-  .mk .r>.mk-chip{justify-self:start}
-  .mk .ract{flex-wrap:wrap}
   .mk .matchday{grid-template-columns:1fr 1fr}
   .mk .matchday>div:first-child{grid-column:1/-1}
   .mk .fx{grid-template-columns:58px minmax(0,1fr)}
@@ -1543,18 +1557,8 @@ table.cmp tr:last-child td{border-bottom:0}
 .cmp-who,.cmp-sub,.cmp-state{align-items:center;justify-content:center;text-align:center}
 
 /* ---- league tabs ---------------------------------------------------------- */
-.mk .rank-dot{grid-area:f;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
-  background:var(--surface-2);color:var(--ink-2);font-size:12px;font-weight:700;
-  font-variant-numeric:tabular-nums}
-.mk .r[data-team]{cursor:pointer}
-.mk .r[data-team]:hover{background:color-mix(in srgb,var(--accent) 5%,transparent)}
-.mk .rwho .meta+.meta{margin-top:1px}
-.mk .rwho .meta .face{margin-right:1px}
 .mk .mk-chip.warn{background:color-mix(in srgb,var(--warning) 18%,transparent);color:var(--warning)}
 .mk .mk-chip.ok{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
-.mk .ract .star{font-size:16px;padding:2px 6px}
-.mk .ract .cmp-add.small{width:28px;height:28px}
-.mk .ract .raid-btn.mb{padding:6px 10px;font-size:12px}
 .mk .mk-box{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
 .mk .rules li{font-size:13px}
 .mk .evo{border-radius:12px;padding:8px 0}
@@ -1576,10 +1580,8 @@ table.cmp tr:last-child td{border-bottom:0}
 @media (max-width:760px){
   .mk-filters .filters label{flex:1 1 140px}
   .mk-filters .filters select,.mk-filters .filters input{max-width:none;width:100%;font-size:16px}
-  .mk .rwho .meta{white-space:normal}
 }
 .mk .evo,.mk .feed{max-width:none}
-.mk .side .ract .star{padding:0 4px}
 .mk .board .r.me{background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .mk .board .podium .rank-dot{color:#1a1a19;font-weight:800}
 .mk .board .p1 .rank-dot{background:#e8c25a} .mk .board .p2 .rank-dot{background:#c9ccd1}
@@ -1596,6 +1598,12 @@ table.cmp tr:last-child td{border-bottom:0}
 .pc-grid>div.t-bad{border-color:color-mix(in srgb,var(--critical) 35%,var(--line))}
 .pc-grid>div.t-info{border-color:color-mix(in srgb,var(--accent) 35%,var(--line))}
 .pc-grid>div b [data-deadline]{color:inherit!important}
+/* The profitable ceiling is the number a bid is judged by, so it stands out and leads to its
+   source. */
+.pc-grid>.t-ceiling{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.pc-grid>a.t-link{display:block;color:inherit;text-decoration:none;cursor:pointer}
+.pc-grid>a.t-link:hover{border-color:var(--accent)}
+.pc-grid>a.t-link small{color:var(--accent)}
 .shield-mark{font-size:.85em;cursor:help}
 .cmp-acts button.cmp-close{width:33px;height:33px;padding:0;border-radius:50%;font-size:13px;line-height:1;
   display:inline-grid;place-items:center;align-self:center;background:transparent;color:var(--muted);
@@ -1640,11 +1648,9 @@ table.cmp tr:last-child td{border-bottom:0}
   .mk-once .slot.tokslot{width:66px} .mk-once .tok-name{max-width:64px;font-size:11px}
   .mk .fx{grid-template-columns:58px minmax(0,1fr)}
 }
-.mk button.mb.mb-good{background:var(--good);color:#fff;border:1px solid var(--good)}
-.mk button.mb.mb-bad{background:var(--critical);color:#fff;border:1px solid var(--critical)}
-.drawer-actions.pc-acts button.act-good{background:var(--good);border-color:var(--good);color:#fff}
-.drawer-actions.pc-acts button.act-bad{background:var(--critical);border-color:var(--critical);color:#fff}
 .mk .big-note.up{color:var(--good)} .mk .big-note.down{color:var(--critical)}
-.mk .rows .line-head{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:11px;color:var(--muted);
-  background:var(--surface-2);border-top:1px solid var(--line);font-weight:600}
-.mk .rows .line-head:first-child{border-top:0}
+
+/* Vender: the rest of the squad, the eleven marked so a sale there is never by accident */
+.mk .xi-mark{color:var(--accent);font-weight:650;white-space:nowrap}
+.mk .src-rival{color:var(--warning)}
+.mk .mk-note.plan-warn{color:var(--warning)}

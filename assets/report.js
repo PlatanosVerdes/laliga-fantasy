@@ -87,59 +87,61 @@ function wireTables(root=document){
   });
 }
 
+// What people type as a price: "20", "20M", "20,5", "20.000.000". Small numbers are millions;
+// empty is no limit.
+function parsePrice(raw){
+  let text=String(raw||'').trim().toLowerCase().replace(/\s|€/g,'');
+  if(!text) return Infinity;
+  const millions=/m$/.test(text);
+  text=text.replace(/m$/,'');
+  if(/^\d{1,3}(\.\d{3})+$/.test(text)) text=text.replace(/\./g,'');
+  const n=parseFloat(text.replace(',','.'));
+  if(!isFinite(n)) return Infinity;
+  return millions||n<1000 ? n*1e6 : n;
+}
+const plain=t=>String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+
 function applyFilters(){
-  const maxPrice=parseFloat(filterState.price)||Infinity;
-  const needle=filterState.text.trim().toLowerCase();
+  const maxPrice=parsePrice(filterState.price);
+  const needle=plain(filterState.text.trim());
+  const active=filterState.pos!=='all'||maxPrice!==Infinity||!!needle;
   document.querySelectorAll('.filters').forEach(bar=>{
     const scope=bar.closest('section');
     let shown=0,total=0;
     // A list keeps its rest folded; a filter has to look through all of it.
-    if(filterState.pos!=='all'||filterState.price||needle)
+    if(active)
       scope.querySelectorAll('details.fold').forEach(d=>{ if(d.querySelector('li[data-position]')) d.open=true; });
     scope.querySelectorAll('tr[data-position], li[data-position]').forEach(row=>{
       total++;
       const ok=(filterState.pos==='all'||row.dataset.position===filterState.pos)
         && parseFloat(row.dataset.price)<=maxPrice
-        && (!needle||row.dataset.name.includes(needle));
+        && (!needle||plain(row.dataset.find||row.dataset.name).includes(needle));
       row.hidden=!ok; if(ok) shown++;
+    });
+    // Each box says how many it shows, and says so when the filter leaves it empty.
+    scope.querySelectorAll('.block').forEach(box=>{
+      const rows=[...box.querySelectorAll('li[data-position]')];
+      if(!rows.length) return;
+      const badge=box.querySelector('.sec-head .count');
+      if(badge){
+        if(!badge.dataset.total) badge.dataset.total=badge.textContent;
+        badge.textContent=active?rows.filter(r=>!r.hidden).length:badge.dataset.total;
+      }
+      let none=box.querySelector('.f-none');
+      const empty=active&&rows.every(r=>r.hidden);
+      if(empty&&!none){
+        none=document.createElement('p');
+        none.className='mk-empty f-none';
+        none.textContent='Ninguno con este filtro.';
+        box.appendChild(none);
+      }
+      if(none) none.hidden=!empty;
+      const list=box.querySelector('.scrollbox, .rows');
+      if(list) list.hidden=empty;
     });
     const counter=bar.querySelector('.f-count');
     if(counter) counter.textContent=shown+' de '+total+' filas';
   });
-}
-
-// One section narrowing itself to one kind of move. It owns `hidden` on its own rows, which is
-// safe because the sections with a filter bar are other ones, and it is remembered: a rebuild
-// puts the full table back and the answer you were reading should not disappear with it.
-const ONLY_KEY='fantasy:only';
-function onlyState(){
-  try{ return localStorage.getItem(ONLY_KEY)||''; }catch(e){ return ''; }
-}
-
-function applyOnly(root=document){
-  root.querySelectorAll('button[data-only]').forEach(button=>{
-    const on=onlyState()===button.dataset.only;
-    const scope=button.closest('section');
-    button.classList.toggle('on',on);
-    if(!scope) return;
-    scope.querySelectorAll('tr[data-route]').forEach(row=>{
-      row.hidden = on && !(row.dataset.route===button.dataset.only && row.dataset.afford==='1');
-    });
-  });
-}
-
-function wireOnly(root=document){
-  root.querySelectorAll('button[data-only]').forEach(button=>{
-    if(button.dataset.wired) return;
-    button.dataset.wired='1';
-    button.addEventListener('click',()=>{
-      const next=onlyState()===button.dataset.only?'':button.dataset.only;
-      try{ localStorage.setItem(ONLY_KEY,next); }catch(e){}
-      usage.click('chollos',next?'solo '+next:'todas las vias');
-      applyOnly();
-    });
-  });
-  applyOnly(root);
 }
 
 function wireFilters(root=document){
@@ -1816,54 +1818,76 @@ async function openDetail(playerId){
   const trend=past!=null?past:projected;
   const starts=p.start_probability;
   const xp=p.xpts||0;
-  const tiles=[
-    ['Valor', mny(p.value), l.market_id?`en venta por ${mny(l.min_bid)}`:''],
-    ['Cláusula', p.clause?mny(p.clause):'—',
-      p.clause&&p.value?`${dec(p.clause/p.value,2)}x su valor`:''],
-    ['xPts / jornada', dec(p.xpts), p.rank?`score #${p.rank}`:'',
-      xp>=6?'t-good':xp>=3.5?'t-info':xp>=2?'t-warn':'t-bad'],
-    ['Puntos temporada', p.season_points??'—',
-      p.last_season_points?`25/26: ${p.last_season_points}`:''],
-    ['Titular', starts!=null?starts+' %':'—',
-      p.hierarchy?p.hierarchy:(p.start_probability_source==='ficha'?`J${p.start_week||''} en su ficha`:''),
-      starts==null?'':starts>=75?'t-good':starts>=50?'t-warn':'t-bad'],
-    ['Próximo', p.next_rival||'—', p.next_rival?(p.next_home?'🏠 en casa':'✈️ fuera'):''],
-    ['Valor 7d', trend!=null?`${signed(trend)} %`:'—',
-      past!=null&&projected!=null?`prevé ${signed(projected)} % en 7 días`:(past==null&&projected!=null?'previsión':''),
-      trend==null?'':trend>=0?'t-good':'t-bad'],
-  ];
+  // Tiles by meaning, one row each: performance, money, availability, the season. A tile with
+  // nothing to say is left out rather than drawn empty.
+  const tile=(k,v,sm,cls,href)=>({k,v,sm,cls,href});
+  const xpTile=tile('xPts / jornada', dec(p.xpts), p.rank?`score #${p.rank}`:'',
+    xp>=6?'t-good':xp>=3.5?'t-info':xp>=2?'t-warn':'t-bad');
+  const startsTile=starts!=null?tile('Titular', starts+' %',
+    p.hierarchy?p.hierarchy:(p.start_probability_source==='ficha'?`J${p.start_week||''} en su ficha`:''),
+    starts>=75?'t-good':starts>=50?'t-warn':'t-bad'):null;
+  const nextTile=p.next_rival?tile('Próximo', p.next_rival, p.next_home?'🏠 en casa':'✈️ fuera'):null;
+  const valueTile=tile('Valor', mny(p.value), l.market_id?`en venta por ${mny(l.min_bid)}`:'');
+  const ceilingTile=p.is_mine?null:tile('Techo rentable', p.ideal_bid?mny(p.ideal_bid):'sin margen',
+    p.ff_url?'↗ futbolfantasy':(p.ideal_bid?'futbolfantasy':''), 't-ceiling', p.ff_url);
+  const clauseTile=p.clause?tile('Cláusula', mny(p.clause),
+    p.value?`${dec(p.clause/p.value,2)}x su valor`:''):null;
   // Whether anybody can pay his clause right now, and if not, until when.
+  let payableTile=null;
   if(p.clause){
     const shut=pageFacts.windowOpen===false||(pageFacts.closes&&new Date(pageFacts.closes)<=new Date());
-    if(p.shielded&&p.shielded_until) tiles.push(['Clausulable',`blindado hasta ${whenShort(p.shielded_until)}`,'','t-info']);
-    else if(p.clause_locked&&p.clause_locked_until) tiles.push(['Clausulable',`se libera en ${countdown(p.clause_locked_until)}`,
-      whenShort(p.clause_locked_until),'t-warn']);
-    else if(shut&&pageFacts.opens) tiles.push(['Clausulable',`se abre ${whenShort(pageFacts.opens)}`,
-      'ventana de cláusulas cerrada','t-warn']);
-    else tiles.push(['Clausulable','pagable ya','','t-good']);
+    if(p.shielded&&p.shielded_until) payableTile=tile('Clausulable',`blindado hasta ${whenShort(p.shielded_until)}`,'','t-info');
+    else if(p.clause_locked&&p.clause_locked_until) payableTile=tile('Clausulable',`se libera en ${countdown(p.clause_locked_until)}`,
+      whenShort(p.clause_locked_until),'t-warn');
+    else if(shut&&pageFacts.opens) payableTile=tile('Clausulable',`se abre ${whenShort(pageFacts.opens)}`,
+      'ventana de cláusulas cerrada','t-warn');
+    else payableTile=tile('Clausulable','pagable ya','','t-good');
   }
+  const bidsTile=(l.kind==='libre'||l.expires)?tile('Pujas', l.bids||'ninguna',
+    l.expires?'cierra '+String(l.expires).slice(11,16):''):null;
+  let sellTile=null;
   if(p.is_mine){
     const rule=pageFacts.holdExcept?` title="excepción: ${pageFacts.holdExcept.replace(/"/g,'&quot;')}"`:'';
-    tiles.push(p.sale_locked&&p.hold_until
-      ? ['Puedes venderlo',`<span${rule}>🔒 en ${countdown(p.hold_until)}</span>`,'norma de la liga','t-warn']
-      : ['Puedes venderlo',`<span${rule}>ya</span>`,'','t-good']);
+    sellTile=p.sale_locked&&p.hold_until
+      ? tile('Puedes venderlo',`<span${rule}>🔒 en ${countdown(p.hold_until)}</span>`,'norma de la liga','t-warn')
+      : tile('Puedes venderlo',`<span${rule}>ya</span>`,'','t-good');
   }
-  if(!p.is_mine) tiles.push(['Techo rentable', p.ideal_bid?mny(p.ideal_bid):'sin margen',
-    p.ideal_bid?'futbolfantasy':'']);
-  if(l.kind==='libre'||l.expires) tiles.push(['Pujas', l.bids||'ninguna',
-    l.expires?'cierra '+String(l.expires).slice(11,16):'']);
-  if(p.bought_at) tiles.push(['Fichado', since(p.bought_at), '']);
-  const grid=tiles.map(([k,v,sm,cls])=>`<div class="${cls||''}"><span>${k}</span><b>${v}</b>${sm?`<small>${sm}</small>`:''}</div>`).join('');
+  const boughtTile=p.bought_at?tile('Fichado', since(p.bought_at), ''):null;
+  const seasonTile=p.season_points!=null?tile('Puntos temporada', p.season_points,
+    p.last_season_points?`25/26: ${p.last_season_points}`:''):null;
+  const trendTile=trend!=null?tile('Valor 7d', `${signed(trend)} %`,
+    past!=null&&projected!=null?`prevé ${signed(projected)} % en 7 días`:(past==null?'previsión':''),
+    trend>=0?'t-good':'t-bad'):null;
+  const rowsOfTiles=[
+    [xpTile, startsTile, nextTile],
+    [valueTile, ceilingTile, clauseTile],
+    [payableTile, bidsTile, sellTile||boughtTile],
+    [seasonTile, trendTile, sellTile?boughtTile:null],
+  ];
+  const drawTile=t=>{
+    const inner=`<span>${t.k}</span><b>${t.v}</b>${t.sm?`<small>${t.sm}</small>`:''}`;
+    return t.href
+      ? `<a class="${t.cls||''} t-link" href="${t.href}" target="_blank" rel="noopener" title="Su ficha en futbolfantasy">${inner}</a>`
+      : `<div class="${t.cls||''}">${inner}</div>`;
+  };
+  const grid=rowsOfTiles.map(group=>group.filter(Boolean)).filter(group=>group.length)
+    .map(group=>`<div class="pc-grid">${group.map(drawTile).join('')}</div>`).join('');
   const actions=data.actions||[];
   const notes=actions.filter(x=>x.kind==='note'), buttons=actions.filter(x=>x.kind!=='note');
-  // An offer's pair: the button the panel recommends is filled and says why.
+  // An offer's pair, always Aceptar then Rechazar: only the recommended one is filled, in the
+  // accent colour whichever it is, and says why.
   const recommended=new Map();
   buttons.filter(x=>x.op==='accept_offer'&&x.why).forEach(x=>{
     const decline=buttons.find(y=>y.op==='decline_offer'&&y.offer_id===x.offer_id);
-    if(x.take) recommended.set(x,{tone:'good',why:x.why});
-    else if(decline) recommended.set(decline,{tone:'bad',why:x.why});
+    if(x.take) recommended.set(x,{tone:'primary',why:x.why});
+    else if(decline) recommended.set(decline,{tone:'primary',why:x.why});
   });
-  const primary=buttons.find(x=>!isDanger(x)&&x.op!=='always'&&!x.blocked&&x.op!=='accept_offer');
+  // Buying, blue means recommended: he improves the eleven at a price within the ceiling.
+  const BUY_OPS=['bid','buy_offer','direct_offer'];
+  const primary=p.is_mine
+    ? buttons.find(x=>!isDanger(x)&&x.op!=='always'&&!x.blocked&&x.op!=='accept_offer')
+    : (data.recommended&&buttons.find(x=>BUY_OPS.includes(x.op)&&!x.blocked))
+      ||buttons.find(x=>x.recommended&&!x.blocked);
   body.innerHTML=`
     ${drawerFrom?`<button class="drawer-back" type="button" data-back="${drawerFrom.id}"
       >← ${drawerFrom.label}</button>`:''}
@@ -1873,7 +1897,7 @@ async function openDetail(playerId){
         <button class="cmp-add" type="button" data-cmp="${p.id}" data-cmp-name="${p.name}"
           data-cmp-pos="${p.position||''}">+ comparar</button></div></div></div>
     ${status}
-    <div class="pc-grid">${grid}</div>
+    <div class="pc-tiles">${grid}</div>
     ${popWeeks(data.weeks||[])}
     ${(data.history||[]).filter(x=>x.value!=null).length>=3
       ?`<div class="pc-h">Valor · ${(data.history||[]).filter(x=>x.value!=null).length} días</div>`:''}
@@ -2005,7 +2029,7 @@ function actionButton(a,primary=false,rec=null){
   return a.op==='always'&&a.on ? button+alwaysPanel(a) : button;
 }
 
-async function runAction(a,player){
+async function runAction(a,player,from=null){
   if(a.op==='note') return;
   if(a.op==='raid'){
     raidDialog({id:player.id, name:player.name, suggested:a.suggested, clause:player.clause,
@@ -2028,12 +2052,14 @@ async function runAction(a,player){
   if(a.op==='always'){
     // Paint before asking: the server confirms in milliseconds, but reloading the whole card
     // made the button look dead.
-    const button=[...document.querySelectorAll('.drawer-actions button')]
+    const button=from||[...document.querySelectorAll('.drawer-actions button')]
       .find(b=>b.textContent.includes('mercado'));
+    const label=on=>from?(on?'● Siempre en mercado':'Siempre en mercado')
+                        :(on?'Quitar de siempre-en-mercado':'Siempre en mercado');
     const turningOn=!a.on;
     if(button){
       button.classList.toggle('on',turningOn);
-      button.textContent=turningOn?'Quitar de siempre-en-mercado':'Siempre en mercado';
+      button.textContent=label(turningOn);
       button.disabled=true;
     }
     try{
@@ -2044,18 +2070,18 @@ async function runAction(a,player){
       const data=await res.json();
       if(button){
         button.classList.toggle('on',!!data.always_listed);
-        button.textContent=data.always_listed?'Quitar de siempre-en-mercado'
-                                             :'Siempre en mercado';
+        button.textContent=label(!!data.always_listed);
       }
       a.on=!!data.always_listed;
       const existing=document.querySelector('.always-panel');
+      if(from) return;
       if(a.on&&!existing&&button){
         button.insertAdjacentHTML('afterend',alwaysPanel(a));
         wireAlways(button.parentElement,player);
       }else if(!a.on&&existing){ existing.remove(); }
     }catch(e){
-      if(button){ button.classList.toggle('on',a.on);
-        button.textContent=a.on?'Quitar de siempre-en-mercado':'Siempre en mercado'; }
+      if(button){ button.classList.toggle('on',a.on); button.textContent=label(a.on); }
+      if(from) alert('No he podido cambiarlo: '+(e.message||e));
     }finally{ if(button) button.disabled=false; }
     return;
   }
@@ -2736,24 +2762,30 @@ function wireFindPlayer(){
 
 // ---- tabs: one view at a time ---------------------------------------------
 const TABS=[
-  {id:'decidir', label:'Decidir', sections:['plan','acciones','caja','chollos']},
+  {id:'decidir', label:'Decidir', sections:['ahora']},
   // By direction: a bid sits with the market it was made in, an offer with the sale it answers.
-  {id:'comprar', label:'Comprar', sections:['fichajes','enventa','mispujas','seguimiento','resueltas']},
-  {id:'vender', label:'Vender', sections:['misventas','ofertas','siempre']},
-  {id:'clausulas', label:'Cláusulas', sections:['subir','programados','calendario','vencimientos','oportunidades','clausulas']},
-  {id:'plantilla', label:'Plantilla', sections:['once','plantilla','ventas']},
-  {id:'partidos', label:'Partidos', sections:['jornada','partidos']},
+  {id:'comprar', label:'Comprar', sections:['v-comprar']},
+  {id:'vender', label:'Vender', sections:['v-vender']},
+  {id:'clausulas', label:'Cláusulas', sections:['v-clausulas']},
+  {id:'plantilla', label:'Plantilla', sections:['once','v-plantilla','plantilla']},
+  {id:'partidos', label:'Partidos', sections:['v-partidos']},
   // Everyone else's in its place: their whole squads and what they can pay for yours.
-  {id:'rivales', label:'Rivales', sections:['rivales']},
+  {id:'rivales', label:'Rivales', sections:['v-rivales']},
   {id:'liga', label:'Liga', sections:['evolucion','movimientos','normas']},
-  {id:'ranking', label:'Ranking', sections:['ranking','rentabilidad']},
+  {id:'ranking', label:'Ranking', sections:['v-ranking']},
   {id:'comparador', label:'Comparador', sections:['comparador']},
 ];
 
-// A hash can be a tab (#comprar) or a section (#oportunidades), and the second is what the
+// A hash can be a tab (#comprar) or a section (#v-clausulas), and the second is what the
 // links carry, so it has to be resolved to the tab that owns it.
-// The tabs before they were split by direction, so old links and bookmarks still land.
-const TAB_ALIASES={mercado:'comprar', misofertas:'vender'};
+// The tabs before they were split by direction, and the sections of the old tables, so old
+// links and bookmarks still land on the tab that took their place.
+const TAB_ALIASES={mercado:'comprar', misofertas:'vender',
+  plan:'decidir', acciones:'decidir', caja:'decidir', chollos:'comprar',
+  fichajes:'comprar', enventa:'comprar', mispujas:'comprar', seguimiento:'comprar', resueltas:'comprar',
+  misventas:'vender', ofertas:'vender', siempre:'vender', ventas:'plantilla',
+  subir:'clausulas', programados:'clausulas', calendario:'clausulas', vencimientos:'clausulas',
+  oportunidades:'clausulas', jornada:'partidos', pinta:'rivales', rentabilidad:'ranking'};
 
 function resolveTarget(hash){
   let id=(hash||'').replace(/^#/,'');
@@ -2790,44 +2822,6 @@ document.addEventListener('change',(event)=>{
   applyRivalPick();
 });
 
-// ---- each tab's view first, its old tables folded under "Ver detalle" -------------
-// The tables stay sections of their own, so the live refresh still finds them by id; the fold
-// only decides whether they are on screen.
-const FOLDS={
-  decidir:['plan','acciones','caja','chollos'],
-  comprar:['fichajes','enventa','mispujas','seguimiento','resueltas'],
-  vender:['misventas','ofertas','siempre'],
-  clausulas:['subir','programados','calendario','vencimientos','oportunidades','clausulas'],
-  partidos:['jornada','partidos'],
-  rivales:['rivales','pinta'],
-  ranking:['ranking','rentabilidad'],
-};
-const FOLD_KEY='fantasy:detalle:';
-function foldOpen(tab){
-  try{ return localStorage.getItem(FOLD_KEY+tab)==='1'; }catch(e){ return false; }
-}
-function applyFold(tab){
-  const ids=FOLDS[tab];
-  if(!ids) return;
-  const open=foldOpen(tab);
-  document.querySelectorAll(`button[data-fold="${tab}"]`).forEach(button=>{
-    button.setAttribute('aria-expanded',open?'true':'false');
-    button.classList.toggle('on',open);
-  });
-  if(!document.getElementById('mas-'+tab)) return;
-  ids.forEach(id=>{ const node=document.getElementById(id); if(node&&!open) node.hidden=true; });
-}
-document.addEventListener('click',(event)=>{
-  const button=event.target.closest&&event.target.closest('button[data-fold]');
-  if(!button) return;
-  const tab=button.dataset.fold, open=!foldOpen(tab);
-  try{ localStorage.setItem(FOLD_KEY+tab,open?'1':'0'); }catch(e){}
-  usage.click('detalle',(open?'ver detalle ':'ocultar detalle ')+tab);
-  showTab(tab,{updateHash:false});
-  const first=(FOLDS[tab]||[]).map(id=>document.getElementById(id)).find(n=>n&&!n.hidden);
-  if(open&&first) first.scrollIntoView({behavior:'smooth',block:'start'});
-});
-
 // Faces, names and rows in the views open the player's card; a button inside them does its own.
 document.addEventListener('click',(event)=>{
   const target=event.target;
@@ -2856,7 +2850,7 @@ document.addEventListener('click',async(event)=>{
     const data=await res.json();
     const action=(data.actions||[]).find(a=>a.op===button.dataset.act);
     if(!action){ alert('Ahora mismo no se puede: abre su ficha para ver por qué.'); return; }
-    runAction(action,data.player);
+    await runAction(action,data.player,action.op==='always'?button:null);
   }catch(e){
     alert('Solo disponible en la versión servida.');
   }finally{ button.disabled=false; }
@@ -2950,7 +2944,10 @@ async function openWeek(week){
   const when=k?['dom','lun','mar','mié','jue','vie','sáb'][k.getDay()]+' '+k.getDate()+' '
     +['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][k.getMonth()]:'';
   body.innerHTML=`<h3 class="pc-title">J${week}${future?' · previsión de cada once':when?' · '+when:''}</h3>`
-    +`<p class="drawer-note" style="margin:0 0 8px">Toca un manager para ver su once${future?'':'; en pequeño, lo previsto si se guardó'}.</p>${rows}`;
+    +`<p class="drawer-note" style="margin:0 0 8px">Toca un manager para ver su once${future?'':'; en pequeño, lo previsto si se guardó'}.</p>${rows}`
+    +`<p class="drawer-note"><button class="j-squads" type="button" data-matchday="${week}">plantillas</button>`
+    +`${fc&&!future?` <button class="j-squads" type="button" data-forecast="${week}">previsión</button>`:''}</p>`;
+  wireMatchdays(body);
 }
 
 function showTab(id,{section=null,updateHash=true}={}){
@@ -2985,10 +2982,6 @@ function showTab(id,{section=null,updateHash=true}={}){
   if(tab.sections.includes('once') && !pitchState) loadPitch();
   if(tab.sections.includes('evolucion')) loadSeason();
   if(tab.id==='comparador'&&was!=='comparador') renderCompare();
-  if(section&&(FOLDS[tab.id]||[]).includes(section)){
-    try{ localStorage.setItem(FOLD_KEY+tab.id,'1'); }catch(e){}
-  }
-  applyFold(tab.id);
   if(tab.id==='partidos') fillHistory();
   drawTray();
   if(section){
@@ -3064,7 +3057,7 @@ async function swap(){
     const node=document.getElementById(id);
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });
-  wireTables(); wireFilters(); wireOnly(); wireStars(); wireBids(); wireOps();
+  wireTables(); wireFilters(); wireStars(); wireBids(); wireOps();
   wireDetails(); wireRaids();
   wireRaises();
   wireManagers(); wireMatchdays(); wireFeedSort(); tick();
@@ -3133,7 +3126,7 @@ function connect(){
   };
 }
 
-wireTables(); wireFilters(); wireOnly(); wireStars(); wireBids(); wireOps();
+wireTables(); wireFilters(); wireStars(); wireBids(); wireOps();
 wireDetails(); wireRaids();
 wireRaises(); wireManagers(); wireMatchdays(); wireFeedSort();
 wireTabs(); tick(); drawTray();

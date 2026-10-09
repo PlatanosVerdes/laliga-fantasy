@@ -1525,6 +1525,9 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 		if policy.AcceptAbove != nil {
 			row["accept_above"] = *policy.AcceptAbove
 		}
+		if policy.AutoSell {
+			row["auto_sell"] = true
+		}
 		policyRows[id] = row
 	}
 
@@ -1575,6 +1578,7 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 		Swaps:          advice.Swaps(generic, buckets, cash),
 		HoldDays:       house.HoldDays,
 		HoldExceptions: house.HoldExceptions,
+		MaxDebtPct:     house.MaxDebtPct,
 		RuleNotes:      house.Notes,
 		CSS: read("report.css"), JS: read("report.js"),
 		Modal: read("modal.html"), Drawer: read("drawer.html"),

@@ -14,19 +14,6 @@ func mkSection(id, tab, title, body, sub string, count int) string {
 		id, tab, block(title, body, sub, count))
 }
 
-// teamRow is a manager as a compact row: his place where a face would be.
-func teamRow(teamID, place, name, meta, value, note, chip, action, tone string) string {
-	if note != "" {
-		note = `<span class="rnote">` + note + `</span>`
-	}
-	if action != "" {
-		action = `<span class="ract">` + action + `</span>`
-	}
-	return fmt.Sprintf(`<li class="r %s" data-team="%s"><span class="rank-dot">%s</span>`+
-		`<span class="rwho"><b>%s</b>%s</span><span class="rval"><b>%s</b>%s</span>%s%s</li>`,
-		tone, Esc(teamID), place, Esc(name), meta, value, note, chip, action)
-}
-
 func tag(text, class string) string {
 	return `<span class="mk-chip ` + class + `">` + text + `</span>`
 }
@@ -73,18 +60,17 @@ func (d Document) rivalsView() string {
 				top = player
 			}
 		}
-		pays := `<span class="meta">no le llega a ninguna cláusula tuya</span>`
+		pays := "no le llega a ninguna cláusula tuya"
 		if top != nil {
 			lock := ""
 			if truthy(top["clause_locked"]) {
 				lock = " 🔒"
 			}
-			pays = fmt.Sprintf(`<span class="meta">le llega hasta %s%s %s%s</span>`,
-				face(top, "xs"), Esc(text(top["name"])), esMoney(number(top["clause"])), lock)
+			pays = fmt.Sprintf("le llega hasta %s %s%s", Esc(text(top["name"])),
+				esMoney(number(top["clause"])), lock)
 		}
-		meta := fmt.Sprintf(`<span class="meta">%.0f pts · %.0f jugadores · plantilla %s</span>%s`,
-			number(team["points"]), number(team["players"]),
-			esMoney(number(team["squad_value"])), pays)
+		meta := fmt.Sprintf("%.0f pts · %.0f jugadores · plantilla %s", number(team["points"]),
+			number(team["players"]), esMoney(number(team["squad_value"])))
 		chip, tone := tag("no llega", "done"), ""
 		switch {
 		case len(threatens[manager]) > 0:
@@ -102,10 +88,10 @@ func (d Document) rivalsView() string {
 		note := `<span title="Reconstruida del historial de traspasos: es una estimación">caja estimada</span>`
 		action := fmt.Sprintf(`<button type="button" class="mb mb-ghost" data-goto="rival-%s">`+
 			`Ver plantilla</button>`, Esc(text(team["team_id"])))
-		items = append(items, teamRow(text(team["team_id"]), place, manager, meta, esMoney(cash),
+		items = append(items, teamRow(text(team["team_id"]), place, manager, meta, pays, esMoney(cash),
 			note, chip, action, tone))
 	}
-	main := block("Rivales", rowList(items, false), "", len(items))
+	main := block("Rivales", rowList(items), "", len(items))
 	return view("v-rivales", "rivales", main, d.outlookAside())
 }
 
@@ -122,13 +108,13 @@ func (d Document) outlookAside() string {
 		}
 		why := ""
 		if reasons := asStrings(row["reasons"]); len(reasons) > 0 {
-			why = `<span class="meta">` + Esc(reasons[0]) + `</span>`
+			why = Esc(reasons[0])
 		}
 		items = append(items, teamRow(text(row["team_id"]), fmt.Sprintf("%dº", index+1),
-			text(row["manager"]), why, esNum(number(row["xpts"]), 1)+" xPts",
+			text(row["manager"]), why, "", esNum(number(row["xpts"]), 1)+" xPts",
 			fmt.Sprintf("%.0fº de la liga", number(row["position"])), "", "", ""))
 	}
-	return block(fmt.Sprintf("Quién pinta peor la J%d", week), rowList(items, true),
+	return block(fmt.Sprintf("Quién pinta peor la J%d", week), rowList(items),
 		"", -1)
 }
 
@@ -180,7 +166,7 @@ func rivalSquad(team map[string]any, manager string, squad []map[string]any, tab
 		title = fmt.Sprintf("%.0fº · %s", position, Esc(manager))
 	}
 	return mkSection("rival-"+text(team["team_id"]), "rivales", title,
-		rowList(items, false)+folded("tabla completa", table), sub, -1)
+		scrollList(items, 560)+folded("tabla completa", table), sub, -1)
 }
 
 // --- Ranking ---------------------------------------------------------------------------
@@ -199,31 +185,18 @@ func rankRow(player map[string]any, withChip bool) string {
 	if starts := asFloat(player["start_probability"]); starts != nil && withChip {
 		chip = tag(fmt.Sprintf("titular %.0f %%", *starts), "")
 	}
-	line := row(player, Esc(text(player["team_short"]))+" · "+Esc(owner),
-		esNum(number(player["xpts"]), 1)+" xPts",
+	return rowWith(player, filterAttrs(player, number(player["value"])),
+		Esc(text(player["team_short"]))+" · "+Esc(owner), esNum(number(player["xpts"]), 1)+" xPts",
 		fmt.Sprintf("%s pts/M · %s", esNum(number(player["points_value"]), 2),
 			esMoney(number(player["value"]))), chip, Star(player)+CompareButton(player), "")
-	// The filter bar reads these, as it does on the table rows.
-	return strings.Replace(line, `<li class="r " `, fmt.Sprintf(
-		`<li class="r " data-position="%s" data-price="%.0f" data-name="%s" `,
-		Esc(text(player["position"])), number(player["value"]),
-		Esc(strings.ToLower(text(player["name"])))), 1)
 }
 
-func rankList(players []map[string]any, shown int, withChip bool) string {
-	var top, rest []string
-	for index, player := range players {
-		if index < shown {
-			top = append(top, rankRow(player, withChip))
-		} else {
-			rest = append(rest, rankRow(player, withChip))
-		}
+func rankList(players []map[string]any, height int, withChip bool) string {
+	items := make([]string, 0, len(players))
+	for _, player := range players {
+		items = append(items, rankRow(player, withChip))
 	}
-	out := rowList(top, false)
-	if len(rest) > 0 {
-		out += folded(fmt.Sprintf("%d más", len(rest)), rowList(rest, false))
-	}
-	return out
+	return scrollList(items, height)
 }
 
 // bestRow is a player of "Los mejores": his price today and whether my reach gets there.
@@ -256,32 +229,20 @@ func bestRow(player map[string]any, reach float64) string {
 	case price > 0:
 		chip = tag("te faltan "+esMoney(price-reach), "warn")
 	}
-	line := row(player, meta, esNum(number(player["xpts"]), 1)+" xPts", note, chip,
-		Star(player)+CompareButton(player), "")
-	return strings.Replace(line, `<li class="r " `, fmt.Sprintf(
-		`<li class="r " data-position="%s" data-price="%.0f" data-name="%s" `,
-		Esc(text(player["position"])), number(player["value"]),
-		Esc(strings.ToLower(text(player["name"])))), 1)
+	return rowWith(player, filterAttrs(player, number(player["value"])), meta,
+		esNum(number(player["xpts"]), 1)+" xPts", note, chip, Star(player)+CompareButton(player), "")
 }
 
-func (d Document) rankingView(byScore, byXPts []map[string]any) string {
+func (d Document) rankingView(byScore, byXPts, byValue []map[string]any) string {
 	reach, _ := d.crackReach()
-	var top, rest []string
-	for index, player := range byXPts {
-		if index < 10 {
-			top = append(top, bestRow(player, reach))
-		} else {
-			rest = append(rest, bestRow(player, reach))
-		}
-	}
-	best := rowList(top, false)
-	if len(rest) > 0 {
-		best += folded(fmt.Sprintf("%d más", len(rest)), rowList(rest, false))
+	best := make([]string, 0, len(byXPts))
+	for _, player := range byXPts {
+		best = append(best, bestRow(player, reach))
 	}
 	main := `<div class="mk-filters">` + Filters + `</div>` +
-		block("Los mejores", best, "", len(byXPts)) +
+		block("Los mejores", scrollList(best, 560), "", len(byXPts)) +
 		block("Chollos", `<p class="lead">puntos por millón, titularidad y valor al alza: para el `+
-			`banquillo barato</p>`+rankList(byScore, 10, true), "", len(byScore))
+			`banquillo barato</p>`+rankList(byScore, 560, true), "", len(byScore))
 
 	var byLine strings.Builder
 	for _, positionID := range []int{1, 2, 3, 4} {
@@ -300,8 +261,12 @@ func (d Document) rankingView(byScore, byXPts []map[string]any) string {
 		fmt.Fprintf(&byLine, `<li class="line-head"><span class="pos pos-%s">%s</span></li>%s`,
 			slug, strings.ToUpper(slug), strings.Join(items, ""))
 	}
-	aside := block("Los mejores por posición", `<ul class="rows tight">`+byLine.String()+`</ul>`,
+	aside := block("Los mejores por posición", `<ul class="rows">`+byLine.String()+`</ul>`,
 		"", -1)
+	if len(byValue) > 0 {
+		aside += block("Más xPts por millón", `<p class="lead">lo que manda cuando vas justo de `+
+			`caja</p>`+rankList(byValue, 420, false), "", len(byValue))
+	}
 	return view("v-ranking", "ranking", main, aside)
 }
 
@@ -345,14 +310,12 @@ func (d Document) matchdayBoard() string {
 				}
 			}
 		}
-		meta := fmt.Sprintf(`<span class="meta">%.0f pts · ahora %dº</span><span class="meta">%s</span>`,
-			number(manager["points"]), now, left)
+		meta := fmt.Sprintf("%.0f pts · ahora %dº", number(manager["points"]), now)
 		if !started {
-			meta = fmt.Sprintf(`<span class="meta">%.0f pts en la temporada</span><span class="meta">%s</span>`,
-				number(manager["season_points"]), left)
+			meta = fmt.Sprintf("%.0f pts en la temporada", number(manager["season_points"]))
 		}
 		if text(manager["source"]) == "techo" {
-			meta += `<span class="meta">sin su alineación: cuento su mejor once</span>`
+			left += " · sin su alineación: cuento su mejor once"
 		}
 		chip := ""
 		if started && finish != now {
@@ -372,7 +335,7 @@ func (d Document) matchdayBoard() string {
 		note := fmt.Sprintf("%.0f + %s por sumar", number(manager["points"]),
 			esNum(number(manager["to_come"]), 1))
 		items = append(items, teamRow(text(manager["team_id"]), fmt.Sprintf("%dº", finish),
-			text(manager["manager"]), meta, esNum(number(manager["projection"]), 1)+" pts", note,
+			text(manager["manager"]), meta, left, esNum(number(manager["projection"]), 1)+" pts", note,
 			chip, "", tone))
 	}
 	title := fmt.Sprintf("Cómo acabaría la J%d", week)

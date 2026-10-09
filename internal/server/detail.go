@@ -13,11 +13,13 @@ import (
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/render"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
@@ -53,10 +55,15 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	// The profitable ceiling lives on futbolfantasy's page, not in the model, so the drawer
 	// only knows it if the server puts it here: without it the dialog reads "sin margen" and
 	// warns about every amount, however small.
-	if _, present := player["ideal_bid"]; !present {
-		if ffID := text(player["ff_id"]); ffID != "" {
-			if detail, err := futbolfantasy.PlayerDetail(ffID, futbolfantasy.DetailTTL); err == nil {
+	// The link is the page the ceiling was read from, so it comes with it rather than from a
+	// slug of his name, which a short or shared name gets wrong.
+	if ffID := text(player["ff_id"]); ffID != "" {
+		if detail, err := futbolfantasy.PlayerDetail(ffID, futbolfantasy.DetailTTL); err == nil {
+			if _, present := player["ideal_bid"]; !present {
 				player["ideal_bid"] = number(detail["ideal_bid"])
+			}
+			if url, ok := detail["ff_url"].(*string); ok && url != nil {
+				player["ff_url"] = *url
 			}
 		}
 	}
@@ -65,8 +72,15 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	// Reading the page costs a request, so only the player being looked at gets one.
 	var ffMatches []map[string]any
 	if name := fallback(text(player["ff_name"]), text(player["name"])); name != "" {
-		if page, err := futbolfantasy.PlayerPageFor(matching.SlugifyFF(name),
-			text(player["ff_id"]), futbolfantasy.DetailTTL); err == nil {
+		slug := matching.SlugifyFF(name)
+		if url := text(player["ff_url"]); url != "" {
+			slug = url[strings.LastIndex(url, "/")+1:]
+		}
+		if page, err := futbolfantasy.PlayerPageFor(slug, text(player["ff_id"]),
+			futbolfantasy.DetailTTL); err == nil {
+			if _, known := player["ff_url"]; !known {
+				player["ff_url"] = strings.ReplaceAll(config.FFPlayerURL, "{slug}", slug)
+			}
 			if rank := page["hierarchy"]; rank != nil {
 				player["hierarchy"] = text(rank)
 				player["hierarchy_rank"] = number(page["hierarchy_rank"])
@@ -89,6 +103,13 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	clause := number(player["clause"])
 	budget := s.budget()
 	actions := s.actions(player, rows, armed, listing, offers, clause, budget)
+	if s.clauseRecommended(rows, player, budget) {
+		for _, action := range actions {
+			if op := text(action["op"]); op == "raid" || op == "pay_clause" {
+				action["recommended"] = true
+			}
+		}
+	}
 
 	// Points matchday by matchday: an average of 9.8 hides whether it was five 9.8s or a 14 and
 	// three sevens, and the shape is what a card is opened for. The opponents come off the
@@ -141,7 +162,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 
 	s.json(writer, http.StatusOK, map[string]any{"player": player, "offers": offers,
 		"listing": listing, "actions": actions, "history": history, "weeks": weeks,
-		"writes_enabled": s.opts.AllowWrites})
+		"writes_enabled": s.opts.AllowWrites, "recommended": recommendedBuy(rows, player)})
 }
 
 func (s *Server) actions(player map[string]any, rows []map[string]any,
@@ -520,6 +541,84 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 		"formation": formation["tacticalFormation"],
 		"formations": map[string]any{"free": free, "premium": premium},
 		"updated_at": payload["updatedAt"], "writes_enabled": s.opts.AllowWrites})
+}
+
+// recommendedBuy is whether bidding for him is what the panel recommends: he improves the best
+// eleven and his price is within futbolfantasy's ceiling. Same rule as the Comprar boxes.
+func recommendedBuy(rows []map[string]any, player map[string]any) bool {
+	listing := mapOf(player["market"])
+	if truthy(player["is_mine"]) || text(listing["market_id"]) == "" {
+		return false
+	}
+	cost := number(listing["min_bid"])
+	if ceiling := number(player["ideal_bid"]); ceiling <= 0 || ceiling < cost {
+		return false
+	}
+	var mine []map[string]any
+	for _, row := range rows {
+		if truthy(row["is_mine"]) {
+			mine = append(mine, row)
+		}
+	}
+	return elevenTotal(append(mine, player))-elevenTotal(mine) > render.MinShownGain
+}
+
+// clauseRecommended is whether paying his clause is what the panel recommends: the advice rates
+// it "chollo" or "renta" and he improves the best eleven. Same rule as the Comprar list.
+func (s *Server) clauseRecommended(rows []map[string]any, player map[string]any,
+	budget float64) bool {
+	if truthy(player["is_mine"]) || text(player["owner"]) == "" || truthy(player["shielded"]) {
+		return false
+	}
+	blob, err := json.Marshal(s.state.Universe())
+	if err != nil {
+		return false
+	}
+	var universe map[string]any
+	if json.Unmarshal(blob, &universe) != nil {
+		return false
+	}
+	buckets := advice.Recommend(universe, budget, 0, len(rows))
+	rated := false
+	for _, key := range []string{"raids", "upcoming_raids"} {
+		for _, raid := range listOf(buckets[key]) {
+			if text(raid["id"]) == text(player["id"]) {
+				verdict := text(raid["verdict"])
+				rated = rated || verdict == "chollo" || verdict == "renta"
+			}
+		}
+	}
+	if !rated {
+		return false
+	}
+	var mine []map[string]any
+	for _, row := range rows {
+		if truthy(row["is_mine"]) {
+			mine = append(mine, row)
+		}
+	}
+	return elevenTotal(append(mine, player))-elevenTotal(mine) > render.MinShownGain
+}
+
+func elevenTotal(squad []map[string]any) float64 {
+	players := []eleven.Player{}
+	points := map[string]float64{}
+	for _, row := range squad {
+		id := text(row["id"])
+		players = append(players, eleven.Player{ID: id, Name: text(row["name"]),
+			Position: int(number(row["position_id"])), XPts: number(row["xpts"]),
+			Available: true})
+		points[id] = number(row["xpts"])
+	}
+	choice, ok := eleven.Best(players)
+	if !ok {
+		return 0
+	}
+	total := 0.0
+	for _, id := range choice.IDs() {
+		total += points[id]
+	}
+	return total
 }
 
 // bestLineup is the best legal eleven of my squad, in the lineup's own lines, so the editor can
