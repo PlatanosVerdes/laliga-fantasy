@@ -6,6 +6,7 @@ import {WeekPopup} from './matches.js';
 import {ReachPopup} from './rivals.js';
 import './league.js';
 import {mountCompareTab} from './compare.js';
+import {mountLineup} from './lineup.js';
 
 const dialogs = document.createElement('div');
 document.body.appendChild(dialogs);
@@ -42,3 +43,6 @@ for (const section of document.querySelectorAll('section[data-view]')) {
 
 const compareTab = document.querySelector('section[data-ui="comparador"]');
 if (compareTab) mountCompareTab(compareTab);
+
+const lineup = document.querySelector('section[data-ui="lineup"]');
+if (lineup) mountLineup(lineup);

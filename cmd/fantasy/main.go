@@ -1575,7 +1575,6 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		}
 		return string(body)
 	}
-	render.Pitch, render.Filters = read("pitch.html"), read("filters.html")
 	render.Build = buildVersion
 	var crests map[string]string
 	if body, err := os.ReadFile(filepath.Join(config.CacheDir, "crests.json")); err == nil {
@@ -1641,8 +1640,6 @@ func cmdPage(args []string) error {
 		}
 		return string(body)
 	}
-	render.Pitch = read("pitch.html")
-	render.Filters = read("filters.html")
 
 	// The crests come from the same cache file Python fills, so the page carries the same
 	// badges rather than a second download.

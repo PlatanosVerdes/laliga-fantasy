@@ -234,3 +234,5 @@ KINDS.calendar = ({b}) => !b.data.length ? html`<${Empty}>${b.empty}<//>` : html
     day.mine.map((p) => html`<span class="mk-cal-mine" data-pid=${p.id}>🛡 ${p.name}</span>`)}${
     day.theirs.map((p) => html`<span class="mk-cal-them" data-pid=${p.id}>${p.name} <i>${p.gain}</i></span>`)}<span class="meta">${day.reach} a tu alcance</span></span></li>`)}</ul>
   <p class="mk-note">🛡 tuyas que se abren · en gris, las de rivales que más suman a tu once (xPts)</p>`;
+
+KINDS.kv = ({b}) => b.data.map((kv) => html`<div class="kv"><span>${kv.label}</span><b class=${kv.c || undefined}>${kv.value}</b></div>`);

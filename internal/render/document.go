@@ -95,7 +95,8 @@ func (d Document) ViewData() map[string]any {
 		return map[string]any{}
 	}
 	return map[string]any{"vender": d.SellData(), "comprar": d.BuyData(),
-		"clausulas": d.ClauseData(), "partidos": d.MatchesData(), "rivales": d.RivalsData()}
+		"clausulas": d.ClauseData(), "partidos": d.MatchesData(), "rivales": d.RivalsData(),
+		"plantilla": d.SquadData(), "squad": d.MySquadData()}
 }
 
 // HTML renders the document.
@@ -174,8 +175,6 @@ func filterEmpty(values []string) []string {
 	return out
 }
 
-// Pitch and Filters are read from assets/ by the caller and injected, like the CSS.
-var Pitch, Filters string
 
 // --- widgets ---------------------------------------------------------------------------
 
@@ -669,69 +668,6 @@ func (d Document) feedMarks() (map[string]string, string) {
 	}
 	me := text(mapOf(mapOf(d.Universe["league_teams"])[text(d.Universe["my_team_id"])])["manager"])
 	return marks, me
-}
-
-func (d Document) squadSection() string {
-	squad := rows(d.Advice["squad"])
-	shape := mapOf(d.Advice["shape"])
-	var groups strings.Builder
-	for _, positionID := range []string{"1", "2", "3", "4"} {
-		var line []map[string]any
-		for _, player := range squad {
-			if text(player["position_id"]) == positionID {
-				line = append(line, player)
-			}
-		}
-		if len(line) == 0 {
-			continue
-		}
-		sort.SliceStable(line, func(one, two int) bool {
-			return number(line[one]["xpts"]) > number(line[two]["xpts"])
-		})
-		state := ""
-		if data := mapOf(shape[positionID]); data != nil {
-			switch {
-			case truthy(data["gap"]):
-				state = " · falta uno"
-			case truthy(data["surplus"]):
-				state = " · sobra uno"
-			}
-		}
-		slug := map[string]string{"1": "por", "2": "def", "3": "med", "4": "del"}[positionID]
-		fmt.Fprintf(&groups, `<li class="line-head"><span class="pos pos-%s">%s</span>%s%s</li>`,
-			slug, strings.ToUpper(slug), counted(len(line), "jugador", "jugadores"), state)
-		for _, player := range line {
-			groups.WriteString(squadRow(player))
-		}
-	}
-	return mkSection("plantilla", "plantilla", "Mi plantilla",
-		`<ul class="rows">`+groups.String()+`</ul>`, "", len(squad))
-}
-
-// squadRow is one of mine: what he gives, what he is worth and where his clause and his sale
-// stand.
-func squadRow(player map[string]any) string {
-	trend := number(player["pct_7d"])
-	class, sign := "up", "+"
-	if trend < 0 {
-		class, sign = "down", ""
-	}
-	note := fmt.Sprintf(`%s · <span class="%s">%s%s %%</span>`, esMoney(number(player["value"])),
-		class, sign, esNum(trend, 1))
-	if asking := number(mapOf(player["market"])["min_bid"]); asking > 0 {
-		note = "en venta " + esMoney(asking) + " · " + note
-	}
-	var chip string
-	switch {
-	case truthy(player["shielded"]):
-		chip = tag("🛡 blindado", "done")
-	case truthy(player["clause_locked"]):
-		chip = clock(text(player["clause_locked_until"]), "se libera su cláusula")
-	case number(player["clause"]) > 0:
-		chip = tag("pagable "+esMoney(number(player["clause"])), "warn")
-	}
-	return row(player, "", esNum(number(player["xpts"]), 1)+" xPts", note, chip,
-		Star(player)+CompareButton(player), "")
 }
 
 var positionNames = map[string]string{

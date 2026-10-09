@@ -215,7 +215,7 @@ func (d Document) Views() []string {
 	if len(d.Advice) == 0 {
 		return nil
 	}
-	return []string{d.decideSection(), d.buyView(), d.sellView(), d.clauseView(), Pitch,
+	return []string{d.decideSection(), d.buyView(), d.sellView(), d.clauseView(), LineupShell,
 		d.squadView(), d.matchesView(), d.rivalsView()}
 }
 
@@ -641,88 +641,5 @@ func (d Document) benchOf() []map[string]any {
 		return number(out[one]["xpts"]) < number(out[two]["xpts"])
 	})
 	return out
-}
-
-// --- Plantilla -------------------------------------------------------------------------
-
-func (d Document) squadView() string {
-	squad := rows(d.Advice["squad"])
-	if len(squad) == 0 {
-		return ""
-	}
-	// Only the ones the advice gives a reason to sell, with that reason.
-	var items []string
-	for _, player := range d.sellRows() {
-		reasons := asStrings(player["reasons"])
-		listing := mapOf(player["market"])
-		best := 0.0
-		offerID := ""
-		for _, offer := range rows(player["offers"]) {
-			if amount := number(offer["money"]); amount > best {
-				best, offerID = amount, text(offer["id"])
-			}
-		}
-		when := "se puede ya"
-		if truthy(player["sale_locked"]) {
-			when = "🔒 hasta " + esDay(text(player["hold_until"]))
-		}
-		note := "vale " + esMoney(number(player["value"]))
-		if best > 0 {
-			note += " · oferta " + esMoney(best)
-		}
-		var action string
-		switch {
-		case best > 0 && offerID != "":
-			action = button("Aceptar "+esMoney(best), "primary", "op", fmt.Sprintf(
-				` data-op="accept_offer" data-op-market="%s" data-op-offer="%s" data-op-player="%s" `+
-					`data-op-name="%s" data-op-amount="%d"`, Esc(text(listing["market_id"])),
-				Esc(offerID), Esc(text(player["id"])), Esc(text(player["name"])), int64(best)))
-		case text(listing["market_id"]) != "":
-			action = actButton("Quitar", "ghost", text(player["id"]), "withdraw")
-		case !truthy(player["sale_locked"]):
-			action = actButton("Poner en venta", "ghost", text(player["id"]), "sell_to_market")
-		}
-		line := playerRow(player)
-		line.Value, line.Note, line.Why = esNum(number(player["xpts"]), 1)+" xPts", note,
-			Esc(strings.Join(reasons, ", "))
-		if !truthy(player["sale_locked"]) {
-			line.Chip = tag(when, "ok")
-		}
-		line.Action = action
-		items = append(items, line.HTML())
-	}
-	body := empty("Nadie: el consejo no ve motivo para vender a ninguno.")
-	if len(items) > 0 {
-		body = rowList(items)
-	}
-	main := block("Para vender", body, "", len(items))
-
-	value, clauses, change := 0.0, 0.0, 0.0
-	for _, player := range squad {
-		worth := number(player["value"])
-		value += worth
-		clauses += number(player["clause"])
-		if pct := number(player["pct_7d"]); pct > -100 {
-			change += worth * pct / (100 + pct)
-		}
-	}
-	changeClass, sign := "up", "+"
-	if change < 0 {
-		changeClass, sign = "down", ""
-	}
-	summary := fmt.Sprintf(`<div class="kv"><span>Jugadores</span><b>%d</b></div>`+
-		`<div class="kv"><span>Valor de plantilla</span><b>%s</b></div>`+
-		`<div class="kv"><span>Suma de cláusulas</span><b>%s</b></div>`+
-		`<div class="kv"><span>Valor últimos 7 días</span><b class="%s">%s%s</b></div>`,
-		len(squad), esMoney(value), esMoney(clauses), changeClass, sign, esMoney(change))
-	if projected, ok := d.Money["projected_7d"]; ok {
-		ahead, mark := "up", "+"
-		if number(projected) < 0 {
-			ahead, mark = "down", ""
-		}
-		summary += fmt.Sprintf(`<div class="kv"><span>Previsión próximos 7 días</span>`+
-			`<b class="%s">%s%s</b></div>`, ahead, mark, esMoney(number(projected)))
-	}
-	return view("v-plantilla", "plantilla", main, block("Resumen", summary, "", -1))
 }
 
