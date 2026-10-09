@@ -128,20 +128,22 @@ func TestBuyBoxesListEveryCandidate(t *testing.T) {
 	}
 }
 
-// The longest route goes beside the aside and the other two under both, in their usual order.
+// The longest route goes beside the aside, the others under both, and an empty one closes the
+// aside instead of leaving a gap next to a list.
 func TestBuyLongestRouteBesideTheAside(t *testing.T) {
-	view := decidingDocument().BuyData()
+	document := decidingDocument()
+	listed := rows(document.Advice["bids_now"])
+	document.Advice["asks"], document.Advice["bids_now"] = []any{listed[0]}, []any{}
+	document.Money["bargains"] = []any{merge(listed[0], map[string]any{"route": "clausula"}),
+		merge(listed[1], map[string]any{"route": "clausula"})}
+	view := document.BuyData()
 	titles := []string{}
-	for _, block := range append(append([]Block{}, view.Main...), view.Row2...) {
+	for _, block := range append(append(view.Main, view.Row2...), view.Aside[len(view.Aside)-1]) {
 		titles = append(titles, block.Title)
 	}
-	if len(view.Main) != 1 || len(view.Row2) != 2 {
-		t.Fatalf("one route beside the aside, two under it: %v", titles)
-	}
-	for _, other := range view.Row2 {
-		if len(other.Rows) > len(view.Main[0].Rows) {
-			t.Errorf("%q is longer than %q beside the aside", other.Title, view.Main[0].Title)
-		}
+	want := "Cláusulas que puedes pagar|En venta por rivales|Mercado rentable"
+	if got := strings.Join(titles, "|"); got != want {
+		t.Errorf("beside, under and closing the aside: %s", got)
 	}
 }
 

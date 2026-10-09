@@ -10,7 +10,8 @@ func (d Document) buyView() SectionView { return shell("v-comprar", "comprar", "
 
 // BuyData is Comprar: the free market, the rivals' listings and the clauses, each ranked by
 // what the signing adds to the eleven, beside my bids, how the last ones ended and who I follow.
-// The longest route sits beside the aside, stretching to its height; an empty one there leaves a gap.
+// The longest route sits beside the aside, stretching to its height; an empty one there or in
+// the row below leaves a gap, so it goes to the end of the aside.
 func (d Document) BuyData() View {
 	window := d.window()
 	clauses, offers, free := d.buyOptions()
@@ -38,7 +39,16 @@ func (d Document) BuyData() View {
 			longest = i
 		}
 	}
-	row2 := append(append([]Block{}, routes[:longest]...), routes[longest+1:]...)
+	row2 := []Block{}
+	for i, route := range routes {
+		switch {
+		case i == longest:
+		case len(route.Rows) == 0:
+			aside = append(aside, route)
+		default:
+			row2 = append(row2, route)
+		}
+	}
 	return View{Filters: true, Main: []Block{routes[longest]}, Aside: aside, Row2: row2}
 }
 
