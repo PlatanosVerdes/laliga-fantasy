@@ -180,7 +180,7 @@ func rivalSquad(team map[string]any, manager string, squad []map[string]any, tab
 		title = fmt.Sprintf("%.0fº · %s", position, Esc(manager))
 	}
 	return mkSection("rival-"+text(team["team_id"]), "rivales", title,
-		rowList(items, false)+folded("tabla completa", table), sub, -1)
+		scrollList(items, 560)+folded("tabla completa", table), sub, -1)
 }
 
 // --- Ranking ---------------------------------------------------------------------------
@@ -210,20 +210,12 @@ func rankRow(player map[string]any, withChip bool) string {
 		Esc(strings.ToLower(text(player["name"])))), 1)
 }
 
-func rankList(players []map[string]any, shown int, withChip bool) string {
-	var top, rest []string
-	for index, player := range players {
-		if index < shown {
-			top = append(top, rankRow(player, withChip))
-		} else {
-			rest = append(rest, rankRow(player, withChip))
-		}
+func rankList(players []map[string]any, height int, withChip bool) string {
+	items := make([]string, 0, len(players))
+	for _, player := range players {
+		items = append(items, rankRow(player, withChip))
 	}
-	out := rowList(top, false)
-	if len(rest) > 0 {
-		out += folded(fmt.Sprintf("%d más", len(rest)), rowList(rest, false))
-	}
-	return out
+	return scrollList(items, height)
 }
 
 // bestRow is a player of "Los mejores": his price today and whether my reach gets there.
@@ -266,22 +258,14 @@ func bestRow(player map[string]any, reach float64) string {
 
 func (d Document) rankingView(byScore, byXPts, byValue []map[string]any) string {
 	reach, _ := d.crackReach()
-	var top, rest []string
-	for index, player := range byXPts {
-		if index < 10 {
-			top = append(top, bestRow(player, reach))
-		} else {
-			rest = append(rest, bestRow(player, reach))
-		}
-	}
-	best := rowList(top, false)
-	if len(rest) > 0 {
-		best += folded(fmt.Sprintf("%d más", len(rest)), rowList(rest, false))
+	best := make([]string, 0, len(byXPts))
+	for _, player := range byXPts {
+		best = append(best, bestRow(player, reach))
 	}
 	main := `<div class="mk-filters">` + Filters + `</div>` +
-		block("Los mejores", best, "", len(byXPts)) +
+		block("Los mejores", scrollList(best, 560), "", len(byXPts)) +
 		block("Chollos", `<p class="lead">puntos por millón, titularidad y valor al alza: para el `+
-			`banquillo barato</p>`+rankList(byScore, 10, true), "", len(byScore))
+			`banquillo barato</p>`+rankList(byScore, 560, true), "", len(byScore))
 
 	var byLine strings.Builder
 	for _, positionID := range []int{1, 2, 3, 4} {
@@ -304,7 +288,7 @@ func (d Document) rankingView(byScore, byXPts, byValue []map[string]any) string 
 		"", -1)
 	if len(byValue) > 0 {
 		aside += block("Más xPts por millón", `<p class="lead">lo que manda cuando vas justo de `+
-			`caja</p>`+rankList(byValue, 5, false), "", len(byValue))
+			`caja</p>`+rankList(byValue, 420, false), "", len(byValue))
 	}
 	return view("v-ranking", "ranking", main, aside)
 }

@@ -154,6 +154,12 @@ func folded(summary, body string) string {
 	return `<details class="fold"><summary>` + summary + `</summary>` + body + `</details>`
 }
 
+// scrollList is a whole list in a box of fixed height that scrolls inside, instead of a fold.
+func scrollList(items []string, height int) string {
+	return fmt.Sprintf(`<div class="scrollbox" style="max-height:%dpx">`, height) +
+		rowList(items, false) + `</div>`
+}
+
 func empty(message string) string {
 	return `<p class="mk-empty">` + message + `</p>`
 }
@@ -526,7 +532,7 @@ func (d Document) buyView() string {
 		`descuento.</p>` +
 		d.buyBlock("🔓 Cláusulas que puedes pagar", "", clauses, window) +
 		d.buyBlock("🤝 En venta por rivales", "", offers, window) +
-		d.buyBlock("🔨 Mercado libre", "", free, window)
+		d.buyBlock("🔨 Mercado rentable", "", free, window)
 
 	var bids []string
 	for _, bid := range rows(d.Advice["my_bids"]) {
@@ -546,55 +552,61 @@ func (d Document) buyView() string {
 			`<button class="linkish" type="button" data-goto="clausulas">ver en Cláusulas</button></p>`,
 			Esc(text(raid["name"])), esMoney(number(raid["max_pay"])))
 	}
-	main += block("Mis pujas en curso", body, "", -1)
-	main += d.biddableList()
-	return view("v-comprar", "comprar", main, d.endingsAside()+d.starredAside())
+	main += d.biddableLists()
+	return view("v-comprar", "comprar", main, block("Mis pujas en curso", body, "", -1)+
+		d.endingsAside()+d.starredAside())
 }
 
-// biddableList is everything that can be bid for today, free market and rivals' listings alike,
-// best first by what it adds to the eleven and by xPts when it does not get in.
-func (d Document) biddableList() string {
+// biddableLists is everything that can be bid for today, the game's market and the rivals'
+// listings apart, each best first by what it adds to the eleven and by xPts when it does not
+// get in.
+func (d Document) biddableLists() string {
 	gains := map[string]float64{}
 	for _, item := range rows(d.Money["bargains"]) {
 		if route := text(item["route"]); route != "clausula" {
 			gains[text(item["id"])] = math.Max(gains[text(item["id"])], number(item["xi_gain"]))
 		}
 	}
-	var listings []map[string]any
-	seen := map[string]bool{}
-	for _, item := range append(rows(d.Advice["bids_now"]), rows(d.Advice["asks"])...) {
-		id := text(item["id"])
-		if seen[id] || truthy(item["is_mine"]) || text(mapOf(item["market"])["market_id"]) == "" {
-			continue
+	cash := number(d.Advice["budget"])
+	list := func(source any) []string {
+		var listings []map[string]any
+		for _, item := range rows(source) {
+			if !truthy(item["is_mine"]) && text(mapOf(item["market"])["market_id"]) != "" {
+				listings = append(listings, item)
+			}
 		}
-		seen[id] = true
-		listings = append(listings, item)
+		sort.SliceStable(listings, func(one, two int) bool {
+			first, second := gains[text(listings[one]["id"])], gains[text(listings[two]["id"])]
+			if (first > MinShownGain) != (second > MinShownGain) {
+				return first > MinShownGain
+			}
+			if first > MinShownGain && first != second {
+				return first > second
+			}
+			return number(listings[one]["xpts"]) > number(listings[two]["xpts"])
+		})
+		var items []string
+		for _, item := range listings {
+			items = append(items, d.biddableRow(item, gains[text(item["id"])], cash))
+		}
+		return items
 	}
-	if len(listings) == 0 {
+	market, rivals := list(d.Advice["bids_now"]), list(d.Advice["asks"])
+	if len(market)+len(rivals) == 0 {
 		return ""
 	}
-	sort.SliceStable(listings, func(one, two int) bool {
-		first, second := gains[text(listings[one]["id"])], gains[text(listings[two]["id"])]
-		if (first > MinShownGain) != (second > MinShownGain) {
-			return first > MinShownGain
-		}
-		if first > MinShownGain && first != second {
-			return first > second
-		}
-		return number(listings[one]["xpts"]) > number(listings[two]["xpts"])
-	})
-	cash := number(d.Advice["budget"])
-	var items []string
-	for _, item := range listings {
-		items = append(items, d.biddableRow(item, gains[text(item["id"])], cash))
+	out := `<div class="mk-filters">` + Filters + `</div>`
+	body := empty("El mercado de hoy está vacío.")
+	if len(market) > 0 {
+		body = scrollList(market, 560)
 	}
-	shown := min(15, len(items))
-	body := `<div class="mk-filters">` + Filters + `</div>` + rowList(items[:shown], false)
-	if len(items) > shown {
-		body += folded(fmt.Sprintf("%d más", len(items)-shown), rowList(items[shown:], false))
+	out += block("Mercado de hoy", body, "por lo que suma a tu once", len(market))
+	body = empty("Ningún rival tiene a nadie en venta.")
+	if len(rivals) > 0 {
+		body = scrollList(rivals, 560)
 	}
-	return block("Todo lo que puedes pujar", body, "mercado libre y ventas de rivales, por lo que "+
-		"suma a tu once", len(items))
+	return out + block("Lo que venden tus rivales", body, "casi nunca aceptan ofertas, pero así "+
+		"sabes qué sueltan", len(rivals))
 }
 
 func (d Document) biddableRow(item map[string]any, gain, cash float64) string {
@@ -679,22 +691,14 @@ func (d Document) endingsAside() string {
 			Esc(text(ending["player_id"])), glyph[0], Esc(text(ending["player"])), Esc(what),
 			date, esMoney(number(ending["amount"])))
 	}
-	var visible, rest []string
-	for index, ending := range d.Endings {
-		outcome := text(ending["outcome"])
-		if index < 3 || outcome == "perdida" || outcome == "rechazada" {
-			visible = append(visible, line(ending, true))
-		} else {
-			rest = append(rest, line(ending, false))
-		}
+	var lines []string
+	for _, ending := range d.Endings {
+		lines = append(lines, line(ending, true))
 	}
 	body := empty("Todavía no se ha resuelto ninguna.")
-	if len(visible) > 0 {
-		body = `<ul class="reslist">` + strings.Join(visible, "") + `</ul>`
-	}
-	if len(rest) > 0 {
-		body += folded(fmt.Sprintf("%d anteriores", len(rest)),
-			`<ul class="reslist">`+strings.Join(rest, "")+`</ul>`)
+	if len(lines) > 0 {
+		body = `<div class="scrollbox" style="max-height:420px"><ul class="reslist">` +
+			strings.Join(lines, "") + `</ul></div>`
 	}
 	return block("Cómo acabaron", body, "", len(d.Endings))
 }
@@ -836,10 +840,10 @@ func (d Document) sellView() string {
 	if len(listed) > 0 {
 		body = rowList(listed, false)
 	}
-	main += block("En venta ahora", body, "", len(listed))
+	listedBlock := block("En venta ahora", body, "", len(listed))
 	main += d.restOfSquad()
 
-	return view("v-vender", "vender", main, d.alwaysAside())
+	return view("v-vender", "vender", main, listedBlock+d.alwaysAside())
 }
 
 // restOfSquad is every player of mine not on sale, the bench before the eleven: listing a
@@ -1191,12 +1195,7 @@ func (d Document) cheapClauses(seen map[string]bool) string {
 		items = append(items, row(item, meta, esMoney(number(item["clause"])), note, chip,
 			action, ""))
 	}
-	shown := min(5, len(items))
-	body := rowList(items[:shown], false)
-	if len(items) > shown {
-		body += folded(fmt.Sprintf("%d más", len(items)-shown), rowList(items[shown:], false))
-	}
-	return block("Baratas que rentan", body, "más puntos por millón que tu plantilla: para el "+
+	return block("Baratas que rentan", scrollList(items, 420), "más puntos por millón que tu plantilla: para el "+
 		"banquillo", len(items))
 }
 

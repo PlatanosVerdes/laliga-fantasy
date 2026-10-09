@@ -1636,3 +1636,7 @@ table.cmp tr:last-child td{border-bottom:0}
 .mk .ract button.act.on{border-color:var(--accent);color:var(--accent)}
 .mk .src-rival{color:var(--warning)}
 .mk .mk-note.plan-warn{color:var(--warning)}
+/* A whole list in a box of fixed height, instead of a fold that hides most of it */
+.mk .scrollbox{overflow-y:auto;overscroll-behavior:contain;border-radius:12px}
+.mk .scrollbox>.rows{border-radius:12px}
+.mk .side .scrollbox .reslist{padding-right:4px}

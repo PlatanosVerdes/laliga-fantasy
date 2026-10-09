@@ -116,9 +116,13 @@ func TestRestOfSquadPutsTheBenchFirstAndHonoursTheHoldRule(t *testing.T) {
 
 // Comprar ends with every listing, best for the eleven first, the margin to the ceiling signed.
 func TestBiddableListOrdersByWhatTheElevenGains(t *testing.T) {
-	html := decidingDocument().biddableList()
-	if !strings.Contains(html, "Todo lo que puedes pujar") || !strings.Contains(html, `class="mk-filters"`) {
+	html := decidingDocument().biddableLists()
+	if !strings.Contains(html, "Mercado de hoy") || !strings.Contains(html, `class="mk-filters"`) {
 		t.Fatalf("the list and its filter bar: %.300s", html)
+	}
+	if strings.Contains(html, "<details") || !strings.Contains(html, `class="scrollbox"`) ||
+		!strings.Contains(html, "Lo que venden tus rivales") {
+		t.Error("each list whole in its own scroll box, the game's market and the rivals' apart")
 	}
 	if strings.Index(html, "Barato") > strings.Index(html, "Caro") {
 		t.Error("the one adding more goes first")
