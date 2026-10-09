@@ -376,29 +376,50 @@ func (d Document) planWarnings() string {
 
 // --- Comprar ---------------------------------------------------------------------------
 
-// buyRow is a signing priced by what it adds to the eleven, with the button that makes it.
-func (d Document) buyRow(item map[string]any, window *windowState) string {
-	gain, cost := number(item["xi_gain"]), number(item["entry_cost"])
-	affordable := truthy(item["affordable"])
+// buyRow is a signing ranked by what it adds to the eleven, with the button that makes it.
+// A clause is paid with today's cash; a market bid may also use the debt the league allows,
+// and one that would start the matchday in the red says so.
+func (d Document) buyRow(item map[string]any, route string, gain float64,
+	window *windowState) string {
+	cost := number(item["entry_cost"])
 	listing := mapOf(item["market"])
 	id, name := text(item["id"]), text(item["name"])
-	price := esMoney(cost)
-	if asking := number(item["asking"]); asking > 0 && asking < cost*0.99 {
-		price += " · piden " + esMoney(asking)
+	cash, reach := d.buyingPower()
+	if route == "clausula" {
+		reach = cash
 	}
-	if !affordable {
-		price += " · no llegas"
+	affordable := cost <= reach
+	value := esNum(number(item["xpts"]), 1) + " xPts"
+	if gain > MinShownGain {
+		value = esSigned(gain) + " xPts"
+	}
+	note := esMoney(cost)
+	if asking := number(item["asking"]); asking > 0 && asking < cost*0.99 {
+		note += " · piden " + esMoney(asking)
+	}
+	if route != "clausula" {
+		if ceiling := number(item["ideal_bid"]); ceiling > 0 {
+			class, mark := "up", "+"
+			if ceiling < cost {
+				class, mark = "down", ""
+			}
+			note += fmt.Sprintf(` · <span class="%s">%s%s de margen</span>`, class, mark,
+				esMoney(ceiling-cost))
+		} else {
+			note += ` · <span class="down">sin margen</span>`
+		}
 	}
 	kind := "primary"
-	tone := ""
-	if !affordable {
-		kind, tone = "ghost", "dim"
+	if gain <= MinShownGain {
+		kind = "ghost"
 	}
-	var note, chip, action string
-	switch text(item["route"]) {
+	var meta, chip, action, verb string
+	switch route {
 	case "clausula":
-		note = "de " + Esc(text(item["owner"]))
+		meta = "de " + Esc(text(item["owner"]))
+		verb = "Programar"
 		if window.open {
+			verb = "Pagar"
 			chip = clock(window.closes, "cláusulas abiertas hasta")
 			action = button("Pagar "+esMoney(cost), kind, "op", fmt.Sprintf(` data-op="pay_clause" `+
 				`data-op-player="%s" data-op-name="%s" data-op-amount="%d"`, Esc(id), Esc(name),
@@ -410,16 +431,43 @@ func (d Document) buyRow(item map[string]any, window *windowState) string {
 				Esc(id), Esc(name), int64(cost), int64(number(item["clause"]))))
 		}
 	case "oferta al dueño":
-		note = "vende " + Esc(text(listing["seller"]))
+		meta = "vende " + Esc(fallbackText(text(listing["seller"]), text(item["seller"])))
 		chip = clock(text(listing["expires"]), "sale del mercado")
+		verb = "Ofrecer"
 		action = d.listingButton(item, "Ofrecer "+esMoney(cost), kind)
 	default:
-		note = "libre"
+		meta = "libre"
 		chip = clock(text(listing["expires"]), "sale del mercado")
+		verb = "Pujar"
 		action = d.listingButton(item, "Pujar "+esMoney(cost), kind)
 	}
-	return row(item, Esc(text(item["team_short"]))+" · "+note, esSigned(gain)+" xPts",
-		Esc(price), chip, action, tone)
+	if starts := asFloat(item["start_probability"]); starts != nil {
+		meta += fmt.Sprintf(" · titular %.0f %%", *starts)
+	}
+	tone := ""
+	switch {
+	case !affordable:
+		tone = "dim"
+		short := "te faltan " + esMoney(cost-reach)
+		action = `<span title="` + short + `">` + button(verb+" "+esMoney(cost), "ghost", "",
+			` disabled title="`+short+`"`) + `</span>`
+	case cost > cash:
+		chip = `<span class="mk-chip soon" title="si empiezas la jornada en negativo no puntúas">` +
+			`⚠ en negativo</span>` + chip
+	}
+	return rowWith(item, filterAttrs(item, cost), Esc(text(item["team_short"]))+" · "+meta, value,
+		note, chip, action, tone)
+}
+
+// buyingPower is today's cash, and what a market bid can reach with the debt the league allows
+// over the squad's value.
+func (d Document) buyingPower() (cash, reach float64) {
+	cash = number(d.Advice["budget"])
+	squad := 0.0
+	for _, player := range rows(d.Advice["squad"]) {
+		squad += number(player["value"])
+	}
+	return cash, cash + squad*d.MaxDebtPct/100
 }
 
 // listingButton is the bid or offer button, or what is already on it when there is a bid of
@@ -450,61 +498,83 @@ func (d Document) window() *windowState {
 		opens: window.OpensAt}
 }
 
-// buyBlock lists the reachable ones first, three of them in sight and the rest folded.
-func (d Document) buyBlock(title, sub string, items []map[string]any, window *windowState) string {
-	var reachable, beyond []string
+// buyBlock is every candidate of one route, best for the eleven first and the ones out of
+// reach at the end, in a box that scrolls.
+func (d Document) buyBlock(title, route string, items []map[string]any, window *windowState) string {
+	gains := d.gains(route)
+	cash, reach := d.buyingPower()
+	if route == "clausula" {
+		reach = cash
+	}
+	sort.SliceStable(items, func(one, two int) bool {
+		first, second := items[one], items[two]
+		if inOne, inTwo := number(first["entry_cost"]) <= reach,
+			number(second["entry_cost"]) <= reach; inOne != inTwo {
+			return inOne
+		}
+		gainOne, gainTwo := gains[text(first["id"])], gains[text(second["id"])]
+		if (gainOne > MinShownGain) != (gainTwo > MinShownGain) {
+			return gainOne > MinShownGain
+		}
+		if gainOne > MinShownGain && gainOne != gainTwo {
+			return gainOne > gainTwo
+		}
+		return number(first["xpts"]) > number(second["xpts"])
+	})
+	var lines []string
+	reachable := 0
 	for _, item := range items {
-		if truthy(item["affordable"]) {
-			reachable = append(reachable, d.buyRow(item, window))
-		} else {
-			beyond = append(beyond, d.buyRow(item, window))
+		if number(item["entry_cost"]) <= reach {
+			reachable++
 		}
+		lines = append(lines, d.buyRow(item, route, gains[text(item["id"])], window))
 	}
-	body := ""
-	switch {
-	case len(items) == 0:
-		body = empty("Nada que mejore tu once.")
-	case len(reachable) == 0:
-		body = empty("Ninguno te llega con lo que tienes.")
-	default:
-		shown := min(3, len(reachable))
-		body = rowList(reachable[:shown])
-		if len(reachable) > shown {
-			body += folded(fmt.Sprintf("%d más", len(reachable)-shown),
-				rowList(reachable[shown:]))
-		}
+	body := empty("Nadie ahora mismo.")
+	if len(lines) > 0 {
+		body = scrollList(lines, 420)
 	}
-	if len(beyond) > 0 {
-		body += folded(fmt.Sprintf("%d que no te llegan", len(beyond)), rowList(beyond))
-	}
-	return block(title, body, sub, len(reachable))
+	return block(title, body, "", reachable)
 }
 
-func (d Document) buyOptions() (clauses, offers, free []map[string]any) {
+// gains is what each candidate of a route adds to the best eleven.
+func (d Document) gains(route string) map[string]float64 {
+	out := map[string]float64{}
 	for _, item := range rows(d.Money["bargains"]) {
-		if number(item["xi_gain"]) <= MinShownGain {
-			continue
-		}
-		switch text(item["route"]) {
-		case "clausula":
-			clauses = append(clauses, item)
-		case "oferta al dueño":
-			offers = append(offers, item)
-		case "puja libre":
-			free = append(free, item)
+		if text(item["route"]) == route {
+			out[text(item["id"])] = math.Max(out[text(item["id"])], number(item["xi_gain"]))
 		}
 	}
-	return
+	return out
+}
+
+// buyOptions are the three routes' candidates: the clauses priced by the advice layer, and
+// every listing of the market and of the rivals.
+func (d Document) buyOptions() (clauses, offers, free []map[string]any) {
+	for _, item := range rows(d.Money["bargains"]) {
+		if text(item["route"]) == "clausula" {
+			clauses = append(clauses, item)
+		}
+	}
+	listed := func(source any) []map[string]any {
+		var out []map[string]any
+		for _, item := range rows(source) {
+			if !truthy(item["is_mine"]) && text(mapOf(item["market"])["market_id"]) != "" {
+				out = append(out, item)
+			}
+		}
+		return out
+	}
+	return clauses, listed(d.Advice["asks"]), listed(d.Advice["bids_now"])
 }
 
 func (d Document) buyView() string {
 	window := d.window()
 	clauses, offers, free := d.buyOptions()
 	main := `<p class="lead">Ordenado por lo que gana <b>tu once</b> cada jornada, no por el ` +
-		`descuento.</p>` +
-		d.buyBlock("🔓 Cláusulas que puedes pagar", "", clauses, window) +
-		d.buyBlock("🤝 En venta por rivales", "", offers, window) +
-		d.buyBlock("🔨 Mercado rentable", "", free, window)
+		`descuento.</p><div class="mk-filters">` + Filters + `</div>` +
+		d.buyBlock("🔓 Cláusulas que puedes pagar", "clausula", clauses, window) +
+		d.buyBlock("🤝 En venta por rivales", "oferta al dueño", offers, window) +
+		d.buyBlock("🔨 Mercado rentable", "puja libre", free, window)
 
 	var bids []string
 	for _, bid := range rows(d.Advice["my_bids"]) {
@@ -524,111 +594,8 @@ func (d Document) buyView() string {
 			`<button class="linkish" type="button" data-goto="clausulas">ver en Cláusulas</button></p>`,
 			Esc(text(raid["name"])), esMoney(number(raid["max_pay"])))
 	}
-	main += d.biddableLists()
 	return view("v-comprar", "comprar", main, block("Mis pujas en curso", body, "", -1)+
 		d.endingsAside()+d.starredAside())
-}
-
-// biddableLists is everything that can be bid for today, the game's market and the rivals'
-// listings apart, each best first by what it adds to the eleven and by xPts when it does not
-// get in.
-func (d Document) biddableLists() string {
-	gains := map[string]float64{}
-	for _, item := range rows(d.Money["bargains"]) {
-		if route := text(item["route"]); route != "clausula" {
-			gains[text(item["id"])] = math.Max(gains[text(item["id"])], number(item["xi_gain"]))
-		}
-	}
-	cash := number(d.Advice["budget"])
-	list := func(source any) []string {
-		var listings []map[string]any
-		for _, item := range rows(source) {
-			if !truthy(item["is_mine"]) && text(mapOf(item["market"])["market_id"]) != "" {
-				listings = append(listings, item)
-			}
-		}
-		sort.SliceStable(listings, func(one, two int) bool {
-			first, second := gains[text(listings[one]["id"])], gains[text(listings[two]["id"])]
-			if (first > MinShownGain) != (second > MinShownGain) {
-				return first > MinShownGain
-			}
-			if first > MinShownGain && first != second {
-				return first > second
-			}
-			return number(listings[one]["xpts"]) > number(listings[two]["xpts"])
-		})
-		var items []string
-		for _, item := range listings {
-			items = append(items, d.biddableRow(item, gains[text(item["id"])], cash))
-		}
-		return items
-	}
-	market, rivals := list(d.Advice["bids_now"]), list(d.Advice["asks"])
-	if len(market)+len(rivals) == 0 {
-		return ""
-	}
-	body := empty("El mercado de hoy está vacío.")
-	if len(market) > 0 {
-		body = scrollList(market, 560)
-	}
-	today := block("Mercado de hoy", body, "por lo que suma a tu once", len(market))
-	body = empty("Ningún rival tiene a nadie en venta.")
-	if len(rivals) > 0 {
-		body = scrollList(rivals, 560)
-	}
-	theirs := block("Lo que venden tus rivales", body, "casi nunca aceptan ofertas, pero así "+
-		"sabes qué sueltan", len(rivals))
-	return `<div class="mk-filters">` + Filters + `</div><div class="duo">` + today + theirs +
-		`</div>`
-}
-
-func (d Document) biddableRow(item map[string]any, gain, cash float64) string {
-	listing := mapOf(item["market"])
-	cost := number(item["entry_cost"])
-	seller := fallbackText(text(item["seller"]), text(listing["seller"]))
-	meta := Esc(text(item["team_short"])) + ` · <span class="src-free">libre</span>`
-	label := "Pujar " + esMoney(cost)
-	if seller != "" {
-		meta = Esc(text(item["team_short"])) + ` · <span class="src-rival">vende ` + Esc(seller) +
-			`</span>`
-		label = "Ofrecer " + esMoney(cost)
-	}
-	if starts := asFloat(item["start_probability"]); starts != nil {
-		meta += fmt.Sprintf(" · titular %.0f %%", *starts)
-	}
-	if bids := int(number(listing["bids"])); bids > 0 {
-		meta += " · " + counted(bids, "puja", "pujas")
-	}
-	value := esNum(number(item["xpts"]), 1) + " xPts"
-	if gain > MinShownGain {
-		value = esSigned(gain) + " xPts"
-		meta += " · " + esNum(number(item["xpts"]), 1) + " xPts"
-	}
-	trend := number(item["projected_pct"])
-	class, sign := "up", "+"
-	if trend < 0 {
-		class, sign = "down", ""
-	}
-	note := fmt.Sprintf(`%s · vale %s · <span class="%s">%s%s %%</span> 7d`, esMoney(cost),
-		esMoney(number(item["value"])), class, sign, esNum(trend, 1))
-	if ceiling := number(item["ideal_bid"]); ceiling > 0 {
-		margin := ceiling - cost
-		marginClass, mark := "up", "+"
-		if margin < 0 {
-			marginClass, mark = "down", ""
-		}
-		note += fmt.Sprintf(` · <span class="%s">%s%s de margen</span>`, marginClass, mark,
-			esMoney(margin))
-	} else {
-		note += ` · <span class="down">sin margen</span>`
-	}
-	kind, tone := "ghost", ""
-	if cost > cash {
-		tone = "dim"
-		note += " · no llegas"
-	}
-	return rowWith(item, filterAttrs(item, cost), meta, value, note,
-		clock(text(listing["expires"]), "sale del mercado"), d.listingButton(item, label, kind), tone)
 }
 
 // outcomeRow is a resolved bid, offer or standing order as a list row: a glyph for how it
@@ -1089,12 +1056,17 @@ func (d Document) clauseView() string {
 		"debajo de tu límite", len(scheduled))
 
 	clauses, _, _ := d.buyOptions()
+	gains := d.gains("clausula")
+	sort.SliceStable(clauses, func(one, two int) bool {
+		return gains[text(clauses[one]["id"])] > gains[text(clauses[two]["id"])]
+	})
 	var payable []string
 	listed := map[string]bool{}
 	for _, item := range clauses {
-		if truthy(item["affordable"]) && len(payable) < 3 {
+		gain := gains[text(item["id"])]
+		if truthy(item["affordable"]) && gain > MinShownGain && len(payable) < 3 {
 			listed[text(item["id"])] = true
-			payable = append(payable, d.buyRow(item, window))
+			payable = append(payable, d.buyRow(item, "clausula", gain, window))
 		}
 	}
 	body = empty("Ninguna cláusula pagable mejora tu once.")

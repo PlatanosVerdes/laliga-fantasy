@@ -38,10 +38,7 @@ func (r ListRow) HTML() string {
 		action = `<span class="ract">` + r.Action + `</span>`
 	}
 	class := strings.TrimSpace("r " + r.Tone)
-	tail := ""
-	if r.Chip != "" || action != "" {
-		tail = `<span class="rtail">` + r.Chip + action + `</span>`
-	}
+	tail := `<span class="rtail"><span class="rchip">` + r.Chip + `</span>` + action + `</span>`
 	return `<li class="` + class + `"` + r.Attrs + `>` + r.Lead + who.String() + value + tail +
 		`</li>`
 }

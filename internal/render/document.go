@@ -56,8 +56,10 @@ type Document struct {
 	// ClauseWindow is when the game accepts a clause payment at all. Nil is nobody having
 	// worked it out, and then the page says nothing rather than guessing an hour.
 	Window *schedule.Window
-	// The league's house rules: the hold period, its exceptions, and the social pacts.
+	// The league's house rules: the hold period, its exceptions, the debt a market bid may run
+	// into (percent of the squad's value) and the social pacts.
 	HoldDays       int
+	MaxDebtPct     float64
 	HoldExceptions string
 	RuleNotes      []string
 }

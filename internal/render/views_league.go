@@ -66,8 +66,8 @@ func (d Document) rivalsView() string {
 			if truthy(top["clause_locked"]) {
 				lock = " 🔒"
 			}
-			pays = fmt.Sprintf("le llega hasta %s%s %s%s",
-				face(top, "xs"), Esc(text(top["name"])), esMoney(number(top["clause"])), lock)
+			pays = fmt.Sprintf("le llega hasta %s %s%s", Esc(text(top["name"])),
+				esMoney(number(top["clause"])), lock)
 		}
 		meta := fmt.Sprintf("%.0f pts · %.0f jugadores · plantilla %s", number(team["points"]),
 			number(team["players"]), esMoney(number(team["squad_value"])))

@@ -114,21 +114,28 @@ func TestRestOfSquadPutsTheBenchFirstAndHonoursTheHoldRule(t *testing.T) {
 	}
 }
 
-// Comprar ends with every listing, best for the eleven first, the margin to the ceiling signed.
-func TestBiddableListOrdersByWhatTheElevenGains(t *testing.T) {
-	html := decidingDocument().biddableLists()
-	if !strings.Contains(html, "Mercado de hoy") || !strings.Contains(html, `class="mk-filters"`) {
-		t.Fatalf("the list and its filter bar: %.300s", html)
-	}
+// Each Comprar box holds every candidate in a scroll box, best for the eleven first; what cash
+// cannot reach stays at the end, greyed out with what is missing.
+func TestBuyBoxesListEveryCandidate(t *testing.T) {
+	document := decidingDocument()
+	html := document.buyView()
 	if strings.Contains(html, "<details") || !strings.Contains(html, `class="scrollbox"`) ||
-		!strings.Contains(html, "Lo que venden tus rivales") {
-		t.Error("each list whole in its own scroll box, the game's market and the rivals' apart")
+		!strings.Contains(html, `class="mk-filters"`) {
+		t.Fatalf("every candidate in a scroll box under the filter bar: %.300s", html)
 	}
 	if strings.Index(html, "Barato") > strings.Index(html, "Caro") {
 		t.Error("the one adding more goes first")
 	}
 	if !strings.Contains(html, "+1,0M de margen") || !strings.Contains(html, `data-price="2000000"`) {
-		t.Errorf("margin and the price the filter reads: %s", html)
+		t.Error("margin to the ceiling and the price the filter reads")
+	}
+	if !strings.Contains(html, `title="te faltan 20,0M"`) {
+		t.Error("an unreachable bid is disabled and says what is missing")
+	}
+	document.MaxDebtPct = 30
+	html = document.buyView()
+	if strings.Contains(html, "te faltan") || !strings.Contains(html, "⚠ en negativo") {
+		t.Error("the allowed debt reaches it, with the warning about starting in the red")
 	}
 }
 

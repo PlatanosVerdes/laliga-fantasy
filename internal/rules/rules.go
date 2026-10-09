@@ -21,6 +21,9 @@ type League struct {
 	// HoldExceptions is the agreed escape hatch, in the league's own words. It is shown
 	// beside the refusal so the person knows whether to go ask.
 	HoldExceptions string `json:"hold_exceptions,omitempty"`
+	// MaxDebtPct is the share of the squad's value, in percent, that market bids may spend
+	// beyond the cash. Never for clauses or clause raises. Zero is cash only.
+	MaxDebtPct float64 `json:"max_debt_pct,omitempty"`
 	// Notes are the rest of the pact: prizes, forfeits, votes. Displayed, never acted on.
 	Notes []string `json:"notes,omitempty"`
 }

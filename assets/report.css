@@ -1349,15 +1349,18 @@ section.mk{margin:0 0 22px}
 .mk .ract .mine-bid{font-size:12px;color:var(--muted)}
 
 /* ---- The one list row (rows.go) ------------------------------------------------------
-   Every list in every tab is this markup. The list is the container, so the same row draws
-   wide in a main column and compact in an aside, a half-width column or a phone. */
+   Every list in every tab is this markup, in two zones: who on the left, truncated rather
+   than wrapped, and on the right the figure, the chip and the buttons. The list is a grid and
+   each row a subgrid of it, so the right zone's columns line up across every row of a list;
+   the list is also a container, so a narrow one draws the same row smaller. The 42px lead is
+   the face plus the row's padding, which a subgrid lays over its edge tracks. */
 .mk .rows{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);
-  border-radius:12px;overflow:hidden;container:rows/inline-size}
-.mk .r{--lead:30px;display:grid;grid-template-columns:var(--lead) minmax(0,1fr) auto 112px auto;
-  grid-template-areas:"f w v c a";column-gap:10px;align-items:center;padding:9px 12px;
-  border-top:1px solid var(--line)}
+  border-radius:12px;overflow:hidden;container:rows/inline-size;display:grid;
+  grid-template-columns:42px minmax(0,1fr) max-content max-content max-content;column-gap:10px}
+.mk .r{grid-column:1/-1;display:grid;grid-template-columns:subgrid;grid-template-areas:"f w v c a";
+  align-items:center;padding:9px 12px;border-top:1px solid var(--line)}
 .mk .r:first-child{border-top:0}
-.mk .r>.face,.mk .r>.rank-dot{grid-area:f;width:var(--lead);height:var(--lead);flex:none}
+.mk .r>.face,.mk .r>.rank-dot{grid-area:f;width:30px;height:30px}
 .mk .rank-dot{border-radius:50%;display:grid;place-items:center;background:var(--surface-2);
   color:var(--ink-2);font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
 .mk .rank-dot.out-good{color:var(--good)} .mk .rank-dot.out-bad{color:var(--critical)}
@@ -1366,16 +1369,15 @@ section.mk{margin:0 0 22px}
 .mk .rname{display:flex;align-items:center;gap:6px;min-width:0}
 .mk .rname b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .mk .rname .pos{flex:none}
-.mk .rwho .meta{display:block;font-size:12px;color:var(--muted)}
-.mk .rwho .meta .face{display:inline-flex;vertical-align:middle;margin-right:2px}
+.mk .rwho .meta{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
 .mk .rval{grid-area:v;display:flex;flex-direction:column;align-items:flex-end;line-height:1.25;
-  font-variant-numeric:tabular-nums;min-width:0}
+  font-variant-numeric:tabular-nums;min-width:72px}
 .mk .rval b{font-size:17px;letter-spacing:-.01em;white-space:nowrap}
 .mk .rnote{font-size:11px;color:var(--muted);white-space:nowrap}
 .mk .rtail{display:contents}
-.mk .rtail>.mk-chip{grid-area:c;justify-self:center}
+.mk .rchip{grid-area:c;display:flex;gap:4px;justify-content:center}
 .mk .ract{grid-area:a;display:flex;gap:6px;justify-content:flex-end;align-items:center}
-.mk .ract:not(:has(*)){display:none}
 .mk .ract .mine-bid{font-size:12px;color:var(--muted)}
 .mk .ract .star{font-size:16px;padding:2px 6px}
 .mk .ract .cmp-add.small{width:28px;height:28px}
@@ -1384,37 +1386,39 @@ section.mk{margin:0 0 22px}
 .mk .r.good{box-shadow:inset 3px 0 0 var(--good)}
 .mk .r.accent{box-shadow:inset 3px 0 0 var(--accent)}
 .mk .r.warn{box-shadow:inset 3px 0 0 var(--warning)}
-.mk .r.dim{opacity:.55}
+.mk .r.dim>:not(.rtail),.mk .r.dim .rchip{opacity:.5}
 .mk .r[data-team]{cursor:pointer}
 .mk .r[data-team]:hover{background:color-mix(in srgb,var(--accent) 5%,transparent)}
 .mk .up{color:var(--good)} .mk .down{color:var(--critical)}
-.mk .rows .line-head{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:11px;color:var(--muted);
-  background:var(--surface-2);border-top:1px solid var(--line);font-weight:600}
+.mk .rows .line-head{grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:6px 12px;
+  font-size:11px;color:var(--muted);background:var(--surface-2);border-top:1px solid var(--line);
+  font-weight:600}
 .mk .rows .line-head:first-child{border-top:0}
 .mk .rows .line-head.xi-head{color:var(--accent)}
 .mk .scrollbox{overflow-y:auto;overscroll-behavior:contain;border-radius:12px}
-/* Compact: one line while it fits, the buttons dropping under it (right-aligned) when not. */
+/* A narrow list (an aside): the same zones, smaller. */
 @container rows (max-width:640px){
-  .mk .r{--lead:28px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding:7px 10px}
-  .mk .rwho{flex:1 1 80px}
+  .mk .r{padding:7px 10px}
+  .mk .r>.face,.mk .r>.rank-dot{width:28px;height:28px}
   .mk .rname{gap:4px}
-  .mk .rwho .meta{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .mk .rval{flex:none;max-width:170px;min-width:58px}
+  .mk .rwho .meta{font-size:11px}
+  .mk .rval{min-width:56px}
   .mk .rval b{font-size:14px}
-  .mk .rnote{font-size:10.5px;white-space:normal;text-align:right}
-  .mk .rtail{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:6px;
-    flex:0 1 auto;max-width:100%;margin-left:auto}
-  .mk .rtail>.mk-chip{font-size:10px;padding:2px 6px;min-width:62px;text-align:center}
-  .mk .rtail>.mk-chip .clock{display:none}
+  .mk .rnote{font-size:10.5px}
+  .mk .rchip .mk-chip{font-size:10px;padding:2px 6px}
+  .mk .rchip .clock{display:none}
   .mk .ract{gap:4px}
   .mk .ract button.mb{font-size:12px;padding:4px 8px;border-radius:7px}
   .mk .ract .star{font-size:14px;padding:0 2px}
   .mk .ract .cmp-add.small{width:24px;height:24px}
 }
-/* Two lists side by side at the same level, one under the other on a phone. */
-.mk .duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
-.mk .duo .sec-head{flex-direction:column;align-items:flex-start;gap:2px}
-@media (max-width:760px){.mk .duo{grid-template-columns:minmax(0,1fr)}}
+/* A phone has no room for both zones on one line: the chip and buttons go under, right. */
+@media (max-width:560px){
+  .mk .r{grid-template-columns:28px minmax(0,1fr) auto;grid-template-areas:"f w v" "f t t";
+    row-gap:6px;column-gap:8px}
+  .mk .rtail{grid-area:t;display:flex;justify-content:flex-end;align-items:center;gap:6px}
+  .mk .rtail:not(:has(*)){display:none}
+}
 .mk .fold{margin-top:6px}
 .mk .fold summary{cursor:pointer;color:var(--muted);font-size:12px;padding:6px 2px;list-style:none}
 .mk .fold summary::-webkit-details-marker{display:none}
