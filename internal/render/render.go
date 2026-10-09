@@ -533,7 +533,7 @@ func Header(stats []string, withTabs bool, cashAmount *float64) string {
 	}
 	return `<div class="topbar"` + attrs + `>` + tabs + `<div class="topright">` +
 		`<span id="live-dot" class="live-off"` + build + ` data-tip="` + Esc(tip) + `"></span>` +
-		find + `</div></div>` + strip
+		versionTag() + find + `</div></div>` + strip
 }
 
 // PageFoot is where the page comes from and what the server may do, and the figures that did
@@ -2141,4 +2141,13 @@ func asSeries(value any) []float64 {
 		return out
 	}
 	return nil
+}
+
+// versionTag is the build in plain sight: whether a deploy has landed is read at a glance, not
+// hovered for.
+func versionTag() string {
+	if Build == "" {
+		return ""
+	}
+	return `<span class="build-tag">` + Esc(Build) + `</span>`
 }

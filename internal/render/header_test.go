@@ -9,7 +9,7 @@ import (
 // to tell whether a fix is deployed is to read the container's logs.
 func TestHeaderShowsTheBuildOnlyWhenStamped(t *testing.T) {
 	Build = ""
-	if got := Header(nil, true, nil); strings.Contains(got, `data-build=`) {
+	if got := Header(nil, true, nil); strings.Contains(got, `data-build=`) || strings.Contains(got, "build-tag") {
 		t.Errorf("sin sello no deberia anunciar version: %s", got)
 	}
 	Build = "v2026.08.21.3"
@@ -17,6 +17,9 @@ func TestHeaderShowsTheBuildOnlyWhenStamped(t *testing.T) {
 	got := Header(nil, true, nil)
 	if !strings.Contains(got, `data-build="v2026.08.21.3"`) || !strings.Contains(got, "· v2026.08.21.3") {
 		t.Errorf("el punto en vivo lleva la version: %s", got)
+	}
+	if !strings.Contains(got, `<span class="build-tag">v2026.08.21.3</span>`) {
+		t.Errorf("la version se ve sin pasar el raton: %s", got)
 	}
 }
 

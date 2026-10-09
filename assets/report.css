@@ -1725,3 +1725,7 @@ a.role:hover,a.role:focus-visible{text-decoration:underline}
 .cmp-hit-num .crest,.mk-cal-them .crest,.cmp-sub .crest,table.cmp td .crest{width:13px;height:13px;
   vertical-align:-2px;margin:0 2px}
 .pc-grid b .crest{width:16px;height:16px;vertical-align:-2px;margin-right:4px}
+.build-tag{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;
+  color:var(--muted);padding:1px 6px;border:1px solid var(--line);border-radius:5px;
+  white-space:nowrap;cursor:default}
+@media (max-width:640px){.build-tag{display:none}}
