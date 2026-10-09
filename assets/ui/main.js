@@ -2,6 +2,7 @@ import {html, render, legacy} from './lib.js';
 import {ModalRoot} from './components.js';
 import {PlayerPopup} from './player.js';
 import {ViewScreen} from './view.js';
+import {WeekPopup} from './matches.js';
 
 const dialogs = document.createElement('div');
 document.body.appendChild(dialogs);
@@ -12,7 +13,10 @@ render(html`<${ModalRoot}/>`, dialogs);
 let host = null;
 const unmount = () => { if (host) { render(null, host); host = null; } };
 
-export function mountPlayer(body, id, from) {
+const DRAWERS = {player: PlayerPopup, week: WeekPopup};
+
+// A drawer view drawn here: the card, the matchday.
+export function mountDrawer(body, name, props) {
   unmount();
   body.textContent = '';
   host = document.createElement('div');
@@ -21,8 +25,11 @@ export function mountPlayer(body, id, from) {
   new MutationObserver((changes, observer) => {
     if (!mine.isConnected) { observer.disconnect(); if (host === mine) unmount(); }
   }).observe(body, {childList: true});
-  render(html`<${PlayerPopup} key=${id} id=${id} from=${from}/>`, host);
+  const View = DRAWERS[name];
+  render(html`<${View} key=${JSON.stringify(props)} ...${props}/>`, host);
 }
+
+export const mountPlayer = (body, id, from) => mountDrawer(body, 'player', {id, from});
 
 // Every tab the server hands over as a view is the browser's: drawn from the views the page
 // carries, and again whenever the world moves.

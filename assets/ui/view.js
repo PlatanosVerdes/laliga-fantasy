@@ -142,8 +142,8 @@ function FilterBar({view}) {
 
 export const KINDS = {};
 
-function list(rows, scroll) {
-  const ul = html`<ul class="rows">${rows.map((r) => html`<${RowView} r=${r}/>`)}</ul>`;
+function list(rows, scroll, extra) {
+  const ul = html`<ul class=${'rows' + (extra ? ' ' + extra : '')}>${rows.map((r) => html`<${RowView} r=${r}/>`)}</ul>`;
   return scroll ? html`<div class="scrollbox" style=${'max-height:' + scroll + 'px'}>${ul}</div>` : ul;
 }
 
@@ -151,6 +151,7 @@ export function BlockView({b}) {
   const state = useFilters();
   if (!b || (!b.title && !b.kind)) return null;
   const Kind = b.kind && KINDS[b.kind];
+  if (Kind && Kind.full) return html`<${Kind} b=${b}/>`;
   const active = filtering(state);
   const rows = (b.rows || []).filter((r) => !active || passes(r, state));
   const filtered = active && (b.rows || []).some((r) => r.find);
@@ -159,7 +160,7 @@ export function BlockView({b}) {
   if (Kind) body = html`<${Kind} b=${b}/>`;
   else if (!rows.length) body = filtered && b.rows.length ? html`<p class="mk-empty f-none">Ninguno con este filtro.</p>`
     : b.empty ? html`<${Empty}>${b.empty}<//>` : null;
-  else body = list(rows, b.scroll);
+  else body = list(rows, b.scroll, b.list_c);
   return html`<div class="block" id=${b.id || undefined}>
     ${b.title ? html`<div class="sec-head"><h2>${b.title}${counted != null ? html`<span class="count">${counted}</span>` : null}</h2>${
       b.sub ? html`<p>${b.sub}</p>` : null}</div>` : null}

@@ -50,7 +50,7 @@ func TestMatchdayBoardOrdersByProjectedFinish(t *testing.T) {
 				"points_rank": 2.0, "projection": 50.0, "projection_rank": 1.0, "to_come": 30.0,
 				"waiting": 5.0, "waiting_names": []any{"Pedri"}},
 		}}}}
-	board := document.matchdayBoard()
+	board := asJSON(document.boardBlock())
 	if strings.Index(board, "Yo") > strings.Index(board, "Ana") {
 		t.Error("el que acabaría primero va primero")
 	}

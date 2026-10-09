@@ -24,7 +24,7 @@ function useNow(every = 1000) {
 
 // A live countdown. "chip" is a row's chip (red in its last six hours, "cerrado" once past);
 // "plain" is the figure inside a sentence, coloured as its last hours run out.
-export function Countdown({until, kind = 'plain', label = ''}) {
+export function Countdown({until, kind = 'plain', label = '', cls}) {
   const now = useNow();
   const left = new Date(until).getTime() - now;
   if (isNaN(left)) return null;
@@ -34,7 +34,7 @@ export function Countdown({until, kind = 'plain', label = ''}) {
   }
   const hours = left / 3600000;
   const color = left <= 0 ? '' : hours < 1 ? 'var(--critical)' : hours < 6 ? 'var(--warning)' : '';
-  return html`<span style=${color ? 'color:' + color : ''}>${countdownText(left)}</span>`;
+  return html`<span class=${cls} style=${color ? 'color:' + color : ''}>${countdownText(left)}</span>`;
 }
 
 const CROSS = 'M6.4 2.5h3.2v3.9h3.9v3.2H9.6v3.9H6.4V9.6H2.5V6.4h3.9z';
@@ -193,5 +193,5 @@ export function ModalRoot() {
 
 // A real switch: track and knob, the accent when on.
 export const Switch = ({on, disabled, label, onChange}) => html`<button type="button" role="switch"
-  class=${'sw' + (on ? ' on' : '')} aria-checked=${on ? 'true' : 'false'} aria-label=${label}
-  disabled=${disabled} onClick=${onChange}><span class="sw-knob"></span></button>`;
+  class=${'tgl' + (on ? ' on' : '')} aria-checked=${on ? 'true' : 'false'} aria-label=${label}
+  disabled=${disabled} onClick=${onChange}><span class="tgl-knob"></span></button>`;

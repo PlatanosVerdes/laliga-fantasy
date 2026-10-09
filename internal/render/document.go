@@ -95,7 +95,7 @@ func (d Document) ViewData() map[string]any {
 		return map[string]any{}
 	}
 	return map[string]any{"vender": d.SellData(), "comprar": d.BuyData(),
-		"clausulas": d.ClauseData()}
+		"clausulas": d.ClauseData(), "partidos": d.MatchesData()}
 }
 
 // HTML renders the document.

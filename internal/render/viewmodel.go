@@ -85,6 +85,7 @@ type Block struct {
 	Rows   []Row  `json:"rows,omitempty"`
 	Empty  string `json:"empty,omitempty"`
 	Scroll int    `json:"scroll,omitempty"`
+	ListC  string `json:"list_c,omitempty"`
 	Note   string `json:"note,omitempty"`
 	Kind   string `json:"kind,omitempty"`
 	Data   any    `json:"data,omitempty"`

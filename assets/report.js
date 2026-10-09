@@ -3023,6 +3023,8 @@ async function openWeek(week){
   const body=drawer.querySelector('.drawer-body');
   body.dataset.view='week';
   body.innerHTML='<p class="empty">Cargando…</p>';
+  const ui=await uiModule;
+  if(ui){ ui.mountDrawer(body,'week',{week:String(week)}); return; }
   let md=null, fc=null;
   try{
     [md,fc]=await Promise.all([
@@ -3100,7 +3102,6 @@ function showTab(id,{section=null,updateHash=true}={}){
   if(tab.sections.includes('once') && !pitchState) loadPitch();
   if(tab.sections.includes('evolucion')) loadSeason();
   if(tab.id==='comparador'&&was!=='comparador') renderCompare();
-  if(tab.id==='partidos') fillHistory();
   drawTray();
   if(section){
     const node=document.getElementById(section);
@@ -3257,7 +3258,7 @@ function connect(){
 }
 
 // What /assets/ui borrows from this file: the dialogs it does not redraw and the drawer's routing.
-window.panel={openDetail, openManager, closeDrawer, openAmount, openBid, shieldDialog, raidDialog,
+window.panel={openDetail, openManager, openWeek, openMatchday, openForecast, closeDrawer, openAmount, openBid, shieldDialog, raidDialog,
   flash, cmpHas, cmpAdd, cmpDrop, usage,
   goto:(where)=>{ const target=resolveTarget(where);
     if(target) showTab(target.tab,{section:target.section}); else showTab(where); }};
