@@ -1,4 +1,4 @@
-import {html, useState, useEffect} from './lib.js';
+import {html, useState, useEffect, useRef} from './lib.js';
 import {getJSON, postJSON} from './api.js';
 import {since, countdownText} from './format.js';
 import {registerDrawer, openDrawer, onLiveDot} from './shell.js';
@@ -9,41 +9,52 @@ import {registerDrawer, openDrawer, onLiveDot} from './shell.js';
 const SOURCE_TIP = {env: (s) => 'de la variable ' + s.env, flag: () => 'de --interval al arrancar',
   default: () => 'el valor por defecto'};
 
-const parts = (seconds) => {
-  const t = Math.round(seconds);
-  return {h: String(Math.floor(t / 3600)), m: String(Math.floor(t % 3600 / 60)), s: String(t % 60)};
-};
-const whole = (text) => Math.max(0, parseInt(text, 10) || 0);
-const total = (p) => whole(p.h) * 3600 + whole(p.m) * 60 + whole(p.s);
+// One native number field per row in a fixed unit: seconds for a clock that never passes a
+// minute, minutes for the rest.
+const unitOf = (s) => (s.max_seconds <= 60 ? {size: 1, step: 5, label: 's'} : {size: 60, step: 1, label: 'min'});
 
-// Hours, minutes and seconds as three small numeric fields; saved when focus leaves the group.
 function Interval({s, onSaved}) {
-  const [value, setValue] = useState(parts(s.seconds));
+  const unit = unitOf(s);
+  const low = Math.ceil(s.min_seconds / unit.size), high = Math.floor(s.max_seconds / unit.size);
+  const shown = String(Math.round(s.seconds / unit.size));
+  const [text, setText] = useState(shown);
   const [error, setError] = useState('');
-  useEffect(() => setValue(parts(s.seconds)), [s.seconds]);
+  const timer = useRef(null);
+  useEffect(() => setText(shown), [s.seconds]);
+  useEffect(() => () => clearTimeout(timer.current), []);
   const save = async (body) => {
+    clearTimeout(timer.current);
     setError('');
     try {
       const list = (await postJSON('/api/services', body)).services;
-      setValue(parts((list.find((x) => x.key === s.key) || s).seconds));
+      const next = list.find((x) => x.key === s.key) || s;
+      setText(String(Math.round(next.seconds / unit.size)));
       onSaved(list);
     } catch (e) { setError(e.message); }
   };
-  const commit = () => {
-    const seconds = total(value);
-    if (seconds === Math.round(s.seconds)) { setValue(parts(s.seconds)); return; }
-    save({key: s.key, interval: seconds + 's'});
+  const commit = (value) => {
+    clearTimeout(timer.current);
+    const typed = value.trim();
+    if (typed === shown) return;
+    const number = parseInt(typed, 10);
+    if (isNaN(number)) { setText(shown); return; }
+    save({key: s.key, interval: number * unit.size + 's'});
   };
-  const hours = s.max_seconds >= 3600;
-  const field = (unit, label, max, hidden) => html`<span class=${'svc-part' + (hidden ? ' off' : '')}>
-    <input class=${'svc-in' + (error ? ' bad' : '')} type="number" inputmode="numeric" min="0" max=${max}
-      value=${value[unit]} aria-label=${s.label + ', ' + label} tabindex=${hidden ? -1 : undefined}
-      onInput=${(e) => { const text = e.currentTarget.value; setValue((v) => ({...v, [unit]: text})); }}
-      onFocus=${(e) => e.currentTarget.select()}
-      onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}/><span class="svc-unit">${label}</span></span>`;
-  return html`<span class="svc-dur" data-tip=${`entre ${s.min} y ${s.max} · ${s.env}`}
-      onFocusOut=${(e) => { if (!e.currentTarget.contains(e.relatedTarget)) commit(); }}>
-      ${field('h', 'h', Math.floor(s.max_seconds / 3600), !hours)}${field('m', 'min', 59)}${field('s', 's', 59)}</span>
+  // A run of clicks on the stepper adds up to one write.
+  const changed = (e) => {
+    const value = e.currentTarget.value;
+    setText(value);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => commit(value), 400);
+  };
+  return html`<span class="svc-dur" data-tip=${`entre ${s.min} y ${s.max} · ${s.env}`}>
+      <input class=${'svc-in' + (error ? ' bad' : '')} type="number" inputmode="numeric"
+        min=${low} max=${high} step=${unit.step} value=${text}
+        aria-label=${s.label + ', en ' + (unit.size === 1 ? 'segundos' : 'minutos')}
+        onInput=${(e) => setText(e.currentTarget.value)} onChange=${changed}
+        onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(e.currentTarget.value); } }}/>
+      <span class="svc-unit">${unit.label}</span>
+      <span class="svc-exact">${s.seconds % unit.size ? s.interval : ''}</span></span>
     ${s.source === 'ui'
       ? html`<button type="button" class="svc-reset" data-tip=${'vuelve a ' + s.fallback + ', ' + SOURCE_TIP[s.fallback_source](s)}
           onMouseDown=${(e) => e.preventDefault()} onClick=${() => save({key: s.key, reset: true})}>por defecto</button>`

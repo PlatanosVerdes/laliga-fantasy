@@ -1471,17 +1471,15 @@ a.role:hover,a.role:focus-visible{text-decoration:underline}
 .svc h3{margin:2px 0 4px;font-size:17px}
 .svc-sub{font-size:13px;color:var(--ink-2);margin:0 0 12px}
 .svc-list{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
-.svc-row{display:grid;grid-template-columns:minmax(0,1fr) 12.5em 5.5em 9.5em;column-gap:12px;row-gap:4px;
+.svc-row{display:grid;grid-template-columns:minmax(0,1fr) auto 5.5em 9.5em;column-gap:12px;row-gap:4px;
   align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
 .svc-name{font-weight:600;min-width:0;white-space:nowrap}
-.svc-dur{display:inline-flex;align-items:center;gap:8px}
-.svc-part{display:inline-flex;align-items:baseline;gap:3px}
-.svc-part.off{visibility:hidden}
+.svc-dur{display:grid;grid-template-columns:6.5em 2.4em 3.8em;align-items:center;gap:4px}
 .svc-unit{font-size:12px;color:var(--muted)}
-.svc-in{box-sizing:content-box;width:2.6ch;height:20px;padding:3px 5px;font:inherit;font-size:13px;
-  font-variant-numeric:tabular-nums;text-align:right;color:var(--ink);background:var(--plane);
-  border:1px solid var(--line);border-radius:6px;appearance:textfield;-moz-appearance:textfield}
-.svc-in::-webkit-outer-spin-button,.svc-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.svc-exact{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.svc-in{box-sizing:border-box;width:100%;font:inherit;font-size:13px;font-variant-numeric:tabular-nums;
+  text-align:right;color:var(--ink);background:var(--plane);border:1px solid var(--line);border-radius:7px;
+  padding:3px 4px 3px 8px}
 .svc-in:focus{outline:none;border-color:var(--accent)}
 .svc-in.bad{border-color:var(--warning)}
 .svc-reset{justify-self:start;font:inherit;font-size:12px;color:var(--accent);background:none;border:0;
@@ -1494,7 +1492,7 @@ a.role:hover,a.role:focus-visible{text-decoration:underline}
   .svc-row{grid-template-columns:auto minmax(0,1fr)}
   .svc-name{grid-column:1/-1}
   .svc-when{grid-column:1/-1;text-align:left}
-  .svc-in{font-size:16px;height:24px}
+  .svc-in{font-size:16px}
 }
 #live-dot[role="button"]{position:relative}
 #live-dot[role="button"]::after{content:"";position:absolute;inset:-8px}
