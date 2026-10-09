@@ -1818,44 +1818,60 @@ async function openDetail(playerId){
   const trend=past!=null?past:projected;
   const starts=p.start_probability;
   const xp=p.xpts||0;
-  const tiles=[
-    ['Valor', mny(p.value), l.market_id?`en venta por ${mny(l.min_bid)}`:''],
-    ['Cláusula', p.clause?mny(p.clause):'—',
-      p.clause&&p.value?`${dec(p.clause/p.value,2)}x su valor`:''],
-    ['xPts / jornada', dec(p.xpts), p.rank?`score #${p.rank}`:'',
-      xp>=6?'t-good':xp>=3.5?'t-info':xp>=2?'t-warn':'t-bad'],
-    ['Puntos temporada', p.season_points??'—',
-      p.last_season_points?`25/26: ${p.last_season_points}`:''],
-    ['Titular', starts!=null?starts+' %':'—',
-      p.hierarchy?p.hierarchy:(p.start_probability_source==='ficha'?`J${p.start_week||''} en su ficha`:''),
-      starts==null?'':starts>=75?'t-good':starts>=50?'t-warn':'t-bad'],
-    ['Próximo', p.next_rival||'—', p.next_rival?(p.next_home?'🏠 en casa':'✈️ fuera'):''],
-    ['Valor 7d', trend!=null?`${signed(trend)} %`:'—',
-      past!=null&&projected!=null?`prevé ${signed(projected)} % en 7 días`:(past==null&&projected!=null?'previsión':''),
-      trend==null?'':trend>=0?'t-good':'t-bad'],
-  ];
+  // Tiles by meaning, one row each: performance, money, availability, the season. A tile with
+  // nothing to say is left out rather than drawn empty.
+  const tile=(k,v,sm,cls,href)=>({k,v,sm,cls,href});
+  const xpTile=tile('xPts / jornada', dec(p.xpts), p.rank?`score #${p.rank}`:'',
+    xp>=6?'t-good':xp>=3.5?'t-info':xp>=2?'t-warn':'t-bad');
+  const startsTile=starts!=null?tile('Titular', starts+' %',
+    p.hierarchy?p.hierarchy:(p.start_probability_source==='ficha'?`J${p.start_week||''} en su ficha`:''),
+    starts>=75?'t-good':starts>=50?'t-warn':'t-bad'):null;
+  const nextTile=p.next_rival?tile('Próximo', p.next_rival, p.next_home?'🏠 en casa':'✈️ fuera'):null;
+  const valueTile=tile('Valor', mny(p.value), l.market_id?`en venta por ${mny(l.min_bid)}`:'');
+  const ceilingTile=p.is_mine?null:tile('Techo rentable', p.ideal_bid?mny(p.ideal_bid):'sin margen',
+    p.ff_url?'↗ futbolfantasy':(p.ideal_bid?'futbolfantasy':''), 't-ceiling', p.ff_url);
+  const clauseTile=p.clause?tile('Cláusula', mny(p.clause),
+    p.value?`${dec(p.clause/p.value,2)}x su valor`:''):null;
   // Whether anybody can pay his clause right now, and if not, until when.
+  let payableTile=null;
   if(p.clause){
     const shut=pageFacts.windowOpen===false||(pageFacts.closes&&new Date(pageFacts.closes)<=new Date());
-    if(p.shielded&&p.shielded_until) tiles.push(['Clausulable',`blindado hasta ${whenShort(p.shielded_until)}`,'','t-info']);
-    else if(p.clause_locked&&p.clause_locked_until) tiles.push(['Clausulable',`se libera en ${countdown(p.clause_locked_until)}`,
-      whenShort(p.clause_locked_until),'t-warn']);
-    else if(shut&&pageFacts.opens) tiles.push(['Clausulable',`se abre ${whenShort(pageFacts.opens)}`,
-      'ventana de cláusulas cerrada','t-warn']);
-    else tiles.push(['Clausulable','pagable ya','','t-good']);
+    if(p.shielded&&p.shielded_until) payableTile=tile('Clausulable',`blindado hasta ${whenShort(p.shielded_until)}`,'','t-info');
+    else if(p.clause_locked&&p.clause_locked_until) payableTile=tile('Clausulable',`se libera en ${countdown(p.clause_locked_until)}`,
+      whenShort(p.clause_locked_until),'t-warn');
+    else if(shut&&pageFacts.opens) payableTile=tile('Clausulable',`se abre ${whenShort(pageFacts.opens)}`,
+      'ventana de cláusulas cerrada','t-warn');
+    else payableTile=tile('Clausulable','pagable ya','','t-good');
   }
+  const bidsTile=(l.kind==='libre'||l.expires)?tile('Pujas', l.bids||'ninguna',
+    l.expires?'cierra '+String(l.expires).slice(11,16):''):null;
+  let sellTile=null;
   if(p.is_mine){
     const rule=pageFacts.holdExcept?` title="excepción: ${pageFacts.holdExcept.replace(/"/g,'&quot;')}"`:'';
-    tiles.push(p.sale_locked&&p.hold_until
-      ? ['Puedes venderlo',`<span${rule}>🔒 en ${countdown(p.hold_until)}</span>`,'norma de la liga','t-warn']
-      : ['Puedes venderlo',`<span${rule}>ya</span>`,'','t-good']);
+    sellTile=p.sale_locked&&p.hold_until
+      ? tile('Puedes venderlo',`<span${rule}>🔒 en ${countdown(p.hold_until)}</span>`,'norma de la liga','t-warn')
+      : tile('Puedes venderlo',`<span${rule}>ya</span>`,'','t-good');
   }
-  if(!p.is_mine) tiles.push(['Techo rentable', p.ideal_bid?mny(p.ideal_bid):'sin margen',
-    p.ideal_bid?'futbolfantasy':'']);
-  if(l.kind==='libre'||l.expires) tiles.push(['Pujas', l.bids||'ninguna',
-    l.expires?'cierra '+String(l.expires).slice(11,16):'']);
-  if(p.bought_at) tiles.push(['Fichado', since(p.bought_at), '']);
-  const grid=tiles.map(([k,v,sm,cls])=>`<div class="${cls||''}"><span>${k}</span><b>${v}</b>${sm?`<small>${sm}</small>`:''}</div>`).join('');
+  const boughtTile=p.bought_at?tile('Fichado', since(p.bought_at), ''):null;
+  const seasonTile=p.season_points!=null?tile('Puntos temporada', p.season_points,
+    p.last_season_points?`25/26: ${p.last_season_points}`:''):null;
+  const trendTile=trend!=null?tile('Valor 7d', `${signed(trend)} %`,
+    past!=null&&projected!=null?`prevé ${signed(projected)} % en 7 días`:(past==null?'previsión':''),
+    trend>=0?'t-good':'t-bad'):null;
+  const rowsOfTiles=[
+    [xpTile, startsTile, nextTile],
+    [valueTile, ceilingTile, clauseTile],
+    [payableTile, bidsTile, sellTile||boughtTile],
+    [seasonTile, trendTile, sellTile?boughtTile:null],
+  ];
+  const drawTile=t=>{
+    const inner=`<span>${t.k}</span><b>${t.v}</b>${t.sm?`<small>${t.sm}</small>`:''}`;
+    return t.href
+      ? `<a class="${t.cls||''} t-link" href="${t.href}" target="_blank" rel="noopener" title="Su ficha en futbolfantasy">${inner}</a>`
+      : `<div class="${t.cls||''}">${inner}</div>`;
+  };
+  const grid=rowsOfTiles.map(group=>group.filter(Boolean)).filter(group=>group.length)
+    .map(group=>`<div class="pc-grid">${group.map(drawTile).join('')}</div>`).join('');
   const actions=data.actions||[];
   const notes=actions.filter(x=>x.kind==='note'), buttons=actions.filter(x=>x.kind!=='note');
   // An offer's pair, always Aceptar then Rechazar: only the recommended one is filled, in the
@@ -1870,7 +1886,8 @@ async function openDetail(playerId){
   const BUY_OPS=['bid','buy_offer','direct_offer'];
   const primary=p.is_mine
     ? buttons.find(x=>!isDanger(x)&&x.op!=='always'&&!x.blocked&&x.op!=='accept_offer')
-    : data.recommended&&buttons.find(x=>BUY_OPS.includes(x.op)&&!x.blocked);
+    : (data.recommended&&buttons.find(x=>BUY_OPS.includes(x.op)&&!x.blocked))
+      ||buttons.find(x=>x.recommended&&!x.blocked);
   body.innerHTML=`
     ${drawerFrom?`<button class="drawer-back" type="button" data-back="${drawerFrom.id}"
       >← ${drawerFrom.label}</button>`:''}
@@ -1880,7 +1897,7 @@ async function openDetail(playerId){
         <button class="cmp-add" type="button" data-cmp="${p.id}" data-cmp-name="${p.name}"
           data-cmp-pos="${p.position||''}">+ comparar</button></div></div></div>
     ${status}
-    <div class="pc-grid">${grid}</div>
+    <div class="pc-tiles">${grid}</div>
     ${popWeeks(data.weeks||[])}
     ${(data.history||[]).filter(x=>x.value!=null).length>=3
       ?`<div class="pc-h">Valor · ${(data.history||[]).filter(x=>x.value!=null).length} días</div>`:''}

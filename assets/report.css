@@ -1192,10 +1192,11 @@ details.kpis-more .kpi{padding:9px 12px}
   border-radius:999px;padding:3px 10px;margin:0 0 12px}
 .pc-status.out{background:color-mix(in srgb,var(--critical) 18%,transparent);color:var(--critical)}
 .pc-status.doubt{background:color-mix(in srgb,var(--warning) 20%,transparent);color:var(--warning)}
+.pc-tiles{display:grid;gap:6px}
 .pc-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
-.pc-grid>div{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+.pc-grid>*{background:var(--surface);border:1px solid var(--line);border-radius:10px;
   padding:7px 10px;min-width:0}
-.pc-grid>div>span:first-child{display:block;font-size:11px;color:var(--muted)}
+.pc-grid>*>span:first-child{display:block;font-size:11px;color:var(--muted)}
 .pc-grid b{font-size:16px;font-variant-numeric:tabular-nums}
 .pc-grid small{display:block;font-size:11px;color:var(--ink-2);overflow-wrap:anywhere}
 .pc-grid .up{color:var(--good)} .pc-grid .down{color:var(--critical)}
@@ -1597,6 +1598,12 @@ table.cmp tr:last-child td{border-bottom:0}
 .pc-grid>div.t-bad{border-color:color-mix(in srgb,var(--critical) 35%,var(--line))}
 .pc-grid>div.t-info{border-color:color-mix(in srgb,var(--accent) 35%,var(--line))}
 .pc-grid>div b [data-deadline]{color:inherit!important}
+/* The profitable ceiling is the number a bid is judged by, so it stands out and leads to its
+   source. */
+.pc-grid>.t-ceiling{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.pc-grid>a.t-link{display:block;color:inherit;text-decoration:none;cursor:pointer}
+.pc-grid>a.t-link:hover{border-color:var(--accent)}
+.pc-grid>a.t-link small{color:var(--accent)}
 .shield-mark{font-size:.85em;cursor:help}
 .cmp-acts button.cmp-close{width:33px;height:33px;padding:0;border-radius:50%;font-size:13px;line-height:1;
   display:inline-grid;place-items:center;align-self:center;background:transparent;color:var(--muted);

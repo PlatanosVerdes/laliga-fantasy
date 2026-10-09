@@ -13,6 +13,7 @@ import (
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
@@ -66,8 +67,10 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	// Reading the page costs a request, so only the player being looked at gets one.
 	var ffMatches []map[string]any
 	if name := fallback(text(player["ff_name"]), text(player["name"])); name != "" {
-		if page, err := futbolfantasy.PlayerPageFor(matching.SlugifyFF(name),
-			text(player["ff_id"]), futbolfantasy.DetailTTL); err == nil {
+		slug := matching.SlugifyFF(name)
+		if page, err := futbolfantasy.PlayerPageFor(slug, text(player["ff_id"]),
+			futbolfantasy.DetailTTL); err == nil {
+			player["ff_url"] = strings.ReplaceAll(config.FFPlayerURL, "{slug}", slug)
 			if rank := page["hierarchy"]; rank != nil {
 				player["hierarchy"] = text(rank)
 				player["hierarchy_rank"] = number(page["hierarchy_rank"])
@@ -90,6 +93,13 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	clause := number(player["clause"])
 	budget := s.budget()
 	actions := s.actions(player, rows, armed, listing, offers, clause, budget)
+	if s.clauseRecommended(rows, player, budget) {
+		for _, action := range actions {
+			if op := text(action["op"]); op == "raid" || op == "pay_clause" {
+				action["recommended"] = true
+			}
+		}
+	}
 
 	// Points matchday by matchday: an average of 9.8 hides whether it was five 9.8s or a 14 and
 	// three sevens, and the shape is what a card is opened for. The opponents come off the
@@ -532,6 +542,43 @@ func recommendedBuy(rows []map[string]any, player map[string]any) bool {
 	}
 	cost := number(listing["min_bid"])
 	if ceiling := number(player["ideal_bid"]); ceiling <= 0 || ceiling < cost {
+		return false
+	}
+	var mine []map[string]any
+	for _, row := range rows {
+		if truthy(row["is_mine"]) {
+			mine = append(mine, row)
+		}
+	}
+	return elevenTotal(append(mine, player))-elevenTotal(mine) > render.MinShownGain
+}
+
+// clauseRecommended is whether paying his clause is what the panel recommends: the advice rates
+// it "chollo" or "renta" and he improves the best eleven. Same rule as the Comprar list.
+func (s *Server) clauseRecommended(rows []map[string]any, player map[string]any,
+	budget float64) bool {
+	if truthy(player["is_mine"]) || text(player["owner"]) == "" || truthy(player["shielded"]) {
+		return false
+	}
+	blob, err := json.Marshal(s.state.Universe())
+	if err != nil {
+		return false
+	}
+	var universe map[string]any
+	if json.Unmarshal(blob, &universe) != nil {
+		return false
+	}
+	buckets := advice.Recommend(universe, budget, 0, len(rows))
+	rated := false
+	for _, key := range []string{"raids", "upcoming_raids"} {
+		for _, raid := range listOf(buckets[key]) {
+			if text(raid["id"]) == text(player["id"]) {
+				verdict := text(raid["verdict"])
+				rated = rated || verdict == "chollo" || verdict == "renta"
+			}
+		}
+	}
+	if !rated {
 		return false
 	}
 	var mine []map[string]any
