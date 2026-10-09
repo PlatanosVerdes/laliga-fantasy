@@ -248,16 +248,32 @@ type Decision struct {
 	Kind string
 }
 
+// Cadence is the three clocks the scheduler runs on. The defaults are the constants above;
+// the server lets them be tuned from the page.
+type Cadence struct {
+	Tick    time.Duration
+	Live    time.Duration
+	Ceiling time.Duration
+}
+
 // NextWake picks the soonest thing that matters.
 func NextWake(payload Payload, now time.Time, tick time.Duration, lastFull time.Time,
 	watched bool, after time.Time) Decision {
+	return NextWakeWith(payload, now, Cadence{Tick: tick, Live: LiveTick, Ceiling: Ceiling},
+		lastFull, watched, after)
+}
+
+// NextWakeWith is NextWake with every clock given rather than taken from the constants.
+func NextWakeWith(payload Payload, now time.Time, cadence Cadence, lastFull time.Time,
+	watched bool, after time.Time) Decision {
+	tick := cadence.Tick
 	upcoming := Deadlines(payload, now, after)
 	busy := watched || (len(upcoming) > 0 && upcoming[0].At.Sub(now) <= BusyWindow)
 
 	if len(LiveMatches(payload, now, true)) > 0 {
 		// Our own players on the pitch: points move and no endpoint announces it.
-		if tick > LiveTick {
-			tick = LiveTick
+		if tick > cadence.Live {
+			tick = cadence.Live
 		}
 		busy = true
 	} else if len(LiveMatches(payload, now, false)) > 0 {
@@ -270,9 +286,9 @@ func NextWake(payload Payload, now time.Time, tick time.Duration, lastFull time.
 	}
 	decision := Decision{At: now.Add(sleep), Why: "a ver si se ha movido algo", Kind: Probe}
 
-	rebuildAt := lastFull.Add(Ceiling)
+	rebuildAt := lastFull.Add(cadence.Ceiling)
 	if lastFull.IsZero() {
-		rebuildAt = now.Add(Ceiling)
+		rebuildAt = now.Add(cadence.Ceiling)
 	}
 	if rebuildAt.Before(decision.At) {
 		decision = Decision{At: rebuildAt, Why: "reconstruccion completa periodica", Kind: Rebuild}

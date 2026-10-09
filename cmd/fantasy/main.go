@@ -37,6 +37,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rewards"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/server"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/services"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
@@ -197,7 +198,8 @@ func cmdServe(args []string) error {
 	port := flags.Int("port", 8000, "puerto")
 	// Accepts "90s", "2m" and a bare number of seconds, because the deployed command line
 	// has always been written the second way.
-	interval := flags.String("interval", "2m", "cadencia base del sondeo")
+	interval := flags.String("interval", services.Format(defaultPoll),
+		"cadencia base del sondeo (FANTASY_POLL_INTERVAL y el panel mandan sobre ella)")
 	readOnly := flags.Bool("read-only", false, "no ejecutar ninguna escritura")
 	noAuto := flags.Bool("no-auto", false,
 		"mostrar las instrucciones permanentes sin ejecutarlas")
@@ -210,6 +212,9 @@ func cmdServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	tickFromFlag := false
+	flags.Visit(func(given *flag.Flag) { tickFromFlag = tickFromFlag || given.Name == "interval" })
+	clocks := services.New(config.ServicesFile, serviceJobs(tick, tickFromFlag)...)
 	allowWrites := !*readOnly
 
 	client := api.New()
@@ -529,6 +534,7 @@ func cmdServe(args []string) error {
 		LastFull: world.LastFull,
 		Watchers: world.Watchers,
 		Tick:     tick,
+		Cadence:  cadenceOf(clocks),
 		Rebuild: func(cause string) error {
 			// Act first, rebuild after. A clause raid is a race decided in seconds, and a full
 			// rebuild takes several: the instructions already know the amount and the limit from
@@ -576,6 +582,8 @@ func cmdServe(args []string) error {
 			return len(moved) > 0, moved, nil
 		},
 	})
+
+	trackServices(clocks, engineRef, world.LastFull)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -641,7 +649,8 @@ func cmdServe(args []string) error {
 				slog.Error("settle failed", "cause", cause, "reason", err.Error())
 			}
 		},
-		Adopted: boot,
+		Adopted:  boot,
+		Services: clocks,
 		// The page is rendered on demand from whatever the last rebuild left, so a slow
 		// refresh never blocks a request and a failed one still serves the last good world.
 		Page: func() server.Rendered {

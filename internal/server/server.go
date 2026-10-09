@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/services"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
@@ -60,6 +61,9 @@ type Options struct {
 	NecroCookie   string
 	NecroAction   string
 	NecroGameweek int
+	// Services is the registry of job clocks behind /api/services. Nil leaves the heartbeat
+	// at its default and the endpoint answering 501.
+	Services *services.Registry
 }
 
 // Rendered is one build of the world: the page, and the views the client draws from JSON.
@@ -135,6 +139,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/session", s.session)
 	mux.HandleFunc("/api/favourite", s.favourite)
 	mux.HandleFunc("/api/usage", s.usage)
+	mux.HandleFunc("/api/services", s.services)
 	mux.HandleFunc("/favourite", s.favourite)
 	mux.HandleFunc("/api/always", s.always)
 	mux.HandleFunc("/api/raid", s.raid)
@@ -290,7 +295,8 @@ func (s *Server) events(writer http.ResponseWriter, request *http.Request) {
 	fmt.Fprintf(writer, "data: %s\n\n", hello)
 	flusher.Flush()
 
-	ticker := time.NewTicker(Heartbeat)
+	beat := s.heartbeat()
+	ticker := time.NewTicker(beat)
 	defer ticker.Stop()
 	for {
 		select {
@@ -302,6 +308,10 @@ func (s *Server) events(writer http.ResponseWriter, request *http.Request) {
 		case <-ticker.C:
 			fmt.Fprint(writer, ": latido\n\n")
 			flusher.Flush()
+			if next := s.heartbeat(); next != beat {
+				beat = next
+				ticker.Reset(beat)
+			}
 		}
 	}
 }

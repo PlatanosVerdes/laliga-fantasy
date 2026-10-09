@@ -43,6 +43,9 @@ type Deps struct {
 	Now func() time.Time
 	// Tick is the base cadence.
 	Tick time.Duration
+	// Cadence, when set, is read every cycle and wins over Tick, so a clock changed from the
+	// page applies on the next wait without a restart.
+	Cadence func() schedule.Cadence
 	// Invalidate drops caches by tag before a rebuild that needs fresher data.
 	Invalidate func(tags ...string)
 }
@@ -57,8 +60,22 @@ type Engine struct {
 	deadlineFloor time.Time
 	next          time.Time
 	nextWhy       string
+	nextKind      string
+	nextLive      bool
+	lastProbe     time.Time
+	lastLive      time.Time
 	probes        int
 	rebuilds      int
+}
+
+// Clocks is when the probe last ran, when our last live-match rebuild ran, and the planned
+// wake-up with its kind and whether it is paced by a match of ours.
+type Clocks struct {
+	LastProbe time.Time
+	LastLive  time.Time
+	Next      time.Time
+	NextKind  string
+	NextLive  bool
 }
 
 func New(deps Deps) *Engine {
@@ -96,16 +113,32 @@ func (e *Engine) Next() (time.Time, string, int, int) {
 	return e.next, e.nextWhy, e.probes, e.rebuilds
 }
 
+// Clocks reports the timings the services panel shows.
+func (e *Engine) Clocks() Clocks {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return Clocks{LastProbe: e.lastProbe, LastLive: e.lastLive, Next: e.next,
+		NextKind: e.nextKind, NextLive: e.nextLive}
+}
+
+func (e *Engine) cadence() schedule.Cadence {
+	if e.deps.Cadence != nil {
+		return e.deps.Cadence()
+	}
+	return schedule.Cadence{Tick: e.deps.Tick, Live: schedule.LiveTick, Ceiling: schedule.Ceiling}
+}
+
 // Run drives the cycle until the context is cancelled.
 func (e *Engine) Run(ctx context.Context) {
 	for {
 		payload := e.deps.Payload()
 		now := e.deps.Now()
-		decision := schedule.NextWake(payload, now, e.deps.Tick, e.deps.LastFull(),
+		decision := schedule.NextWakeWith(payload, now, e.cadence(), e.deps.LastFull(),
 			e.deps.Watchers() > 0, e.deadlineFloor)
 
 		e.mu.Lock()
-		e.next, e.nextWhy = decision.At, decision.Why
+		e.next, e.nextWhy, e.nextKind = decision.At, decision.Why, decision.Kind
+		e.nextLive = len(schedule.LiveMatches(payload, now, true)) > 0
 		e.mu.Unlock()
 
 		delay := decision.At.Sub(now)
@@ -156,6 +189,7 @@ func (e *Engine) doWork(decision schedule.Decision) {
 	moved, halves, err := e.deps.Probe()
 	e.mu.Lock()
 	e.probes++
+	e.lastProbe = e.deps.Now()
 	e.mu.Unlock()
 	if err != nil {
 		// A failed probe must not silence the cycle: fall back to rebuilding, which has
@@ -190,6 +224,9 @@ func (e *Engine) rebuild(cause, why string) {
 	}
 	e.mu.Lock()
 	e.rebuilds++
+	if cause == "partido" {
+		e.lastLive = e.deps.Now()
+	}
 	e.mu.Unlock()
 }
 

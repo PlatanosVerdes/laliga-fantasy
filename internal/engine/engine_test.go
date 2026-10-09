@@ -183,3 +183,44 @@ func TestAFailedProbeStillRebuilds(t *testing.T) {
 		t.Fatalf("esperaba un refresco de rescate, obtuve %v", causes)
 	}
 }
+
+// A clock changed from the page applies to the wait already under way once nudged: no restart.
+func TestAChangedCadenceAppliesOnTheNextWait(t *testing.T) {
+	rec := &recorder{}
+	var mu sync.Mutex
+	tick := 10 * time.Minute
+	engine := New(Deps{
+		Payload:  func() schedule.Payload { return schedule.Payload{} },
+		Probe:    rec.probe,
+		Rebuild:  rec.rebuild,
+		Watchers: func() int { return 1 },
+		LastFull: time.Now,
+		Cadence: func() schedule.Cadence {
+			mu.Lock()
+			defer mu.Unlock()
+			return schedule.Cadence{Tick: tick, Live: schedule.LiveTick, Ceiling: time.Hour}
+		},
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go engine.Run(ctx)
+
+	time.Sleep(200 * time.Millisecond)
+	planned, _, _, _ := engine.Next()
+	if until := time.Until(planned); until < 9*time.Minute {
+		t.Fatalf("esperaba unos diez minutos, planeó %v", until)
+	}
+	mu.Lock()
+	tick = 30 * time.Second
+	mu.Unlock()
+	engine.Nudge("ha cambiado un intervalo")
+	time.Sleep(300 * time.Millisecond)
+
+	replanned, _, _, _ := engine.Next()
+	if until := time.Until(replanned); until > 31*time.Second {
+		t.Fatalf("el intervalo nuevo no se ha aplicado: espera %v", until)
+	}
+	if clocks := engine.Clocks(); clocks.NextKind != schedule.Probe || clocks.NextLive {
+		t.Fatalf("la proxima es un sondeo sin partido: %+v", clocks)
+	}
+}
