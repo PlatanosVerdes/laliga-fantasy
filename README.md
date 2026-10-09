@@ -334,7 +334,7 @@ cannot be regenerated:
 
 | Directory | Default | Holds |
 |---|---|---|
-| config | `~/.config/laliga-fantasy/` | `tokens.json` (`0600`), `settings.json`, `favourites.json`, `policies.json` |
+| config | `~/.config/laliga-fantasy/` | `tokens.json` (`0600`), `settings.json`, `policies.json` |
 | state | `~/.local/state/laliga-fantasy/` | `report.html`, `fantasy.log` |
 | cache | `~/.cache/laliga-fantasy/` | scraped futbolfantasy pages, 24 h TTL — safe to delete |
 

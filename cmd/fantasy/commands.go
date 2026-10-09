@@ -15,9 +15,10 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/cli"
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
@@ -548,24 +549,22 @@ func cmdReward(args []string) error {
 
 // --- favourites, always, raid -----------------------------------------------------------
 
+// cmdFav reads and sets the app's own favourites, the same list the page's star writes.
 func cmdFav(args []string) error {
-	favourites, err := loadFavourites()
+	state, err := loadWorld(15, false)
 	if err != nil {
 		return err
 	}
 	if len(args) == 0 || args[0] == "list" {
 		cli.Heading("Favoritos")
-		ids := make([]string, 0, len(favourites))
-		for id := range favourites {
-			ids = append(ids, id)
+		rows := [][]string{}
+		for _, player := range state.Universe.Players {
+			if player.Starred {
+				rows = append(rows, []string{player.ID, player.Name})
+			}
 		}
-		sort.Strings(ids)
-		rows := make([][]string, 0, len(ids))
-		for _, id := range ids {
-			rows = append(rows, []string{id, text(favourites[id]["name"]),
-				text(favourites[id]["note"])})
-		}
-		fmt.Println(cli.Table([]string{"id", "jugador", "nota"}, rows, nil))
+		sort.Slice(rows, func(one, two int) bool { return rows[one][1] < rows[two][1] })
+		fmt.Println(cli.Table([]string{"id", "jugador"}, rows, nil))
 		return nil
 	}
 
@@ -573,9 +572,8 @@ func cmdFav(args []string) error {
 	if name == "" {
 		return fmt.Errorf("uso: fav <add|rm> <nombre>")
 	}
-	state, err := loadWorld(15, false)
-	if err != nil {
-		return err
+	if action != "add" && action != "rm" {
+		return fmt.Errorf("no se que es '%s': usa add o rm", action)
 	}
 	query := matching.Normalize(name)
 	var found map[string]any
@@ -590,18 +588,21 @@ func cmdFav(args []string) error {
 		return nil
 	}
 
-	id := text(found["id"])
-	switch action {
-	case "add":
-		favourites[id] = map[string]any{"id": id, "name": found["name"], "note": nil}
-		fmt.Println(cli.Green(fmt.Sprintf("%s marcado como favorito", text(found["name"]))))
-	case "rm":
-		delete(favourites, id)
-		fmt.Printf("Quitado: %s\n", text(found["name"]))
-	default:
-		return fmt.Errorf("no se que es '%s': usa add o rm", action)
+	call, err := writes.Build("favourite", writes.Args{TeamID: state.TeamID,
+		PlayerID: text(found["id"]), Favourite: action == "add"})
+	if err != nil {
+		return err
 	}
-	return saveFavourites(favourites)
+	if _, err := writes.Send(call); err != nil {
+		return err
+	}
+	httpx.Invalidate(writes.Operations["favourite"].Effects...)
+	if action == "add" {
+		fmt.Println(cli.Green(fmt.Sprintf("%s marcado como favorito", text(found["name"]))))
+	} else {
+		fmt.Printf("Quitado: %s\n", text(found["name"]))
+	}
+	return nil
 }
 
 func cmdAlways(args []string) error {
@@ -909,32 +910,6 @@ func findMine(players []map[string]any, name string) (string, string) {
 		}
 	}
 	return "", ""
-}
-
-func loadFavourites() (map[string]map[string]any, error) {
-	out := map[string]map[string]any{}
-	body, err := os.ReadFile(config.FavouritesFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return out, nil
-		}
-		return nil, err
-	}
-	if err := json.Unmarshal(body, &out); err != nil {
-		return map[string]map[string]any{}, nil
-	}
-	return out, nil
-}
-
-func saveFavourites(favourites map[string]map[string]any) error {
-	if err := config.EnsureDirs(); err != nil {
-		return err
-	}
-	blob, err := json.MarshalIndent(favourites, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(config.FavouritesFile, blob, 0o600)
 }
 
 func fallbackText(value, other string) string {

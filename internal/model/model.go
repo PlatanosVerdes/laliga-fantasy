@@ -177,9 +177,9 @@ var positions = map[int]string{1: "POR", 2: "DEF", 3: "MED", 4: "DEL", 5: "ENT"}
 
 // Build assembles the structural universe. TTLs match the Python ones so a frozen cache
 // serves both sides identically.
-// State is what lives in files rather than in the feed: the stars we set, the standing
-// instructions we armed. Passed in rather than read here so the model stays a pure
-// function of its inputs, which is what makes it comparable.
+// State is what we chose rather than what the feed says: the stars set in the app, the
+// standing instructions we armed. Passed in rather than read in Build so the model stays a
+// pure function of its inputs, which is what makes it comparable.
 type State struct {
 	Starred map[string]bool
 	Raids   map[string]bool
@@ -192,6 +192,16 @@ func BuildLive(client *api.Client, leagueID, myTeamID string, state State,
 	bridge, err := LoadBridge(client, ffTTL)
 	if err != nil {
 		return nil, err
+	}
+	if myTeamID != "" {
+		if ids, err := client.FavouritePlayers(myTeamID, 5*time.Minute); err != nil {
+			slog.Warn("favourites unreadable", "reason", err.Error())
+		} else {
+			state.Starred = make(map[string]bool, len(ids))
+			for _, id := range ids {
+				state.Starred[id] = true
+			}
+		}
 	}
 	return Build(client, leagueID, myTeamID, bridge, state)
 }

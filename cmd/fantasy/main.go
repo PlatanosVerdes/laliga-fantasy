@@ -733,19 +733,10 @@ func cmdModel(args []string) error {
 	return nil
 }
 
-// loadState reads the two files that hold what we chose rather than what the feed says. A
-// missing file is not an error: no stars and no instructions is a perfectly good state.
+// loadState reads the standing instructions; the stars come from the app, in BuildLive. A
+// missing file is not an error: no instructions is a perfectly good state.
 func loadState() model.State {
 	state := model.State{Starred: map[string]bool{}, Raids: map[string]bool{}}
-
-	var favourites map[string]map[string]any
-	if raw, err := os.ReadFile(config.FavouritesFile); err == nil {
-		if json.Unmarshal(raw, &favourites) == nil {
-			for id := range favourites {
-				state.Starred[id] = true
-			}
-		}
-	}
 	armed, err := policies.Load()
 	if err == nil {
 		for id, policy := range armed {
