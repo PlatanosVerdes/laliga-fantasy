@@ -100,18 +100,19 @@ func scrollList(items []string, height int) string {
 		rowList(items) + `</div>`
 }
 
-// tg is the one small tag of the panel: same height, padding and font in every list and in
-// the card's header.
+// tg is a small boxed tag, kept for what has to catch the eye: a hold, a shield, a drop in his
+// club, an injury or a doubt.
 func tg(content, class string) string {
 	return `<span class="tg ` + class + `">` + content + `</span>`
 }
 
-// playerTags are a player's basics, always in this order: club, owner, role, starting odds,
-// and then only the states that apply (held, shielded, moved down, injured or in doubt).
+// playerTags are a player's basics as one line of muted text (club, owner, role, starting
+// odds) followed by the alerts that apply, boxed. Only the owner shortens when it does not fit.
 func playerTags(player map[string]any) string {
-	var out strings.Builder
+	var line strings.Builder
 	if team := text(player["team_short"]); team != "" {
-		out.WriteString(tg(crestOf(text(player["team_id"]))+Esc(team), "tg-team"))
+		line.WriteString(`<span class="pl-team">` + crestOf(text(player["team_id"])) + Esc(team) +
+			`</span>`)
 	}
 	owner := text(player["owner"])
 	switch {
@@ -120,39 +121,42 @@ func playerTags(player map[string]any) string {
 	case owner == "":
 		owner = fallbackText(text(mapOf(player["market"])["seller"]), "libre")
 	}
-	out.WriteString(tg(Esc(owner), "tg-owner"))
-	out.WriteString(roleChip(player))
+	line.WriteString(`<span class="pl-owner">` + Esc(owner) + `</span>`)
+	line.WriteString(roleChip(player))
 	if starts := asFloat(player["start_probability"]); starts != nil {
-		out.WriteString(tg(fmt.Sprintf("titular %.0f %%", *starts), "tg-starts"))
+		line.WriteString(fmt.Sprintf(`<span title="probabilidad de ser titular">%.0f %%</span>`,
+			*starts))
 	}
+	out := `<span class="pl">` + line.String() + `</span>`
 	if truthy(player["is_mine"]) && truthy(player["sale_locked"]) {
-		out.WriteString(`<span class="tg tg-warn" title="no se puede vender hasta el ` +
+		out += `<span class="tg tg-warn" title="no se puede vender hasta el ` +
 			Esc(esWhen(text(player["hold_until"]))) + `">🔒 hasta ` +
-			Esc(esDay(text(player["hold_until"]))) + `</span>`)
+			Esc(esDay(text(player["hold_until"]))) + `</span>`
 	}
 	if truthy(player["shielded"]) {
-		out.WriteString(tg("🛡", "tg-info"))
+		out += tg("🛡", "tg-info")
 	}
-	out.WriteString(roleDrop(player))
+	out += roleDrop(player)
 	if ring, _, reason := health(player); ring != "" {
 		class := "tg-warn"
 		if ring == "out" {
 			class = "tg-bad"
 		}
-		out.WriteString(tg(Esc(reason), class))
+		out += tg(Esc(reason), class)
 	}
-	return out.String()
+	return out
 }
 
-// roleChip is futbolfantasy's category for him in his club, in the colour of their own icon.
+// roleChip is futbolfantasy's category for him in his club: a dot in the colour of their own
+// icon and the word, in the line's own colour.
 func roleChip(player map[string]any) string {
 	role := mapOf(player["role"])
 	key := text(role["key"])
 	if key == "" {
 		return ""
 	}
-	return `<span class="tg role role-` + Esc(key) + `" title="` + Esc(text(role["note"])) + `">` +
-		Esc(text(role["label"])) + `</span>`
+	return `<span class="role role-` + Esc(key) + `" title="` + Esc(text(role["note"])) + `">` +
+		`<i class="rdot"></i>` + Esc(text(role["label"])) + `</span>`
 }
 
 // roleDrop is the warning when the editors just moved him down, or nothing.

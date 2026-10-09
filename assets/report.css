@@ -1188,8 +1188,8 @@ details.kpis-more .kpi{padding:9px 12px}
 .pc-head h3{margin:0;font-size:20px;letter-spacing:-.015em}
 .pc-sub{display:flex;gap:6px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:13px}
 .pc-sub .cmp-add{margin-left:4px}
-.pc-sub .tags{margin-top:0}
-.pc-sub .tg .p-name{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
+.pc-sub .tags{margin-top:0;font-size:13px}
+.pc-sub .pl-owner .p-name{font:inherit;color:inherit}
 .pc-status{display:inline-flex;gap:6px;align-items:center;font-size:12px;font-weight:600;
   border-radius:999px;padding:3px 10px;margin:0 0 12px}
 .pc-status.out{background:color-mix(in srgb,var(--critical) 18%,transparent);color:var(--critical)}
@@ -1666,26 +1666,32 @@ table.cmp tr:last-child td{border-bottom:0}
 .mk .src-rival{color:var(--warning)}
 .mk .mk-note.plan-warn{color:var(--warning)}
 
-/* futbolfantasy's hierarchy categories, in the colours of their own icons. The tint is light
-   enough for the ink to read on it in both themes. */
-/* The one small tag: a row's second line, the card's header, the role. Same height, padding and
-   font everywhere; a line of them wraps instead of being cut. */
-.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+/* A player's second line: club, owner, role and starting odds as one line of muted text, and
+   after it, boxed, only the alerts that have to catch the eye. If it does not fit, the owner
+   shortens and the alerts move to a line of their own; nothing else is cut. */
+.tags{display:flex;flex-wrap:wrap;align-items:center;gap:3px 6px;margin-top:2px;min-width:0;
+  font-size:12px;color:var(--muted)}
+.pl{display:flex;align-items:center;min-width:0;white-space:nowrap;flex:0 1 auto}
+.pl>*{flex:none}
+.pl>*+*::before{content:"·";margin:0 5px;color:var(--muted)}
+.pl>.pl-owner{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.pl-team{display:inline-flex;align-items:center;gap:3px}
+.pl-team .crest{width:12px;height:12px}
 .tg{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 6px;border-radius:5px;
-  font-size:10.5px;font-weight:600;line-height:1;white-space:nowrap;color:var(--ink-2);
-  background:var(--surface-2);border:1px solid var(--line);vertical-align:1px}
-.tg .crest{width:12px;height:12px}
+  font-size:10.5px;font-weight:600;line-height:1;white-space:nowrap;flex:none;color:var(--ink-2);
+  background:var(--surface-2);border:1px solid var(--line)}
 .tg-warn{color:var(--warning);background:color-mix(in srgb,var(--warning) 14%,transparent);
   border-color:color-mix(in srgb,var(--warning) 40%,transparent)}
 .tg-bad{color:var(--critical);background:color-mix(in srgb,var(--critical) 12%,transparent);
   border-color:color-mix(in srgb,var(--critical) 40%,transparent)}
 .tg-info{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
-.tg.role{--rc:var(--muted);color:var(--ink);font-weight:700;
-  background:color-mix(in srgb,var(--rc) 30%,transparent);border-color:color-mix(in srgb,var(--rc) 80%,transparent)}
-.tg.role-clave,.role-clave{--rc:#3cc4c7} .tg.role-importante,.role-importante{--rc:#d2b54a}
-.tg.role-rotacion,.role-rotacion{--rc:#a3a3a3} .tg.role-revulsivo,.role-revulsivo{--rc:#b07f4f}
-.tg.role-reserva,.role-reserva{--rc:#c27752} .tg.role-descarte,.role-descarte{--rc:#6e6e6e}
-.role-revulsivo::after{content:" ▲";color:#3fae49;font-size:8px}
+/* futbolfantasy's hierarchy category: a dot in the colour of their own icon, the word in the
+   line's colour. */
+.role{--rc:var(--muted);display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.role .rdot{width:7px;height:7px;border-radius:50%;background:var(--rc);flex:none}
+.role-clave{--rc:#3cc4c7} .role-importante{--rc:#d2b54a} .role-rotacion{--rc:#a3a3a3}
+.role-revulsivo{--rc:#b07f4f} .role-reserva{--rc:#c27752} .role-descarte{--rc:#6e6e6e}
+.role-revulsivo::after{content:"▲";color:#3fae49;font-size:8px}
 .pc-role{margin:8px 0 0;font-size:12px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:4px 6px;
   align-items:baseline;line-height:1.45}
 .pc-role a{color:var(--accent);text-decoration:none;white-space:nowrap}
