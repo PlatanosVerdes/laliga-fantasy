@@ -1245,6 +1245,10 @@ details.kpis-more .kpi{padding:9px 12px}
 .tgl.on .tgl-knob{transform:translateX(16px);background:#fff}
 .tgl[disabled]{opacity:.5;cursor:not-allowed}
 .aw{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+.aw-line{display:flex;flex-wrap:wrap;gap:6px;align-items:stretch}
+.aw-line>.aw-lead{margin:0;flex:0 0 auto}
+.aw-line>.aw{flex:1 1 240px;padding:7px 12px;justify-content:center}
+.aw-box .aw-set{border-top:0;padding-top:0}
 .aw-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .aw-label{font-size:13px;font-weight:650;white-space:nowrap}
 .aw-head{cursor:pointer;user-select:none}

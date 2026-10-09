@@ -132,7 +132,7 @@ function Note({a, extra}) {
 // The standing listing: a switch that arms or drops the rule at once, and under it, while it is
 // on, the price it is listed at and whether it sells by itself. Same /api/always payloads as
 // always: auto_sell on its own, the amounts on their own.
-function AlwaysBlock({a, player}) {
+function AlwaysBlock({a, player, lead}) {
   const floor = a.good_floor || 0;
   const start = {
     min: a.min_price ? group(a.min_price) : '',
@@ -183,20 +183,19 @@ function AlwaysBlock({a, player}) {
   };
   const floorTip = 'Una oferta buena es la mayor de tres: lo que pides, su valor ×1,02 y el techo ' +
     'rentable de futbolfantasy. Ahora: ' + (floor ? exact(floor) + ' (' + a.good_source + ')' : 'sin dato') + '.';
-  const status = !form.auto ? 'te aviso si llega una oferta buena y decides tú'
-    : 'se vende solo desde ' + mny(digits(form.amount) || floor);
+  const status = form.auto ? 'se vende solo desde ' + mny(digits(form.amount) || floor) : '';
   const price = digits(saved.min) || a.value || 0;
-  const summary = on ? (price ? (price / 1e6).toFixed(2).replace('.', ',') + 'M · ' : '') +
-    (saved.auto ? 'venta automática' : 'te aviso') : '';
-  return html`<div class="aw">
+  const summary = on ? [price ? (price / 1e6).toFixed(2).replace('.', ',') + 'M' : '',
+    saved.auto ? 'vende solo' : ''].filter(Boolean).join(' · ') : '';
+  return html`<div class="aw-line">${lead && lead.length ? html`<div class="drawer-actions pc-acts aw-lead">${lead}</div>` : null}<div class="aw">
     <div class="aw-row aw-head" role="button" tabindex="0" aria-expanded=${open && on}
         onClick=${() => on && setOpen(!open)} onKeyDown=${(e) => { if (e.key === 'Enter' && on) setOpen(!open); }}>
       <span class="aw-label">Siempre en mercado <i class="aw-i" data-tip="Lo vuelve a poner en venta cada vez que caduca su anuncio, al precio que digas.">ⓘ</i></span>
       <span class="aw-sum">${summary}</span>
       <span onClick=${(e) => e.stopPropagation()}><${Switch} on=${on} disabled=${busy} label="Siempre en mercado" onChange=${flip}/></span>
       <span class="aw-chev" aria-hidden="true">${on ? (open ? '▴' : '▾') : ''}</span>
-    </div>
-    ${open && on ? html`<div class="aw-set">
+    </div></div></div>
+    ${open && on ? html`<div class="aw aw-box"><div class="aw-set">
       <label class="aw-field"><span>Precio en venta</span>
         <input type="text" inputmode="numeric" autocomplete="off" value=${form.min}
           placeholder=${a.value ? group(a.value) : 'valor de mercado'} onInput=${typed('min')}/></label>
@@ -212,9 +211,8 @@ function AlwaysBlock({a, player}) {
         <p class="aw-status">${status}</p>
         <button type="button" class="act aw-save" disabled=${!dirty || busy} onClick=${save}>Guardar</button>
       </div>
-    </div>` : null}
-    ${error ? html`<p class="bid-error">${error}</p>` : null}
-  </div>`;
+    </div></div>` : null}
+    ${error ? html`<p class="bid-error">${error}</p>` : null}`;
 }
 
 const FICHAR_ORDER = ['bid', 'modify_bid', 'cancel_bid', 'buy_offer', 'cancel_offer', 'direct_offer', 'raid', 'pay_clause'];
@@ -262,8 +260,8 @@ function Actions({data, reopen}) {
     const cancelLink = (c) => html` <button type="button" class="pc-link" onClick=${() => run(c)}>cancelar</button>`;
     sections.push(html`<div class="pc-group">
       <div class="pc-gl">${title}</div>
-      ${rest.length ? html`<div class="pc-gb drawer-actions pc-acts">${rest.map((a) => button(a))}</div>` : null}
-      ${always ? html`<${AlwaysBlock} a=${always} player=${p}/>` : null}
+      ${rest.length && !always ? html`<div class="pc-gb drawer-actions pc-acts">${rest.map((a) => button(a))}</div>` : null}
+      ${always ? html`<${AlwaysBlock} a=${always} player=${p} lead=${rest.map((a) => button(a))}/>` : null}
       ${mine.filter((a) => a.kind === 'note').map((a) => html`<${Note} a=${a} extra=${cancelFor(a) ? cancelLink(cancelFor(a)) : null}/>`)}
       ${cancels.filter((c) => !mine.some((a) => a.kind === 'note' && a.deadline === c.at))
         .map((c) => html`<p class="pc-info">Blindaje programado ${whenShort(c.at)}${cancelLink(c)}</p>`)}
