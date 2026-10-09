@@ -9,28 +9,41 @@ import {registerDrawer, openDrawer, onLiveDot} from './shell.js';
 const SOURCE_TIP = {env: (s) => 'de la variable ' + s.env, flag: () => 'de --interval al arrancar',
   default: () => 'el valor por defecto'};
 
+const parts = (seconds) => {
+  const t = Math.round(seconds);
+  return {h: String(Math.floor(t / 3600)), m: String(Math.floor(t % 3600 / 60)), s: String(t % 60)};
+};
+const whole = (text) => Math.max(0, parseInt(text, 10) || 0);
+const total = (p) => whole(p.h) * 3600 + whole(p.m) * 60 + whole(p.s);
+
+// Hours, minutes and seconds as three small numeric fields; saved when focus leaves the group.
 function Interval({s, onSaved}) {
-  const [text, setText] = useState(s.interval);
+  const [value, setValue] = useState(parts(s.seconds));
   const [error, setError] = useState('');
-  useEffect(() => setText(s.interval), [s.interval]);
+  useEffect(() => setValue(parts(s.seconds)), [s.seconds]);
   const save = async (body) => {
     setError('');
     try {
       const list = (await postJSON('/api/services', body)).services;
-      setText((list.find((x) => x.key === s.key) || s).interval);
+      setValue(parts((list.find((x) => x.key === s.key) || s).seconds));
       onSaved(list);
     } catch (e) { setError(e.message); }
   };
   const commit = () => {
-    const typed = text.trim();
-    if (!typed || typed === s.interval) { setText(s.interval); return; }
-    save({key: s.key, interval: typed});
+    const seconds = total(value);
+    if (seconds === Math.round(s.seconds)) { setValue(parts(s.seconds)); return; }
+    save({key: s.key, interval: seconds + 's'});
   };
-  const bounds = `entre ${s.min} y ${s.max} · ${s.env}`;
-  return html`<input class=${'svc-in' + (error ? ' bad' : '')} type="text" autocomplete="off" spellcheck="false"
-      value=${text} aria-label=${s.label} data-tip=${bounds} placeholder=${s.fallback}
-      onInput=${(e) => setText(e.currentTarget.value)} onBlur=${commit}
-      onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } }}/>
+  const hours = s.max_seconds >= 3600;
+  const field = (unit, label, max, hidden) => html`<span class=${'svc-part' + (hidden ? ' off' : '')}>
+    <input class=${'svc-in' + (error ? ' bad' : '')} type="number" inputmode="numeric" min="0" max=${max}
+      value=${value[unit]} aria-label=${s.label + ', ' + label} tabindex=${hidden ? -1 : undefined}
+      onInput=${(e) => { const text = e.currentTarget.value; setValue((v) => ({...v, [unit]: text})); }}
+      onFocus=${(e) => e.currentTarget.select()}
+      onKeyDown=${(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}/><span class="svc-unit">${label}</span></span>`;
+  return html`<span class="svc-dur" data-tip=${`entre ${s.min} y ${s.max} · ${s.env}`}
+      onFocusOut=${(e) => { if (!e.currentTarget.contains(e.relatedTarget)) commit(); }}>
+      ${field('h', 'h', Math.floor(s.max_seconds / 3600), !hours)}${field('m', 'min', 59)}${field('s', 's', 59)}</span>
     ${s.source === 'ui'
       ? html`<button type="button" class="svc-reset" data-tip=${'vuelve a ' + s.fallback + ', ' + SOURCE_TIP[s.fallback_source](s)}
           onMouseDown=${(e) => e.preventDefault()} onClick=${() => save({key: s.key, reset: true})}>por defecto</button>`
@@ -66,7 +79,7 @@ function ServicesView() {
         <${Interval} s=${s} onSaved=${setList}/>
         <${When} s=${s} now=${now}/>
       </li>`)}</ul>` : error ? null : html`<p class="svc-sub">Cargando…</p>`}
-    <p class="modal-note">Admite 90s, 5m o 1h. Lo que pongas aquí manda sobre la variable de entorno, y esta sobre el valor por defecto.</p>
+    <p class="modal-note">Lo que pongas aquí manda sobre la variable de entorno, y esta sobre el valor por defecto.</p>
   </div>`;
 }
 
