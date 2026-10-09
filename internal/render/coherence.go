@@ -291,7 +291,7 @@ func (d Document) crackBox() string {
 	} else {
 		line += "; hoy ninguno se puede fichar."
 	}
-	return block("Objetivo: un crack", rowList(items, true)+`<p class="mk-note">`+Esc(line)+`</p>`,
+	return block("Objetivo: un crack", rowList(items)+`<p class="mk-note">`+Esc(line)+`</p>`,
 		"", -1)
 }
 
