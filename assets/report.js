@@ -700,8 +700,8 @@ function statusBadge(player){
 // A round face with the status ring and its badge, the reason as the tooltip.
 function faceOf(player,size='sm'){
   const s=health(player);
-  const badge=!s?'':s.glyph==='card'?'<span class="hb hb-card"></span>'
-    :s.glyph==='cross'?'<span class="hb hb-cross">✚</span>':'';
+  const badge=!s?'':s.glyph==='card'?'<span class="hb hb-card"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4.5" y="2.5" width="7" height="11" rx="1.3"/></svg></span>'
+    :s.glyph==='cross'?'<span class="hb hb-cross"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.4 2.5h3.2v3.9h3.9v3.2H9.6v3.9H6.4V9.6H2.5V6.4h3.9z"/></svg></span>':'';
   const inner=player.image
     ? `<img src="${player.image}" alt="" loading="lazy" onerror="this.remove()">`
     : `<span class="crest crest-${player.team_id}"></span>`;
@@ -730,7 +730,7 @@ function xClass(v){ return v>=6?'x-hi':v>=3.5?'x-mid':v>=2?'x-lo':'x-bad'; }
 function shirtHtml(player,line,index){
   if(!player) return `<div class="slot empty gap" data-line="${line}" data-index="${index}"
     title="No tienes con quien cubrir esta plaza">⚠<br>${LINE_LABEL[line]}<br>sin cubrir</div>`;
-  const listed=player.listed_for?`<span class="tok-flag" title="en venta por ${mny(player.listed_for)}">en venta</span>`:'';
+  const listed=player.listed_for?`<span class="tok-flag" title="en venta por ${mny(player.listed_for)}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.2 8.6V3.2a1 1 0 0 1 1-1h5.4l5.2 5.2a1 1 0 0 1 0 1.4l-4.4 4.4a1 1 0 0 1-1.4 0z"/><circle cx="5.4" cy="5.4" r="1.2"/></svg></span>`:'';
   return `<div class="slot tokslot" draggable="true" data-line="${line}"
     data-index="${index}" data-player="${player.id}" data-pt="${player.player_team_id}"
     title="${player.name}${player.next_rival?(' · vs '+player.next_rival
@@ -831,27 +831,30 @@ const LINE_WORD={goalkeeper:['portero','porteros'],defender:['defensa','defensas
 // players and one named hole, and this warning offered the formation change that lines them up
 // as if that
 // would fix anything.
-const cannotPlay=p=>{
-  if(!p) return false;
-  if(p.available===false) return true;
-  const s=statusOf(p);
-  return !!s&&s.cls!=='st-duda';
-};
+// Only a confirmed absence keeps a starter from scoring; a doubt or a knock still plays.
+const cannotPlay=p=>!!p&&(p.available===false||(health(p)||{}).ring==='out');
 
 function pitchAlert(){
   const box=document.getElementById('pitch-alert');
   if(!box) return;
-  const holes=[]; let missing=0; const idle=[];
+  const holes=[]; let missing=0; const idle=[], doubts=[];
   LINE_ORDER.forEach(line=>{
     const slots=pitchState.lines[line]||[];
-    slots.forEach(p=>{ if(cannotPlay(p)) idle.push(p); });
+    slots.forEach(p=>{ if(cannotPlay(p)) idle.push(p); else if(p&&health(p)) doubts.push(p); });
     const empty=slots.filter(p=>!p).length;
     if(!empty) return;
     missing+=empty;
     holes.push(`${empty} ${LINE_WORD[line][empty>1?1:0]}`);
   });
-  // No holes and nobody standing there for nothing: there is nothing to say.
-  if(!missing&&!idle.length){ box.hidden=true; box.innerHTML=''; return; }
+  const doubtLine=doubts.length?`<span class="pitch-doubt">${doubts.map(p=>
+    `<b>${p.name}</b>: ${health(p).label.toLowerCase()}${p.start_probability!=null?` (${p.start_probability} %)`:''}`)
+    .join(' · ')}</span>`:'';
+  // No holes and nobody standing there for nothing: at most the doubts, said softly.
+  if(!missing&&!idle.length){
+    box.innerHTML=doubtLine; box.hidden=!doubtLine; box.classList.toggle('soft',!!doubtLine);
+    return;
+  }
+  box.classList.remove('soft');
 
   const have={1:0,2:0,3:0,4:0}, can={1:0,2:0,3:0,4:0};
   const tally=p=>{ if(!p) return; have[p.position_id]++; if(!cannotPlay(p)) can[p.position_id]++; };
@@ -880,7 +883,7 @@ function pitchAlert(){
   else if(playable<11) out+=`<span>Hoy solo pueden jugar ${playable} de tus ${squad}: `
     +`ninguna formacion cuadra el once, y cambiarla no lo arregla. Toca fichar.</span>`;
   else out+=`<span>Ninguna formacion cuadra con ${squad} jugadores: toca fichar.</span>`;
-  box.innerHTML=out;
+  box.innerHTML=out+doubtLine;
   box.hidden=false;
   const button=box.querySelector('button[data-formation]');
   if(button) button.addEventListener('click',()=>applyFormation(button.dataset.formation));

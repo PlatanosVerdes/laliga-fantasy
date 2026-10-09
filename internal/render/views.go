@@ -86,9 +86,9 @@ func face(player map[string]any, size string) string {
 	badge := ""
 	switch glyph {
 	case "cross":
-		badge = `<span class="hb hb-cross">✚</span>`
+		badge = `<span class="hb hb-cross"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.4 2.5h3.2v3.9h3.9v3.2H9.6v3.9H6.4V9.6H2.5V6.4h3.9z"/></svg></span>`
 	case "card":
-		badge = `<span class="hb hb-card"></span>`
+		badge = `<span class="hb hb-card"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4.5" y="2.5" width="7" height="11" rx="1.3"/></svg></span>`
 	}
 	return fmt.Sprintf(`<span class="%s" data-pid="%s"%s><span class="ini">%s</span>%s%s</span>`,
 		class, Esc(text(player["id"])), title, Esc(initials(text(player["name"]))), image, badge)

@@ -1171,16 +1171,12 @@ details.kpis-more .kpi{padding:9px 12px}
 .face-xs{width:22px;height:22px;border-width:1px}
 .face.ring-out{border-color:var(--critical);box-shadow:0 0 0 1.5px var(--critical)}
 .face.ring-doubt{border-color:var(--warning);box-shadow:0 0 0 1.5px var(--warning)}
-.hb{position:absolute;right:-4px;bottom:-3px;z-index:1;display:grid;place-items:center;line-height:1}
-.hb-cross{width:14px;height:14px;border-radius:50%;background:#fff;color:#d03b3b;font-size:11px;
-  font-weight:900;border:1px solid #d03b3b}
-.ring-doubt .hb-cross{color:#b07800;border-color:#b07800}
-.hb-card{width:9px;height:12px;border-radius:2px;background:#d03b3b;border:1px solid #fff;
-  transform:rotate(12deg)}
-.face-xs .hb-cross{width:11px;height:11px;font-size:8px;right:-3px;bottom:-3px}
-.face-xs .hb-card{width:7px;height:9px}
-.face-xl .hb-cross{width:20px;height:20px;font-size:14px;right:-2px;bottom:0}
-.face-xl .hb-card{width:13px;height:17px;right:0;bottom:0}
+.hb{position:absolute;right:-12%;bottom:-10%;z-index:1;display:grid;place-items:center;
+  width:42%;min-width:10px;aspect-ratio:1;border-radius:50%;background:#fff;border:1px solid currentColor;
+  color:#d03b3b;line-height:0;box-sizing:border-box}
+.hb svg{width:78%;height:78%;fill:currentColor}
+.ring-doubt .hb{color:#b07800}
+.hb-card svg{transform:rotate(12deg)}
 .mini-benched .face{width:16px;height:16px}
 .cmp-hit-who .face{margin-right:2px}
 .cmp-who .face{margin:0 0 4px}
@@ -1535,7 +1531,12 @@ section.mk{margin:0 0 22px}
 .mk .tok-x{font-size:12px;font-weight:800;background:rgba(0,0,0,.55);border-radius:999px;padding:0 7px;
   font-variant-numeric:tabular-nums}
 .mk .tok-x.x-mid{color:#fff}
-.mk .tok-flag{position:absolute;top:-4px;right:6px;font-size:9px;font-weight:700;padding:0 4px;border-radius:4px;background:var(--warning);color:#1a1a19;white-space:nowrap}
+.mk .tok-flag{position:absolute;top:-4px;right:12px;width:16px;height:16px;color:#e0a100;
+  filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
+.mk .tok-flag svg{width:100%;height:100%;fill:currentColor;stroke:#1a1a19;stroke-width:.6}
+.mk .tok-flag svg circle{fill:#1a1a19;stroke:none}
+.pitch-alert.soft{background:var(--surface-2);border-color:var(--line);color:var(--ink-2)}
+.pitch-doubt{color:var(--ink-2)}
 .mk .pitch-foot{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}
 .mk .pitch-foot b{color:var(--ink)}
 
@@ -1680,7 +1681,7 @@ button.reach-btn:hover{filter:brightness(1.1);text-decoration:underline}
   font-variant-numeric:tabular-nums;color:#fff}
 .mk-once .tok-x.x-hi{color:var(--good)} .mk-once .tok-x.x-lo{color:var(--warning)}
 .mk-once .tok-x.x-bad{color:var(--critical)}
-.mk-once .tok-flag{position:absolute;top:0;right:0;font-size:9px}
+.mk-once .tok-flag{position:absolute;top:0;right:4px}
 .mk-once .slot-grip{left:2px;top:2px}
 .mk-once .pitch-wrap{grid-template-columns:minmax(0,1fr) 300px}
 .mk-once .bench{border-radius:14px;padding:12px}
