@@ -1278,7 +1278,17 @@ section.mk{margin:0 0 22px}
 @media (min-width:1000px){
   .mk .layout{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:24px;align-items:start}
   .mk .side{position:sticky;top:56px}
+  .mk .layout.with-row{grid-template-areas:"m s" "r r";row-gap:0}
+  .mk .with-row>.main{grid-area:m} .mk .with-row>.side{grid-area:s;position:static}
+  .mk .with-row>.row2{grid-area:r}
 }
+/* On a phone the second row comes before the aside: the lists first, the boxes after. */
+@media (max-width:999px){
+  .mk .layout.with-row{display:flex;flex-direction:column}
+  .mk .with-row>.row2{order:1} .mk .with-row>.side{order:2}
+}
+.mk .duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start}
+@media (max-width:760px){.mk .duo{grid-template-columns:minmax(0,1fr)}}
 .mk h2{font-size:16px;margin:0;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
 .mk .count{font-size:11px;font-weight:600;color:var(--muted);background:var(--surface-2);
   border-radius:999px;padding:1px 7px}

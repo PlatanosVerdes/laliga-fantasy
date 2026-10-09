@@ -158,6 +158,15 @@ func view(id, tab, main, aside string) string {
 	return fmt.Sprintf(`<section id="%s" data-tab="%s" class="mk">%s</section>`, id, tab, layout)
 }
 
+// viewWithRow is a view with a second row under both columns: two blocks side by side, full
+// width. On a phone it goes before the aside.
+func viewWithRow(id, tab, main, aside, left, right string) string {
+	return fmt.Sprintf(`<section id="%s" data-tab="%s" class="mk"><div class="layout with-row">`+
+		`<div class="main">%s</div><aside class="side">%s</aside>`+
+		`<div class="row2"><div class="duo">%s%s</div></div></div></section>`,
+		id, tab, main, aside, left, right)
+}
+
 func ratioClass(ratio float64) string {
 	if ratio >= 1 {
 		return "up"
@@ -598,9 +607,7 @@ func (d Document) buyView() string {
 	window := d.window()
 	clauses, offers, free := d.buyOptions()
 	main := `<div class="mk-filters">` + Filters + `</div>` +
-		d.buyBlock("🔨 Mercado rentable", "puja libre", free, window) +
-		d.buyBlock("🤝 En venta por rivales", "oferta al dueño", offers, window) +
-		d.buyBlock("🔓 Cláusulas que puedes pagar", "clausula", clauses, window)
+		d.buyBlock("🔨 Mercado rentable", "puja libre", free, window)
 
 	var bids []string
 	for _, bid := range rows(d.Advice["my_bids"]) {
@@ -620,8 +627,10 @@ func (d Document) buyView() string {
 			`<button class="linkish" type="button" data-goto="clausulas">ver en Cláusulas</button></p>`,
 			Esc(text(raid["name"])), esMoney(number(raid["max_pay"])))
 	}
-	return view("v-comprar", "comprar", main, block("Mis pujas en curso", body, "", -1)+
-		d.endingsAside()+d.starredAside())
+	return viewWithRow("v-comprar", "comprar", main, block("Mis pujas en curso", body, "", -1)+
+		d.endingsAside()+d.starredAside(),
+		d.buyBlock("🤝 En venta por rivales", "oferta al dueño", offers, window),
+		d.buyBlock("🔓 Cláusulas que puedes pagar", "clausula", clauses, window))
 }
 
 // outcomeRow is a resolved bid, offer or standing order as a list row: a glyph for how it
