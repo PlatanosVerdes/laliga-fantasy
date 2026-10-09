@@ -51,6 +51,7 @@ var (
 	UsageFile      string
 	ForecastFile   string
 	ClauseFile     string
+	ServicesFile   string
 )
 
 // APIHeaders are what the official app sends. x-app: 2 is not optional.
@@ -118,6 +119,8 @@ func init() {
 	// The clauses seen at the last build: the log does not tell a clause paid from an offer
 	// accepted, and the clause before the transfer is the only way to.
 	ClauseFile = filepath.Join(StateDir, "clauses.json")
+	// The job intervals changed from the page: a preference, so it sits with the settings.
+	ServicesFile = filepath.Join(ConfigDir, "services.json")
 }
 
 // resolveDirs honours one override and the XDG spec, in the same order as Python.
