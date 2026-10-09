@@ -1,5 +1,5 @@
 import {html, useState, useEffect, useRef, legacy} from './lib.js';
-import {esWhen, exact, chipText, countdownText} from './format.js';
+import {esWhen, exact, chipText, countdownText, health} from './format.js';
 import {prepare, confirm, changed, closeDialog, useDialog} from './api.js';
 
 // The sprite render.IconSprite puts once at the top of the page.
@@ -200,3 +200,17 @@ export function ModalRoot() {
 export const Switch = ({on, disabled, label, onChange}) => html`<button type="button" role="switch"
   class=${'tgl' + (on ? ' on' : '')} aria-checked=${on ? 'true' : 'false'} aria-label=${label}
   disabled=${disabled} onClick=${onChange}><span class="tgl-knob"></span></button>`;
+
+// A face from the API's own player shape (matchday, comparator, squads), as report.js's faceOf
+// drew it: the crest behind it when there is no photo, the ring and badge of his status.
+export function ApiFace({p, size = 'xs'}) {
+  const h = health(p);
+  const [broken, setBroken] = useState(false);
+  const a = p.absence || {};
+  const tip = h ? [h.label, a.reason || 'sin detalle en futbolfantasy', a.since, a.until].filter(Boolean).join(' · ') : undefined;
+  const badge = !h ? null : h.glyph === 'card'
+    ? html`<span class="hb hb-card"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4.5" y="2.5" width="7" height="11" rx="1.3"/></svg></span>`
+    : h.glyph === 'cross' ? html`<span class="hb hb-cross"><svg viewBox="0 0 16 16" aria-hidden="true"><path d=${CROSS}/></svg></span>` : null;
+  return html`<span class=${'face face-' + size + (h ? ' ring-' + h.ring : '')} data-tip=${tip}>${
+    p.image && !broken ? html`<img src=${p.image} alt="" loading="lazy" onError=${() => setBroken(true)}/>` : html`<span class=${'crest crest-' + p.team_id}></span>`}${badge}</span>`;
+}

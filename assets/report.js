@@ -1091,7 +1091,6 @@ function route(){
   try{
     if(view&&VIEWS[view]) VIEWS[view](arg);
     else if(drawer&&!drawer.hidden) shutDrawer();
-    if(base==='comparador'&&!VIEWS[view]) renderCompare();
   }finally{ routing=false; }
 }
 
@@ -2105,149 +2104,13 @@ document.addEventListener('focusin',(event)=>{
 document.addEventListener('focusout',hideTip);
 
 // ---- comparador: un fichaje es siempre "en vez de quien" --------------------
-// The tray lives in localStorage because the panel swaps itself out live, and losing a
-// half-built comparison to a refresh would mean nobody used it.
-const CMP_MAX=8, CMP_KEY='fantasy:compare';
-let tray=[];
-try{ tray=(JSON.parse(localStorage.getItem(CMP_KEY))||[]).slice(0,CMP_MAX); }catch(e){ tray=[]; }
-
-const cmpSave=()=>{ try{ localStorage.setItem(CMP_KEY,JSON.stringify(tray)); }catch(e){} };
-const cmpHas=(id)=> tray.some(p=>p.id===String(id));
-function cmpAdd(id,name,pos){
-  id=String(id);
-  if(cmpHas(id)) return true;
-  if(tray.length>=CMP_MAX){ trayMsg(`El comparador ya lleva ${CMP_MAX}`); return false; }
-  tray.push({id,name:name||id,pos:pos||''});
-  cmpSave(); drawTray();
-  if(comparing()) renderCompare();
-  return true;
-}
-function cmpDrop(id){
-  tray=tray.filter(p=>p.id!==String(id));
-  cmpSave(); drawTray();
-  // Dropping one with the table in front of you has to drop him from the table, not just the bar.
-  if(comparing()) renderCompare();
-}
-
-const comparing=()=> (document.querySelector('.tab.on')||{dataset:{}}).dataset.tab==='comparador';
-
-function trayBox(){
-  let box=document.getElementById('cmp-tray');
-  if(box) return box;
-  box=document.createElement('div');
-  box.id='cmp-tray'; box.className='cmp-tray'; box.hidden=true;
-  box.innerHTML=`<div class="cmp-find-wrap">
-      <input class="cmp-find" type="search" autocomplete="off" spellcheck="false"
-        placeholder="buscar jugador…" aria-label="Buscar jugador para comparar">
-      <div class="cmp-results" hidden></div>
-    </div>
-    <div class="cmp-chips"></div>
-    <span class="cmp-msg"></span>
-    <div class="cmp-acts">
-      <div class="cmp-mine-wrap">
-        <button type="button" class="cmp-mine">Mi plantilla</button>
-        <div class="cmp-results cmp-mine-list" hidden></div>
-      </div>
-      <button type="button" class="cmp-go primary"></button>
-      <button type="button" class="cmp-close" title="Quitar todos" aria-label="Quitar todos">✕</button>
-    </div>`;
-  document.body.appendChild(box);
-  box.querySelector('.cmp-go').addEventListener('click',openCompare);
-  box.querySelector('.cmp-close').addEventListener('click',clearCompare);
-  wireFind(box);
-  wireMine(box);
-  return box;
-}
-
-// The tray's search. It comes off the same request the comparator uses, so no new index is
-// needed: the whole world is already in memory on the server.
-function wireFind(box){
-  const input=box.querySelector('.cmp-find'), list=box.querySelector('.cmp-results');
-  let timer=null, found=[];
-  const hide=()=>{ list.hidden=true; list.innerHTML=''; found=[]; };
-  const paint=()=>{
-    if(!found.length){ hide(); return; }
-    list.innerHTML=found.map((p,i)=>`
-      <button class="cmp-hit${i===0?' first':''}" type="button" data-cmp="${p.id}"
-        data-cmp-name="${p.name}" data-cmp-pos="${p.position||''}">
-        <span class="cmp-hit-who">
-          ${p.image
-            ? `<img src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
-            : `<span class="crest crest-${p.team_id}"></span>`}
-          <b>${p.name}</b>
-          <span class="pos pos-${String(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
-        </span>
-        <span class="cmp-hit-num"><span class="crest crest-${p.team_id}"></span>${p.team_short||''} · ${p.is_mine?'tuyo':(p.owner||'libre')}
-          <b>${fmt(p.value)}</b></span>
-      </button>`).join('');
-    list.hidden=false;
-  };
-  const run=async()=>{
-    const query=input.value.trim();
-    if(query.length<2){ hide(); return; }
-    try{
-      const res=await fetch('/api/compare?q='+encodeURIComponent(query));
-      if(!res.ok) throw new Error(res.status);
-      const data=await res.json();
-      found=(data.matches||[]).filter(p=>!cmpHas(p.id));
-      if(!found.length){
-        list.innerHTML='<p class="cmp-none">Nadie con ese nombre</p>';
-        list.hidden=false;
-        return;
-      }
-      paint();
-    }catch(e){ hide(); }
-  };
-  input.addEventListener('input',()=>{ clearTimeout(timer); timer=setTimeout(run,180); });
-  input.addEventListener('keydown',(event)=>{
-    if(event.key==='Escape'){ collapse(); trigger&&trigger.focus(); }
-    // Enter adds the first: three letters and Enter is the short way through.
-    if(event.key==='Enter'&&found.length){
-      event.preventDefault();
-      const first=found[0];
-      cmpAdd(first.id,first.name,first.position);
-      input.value=''; hide();
-    }
-  });
-  // Adding from the list closes it on its own: the document picks the click up.
-  list.addEventListener('click',()=>{ input.value=''; setTimeout(hide,0); });
-  document.addEventListener('click',(event)=>{
-    if(!box.contains(event.target)) hide();
-  });
-}
-
-function trayMsg(text){
-  const line=trayBox().querySelector('.cmp-msg');
-  line.textContent=text;
-  setTimeout(()=>{ if(line.textContent===text) line.textContent=''; },4000);
-}
-
-// The tray's common line: comparing a forward with your keepers says nothing, so the shortcut
-// to the squad is offered by position only when they all agree.
-function trayLine(){
-  const lines=[...new Set(tray.map(p=>p.pos).filter(Boolean))];
-  return lines.length===1?lines[0]:'';
-}
-
+// The tray and the comparator's tab are /assets/ui/compare.js; these reach it once it is loaded.
+const cmpStore=()=>window.panelCompare;
+const cmpHas=(id)=>!!cmpStore()&&cmpStore().has(id);
+function cmpAdd(id,name,pos){ return cmpStore()?cmpStore().add(id,name,pos):false; }
+function cmpDrop(id){ if(cmpStore()) cmpStore().drop(id); }
+// The "+" buttons report.js still draws (a rival's squad in the drawer) follow the tray too.
 function drawTray(){
-  dispatchEvent(new Event('panel:tray'));
-  const box=trayBox();
-  const visible=tray.length>0&&!comparing();
-  box.hidden=!visible;
-  document.body.classList.toggle('tray-on',visible);
-  box.querySelector('.cmp-chips').innerHTML=tray.map(p=>
-    `<span class="cmp-chip">${p.pos
-        ? `<span class="pos pos-${p.pos.toLowerCase().slice(0,3)}">${p.pos}</span>`:''}
-      <button class="p-name" type="button" data-detail="${p.id}">${p.name}</button>
-      <button class="cmp-x" type="button" data-cmp-drop="${p.id}" aria-label="Quitar">&times;</button>
-    </span>`).join('');
-  const line=trayLine();
-  const mineButton=box.querySelector('.cmp-mine');
-  mineButton.title=line?`Meter tus ${line} para verlos al lado`:'Meter jugadores tuyos';
-  const go=box.querySelector('.cmp-go');
-  go.textContent=`Comparar (${tray.length})`;
-  wireDetails(box);
-  // The card's button has to say which state it is in: "+" invites, "✓" reminds.
   document.querySelectorAll('button[data-cmp]').forEach(button=>{
     const on=cmpHas(button.dataset.cmp), short=button.classList.contains('small');
     button.classList.toggle('on',on);
@@ -2255,144 +2118,14 @@ function drawTray(){
     button.title=on?'Quitar del comparador':'Añadir al comparador';
   });
 }
-
-// The buttons are born in content that gets swapped out (cards, squads, the tray itself), so
-// they are listened for on the document and nothing ever has to be rewired.
+addEventListener('panel:tray',drawTray);
 document.addEventListener('click',(event)=>{
   const add=event.target.closest('button[data-cmp]');
-  if(add){
-    event.stopPropagation();
-    if(cmpHas(add.dataset.cmp)) cmpDrop(add.dataset.cmp);
-    else cmpAdd(add.dataset.cmp,add.dataset.cmpName,add.dataset.cmpPos);
-    return;
-  }
-  const drop=event.target.closest('button[data-cmp-drop]');
-  if(drop){ event.stopPropagation(); cmpDrop(drop.dataset.cmpDrop); }
+  if(!add) return;
+  event.stopPropagation();
+  if(cmpHas(add.dataset.cmp)) cmpDrop(add.dataset.cmp);
+  else cmpAdd(add.dataset.cmp,add.dataset.cmpName,add.dataset.cmpPos);
 });
-
-// Your squad as a menu: add whoever you want, or that whole line at once. Better than a button
-// reading "+ mis MED" that decides for you.
-function wireMine(box){
-  const button=box.querySelector('.cmp-mine'), list=box.querySelector('.cmp-mine-list');
-  let squad=null;
-  const hide=()=>{ list.hidden=true; };
-  const row=(p)=>`
-    <button class="cmp-hit" type="button" data-cmp="${p.id}" data-cmp-name="${p.name}"
-      data-cmp-pos="${p.position||''}">
-      <span class="cmp-hit-who">
-        ${p.image
-          ? `<img src="${p.image}" alt="" loading="lazy" onerror="this.remove()">`
-          : `<span class="crest crest-${p.team_id}"></span>`}
-        <b>${p.name}</b>
-        <span class="pos pos-${String(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
-      </span>
-      <span class="cmp-hit-num">${(p.xpts||0).toFixed(2)} xPts · <b>${fmt(p.value)}</b></span>
-    </button>`;
-  const paint=()=>{
-    const line=trayLine();
-    const free=(squad||[]).filter(p=>!cmpHas(p.id));
-    if(!free.length){ list.innerHTML='<p class="cmp-none">Ya estan todos</p>'; list.hidden=false; return; }
-    const same=line?free.filter(p=>p.position===line):[];
-    const rest=free.filter(p=>!same.includes(p));
-    list.innerHTML=(same.length>1
-        ? `<button class="cmp-hit cmp-all" type="button">Añadir mis ${same.length} ${line}</button>`
-        : '')
-      + (same.length?`<p class="cmp-group">Tus ${line}</p>`+same.map(row).join(''):'')
-      + (rest.length?`<p class="cmp-group">${same.length?'El resto':'Tu plantilla'}</p>`
-          +rest.map(row).join(''):'');
-    list.hidden=false;
-    const all=list.querySelector('.cmp-all');
-    if(all) all.addEventListener('click',()=>{
-      for(const p of same){ if(!cmpAdd(p.id,p.name,p.position)) break; }
-      hide();
-      if(tray.length>1&&!comparing()) openCompare();
-    });
-  };
-  button.addEventListener('click',async()=>{
-    if(!list.hidden){ hide(); return; }
-    if(!squad){
-      try{
-        const res=await fetch('/api/compare');
-        if(!res.ok) throw new Error(res.status);
-        squad=(await res.json()).mine||[];
-      }catch(e){ trayMsg('No he podido leer tu plantilla'); return; }
-    }
-    paint();
-  });
-  list.addEventListener('click',(event)=>{ if(event.target.closest('button[data-cmp]')) hide(); });
-  document.addEventListener('click',(event)=>{
-    if(!box.querySelector('.cmp-mine-wrap').contains(event.target)) hide();
-  });
-}
-
-const CMP_ROWS=[
-  {label:'Valor', get:p=>p.value, fmt:v=>exact(v), best:'min', cost:true},
-  {label:'Clausula', get:p=>p.clause, fmt:v=>v?exact(v):'—', best:'min', cost:true},
-  {label:'Techo rentable', get:p=>p.ideal_bid, fmt:v=>v?exact(v):'sin margen', best:'max'},
-  {label:'xPts por jornada', get:p=>p.xpts, fmt:v=>(v||0).toFixed(2), best:'max'},
-  {label:'Pts por millon', get:p=>p.points_value, fmt:v=>(v||0).toFixed(3), best:'max'},
-  {label:'Score', get:p=>p.score, fmt:v=>((v||0)>=0?'+':'')+(v||0).toFixed(2), best:'max'},
-  {label:'Titularidad', get:p=>p.start_probability, fmt:v=>v==null?'—':v+'%', best:'max'},
-  {label:'Puntos temporada', get:p=>p.season_points, fmt:v=>Math.round(v||0), best:'max'},
-  {label:'Media', get:p=>p.season_avg, fmt:v=>(v||0).toFixed(1), best:'max'},
-  {label:'Puntos 25/26', get:p=>p.last_season_points, fmt:v=>Math.round(v||0), best:'max'},
-  {label:'Valor 7d', get:p=>p.projected_pct,
-    fmt:v=>((v||0)>=0?'+':'')+(v||0).toFixed(2)+'%', best:'max'},
-  {label:'Proximo rival', get:p=>p.next_rival,
-    fmt:(v,p)=>v?`${crest(p.next_rival_id)}${v} · ${p.next_home?'en casa':'fuera'}`:'—', text:true},
-];
-
-function cmpChips(p){
-  const listing=p.market||{};
-  const chips=[];
-  if(listing.market_id) chips.push(`<span class="chip">en venta ${fmt(listing.min_bid)}</span>`);
-  if(p.shielded) chips.push(p.shielded_until
-    ? `<span class="chip chip-warn">blindado <span
-        data-deadline="${p.shielded_until}">${leftUntil(p.shielded_until)}</span></span>`
-    : '<span class="chip chip-warn">blindado</span>');
-  else if(p.clause_locked&&p.clause_locked_until)
-    chips.push(`<span class="chip chip-warn">clausula en <span
-      data-deadline="${p.clause_locked_until}">…</span></span>`);
-  else if(p.clause&&!p.is_mine) chips.push('<span class="chip chip-good">clausula pagable</span>');
-  if(p.sale_locked) chips.push('<span class="chip chip-warn">🔒 recien fichado</span>');
-  if(!p.available) chips.push('<span class="chip chip-bad">no puntua</span>');
-  return chips.join('');
-}
-
-// A table decides nothing on its own: this line says whether the one you are looking at
-// improves on what you have, which is the only reason to be comparing.
-function cmpVerdict(list){
-  const outside=list.filter(p=>!p.is_mine), ours=list.filter(p=>p.is_mine);
-  const by=(arr,key)=>arr.slice().sort((a,b)=>(b[key]||0)-(a[key]||0));
-  if(outside.length!==1||!ours.length){
-    const top=by(list,'xpts')[0], eff=by(list,'points_value')[0];
-    if(!top) return '';
-    return `<p class="cmp-verdict">Mas xPts: <b>${top.name}</b> (${(top.xpts||0).toFixed(2)}).
-      Mas puntos por millon: <b>${eff.name}</b> (${(eff.points_value||0).toFixed(3)}).</p>`;
-  }
-  const him=outside[0], line=him.position||'esa posicion';
-  const ranked=by(ours,'xpts'), best=ranked[0], worst=ranked[ranked.length-1];
-  const gap=(a,b)=>((a.xpts||0)-(b.xpts||0));
-  const money=(a,b)=>{
-    const diff=(a.value||0)-(b.value||0);
-    return diff===0?'y cuesta lo mismo'
-      : `y cuesta ${fmt(Math.abs(Math.round(diff)))} ${diff>0?'mas':'menos'}`;
-  };
-  // Mejorar a uno sancionado no es merito: decirlo evita leer el veredicto al reves.
-  const why=(p)=> p.available===false?' (que ahora no puntua)':'';
-  let verdict;
-  if(gap(him,best)>0){
-    verdict = `<b>${him.name}</b> mejora a tu mejor ${line}: <b>+${gap(him,best).toFixed(2)}
-      xPts</b> sobre ${best.name} ${money(him,best)}.`;
-  }else if(gap(him,worst)>0){
-    verdict = `<b>${him.name}</b> no llega a ${best.name}, pero si mejora a
-      <b>${worst.name}</b>${why(worst)}: +${gap(him,worst).toFixed(2)} xPts ${money(him,worst)}.`;
-  }else{
-    verdict = `<b>${him.name}</b> no mejora a ninguno de tus ${line}:
-      ${worst.name} ya le saca ${Math.abs(gap(him,worst)).toFixed(2)} xPts.`;
-  }
-  return `<p class="cmp-verdict">${verdict}</p>`;
-}
 
 function panelWide(on){
   const panel=drawer&&drawer.querySelector('.drawer-panel');
@@ -2404,14 +2137,11 @@ function panelWide(on){
 // The comparator is a tab of its own; its address carries who is in it, so a link reopens
 // the same comparison.
 function compareHash(){
-  return '#comparador'+(tray.length?'/'+tray.map(p=>p.id).join(','):'');
+  return cmpStore()?cmpStore().hash():'#comparador';
 }
 
 function adoptCompareIds(list){
-  const ids=String(list).split(',').map(x=>x.trim()).filter(Boolean).slice(0,CMP_MAX);
-  if(ids.join(',')===tray.map(p=>p.id).join(',')) return;
-  tray=ids.map(id=>tray.find(p=>p.id===id)||{id,name:id,pos:''});
-  cmpSave(); drawTray();
+  if(cmpStore()) cmpStore().adopt(list); else window.__cmpAdopt=list;
 }
 
 function openCompare({replace=false}={}){
@@ -2420,105 +2150,6 @@ function openCompare({replace=false}={}){
   else history.pushState(null,'',compareHash());
   routed=location.hash;
   showTab('comparador',{updateHash:false});
-}
-
-let compareRun=0;
-async function renderCompare(){
-  const section=document.getElementById('comparador');
-  if(!section) return;
-  wireCompareSection(section);
-  const body=section.querySelector('.cmp-body');
-  // Only the bare tab address follows the tray: with a card open on top it is that card's.
-  const at=hashParts();
-  if(at.base==='comparador'&&!VIEWS[at.view]&&location.hash!==compareHash()){
-    history.replaceState(history.state,'',compareHash());
-    routed=location.hash;
-  }
-  if(!tray.length){
-    body.innerHTML=`<p class="empty">Busca jugadores arriba y ve añadiéndolos, pulsa
-      <b>Mi plantilla</b> para meter a los tuyos, o usa el <b>+ comparar</b> de cada ficha.</p>`;
-    return;
-  }
-  const run=++compareRun;
-  if(!body.querySelector('.cmp-view')) body.innerHTML='<p class="empty">Comparando…</p>';
-  let data;
-  try{
-    const res=await fetch('/api/compare?ids='+tray.map(p=>p.id).join(','));
-    if(!res.ok) throw new Error(res.status);
-    data=await res.json();
-  }catch(e){
-    if(run===compareRun) body.innerHTML='<p class="empty">No he podido comparar.</p>';
-    return;
-  }
-  if(run!==compareRun) return;
-  const list=data.players||[];
-  if(!list.length){ body.innerHTML='<p class="empty">No conozco a ninguno de esos.</p>'; return; }
-  // Ids that came in an address have no name yet: the answer brings them.
-  let named=false;
-  tray.forEach(t=>{ const p=list.find(x=>String(x.id)===t.id);
-    if(p&&(t.name!==p.name||!t.pos)){ t.name=p.name; t.pos=p.position||''; named=true; } });
-  if(named){ cmpSave(); drawTray(); }
-  const head=list.map(p=>`<th>
-    <div class="cmp-who">
-      ${faceOf(p,'md')}
-      <span class="cmp-name">
-        <button class="p-name" type="button" data-detail="${p.id}">${p.name}</button>
-        <button class="cmp-x" type="button" data-cmp-drop="${p.id}" aria-label="Quitar">&times;</button>
-      </span>
-      <span class="cmp-sub"><span class="pos pos-${String(p.position||'').toLowerCase().slice(0,3)}"
-        >${p.position}</span> ${crest(p.team_id)}${p.team_short||p.team||''} ·
-        ${p.is_mine?'tuyo':(p.owner&&p.owner_team_id
-          ? `<button class="p-name" type="button" data-manager="${p.owner_team_id}">${p.owner}</button>`
-          : (p.owner||'libre'))}</span>
-    </div></th>`).join('');
-  const rows=CMP_ROWS.map(row=>{
-    const values=list.map(row.get);
-    let target=null;
-    if(!row.text){
-      const numbers=values.filter(v=>v!=null&&isFinite(v)&&v!==0);
-      if(numbers.length>1)
-        target=row.best==='min'?Math.min(...numbers):Math.max(...numbers);
-      // All equal teaches nothing: highlighting there only stains the table.
-      if(numbers.length&&numbers.every(v=>v===numbers[0])) target=null;
-    }
-    const cells=list.map((p,i)=>{
-      const value=values[i];
-      const win=target!=null&&value===target;
-      const css=win?(row.cost?'cmp-cheap':'cmp-best'):'';
-      return `<td class="${css}">${row.fmt(value,p)}</td>`;
-    }).join('');
-    return `<tr><td>${row.label}</td>${cells}</tr>`;
-  }).join('');
-  body.innerHTML=`
-    <div class="cmp-view">
-    <p class="note">${list.length} jugadores · lo mejor de cada fila en verde</p>
-    ${cmpVerdict(list)}
-    <div class="cmp-wrap"><table class="cmp">
-      <thead><tr><th></th>${head}</tr></thead>
-      <tbody>${rows}
-        <tr><td>Estado</td>${list.map(p=>
-          `<td><span class="cmp-state">${cmpChips(p)||'<span class="cmp-quiet">sin nada</span>'}</span></td>`
-          ).join('')}</tr>
-      </tbody>
-    </table></div>
-    <p class="drawer-note">Valor y cláusula en verde marcan el más barato, no el mejor.
-      Pulsa un nombre para su ficha.</p>
-    </div>`;
-  wireDetails(body); wireManagers(body); tick();
-}
-
-
-function clearCompare(){
-  tray=[]; cmpSave(); drawTray();
-  if(comparing()) renderCompare();
-}
-
-function wireCompareSection(section){
-  if(section.dataset.wired) return;
-  section.dataset.wired='1';
-  wireFind(section);
-  wireMine(section);
-  section.querySelector('.cmp-clear').addEventListener('click',clearCompare);
 }
 
 if(drawer){
@@ -2839,6 +2470,7 @@ function showTab(id,{section=null,updateHash=true}={}){
     if(on) b.scrollIntoView({block:'nearest',inline:'center'});
   });
   try{ localStorage.setItem('fantasy-tab',tab.id); }catch(e){}
+  dispatchEvent(new Event('panel:tab'));
   usage.tab(tab.id);
   if(updateHash){
     // replaceState, not assignment: we want neither a history entry per click nor
@@ -2847,7 +2479,6 @@ function showTab(id,{section=null,updateHash=true}={}){
   }
   applyRivalPick();
   if(tab.sections.includes('once') && !pitchState) loadPitch();
-  if(tab.id==='comparador'&&was!=='comparador') renderCompare();
   drawTray();
   if(section){
     const node=document.getElementById(section);
@@ -2921,7 +2552,7 @@ async function swap(){
   Object.entries(data.sections).forEach(([id,inner])=>{
     if(CLIENT_OWNED.has(id)) return;
     const node=document.getElementById(id);
-    if(node&&node.dataset.view) return;
+    if(node&&(node.dataset.view||node.dataset.ui)) return;
     if(node && node.innerHTML!==inner) node.innerHTML=inner;
   });
   wireTables(); wireStars(); wireBids(); wireOps();
@@ -3002,7 +2633,8 @@ function connect(){
 }
 
 // What /assets/ui borrows from this file: the dialogs it does not redraw and the drawer's routing.
-window.panel={openDetail, openManager, openWeek, openReach, applyRivalPick, openMatchday, openForecast, closeDrawer, openAmount, openBid, shieldDialog, raidDialog,
+window.panel={openCompare, isView:(name)=>!!VIEWS[name], routedTo:(hash)=>{ routed=hash; },
+  openDetail, openManager, openWeek, openReach, applyRivalPick, openMatchday, openForecast, closeDrawer, openAmount, openBid, shieldDialog, raidDialog,
   flash, cmpHas, cmpAdd, cmpDrop, usage,
   goto:(where)=>{ const target=resolveTarget(where);
     if(target) showTab(target.tab,{section:target.section}); else showTab(where); }};

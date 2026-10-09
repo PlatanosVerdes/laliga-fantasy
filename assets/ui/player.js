@@ -3,6 +3,7 @@ import {Face, Tags, Role, Crest, Countdown, Button, ShieldMark, Switch} from './
 import {dec, mny, fmt, signed, exact, group, digits, whenShort, since, health} from './format.js';
 import {getJSON, postJSON} from './api.js';
 import {runAction, toggleAlways} from './actions.js';
+import {compare, useTray} from './compare.js';
 
 const weekClass = (w) => {
   const p = w.points;
@@ -250,11 +251,11 @@ function Actions({data, reopen}) {
 }
 
 function CompareButton({p}) {
-  const page = legacy();
-  const [on, setOn] = useState(page.cmpHas ? page.cmpHas(p.id) : false);
+  const list = useTray();
+  const on = list.some((item) => item.id === String(p.id));
   const flip = (event) => {
     event.stopPropagation();
-    if (on) { page.cmpDrop(p.id); setOn(false); } else setOn(!!page.cmpAdd(p.id, p.name, p.position || ''));
+    if (on) compare.drop(p.id); else compare.add(p.id, p.name, p.position || '');
   };
   return html`<button class=${'cmp-add' + (on ? ' on' : '')} type="button" onClick=${flip}
     title=${on ? 'Quitar del comparador' : 'Añadir al comparador'}>${on ? '✓ comparando' : '+ comparar'}</button>`;

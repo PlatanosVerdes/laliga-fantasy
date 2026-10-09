@@ -362,18 +362,8 @@ const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
 	`<button class="tab" role="tab" data-tab="ranking" aria-selected="false" type="button">Ranking</button>` +
 	`<button class="tab" role="tab" data-tab="comparador" aria-selected="false" type="button">Comparador</button></div>`
 
-// CompareShell is the comparator's tab. The browser fills it from the tray it keeps, so the
-// live refresh must leave its inside alone (CLIENT_OWNED in report.js).
-const CompareShell = `<section id="comparador" data-tab="comparador">` +
-	`<h2>Comparador</h2>` +
-	`<div class="cmp-bar"><div class="cmp-find-wrap"><input class="cmp-find" type="search" ` +
-	`autocomplete="off" spellcheck="false" placeholder="añadir jugador…" ` +
-	`aria-label="Buscar jugador para comparar"><div class="cmp-results" hidden></div></div>` +
-	`<div class="cmp-mine-wrap"><button type="button" class="cmp-mine">Mi plantilla</button>` +
-	`<div class="cmp-results cmp-mine-list" hidden></div></div>` +
-	`<button type="button" class="cmp-clear">Vaciar</button><span class="cmp-msg"></span></div>` +
-	`<div class="cmp-body"><p class="empty">Busca jugadores arriba o pulsa ` +
-	`<b>+ comparar</b> en la ficha de cualquiera.</p></div></section>`
+// CompareShell is the comparator's tab, drawn by the browser from the tray it keeps.
+const CompareShell = `<section id="comparador" data-tab="comparador" data-ui="comparador"></section>`
 
 // Build is the version of the binary serving this page, stamped at compile time. Empty renders
 // nothing: a page built by hand should not claim a version it does not have.

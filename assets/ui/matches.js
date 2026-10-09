@@ -1,18 +1,10 @@
 import {html, useState, useEffect, legacy} from './lib.js';
-import {Face, ShieldMark, Countdown, Crest, Empty} from './components.js';
+import {Face, ShieldMark, Countdown, Crest, Empty, ApiFace} from './components.js';
 import {KINDS} from './view.js';
 import {getJSON, useStamp, useView} from './api.js';
-import {dec, health} from './format.js';
+import {dec} from './format.js';
 
 // Partidos' own blocks, and the matchday popup.
-
-// A face from the API's own player shape, with the crest behind it when there is no photo:
-// the matchday and forecast answers carry no status, so no ring.
-export function ApiFace({p, size = 'xs'}) {
-  const h = health(p);
-  return html`<span class=${'face face-' + size + (h ? ' ring-' + h.ring : '')}>${
-    p.image ? html`<img src=${p.image} alt="" loading="lazy"/>` : html`<span class=${'crest crest-' + p.team_id}></span>`}</span>`;
-}
 
 KINDS.empty = ({b}) => html`<${Empty}>${b.empty}<//>`;
 

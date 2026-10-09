@@ -2,6 +2,7 @@ import {html, useState, useEffect, legacy} from './lib.js';
 import {Face, Tags, ShieldMark, PosTag, Countdown, Empty} from './components.js';
 import {useView, postJSON, changed} from './api.js';
 import {runAct, toggleAlways} from './actions.js';
+import {compare, useTray} from './compare.js';
 
 // The renderer of render/viewmodel.go: a tab's blocks, rows, segments, chips and buttons, in the
 // same markup the Go renderer wrote, so report.css draws them as before.
@@ -64,20 +65,14 @@ function AlwaysAct({a}) {
     onClick=${flip}>${on ? '● ' : ''}Siempre en mercado</button>`;
 }
 
-// The comparator's "+" follows the tray, which report.js keeps and announces.
+// The comparator's "+" follows the tray.
 function CmpAct({a}) {
-  const page = legacy();
-  const has = () => !!(page.cmpHas && page.cmpHas(a.args.id));
-  const [on, setOn] = useState(has());
-  useEffect(() => {
-    const sync = () => setOn(has());
-    addEventListener('panel:tray', sync);
-    return () => removeEventListener('panel:tray', sync);
-  }, [a.args.id]);
+  const list = useTray();
+  const on = list.some((item) => item.id === String(a.args.id));
   const short = a.class.includes('small');
   return html`<button type="button" class=${a.class + (on ? ' on' : '')} data-wired="1"
     title=${on ? 'Quitar del comparador' : 'Añadir al comparador'}
-    onClick=${(e) => { e.stopPropagation(); if (has()) page.cmpDrop(a.args.id); else page.cmpAdd(a.args.id, a.args.name, a.args.pos); }}>${
+    onClick=${(e) => { e.stopPropagation(); if (on) compare.drop(a.args.id); else compare.add(a.args.id, a.args.name, a.args.pos); }}>${
     on ? (short ? '✓' : '✓ comparando') : (short ? '+' : '+ comparar')}</button>`;
 }
 

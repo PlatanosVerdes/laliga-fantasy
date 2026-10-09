@@ -5,6 +5,7 @@ import {ViewScreen} from './view.js';
 import {WeekPopup} from './matches.js';
 import {ReachPopup} from './rivals.js';
 import './league.js';
+import {mountCompareTab} from './compare.js';
 
 const dialogs = document.createElement('div');
 document.body.appendChild(dialogs);
@@ -38,3 +39,6 @@ export const mountPlayer = (body, id, from) => mountDrawer(body, 'player', {id, 
 for (const section of document.querySelectorAll('section[data-view]')) {
   render(html`<${ViewScreen} name=${section.dataset.view}/>`, section);
 }
+
+const compareTab = document.querySelector('section[data-ui="comparador"]');
+if (compareTab) mountCompareTab(compareTab);
