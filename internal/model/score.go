@@ -65,6 +65,7 @@ type Trend struct {
 type Bridge struct {
 	Trends       map[string]Trend          `json:"trends"`
 	Absences     map[string]map[string]any `json:"absences"`
+	Roles        map[string]map[string]any `json:"roles"`
 	Unmatched    []any                     `json:"unmatched"`
 	MatchedCount int                       `json:"matched_count"`
 }

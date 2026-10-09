@@ -361,7 +361,28 @@ func (d Document) elevenAside() string {
 			week, place)
 	}
 	return block("Tu once", `<div class="pitchlist">`+summary+elevenChips(lines, arriving)+legend+
-		`</div>`+d.planWarnings()+finish, Esc(shape), -1) + d.crackBox() + more
+		`</div>`+d.planWarnings()+roleDrops(lines)+finish, Esc(shape), -1) + d.crackBox() + more
+}
+
+// roleDrops are the starters futbolfantasy's editors just moved down in their club.
+func roleDrops(lines [][]map[string]any) string {
+	var out strings.Builder
+	for _, line := range lines {
+		for _, player := range line {
+			role := mapOf(player["role"])
+			if text(role["change"]) != "down" {
+				continue
+			}
+			note := ""
+			if text(role["note"]) != "" {
+				note = ": " + text(role["note"])
+			}
+			fmt.Fprintf(&out, `<p class="mk-note plan-warn" data-pid="%s">⚠ %s bajó a %s en su `+
+				`equipo%s</p>`, Esc(text(player["id"])), Esc(text(player["name"])),
+				Esc(text(role["label"])), Esc(note))
+		}
+	}
+	return out.String()
 }
 
 // planWarnings are the plan's warnings about the eleven itself: a squad that cannot field
@@ -441,9 +462,7 @@ func (d Document) buyRow(item map[string]any, route string, gain float64,
 		verb = "Pujar"
 		action = d.listingButton(item, "Pujar "+esMoney(cost), kind)
 	}
-	if starts := asFloat(item["start_probability"]); starts != nil {
-		meta += fmt.Sprintf(" · titular %.0f %%", *starts)
-	}
+	meta += startsMeta(item)
 	tone := ""
 	switch {
 	case !affordable:
@@ -834,9 +853,7 @@ func (d Document) restOfSquad() string {
 	for _, player := range rest {
 		id := text(player["id"])
 		meta := Esc(text(player["team_short"]))
-		if starts := asFloat(player["start_probability"]); starts != nil {
-			meta += fmt.Sprintf(" · titular %.0f %%", *starts)
-		}
+		meta += startsMeta(player)
 		if starter[id] {
 			meta += ` · <span class="xi-mark">en tu once</span>`
 		}
@@ -855,6 +872,7 @@ func (d Document) restOfSquad() string {
 			sell = `<span title="` + Esc(why) + `">` + button("Poner en venta", "ghost", "",
 				` disabled title="`+Esc(why)+`"`) + `</span>`
 		}
+		chip = roleDrop(player) + chip
 		label, on := "Siempre en mercado", ""
 		if always[id] {
 			label, on = "● Siempre en mercado", " on"

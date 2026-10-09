@@ -186,7 +186,8 @@ func rankRow(player map[string]any, withChip bool) string {
 		chip = tag(fmt.Sprintf("titular %.0f %%", *starts), "")
 	}
 	return rowWith(player, filterAttrs(player, number(player["value"])),
-		Esc(text(player["team_short"]))+" · "+Esc(owner), esNum(number(player["xpts"]), 1)+" xPts",
+		Esc(text(player["team_short"]))+" · "+Esc(owner)+" "+roleChip(player),
+		esNum(number(player["xpts"]), 1)+" xPts",
 		fmt.Sprintf("%s pts/M · %s", esNum(number(player["points_value"]), 2),
 			esMoney(number(player["value"]))), chip, Star(player)+CompareButton(player), "")
 }
@@ -211,9 +212,7 @@ func bestRow(player map[string]any, reach float64) string {
 		owner = "de " + owner
 	}
 	meta := Esc(text(player["team_short"])) + " · " + Esc(owner)
-	if starts := asFloat(player["start_probability"]); starts != nil {
-		meta += fmt.Sprintf(" · titular %.0f %%", *starts)
-	}
+	meta += startsMeta(player)
 	price, how := crackPrice(player)
 	note, chip := Esc(how), ""
 	switch {

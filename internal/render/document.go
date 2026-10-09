@@ -803,9 +803,7 @@ func (d Document) squadSection() string {
 // stand.
 func squadRow(player map[string]any) string {
 	meta := Esc(text(player["team_short"]))
-	if starts := asFloat(player["start_probability"]); starts != nil {
-		meta += fmt.Sprintf(" · titular %.0f %%", *starts)
-	}
+	meta += startsMeta(player)
 	if truthy(player["sale_locked"]) {
 		meta += " · 🔒 venta " + esDay(text(player["hold_until"]))
 	}
@@ -828,6 +826,7 @@ func squadRow(player map[string]any) string {
 	case number(player["clause"]) > 0:
 		chip = tag("🔓 "+esMoney(number(player["clause"])), "warn")
 	}
+	chip = roleDrop(player) + chip
 	return row(player, meta, esNum(number(player["xpts"]), 1)+" xPts", note, chip,
 		Star(player)+CompareButton(player), "")
 }

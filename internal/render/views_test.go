@@ -164,3 +164,21 @@ func TestNoTabFoldsItsOldTables(t *testing.T) {
 		}
 	}
 }
+
+// futbolfantasy's role rides next to the starting odds, and a starter the editors moved down is
+// flagged in his row and in Decidir.
+func TestRoleChipAndTheDropWarning(t *testing.T) {
+	document := decidingDocument()
+	squad := rows(document.Advice["squad"])
+	squad[6]["role"] = map[string]any{"key": "rotacion", "label": "Rotación", "change": "down",
+		"note": "Pierde el puesto ante el nuevo fichaje."}
+	squad[6]["start_probability"] = 60.0
+	document.Advice["squad"] = squad
+	rest := document.restOfSquad()
+	if !strings.Contains(rest, `class="role role-rotacion"`) || !strings.Contains(rest, "bajó a Rotación") {
+		t.Errorf("the chip and the warning in my rows: %.400s", rest)
+	}
+	if aside := document.elevenAside(); !strings.Contains(aside, "Portero bajó a Rotación en su equipo") {
+		t.Errorf("a starter moved down is a Decidir note: %.400s", aside)
+	}
+}

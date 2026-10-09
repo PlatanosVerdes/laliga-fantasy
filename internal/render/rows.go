@@ -89,3 +89,36 @@ func scrollList(items []string, height int) string {
 	return fmt.Sprintf(`<div class="scrollbox" style="max-height:%dpx">`, height) +
 		rowList(items) + `</div>`
 }
+
+// startsMeta is how likely he is to start and his role in his club, for a row's second line.
+func startsMeta(player map[string]any) string {
+	out := ""
+	if starts := asFloat(player["start_probability"]); starts != nil {
+		out = fmt.Sprintf(" · titular %.0f %%", *starts)
+	}
+	if chip := roleChip(player); chip != "" {
+		out += " " + chip
+	}
+	return out
+}
+
+// roleChip is futbolfantasy's category for him in his club, in the colour of their own icon.
+func roleChip(player map[string]any) string {
+	role := mapOf(player["role"])
+	key := text(role["key"])
+	if key == "" {
+		return ""
+	}
+	return `<span class="role role-` + Esc(key) + `" title="` + Esc(text(role["note"])) + `">` +
+		Esc(text(role["label"])) + `</span>`
+}
+
+// roleDrop is the warning when the editors just moved him down, or nothing.
+func roleDrop(player map[string]any) string {
+	role := mapOf(player["role"])
+	if text(role["change"]) != "down" {
+		return ""
+	}
+	return `<span class="mk-chip warn" title="` + Esc(text(role["note"])) + `">bajó a ` +
+		Esc(text(role["label"])) + `</span>`
+}

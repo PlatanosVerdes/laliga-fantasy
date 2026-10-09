@@ -74,6 +74,7 @@ const (
 	FFPlayerURL    = FFBase + "/jugadores/{slug}"
 	FFInjuredURL   = FFBase + "/laliga/lesionados"
 	FFSuspendedURL = FFBase + "/laliga/sancionados"
+	FFHierarchyURL = FFBase + "/laliga/equipos/{team}/jerarquias"
 )
 
 func FFHeaders() map[string]string {

@@ -1654,3 +1654,17 @@ table.cmp tr:last-child td{border-bottom:0}
 .mk .xi-mark{color:var(--accent);font-weight:650;white-space:nowrap}
 .mk .src-rival{color:var(--warning)}
 .mk .mk-note.plan-warn{color:var(--warning)}
+
+/* futbolfantasy's hierarchy categories, in the colours of their own icons. The tint is light
+   enough for the ink to read on it in both themes. */
+.role{--rc:var(--muted);display:inline-block;font-size:10px;font-weight:700;line-height:1.45;
+  padding:0 6px;border-radius:999px;color:var(--ink);white-space:nowrap;vertical-align:1px;
+  background:color-mix(in srgb,var(--rc) 30%,transparent);border:1px solid color-mix(in srgb,var(--rc) 80%,transparent)}
+.role-clave{--rc:#3cc4c7} .role-importante{--rc:#d2b54a} .role-rotacion{--rc:#a3a3a3}
+.role-revulsivo{--rc:#b07f4f} .role-reserva{--rc:#c27752} .role-descarte{--rc:#6e6e6e}
+.role-revulsivo::after{content:" ▲";color:#3fae49;font-size:8px}
+.pc-role{margin:8px 0 0;font-size:12px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:4px 6px;
+  align-items:baseline;line-height:1.45}
+.pc-role a{color:var(--accent);text-decoration:none;white-space:nowrap}
+.pc-role .mk-chip{font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;
+  background:color-mix(in srgb,var(--warning) 18%,transparent);color:var(--warning)}

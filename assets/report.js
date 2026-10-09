@@ -1774,6 +1774,11 @@ function whenShort(stamp){
   return soon?`${day} ${hm}`:`${day} ${t.getDate()} ${['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][t.getMonth()]} ${hm}`;
 }
 
+// futbolfantasy's category for a player in his club, in the colour of their icon.
+function roleChip(r){
+  return r&&r.key?`<span class="role role-${r.key}" title="${String(r.note||'').replace(/"/g,'&quot;')}">${r.label}</span>`:'';
+}
+
 function shieldMark(p){
   return p.shielded?` <span class="shield-mark" title="blindado${p.shielded_until?' hasta '+whenShort(p.shielded_until):''}">🛡</span>`:'';
 }
@@ -1824,7 +1829,7 @@ async function openDetail(playerId){
   const xpTile=tile('xPts / jornada', dec(p.xpts), p.rank?`score #${p.rank}`:'',
     xp>=6?'t-good':xp>=3.5?'t-info':xp>=2?'t-warn':'t-bad');
   const startsTile=starts!=null?tile('Titular', starts+' %',
-    p.hierarchy?p.hierarchy:(p.start_probability_source==='ficha'?`J${p.start_week||''} en su ficha`:''),
+    p.role?roleChip(p.role):p.hierarchy?p.hierarchy:(p.start_probability_source==='ficha'?`J${p.start_week||''} en su ficha`:''),
     starts>=75?'t-good':starts>=50?'t-warn':'t-bad'):null;
   const nextTile=p.next_rival?tile('Próximo', p.next_rival, p.next_home?'🏠 en casa':'✈️ fuera'):null;
   const valueTile=tile('Valor', mny(p.value), l.market_id?`en venta por ${mny(l.min_bid)}`:'');
@@ -1870,6 +1875,9 @@ async function openDetail(playerId){
       ? `<a class="${t.cls||''} t-link" href="${t.href}" target="_blank" rel="noopener" title="Su ficha en futbolfantasy">${inner}</a>`
       : `<div class="${t.cls||''}">${inner}</div>`;
   };
+  const role=p.role?`<div class="pc-role">${roleChip(p.role)}${p.role.change==='down'
+      ?` <span class="mk-chip warn">bajó a ${p.role.label}</span>`:''}${p.role.note?` <span class="pc-role-note">${p.role.note}</span>`:''}${
+      p.role.team_url?` <a href="${p.role.team_url}" target="_blank" rel="noopener">↗ jerarquías</a>`:''}</div>`:'';
   const grid=rowsOfTiles.map(group=>group.filter(Boolean)).filter(group=>group.length)
     .map(group=>`<div class="pc-grid">${group.map(drawTile).join('')}</div>`).join('');
   const actions=data.actions||[];
@@ -1898,6 +1906,7 @@ async function openDetail(playerId){
           data-cmp-pos="${p.position||''}">+ comparar</button></div></div></div>
     ${status}
     <div class="pc-tiles">${grid}</div>
+    ${role}
     ${popWeeks(data.weeks||[])}
     ${(data.history||[]).filter(x=>x.value!=null).length>=3
       ?`<div class="pc-h">Valor · ${(data.history||[]).filter(x=>x.value!=null).length} días</div>`:''}
