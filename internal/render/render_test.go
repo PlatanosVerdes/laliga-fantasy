@@ -102,3 +102,27 @@ func TestFeedIsOneSortableList(t *testing.T) {
 		t.Error("el premio de la jornada no cuenta como operacion")
 	}
 }
+
+// A shield is not a sale: it reads as one, with no amount, and the notices that are not
+// movements stay out of the log; an unknown type still gets a word, not "tipo N".
+func TestFeedNamesShieldsAndHidesNotices(t *testing.T) {
+	page := Feed([]map[string]any{
+		{"type_id": 4.0, "kind": "tipo 4", "player": "El Hilali", "player_id": "9",
+			"seller": "LamineTheTuareg", "actor": "LamineTheTuareg", "user1": "u1",
+			"date": "2026-10-08T16:36:00"},
+		{"type_id": 7.0, "kind": "tipo 7", "actor": "X", "date": "2026-10-08T10:00:00"},
+		{"type_id": 10.0, "kind": "tipo 10", "date": "2026-10-08T09:00:00"},
+		{"type_id": 12.0, "kind": "tipo 12", "player": "Raro", "player_id": "8",
+			"date": "2026-10-08T08:00:00"},
+	})
+	if !strings.Contains(page, ">blindaje<") || !strings.Contains(page, "blindado por") ||
+		strings.Contains(page, "vendido por") || !strings.Contains(page, "feed-quiet") {
+		t.Errorf("the shield: %s", page)
+	}
+	if strings.Contains(page, "tipo ") || !strings.Contains(page, ">movimiento<") {
+		t.Errorf("no 'tipo N' left: %s", page)
+	}
+	if strings.Count(page, `class="feed-row`) != 2 {
+		t.Errorf("types 7 and 10 are not movements: %s", page)
+	}
+}

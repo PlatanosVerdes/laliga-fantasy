@@ -1597,6 +1597,7 @@ table.cmp tr:last-child td{border-bottom:0}
 .mk .evo .empty{border:0;margin:0 14px;background:none}
 .mk .feed{border-radius:12px}
 .mk .feed-row{padding:9px 12px}
+.feed-row.feed-quiet{color:var(--muted)} .feed-quiet .feed-body strong{font-weight:500}
 .mk .feed-sort{margin:0 0 8px}
 .mk .feed-legend{font-size:11px}
 .mk .pick-bar{margin:0}

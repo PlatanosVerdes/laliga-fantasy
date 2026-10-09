@@ -673,7 +673,7 @@ func modeChip(mode string) string {
 func Feed(events []map[string]any) string {
 	var moves []map[string]any
 	for _, event := range events {
-		if !strings.Contains(text(event["kind"]), "alinea") {
+		if !strings.Contains(text(event["kind"]), "alinea") && !feedHidden[int(number(event["type_id"]))] {
 			moves = append(moves, event)
 		}
 	}
@@ -702,6 +702,13 @@ func Feed(events []map[string]any) string {
 	return blocks.String()
 }
 
+// feedHidden are the log's per-matchday and league-wide notices (types 7 and 10): no money and no
+// player moves, so they are not movements.
+var feedHidden = map[int]bool{7: true, 10: true}
+
+// ShieldType is the log's shield bought (see model.ShieldType): it moves no money.
+const ShieldType = 4
+
 // FeedRow is one movement. The amount alone does not say whether it was a steal or a panic
 // buy, so the player's value on that same day travels with it.
 func FeedRow(event map[string]any) string {
@@ -722,6 +729,13 @@ func FeedRow(event map[string]any) string {
 		seller = ""
 	}
 	var body string
+	if int(number(event["type_id"])) == ShieldType {
+		by := ManagerLink(text(event["actor"]), ManagerTeams[text(event["user1"])])
+		return fmt.Sprintf(`<div class="feed-row feed-quiet" data-amount="0">`+
+			`<span class="feed-date">%s</span><span class="feed-kind">blindaje</span>`+
+			`<span class="feed-body">%s · blindado por %s</span><span class="feed-amount"></span></div>`,
+			Esc(feedDate(event)), player, by)
+	}
 	switch {
 	case text(event["kind"]) == "recompensa" && buyer != "":
 		week := ""
@@ -780,10 +794,7 @@ func FeedRow(event map[string]any) string {
 			`<span class="pill-%s">%.2fx</span>`, Esc(Money(then)), status, premium)
 	}
 
-	date := strings.ReplaceAll(text(event["date"]), "T", " ")
-	if len(date) > 16 {
-		date = date[:16]
-	}
+	date := feedDate(event)
 	// The matchday prize is not an operation: sorted by size it would bury the signings.
 	size := 0.0
 	if text(event["kind"]) != "recompensa" {
@@ -792,6 +803,9 @@ func FeedRow(event map[string]any) string {
 	kind := text(event["kind"])
 	if truthy(event["clausulazo"]) {
 		kind = "clausulazo"
+	}
+	if strings.HasPrefix(kind, "tipo ") {
+		kind = "movimiento"
 	}
 	mark := FeedMarks[text(event["player_id"])]
 	if FeedMe != "" && (text(event["buyer"]) == FeedMe || text(event["seller"]) == FeedMe) {
@@ -898,6 +912,14 @@ func ManagerLink(name, teamID string) string {
 
 // buyerUser and sellerUser read the two sides of an event. cash == -1 means user1 paid, which
 // loadActivity already used to fill buyer and seller, so the mapping has to match it.
+func feedDate(event map[string]any) string {
+	date := strings.ReplaceAll(text(event["date"]), "T", " ")
+	if len(date) > 16 {
+		date = date[:16]
+	}
+	return date
+}
+
 func buyerUser(event map[string]any) string {
 	if text(event["buyer"]) == "" {
 		return ""
