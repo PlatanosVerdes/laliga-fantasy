@@ -697,6 +697,9 @@ function statusBadge(player){
   return `<span class="badge-status ${s.cls}" data-tip="${healthTip(player)}">${s.icon}</span>`;
 }
 
+// A club's crest, from the stylesheet the page carries.
+const crest=id=>id?`<span class="crest crest-${id}"></span>`:'';
+
 // A round face with the status ring and its badge, the reason as the tooltip.
 function faceOf(player,size='sm'){
   const s=health(player);
@@ -1880,7 +1883,7 @@ async function openDetail(playerId){
         ? `<button class="p-name" type="button" data-manager="${p.owner_team_id}">${p.owner}</button>`
         : (p.owner||'libre'));
   // The same tags as the rows: club, owner, role, starting odds, then the states that apply.
-  const tags=`<span class="pl"><span class="pl-team">${p.team_short||p.team||''}</span>`
+  const tags=`<span class="pl"><span class="pl-team">${crest(p.team_id)}${p.team_short||p.team||''}</span>`
     +`<span class="pl-owner">${owner}</span>${p.role?roleChip(p.role):''}`
     +`${p.start_probability!=null?`<span>${p.start_probability} %</span>`:''}${p.starred?'<span>★</span>':''}</span>`
     +(p.is_mine&&p.sale_locked&&p.hold_until?`<span class="tg tg-warn">🔒 hasta ${whenShort(p.hold_until)}</span>`:'')
@@ -1902,7 +1905,7 @@ async function openDetail(playerId){
   const startsTile=starts!=null?tile('Titular', starts+' %',
     p.role?roleChip(p.role):p.hierarchy?p.hierarchy:(p.start_probability_source==='ficha'?`J${p.start_week||''} en su ficha`:''),
     starts>=75?'t-good':starts>=50?'t-warn':'t-bad'):null;
-  const nextTile=p.next_rival?tile('Próximo', p.next_rival, p.next_home?'en casa':'fuera'):null;
+  const nextTile=p.next_rival?tile('Próximo', crest(p.next_rival_id)+p.next_rival, p.next_home?'en casa':'fuera'):null;
   const valueTile=tile('Valor', mny(p.value), l.market_id?`en venta por ${mny(l.min_bid)}`:'');
   const ceilingTile=p.is_mine?null:tile('Techo rentable', p.ideal_bid?mny(p.ideal_bid):'sin margen',
     p.ff_url?'↗ futbolfantasy':(p.ideal_bid?'futbolfantasy':''), 't-ceiling', p.ff_url);
@@ -2419,7 +2422,7 @@ function wireFind(box){
           <b>${p.name}</b>
           <span class="pos pos-${String(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
         </span>
-        <span class="cmp-hit-num">${p.team_short||''} · ${p.is_mine?'tuyo':(p.owner||'libre')}
+        <span class="cmp-hit-num"><span class="crest crest-${p.team_id}"></span>${p.team_short||''} · ${p.is_mine?'tuyo':(p.owner||'libre')}
           <b>${fmt(p.value)}</b></span>
       </button>`).join('');
     list.hidden=false;
@@ -2442,7 +2445,7 @@ function wireFind(box){
   };
   input.addEventListener('input',()=>{ clearTimeout(timer); timer=setTimeout(run,180); });
   input.addEventListener('keydown',(event)=>{
-    if(event.key==='Escape'){ input.value=''; hide(); input.blur(); }
+    if(event.key==='Escape'){ collapse(); trigger&&trigger.focus(); }
     // Enter adds the first: three letters and Enter is the short way through.
     if(event.key==='Enter'&&found.length){
       event.preventDefault();
@@ -2580,7 +2583,7 @@ const CMP_ROWS=[
   {label:'Valor 7d', get:p=>p.projected_pct,
     fmt:v=>((v||0)>=0?'+':'')+(v||0).toFixed(2)+'%', best:'max'},
   {label:'Proximo rival', get:p=>p.next_rival,
-    fmt:(v,p)=>v?`${v} · ${p.next_home?'en casa':'fuera'}`:'—', text:true},
+    fmt:(v,p)=>v?`${crest(p.next_rival_id)}${v} · ${p.next_home?'en casa':'fuera'}`:'—', text:true},
 ];
 
 function cmpChips(p){
@@ -2707,7 +2710,7 @@ async function renderCompare(){
         <button class="cmp-x" type="button" data-cmp-drop="${p.id}" aria-label="Quitar">&times;</button>
       </span>
       <span class="cmp-sub"><span class="pos pos-${String(p.position||'').toLowerCase().slice(0,3)}"
-        >${p.position}</span> ${p.team_short||p.team||''} ·
+        >${p.position}</span> ${crest(p.team_id)}${p.team_short||p.team||''} ·
         ${p.is_mine?'tuyo':(p.owner&&p.owner_team_id
           ? `<button class="p-name" type="button" data-manager="${p.owner_team_id}">${p.owner}</button>`
           : (p.owner||'libre'))}</span>
@@ -2779,9 +2782,15 @@ function wireFindPlayer(){
   if(!input||input.dataset.wired) return;
   input.dataset.wired='1';
   const list=input.parentElement.querySelector('.find-results');
+  const pop=input.closest('.find-pop'), box=input.closest('.head-find');
+  const trigger=box&&box.querySelector('.find-btn');
   let timer=null, found=[], cur=0;
   const hide=()=>{ list.hidden=true; list.innerHTML=''; found=[]; cur=0; };
-  const open=(id)=>{ hide(); input.value=''; input.blur(); openDetail(id); };
+  // The search is a magnifier until asked for: then the field opens over the end of the bar.
+  const expand=()=>{ if(pop){ pop.hidden=false; box.classList.add('open'); } input.focus(); };
+  const collapse=()=>{ hide(); input.value=''; input.blur(); if(pop){ pop.hidden=true; box.classList.remove('open'); } };
+  if(trigger) trigger.addEventListener('click',()=>pop&&!pop.hidden?collapse():expand());
+  const open=(id)=>{ collapse(); openDetail(id); };
   const paint=()=>{
     list.innerHTML=found.map((p,i)=>`
       <button class="cmp-hit${i===cur?' first':''}" type="button" data-find="${p.id}">
@@ -2790,7 +2799,7 @@ function wireFindPlayer(){
           <b>${p.name}</b>
           <span class="pos pos-${String(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
         </span>
-        <span class="cmp-hit-num">${p.team_short||''} · ${p.is_mine?'tuyo':(p.owner||'libre')}
+        <span class="cmp-hit-num"><span class="crest crest-${p.team_id}"></span>${p.team_short||''} · ${p.is_mine?'tuyo':(p.owner||'libre')}
           <b>${fmt(p.value)}</b></span>
       </button>`).join('');
     list.hidden=false;
@@ -2815,7 +2824,7 @@ function wireFindPlayer(){
   };
   input.addEventListener('input',()=>{ clearTimeout(timer); timer=setTimeout(run,180); });
   input.addEventListener('keydown',(event)=>{
-    if(event.key==='Escape'){ input.value=''; hide(); input.blur(); }
+    if(event.key==='Escape'){ collapse(); trigger&&trigger.focus(); }
     if(!found.length) return;
     if(event.key==='ArrowDown'||event.key==='ArrowUp'){
       event.preventDefault();
@@ -2830,14 +2839,14 @@ function wireFindPlayer(){
     if(hit) open(hit.dataset.find);
   });
   document.addEventListener('click',(event)=>{
-    if(!input.parentElement.contains(event.target)) hide();
+    if(!(box||input.parentElement).contains(event.target)) collapse();
   });
   document.addEventListener('keydown',(event)=>{
     if(event.key!=='/'||event.metaKey||event.ctrlKey) return;
     const at=document.activeElement;
     if(at&&(at.tagName==='INPUT'||at.tagName==='TEXTAREA'||at.isContentEditable)) return;
     event.preventDefault();
-    input.focus();
+    expand();
   });
 }
 
@@ -3120,18 +3129,17 @@ let currentVersion=null;
 // changes).
 const CLIENT_OWNED=new Set(['once','comparador']);
 
-// The balance is in two places and cannot say two things: the chip in the bar, which is the
-// one always on screen, and the header widget, which also carries the place in the league.
+// The balance lives in the Caja card; the live refresh rewrites it there and keeps the exact
+// figure for the arithmetic a typed amount needs.
 let myCash=null;
 
 function showCash(amount){
   if(typeof amount!=='number') return;
   myCash=amount;
-  const text=exact(amount);
-  const chip=document.getElementById('tab-cash');
-  if(chip){ chip.textContent=mny(amount); chip.title='Tu saldo ahora mismo: '+text; }
   const kpi=document.getElementById('kpi-cash');
-  if(kpi) kpi.textContent=mny(amount);
+  if(kpi){ kpi.textContent=mny(amount); kpi.title='Tu saldo ahora mismo: '+exact(amount); }
+  const exactLine=kpi&&kpi.parentElement.querySelector('.s');
+  if(exactLine&&/€$/.test(exactLine.textContent.trim())) exactLine.textContent=exact(amount);
 }
 
 async function swap(){
@@ -3153,6 +3161,7 @@ async function swap(){
   }
   currentVersion=data.version;
   showCash(data.cash);
+  liveTip();
   Object.entries(data.sections).forEach(([id,inner])=>{
     if(CLIENT_OWNED.has(id)) return;
     const node=document.getElementById(id);
@@ -3206,10 +3215,20 @@ function showEffect(message){
   setTimeout(()=>{box.classList.remove('in');setTimeout(()=>box.remove(),400);},12000);
 }
 
+// The live dot says the connection, the build and when the page last changed.
+let liveState='Sin conexión en vivo', liveAt=new Date();
+function liveTip(state){
+  if(state) liveState=state; else liveAt=new Date();
+  const dot=document.getElementById('live-dot');
+  if(!dot) return;
+  const hm=String(liveAt.getHours()).padStart(2,'0')+':'+String(liveAt.getMinutes()).padStart(2,'0');
+  dot.dataset.tip=[liveState, dot.dataset.build, 'actualizado '+hm].filter(Boolean).join(' · ');
+}
+
 function connect(){
   const dot=document.getElementById('live-dot');
   const source=new EventSource('/api/events');
-  source.onopen=()=>{ if(dot){ dot.className='live-on'; dot.title='En vivo'; } };
+  source.onopen=()=>{ if(dot){ dot.className='live-on'; liveTip('En vivo'); } };
   source.onmessage=(event)=>{
     const message=JSON.parse(event.data);
     if(message.type==='effect'){
@@ -3222,7 +3241,7 @@ function connect(){
     }
   };
   source.onerror=()=>{
-    if(dot){ dot.className='live-off'; dot.title='Sin conexion: reintentando'; }
+    if(dot){ dot.className='live-off'; liveTip('Sin conexión: reintentando'); }
     source.close(); setTimeout(connect,5000);
   };
 }
@@ -3232,8 +3251,9 @@ wireDetails(); wireRaids();
 wireRaises(); wireManagers(); wireMatchdays(); wireFeedSort();
 wireTabs(); tick(); drawTray();
 {
-  const stamped=document.getElementById('tab-cash');
-  if(stamped&&stamped.dataset.cash) myCash=+stamped.dataset.cash;
+  const stamped=document.querySelector('.topbar[data-cash]');
+  if(stamped) myCash=+stamped.dataset.cash;
+  liveTip();
 }
 if(window.EventSource && location.protocol.startsWith('http')) connect();
 

@@ -64,9 +64,6 @@ header p{margin:0;color:var(--ink-2);font-size:13px}
 .bid-balance b.balance-after{color:var(--ink)}
 .bid-balance .balance-bad{color:var(--critical)}
 
-.tab-cash{margin-left:auto;align-self:center;padding:4px 10px;font-size:13px;font-weight:700;
-  font-variant-numeric:tabular-nums;color:var(--ink);
-  background:color-mix(in srgb,var(--good) 16%,transparent);border-radius:6px}
 .tab{font:inherit;font-size:13px;font-weight:600;color:var(--muted);background:none;
   border:none;border-bottom:2px solid transparent;padding:9px 14px;cursor:pointer;
   margin-bottom:-1px}
@@ -746,10 +743,6 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .mode-auto{color:var(--pole-pos);background:color-mix(in srgb,var(--pole-pos) 14%,transparent)}
 .mode-manual{color:var(--warning);background:color-mix(in srgb,var(--warning) 14%,transparent)}
 .mode-read{color:var(--muted)}
-/* The binary's version: there to be looked up, so discreet but legible in both themes. */
-.build{margin-left:10px;align-self:center;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
-  font-size:11px;letter-spacing:0;color:var(--muted);padding:2px 7px;border-radius:6px;
-  border:1px solid var(--line);cursor:default;white-space:nowrap}
 
 /* A squad reads by lines, like a pitch: keeper, defence, midfield, attack. */
 .md-line,.squad-line{display:grid;grid-template-columns:38px 1fr;gap:8px;align-items:start;
@@ -966,11 +959,6 @@ td .muted,span.muted{color:var(--muted)}
   .wrap{padding:14px 12px 56px}
   header h1{font-size:19px;line-height:1.25}
   header p{font-size:12px}
-  /* At 400px a 150px box does not fit beside the button: it takes a line of its own, and the
-     results with it. */
-  .head-find{display:block;margin:6px 0 0}
-  .head-input,.head-input:focus{width:100%}
-  .find-results{width:100%}
   section{margin:28px 0}
   h2{font-size:16px}
   .note{font-size:12.5px}
@@ -985,9 +973,6 @@ td .muted,span.muted{color:var(--muted)}
     border-bottom:none;box-shadow:0 1px 0 var(--line);margin-top:16px}
   .tabs::-webkit-scrollbar{display:none}
   .tab{flex:0 0 auto;padding:10px 11px;margin-bottom:0}
-  .tab-cash{position:sticky;right:0;z-index:1;margin-left:0;
-    background:color-mix(in srgb,var(--good) 16%,var(--plane));
-    box-shadow:-10px 0 10px -4px var(--plane)}
 
   .wide-only{display:none}
   th,td{padding:8px 9px}
@@ -1122,11 +1107,16 @@ section{margin:28px 0}
 .topbar .tabs::-webkit-scrollbar{display:none}
 .topbar .tab{flex:none;font-size:14px;font-weight:400;padding:11px 10px;margin-bottom:0}
 .topbar .tab.on{font-weight:600}
-.topbar .tab-cash{flex:none;margin-left:auto}
-.topbar .head-find{flex:none;width:220px;margin:0}
-.topbar .head-input,.topbar .head-input:focus{width:100%;font-size:13px;padding:6px 10px;
-  border-radius:9px;background:var(--surface)}
-.topbar .find-results{left:auto;right:0;width:300px;max-width:calc(100vw - 32px)}
+/* The search is a magnifier; asked for, its field opens over the right end of the bar. */
+.topbar .head-find{flex:none;margin:0;position:static}
+.find-btn{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink-2);cursor:pointer;padding:0}
+.find-btn:hover,.head-find.open .find-btn{border-color:var(--accent);color:var(--accent)}
+.find-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.find-pop{position:absolute;right:56px;top:50%;transform:translateY(-50%);width:min(340px,calc(100% - 72px));z-index:7}
+.topbar .head-input,.topbar .head-input:focus{width:100%;font-size:13px;padding:7px 12px;
+  border-radius:9px;background:var(--surface);box-shadow:0 4px 18px rgba(0,0,0,.12)}
+.topbar .find-results{left:0;right:0;width:auto;max-width:none}
 .find-results .cmp-hit.first{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 
 .strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 6px}
@@ -1255,11 +1245,9 @@ body:has(.drawer.as-pop:not([hidden])) .cmp-tray{display:none}
 
 @media (max-width:760px){
   .wrap{padding:0 12px 56px}
-  .topbar{flex-wrap:wrap;gap:0;margin:0 -12px 12px;padding:0 12px}
-  .topbar .tabs{flex-basis:100%}
-  .topbar .head-find{width:100%;padding:6px 0 8px}
+  .topbar{gap:6px;margin:0 -12px 12px;padding:0 12px}
   .topbar .head-input{font-size:16px}
-  .topbar .find-results{left:0;right:auto;width:100%;max-width:none}
+  .find-pop{right:48px;width:calc(100% - 60px)}
   .strip{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
   .stat .v{font-size:17px}
   .drawer.as-pop{padding:6px}
@@ -1275,7 +1263,6 @@ body:has(.drawer.as-pop:not([hidden])) .cmp-tray{display:none}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--surface-2:#232321}}
 :root[data-theme="dark"]{--surface-2:#232321}
 .topright{display:flex;align-items:center;gap:8px;flex:none}
-.topbar .topright .tab-cash{margin:0;font-size:12px;padding:3px 8px}
 .topright #live-dot{width:7px;height:7px}
 .strip{margin:0 0 18px}
 section.mk{margin:0 0 22px}
@@ -1585,8 +1572,6 @@ section.mk{margin:0 0 22px}
 footer,header.topline{margin-top:24px}
 
 @media (max-width:760px){
-  .topbar .topright{flex-basis:100%;padding:6px 0 8px}
-  .topbar .topright .head-find{flex:1;width:auto;padding:0}
   .mk .big{font-size:25px}
   .mk .card-foot button{flex:1}
   .mk .matchday{grid-template-columns:1fr 1fr}
@@ -1736,3 +1721,7 @@ button.reach-btn:hover{filter:brightness(1.1);text-decoration:underline}
 .role-revulsivo::after{content:"▲";color:#3fae49;font-size:8px}
 a.role{color:inherit;text-decoration:none;cursor:pointer}
 a.role:hover,a.role:focus-visible{text-decoration:underline}
+/* A crest beside a club code reads at the size of the text around it. */
+.cmp-hit-num .crest,.mk-cal-them .crest,.cmp-sub .crest,table.cmp td .crest{width:13px;height:13px;
+  vertical-align:-2px;margin:0 2px}
+.pc-grid b .crest{width:16px;height:16px;vertical-align:-2px;margin-right:4px}

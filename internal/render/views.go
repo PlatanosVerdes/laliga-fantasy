@@ -698,8 +698,15 @@ func (d Document) endingsAside() string {
 		case outcome == "rechazada" && text(ending["who"]) != "":
 			what = "rechazada por " + text(ending["who"])
 		}
+		detail := ""
+		if outcome == "perdida" && text(ending["new_owner"]) != "" {
+			detail = "ganó " + text(ending["new_owner"])
+			if paid := number(ending["won_for"]); paid > 0 {
+				detail += " (" + esMoney(paid) + ")"
+			}
+		}
 		lines = append(lines, outcomeRow(text(ending["player_id"]), text(ending["player"]),
-			outcome, "", what, shortDate(text(ending["at"])), number(ending["amount"])))
+			outcome, detail, what, shortDate(text(ending["at"])), number(ending["amount"])))
 	}
 	body := empty("Todavía no se ha resuelto ninguna.")
 	if len(lines) > 0 {
@@ -1528,8 +1535,8 @@ func (d Document) comingWeeks(current int) string {
 		entry.yours += count
 		if count > 0 || key == 0 {
 			entry.matches = append(entry.matches, fmt.Sprintf(
-				`<span class="mk-cal-them">%s–%s <i>%d</i></span>`, Esc(text(fixture["local"])),
-				Esc(text(fixture["visitor"])), count))
+				`<span class="mk-cal-them">%s%s–%s%s <i>%d</i></span>`, crestOf(local),
+				Esc(text(fixture["local"])), Esc(text(fixture["visitor"])), crestOf(visitor), count))
 		}
 	}
 	sort.Ints(order)

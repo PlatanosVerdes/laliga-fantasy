@@ -110,12 +110,7 @@ func (d Document) HTML() string {
 	sections = append(sections, CompareShell)
 
 	stats, more := d.widgets(week, players)
-	// The balance rides in the tab bar, which is the only strip that stays on screen.
-	cash, budget := "", asFloat(d.Advice["budget"])
-	if budget != nil {
-		cash = esMoney(*budget)
-	}
-	header := Header(stats, hasAdvice, cash, budget) + d.pageFacts()
+	header := Header(stats, hasAdvice, asFloat(d.Advice["budget"])) + d.pageFacts()
 	footer := PageFoot(d.Generated, d.LeagueName, int(number(week["weekNumber"])), more, d.Mode) +
 		Footer(number(universe["current_weight"]))
 

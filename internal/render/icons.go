@@ -9,7 +9,7 @@ import "strings"
 const IconSprite = `<svg width="0" height="0" style="position:absolute" aria-hidden="true">` +
 	`<symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3 3 7-7"/></symbol>` +
 	`<symbol id="i-slash" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M3.8 12.2l8.4-8.4"/></symbol>` +
-	`<symbol id="i-outbid" viewBox="0 0 16 16"><circle cx="8" cy="11.2" r="3.3"/><path d="M8 1.5v5.3M5.6 4.5L8 6.8l2.4-2.3"/></symbol>` +
+	`<symbol id="i-person" viewBox="0 0 16 16"><circle cx="8" cy="5.3" r="2.7"/><path d="M2.8 14c.5-3.1 2.6-4.9 5.2-4.9s4.7 1.8 5.2 4.9"/></symbol>` +
 	`<symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 4.6V8l2.4 1.5"/></symbol>` +
 	`<symbol id="i-coin" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M10.2 5.6a2.7 2.7 0 1 0 0 4.8M5.2 7.3h3.6M5.2 8.8h3.6"/></symbol>` +
 	`<symbol id="i-x" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></symbol>` +
@@ -29,7 +29,7 @@ var outcomeMarks = map[string]outcomeMark{
 	// Bids and offers.
 	"aceptada":  {"check", "good", "aceptada"},
 	"rechazada": {"slash", "bad", "rechazada"},
-	"perdida":   {"outbid", "warn", "perdida: pujó más otro"},
+	"perdida":   {"person", "warn", "perdida: se lo llevó otro"},
 	"caducada":  {"clock", "muted", "caducada"},
 	// Standing orders.
 	"pagada":    {"coin", "good", "pagada"},
@@ -63,6 +63,9 @@ func outcomeIcon(outcome, why string) string {
 	mark, known := outcomeMarks[outcome]
 	if !known {
 		mark = outcomeMark{"dot", "muted", strings.ReplaceAll(outcome, "_", " ")}
+	}
+	if outcome == "perdida" && why != "" {
+		mark.Label = "perdida: " + why
 	}
 	if outcome == "cancelada" {
 		plain := strings.ToLower(why)

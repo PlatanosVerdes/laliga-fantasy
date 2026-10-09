@@ -37,3 +37,11 @@ func TestEveryOutcomeHasAnIcon(t *testing.T) {
 		t.Errorf("a cancelled order says why: %s", html)
 	}
 }
+
+// A lost bid says who took him and for how much, when that is known.
+func TestLostBidNamesTheWinner(t *testing.T) {
+	html := outcomeIcon("perdida", "ganó -papi— (30,0M)")
+	if !strings.Contains(html, "#i-person") || !strings.Contains(html, `data-tip="perdida: ganó -papi— (30,0M)"`) {
+		t.Errorf("perdida: %s", html)
+	}
+}

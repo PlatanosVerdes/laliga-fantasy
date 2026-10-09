@@ -434,32 +434,6 @@ func RankOf(value float64, others []float64) (string, float64, string) {
 
 // Tabs are the page's groups. Rendered only when there is a session, because a chip
 // that jumps nowhere is worse than no chip.
-// TabsWith is the tab bar plus the balance. The bar is sticky, so this is the one place where
-// a number stays on screen while you scroll a table, and the balance is the number every button
-// on this page is judged against: with it only in the header it was gone after one scroll and
-// stale after any purchase, since the live refresh only replaces sections.
-func TabsWith(cash string) string {
-	return TabsWithAmount(cash, nil)
-}
-
-// TabsWithAmount also stamps the exact figure, which is what the page needs to say how a
-// purchase would leave the balance while somebody is still typing the amount.
-func TabsWithAmount(cash string, amount *float64) string {
-	if cash == "" {
-		return Tabs
-	}
-	return strings.Replace(Tabs, `</div>`, cashChip(cash, amount)+`</div>`, 1)
-}
-
-func cashChip(cash string, amount *float64) string {
-	exact := ""
-	if amount != nil {
-		exact = fmt.Sprintf(` data-cash="%.0f"`, *amount)
-	}
-	return `<span class="tab-cash" id="tab-cash" title="Tu saldo ahora mismo"` + exact + `>` +
-		Esc(cash) + `</span>`
-}
-
 const Tabs = `<div class="tabs" id="tabs" role="tablist">` +
 	`<button class="tab" role="tab" data-tab="decidir" aria-selected="false" type="button">Decidir</button>` +
 	`<button class="tab" role="tab" data-tab="comprar" aria-selected="false" type="button">Comprar</button>` +
@@ -490,13 +464,6 @@ const CompareShell = `<section id="comparador" data-tab="comparador">` +
 // nothing: a page built by hand should not claim a version it does not have.
 var Build string
 
-func buildChip() string {
-	if Build == "" {
-		return ""
-	}
-	return fmt.Sprintf(`<span class="build" title="Versión del panel que estás viendo: la `+
-		`etiqueta con la que se construyó">%s</span>`, Esc(Build))
-}
 
 // Stat is one of the four cards under the tab bar: a label, one figure and a line under it.
 type Stat struct {
@@ -536,27 +503,37 @@ func StatCard(stat Stat) string {
 // Header is the tab bar, with the live dot, the balance and the search on its right, and the
 // four cards under it. The live dot starts off: a static file is honest about not being live,
 // and the script turns it on when the push channel connects.
-func Header(stats []string, withTabs bool, cash string, cashAmount *float64) string {
+func Header(stats []string, withTabs bool, cashAmount *float64) string {
 	tabs := ""
 	if withTabs {
 		tabs = Tabs
 	}
-	chip := ""
-	if withTabs && cash != "" {
-		chip = cashChip(cash, cashAmount)
+	// The exact balance, for the arithmetic a typed amount needs; the Caja card shows it.
+	attrs := ""
+	if cashAmount != nil {
+		attrs = fmt.Sprintf(` data-cash="%.0f"`, *cashAmount)
 	}
-	find := `<div class="head-find"><input id="find" class="head-input" type="search" ` +
+	// The version rides in the live dot's tooltip rather than taking room in the bar.
+	build := ""
+	if Build != "" {
+		build = ` data-build="` + Esc(Build) + `"`
+	}
+	tip := strings.TrimSuffix("Sin conexión en vivo · "+Build, " · ")
+	find := `<div class="head-find"><button class="find-btn" type="button" ` +
+		`aria-label="Buscar jugador" data-tip="Buscar jugador (tecla /)">` +
+		`<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.6"/>` +
+		`<path d="M10.4 10.4l3.6 3.6"/></svg></button>` +
+		`<div class="find-pop" hidden><input id="find" class="head-input" type="search" ` +
 		`autocomplete="off" spellcheck="false" placeholder="buscar jugador…" ` +
 		`aria-label="Buscar un jugador y abrir su ficha">` +
-		`<div class="cmp-results find-results" hidden></div></div>`
+		`<div class="cmp-results find-results" hidden></div></div></div>`
 	strip := ""
 	if len(stats) > 0 {
 		strip = `<div class="strip">` + strings.Join(stats, "") + `</div>`
 	}
-	return `<div class="topbar">` + tabs + `<div class="topright">` +
-		buildChip() + `<span id="live-dot" class="live-off" title="Sin conexión en vivo"></span>` +
-		chip + find +
-		`</div></div>` + strip
+	return `<div class="topbar"` + attrs + `>` + tabs + `<div class="topright">` +
+		`<span id="live-dot" class="live-off"` + build + ` data-tip="` + Esc(tip) + `"></span>` +
+		find + `</div></div>` + strip
 }
 
 // PageFoot is where the page comes from and what the server may do, and the figures that did
@@ -1501,7 +1478,7 @@ func SectionTable(name string, rows []map[string]any) (string, error) {
 				if rival == "" {
 					return nil
 				}
-				return rival + " · " + Where(truthy(row["next_home"]))
+				return crestOf(text(row["next_rival_id"])) + rival + " · " + Where(truthy(row["next_home"]))
 			}, "text"},
 		}
 		return TableIn(columns, rows, "Sin jugadores", "", false), nil
