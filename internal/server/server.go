@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -36,7 +37,7 @@ type Options struct {
 	Nudge func(string)
 	// Page renders the current world. Injected so the server does not need to know what a
 	// document is, and so a run without a session can still answer /healthz.
-	Page func() string
+	Page func() Rendered
 	// Refresh forces a rebuild, for /refresh.
 	Refresh func(cause string, force bool) error
 	// Client reads the live half of a request: the lineup, the value history, the balance.
@@ -56,6 +57,13 @@ type Options struct {
 	Adopted func()
 }
 
+// Rendered is one build of the world: the page, and the views the client draws from JSON.
+// Both come out of the same pass, so a view can never be a build ahead of the page around it.
+type Rendered struct {
+	HTML  string
+	Views map[string]any
+}
+
 type Server struct {
 	state *state.State
 	opts  Options
@@ -65,30 +73,30 @@ type Server struct {
 	// keeping is the current one.
 	pageMu  sync.Mutex
 	pageKey string
-	page    string
+	page    Rendered
 	season  season
 }
 
 // render returns the current page, rendering it only when the world has moved since the last
 // time. Guarded rather than sharded: two requests arriving together should wait for one render,
 // not run two.
-func (s *Server) render() string {
+func (s *Server) render() Rendered {
 	if s.opts.Page == nil {
-		return ""
+		return Rendered{}
 	}
 	key := s.state.RenderKey()
 	s.pageMu.Lock()
 	defer s.pageMu.Unlock()
-	if key == s.pageKey && s.page != "" {
+	if key == s.pageKey && s.page.HTML != "" {
 		return s.page
 	}
 	started := time.Now()
 	page := s.opts.Page()
-	if page == "" {
-		return ""
+	if page.HTML == "" {
+		return Rendered{}
 	}
 	s.pageKey, s.page = key, page
-	slog.Info("page rendered", "key", key, "bytes", len(page),
+	slog.Info("page rendered", "key", key, "bytes", len(page.HTML),
 		"ms", time.Since(started).Milliseconds())
 	return page
 }
@@ -117,6 +125,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/forecast/", s.forecastWeek)
 	mux.HandleFunc("/api/season", s.seasonTable)
 	mux.HandleFunc("/api/fragments", s.fragments)
+	mux.HandleFunc("/api/view/", s.view)
 	mux.HandleFunc("/api/lineup", s.lineup)
 	mux.HandleFunc("/api/session", s.session)
 	mux.HandleFunc("/api/favourite", s.favourite)
@@ -292,9 +301,20 @@ func (s *Server) events(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (s *Server) asset(writer http.ResponseWriter, request *http.Request) {
-	name := filepath.Base(strings.TrimPrefix(request.URL.Path, "/assets/"))
-	body, err := os.ReadFile(filepath.Join(s.opts.Assets, name))
+	name := path.Clean(strings.TrimPrefix(request.URL.Path, "/assets/"))
+	if name == "." || strings.HasPrefix(name, "..") || strings.HasPrefix(name, "/") ||
+		strings.Contains(name, "\\") {
+		http.NotFound(writer, request)
+		return
+	}
+	file, err := os.Open(filepath.Join(s.opts.Assets, filepath.FromSlash(name)))
 	if err != nil {
+		http.NotFound(writer, request)
+		return
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || info.IsDir() {
 		http.NotFound(writer, request)
 		return
 	}
@@ -314,7 +334,10 @@ func (s *Server) asset(writer http.ResponseWriter, request *http.Request) {
 	default:
 		writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	}
-	_, _ = writer.Write(body)
+	// The modules import each other by plain path, so a deploy is only picked up if every load
+	// asks again; Last-Modified keeps that a 304.
+	writer.Header().Set("Cache-Control", "no-cache")
+	http.ServeContent(writer, request, name, info.ModTime(), file)
 }
 
 // index serves the page.
@@ -336,5 +359,18 @@ func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 		fmt.Fprint(writer, "<title>Generando</title><p>Generando el primer informe…</p>")
 		return
 	}
-	fmt.Fprint(writer, s.render())
+	fmt.Fprint(writer, s.render().HTML)
+}
+
+// view is one tab as data, for the tabs the browser draws itself.
+func (s *Server) view(writer http.ResponseWriter, request *http.Request) {
+	name := strings.TrimPrefix(request.URL.Path, "/api/view/")
+	built := s.render()
+	data, ok := built.Views[name]
+	if !ok {
+		s.json(writer, http.StatusNotFound, map[string]any{"error": "sin vista " + name})
+		return
+	}
+	s.json(writer, http.StatusOK, map[string]any{"version": s.state.Health().Version,
+		"view": data})
 }

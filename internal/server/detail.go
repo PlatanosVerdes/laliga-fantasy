@@ -796,7 +796,7 @@ func (s *Server) fragments(writer http.ResponseWriter, _ *http.Request) {
 	// judged against, and the live refresh only replaces sections, so it used to sit there
 	// stale until somebody reloaded by hand.
 	s.json(writer, http.StatusOK, map[string]any{"version": s.state.Health().Version,
-		"cash": s.budget(), "sections": Sections(s.render())})
+		"cash": s.budget(), "sections": Sections(s.render().HTML)})
 }
 
 // budget is the cash the actions are judged against. Read from the API rather than the built

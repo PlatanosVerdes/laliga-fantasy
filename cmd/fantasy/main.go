@@ -648,21 +648,23 @@ func cmdServe(args []string) error {
 		Adopted: boot,
 		// The page is rendered on demand from whatever the last rebuild left, so a slow
 		// refresh never blocks a request and a failed one still serves the last good world.
-		Page: func() string {
+		Page: func() server.Rendered {
 			universe := world.Universe()
 			if universe == nil {
-				return ""
+				return server.Rendered{}
 			}
 			_, team, err := ensureLeague()
 			if err != nil {
-				return ""
+				return server.Rendered{}
 			}
-			page, err := renderPage(universe, client, team, "", mode)
+			document, err := buildDocument(universe, client, team, "", mode)
 			if err != nil {
 				slog.Error("render failed", "reason", err.Error())
-				return "<title>Error</title><p>No he podido construir la pagina.</p>"
+				return server.Rendered{
+					HTML: "<title>Error</title><p>No he podido construir la pagina.</p>"}
 			}
-			return page
+			return server.Rendered{HTML: document.HTML(),
+				Views: map[string]any{"vender": document.SellData()}}
 		},
 	})
 	// Nobody is told about a change until the page for it exists: rendering costs about four
@@ -1489,6 +1491,15 @@ func mineByWeek(universe *model.Universe) map[int]map[string]int {
 
 func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 	mode string) (string, error) {
+	document, err := buildDocument(universe, client, teamID, generated, mode)
+	if err != nil {
+		return "", err
+	}
+	return document.HTML(), nil
+}
+
+func buildDocument(universe *model.Universe, client *api.Client, teamID, generated,
+	mode string) (render.Document, error) {
 	cash := 0.0
 	if cashOverride != nil {
 		cash = *cashOverride
@@ -1500,11 +1511,11 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 	// JSON once. One conversion, in one place, rather than two shapes of the world.
 	blob, err := json.Marshal(universe)
 	if err != nil {
-		return "", err
+		return render.Document{}, err
 	}
 	var generic map[string]any
 	if err := json.Unmarshal(blob, &generic); err != nil {
-		return "", err
+		return render.Document{}, err
 	}
 	buckets := advice.Recommend(generic, cash, 0, 15)
 	// The per-player pages, once each: this is what fills the profitable ceiling and the
@@ -1513,7 +1524,7 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 
 	armed, err := policies.Load()
 	if err != nil {
-		return "", err
+		return render.Document{}, err
 	}
 	players := rowsFrom(generic["players"])
 	policyRows := map[string]map[string]any{}
@@ -1589,7 +1600,7 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 		Raise:    advice.ClausePlan(generic, cash),
 		Policies: policyRows,
 	}
-	return document.HTML(), nil
+	return document, nil
 }
 
 // cmdPage renders the whole document from a dump, so it can be compared with Python's
