@@ -119,7 +119,7 @@ func (d Document) HTML() string {
 	footer := PageFoot(d.Generated, d.LeagueName, int(number(week["weekNumber"])), more, d.Mode) +
 		Footer(number(universe["current_weight"]))
 
-	body := strings.Join(filterEmpty(sections), "")
+	body := IconSprite + strings.Join(filterEmpty(sections), "")
 	return Page(d.CSS, d.JS, CrestCSS(), header, body, footer, d.Modal, d.Drawer)
 }
 

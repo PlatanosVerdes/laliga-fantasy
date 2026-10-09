@@ -626,14 +626,14 @@ func (d Document) buyView() string {
 		d.buyBlock("Cláusulas que puedes pagar", "clausula", clauses, window))
 }
 
-// outcomeRow is a resolved bid, offer or standing order as a list row: a glyph for how it
+// outcomeRow is a resolved bid, offer or standing order as a list row: the icon of how it
 // ended where the face would be.
-func outcomeRow(id, name, glyph, tone, what, date string, amount float64) string {
+func outcomeRow(id, name, outcome, why, what, date string, amount float64) string {
 	value := ""
 	if amount > 0 {
 		value = esMoney(amount)
 	}
-	return ListRow{Lead: `<span class="rank-dot out-` + tone + `">` + glyph + `</span>`,
+	return ListRow{Lead: `<span class="rank-dot out-icon">` + outcomeIcon(outcome, why) + `</span>`,
 		Name: Esc(name), Meta: Esc(what), Value: value, Note: date,
 		Attrs: ` data-pid="` + Esc(id) + `"`}.HTML()
 }
@@ -685,15 +685,9 @@ func (d Document) raidRows() []string {
 }
 
 func (d Document) endingsAside() string {
-	glyphs := map[string][2]string{"aceptada": {"✓", "good"}, "rechazada": {"✕", "bad"},
-		"perdida": {"✕", "bad"}, "caducada": {"·", "muted"}}
 	var lines []string
 	for _, ending := range d.Endings {
 		outcome := text(ending["outcome"])
-		glyph := glyphs[outcome]
-		if glyph[0] == "" {
-			glyph = [2]string{"·", "muted"}
-		}
 		what := outcome
 		switch {
 		case outcome == "perdida" && text(ending["new_owner"]) != "":
@@ -705,7 +699,7 @@ func (d Document) endingsAside() string {
 			what = "rechazada por " + text(ending["who"])
 		}
 		lines = append(lines, outcomeRow(text(ending["player_id"]), text(ending["player"]),
-			glyph[0], glyph[1], what, shortDate(text(ending["at"])), number(ending["amount"])))
+			outcome, "", what, shortDate(text(ending["at"])), number(ending["amount"])))
 	}
 	body := empty("Todavía no se ha resuelto ninguna.")
 	if len(lines) > 0 {
@@ -1104,7 +1098,8 @@ func (d Document) clauseView() string {
 		chip := ""
 		switch {
 		case standing:
-			chip = tag(Esc(strings.ReplaceAll(text(raid["action"]), "_", " ")), "warn")
+			chip = outcomeIcon(text(raid["action"]), text(raid["why"])) +
+				tag(Esc(strings.ReplaceAll(text(raid["action"]), "_", " ")), "warn")
 			tone = "warn"
 		case truthy(player["clause_locked"]):
 			chip = clock(text(player["clause_locked_until"]), "se abre")
@@ -1162,21 +1157,16 @@ func (d Document) orderHistory() string {
 	if len(d.Orders) == 0 {
 		return ""
 	}
-	glyphs := map[string][2]string{"pagada": {"✓", "good"}, "cumplida": {"✓", "good"},
-		"cancelada": {"✕", "muted"}}
 	var lines []string
 	for _, order := range d.Orders {
 		outcome := text(order["outcome"])
-		glyph := glyphs[outcome]
-		if glyph[0] == "" {
-			glyph = [2]string{"·", "muted"}
-		}
 		what := outcome
 		if why := text(order["why"]); why != "" {
 			what += " · " + why
 		}
 		lines = append(lines, outcomeRow(text(order["player_id"]), text(order["player"]),
-			glyph[0], glyph[1], what, shortDate(text(order["at"])), number(order["amount"])))
+			outcome, text(order["why"]), what, shortDate(text(order["at"])),
+			number(order["amount"])))
 	}
 	return folded(fmt.Sprintf("Historial de tus órdenes · %d", len(lines)), scrollList(lines, 320))
 }
