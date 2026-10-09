@@ -1188,6 +1188,8 @@ details.kpis-more .kpi{padding:9px 12px}
 .pc-head h3{margin:0;font-size:20px;letter-spacing:-.015em}
 .pc-sub{display:flex;gap:6px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:13px}
 .pc-sub .cmp-add{margin-left:4px}
+.pc-sub .tags{margin-top:0}
+.pc-sub .tg .p-name{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
 .pc-status{display:inline-flex;gap:6px;align-items:center;font-size:12px;font-weight:600;
   border-radius:999px;padding:3px 10px;margin:0 0 12px}
 .pc-status.out{background:color-mix(in srgb,var(--critical) 18%,transparent);color:var(--critical)}
@@ -1358,7 +1360,8 @@ section.mk{margin:0 0 22px}
 .mk .rows{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);
   border-radius:12px;overflow:hidden;container:rows/inline-size;display:grid;
   grid-template-columns:42px minmax(0,1fr) max-content max-content max-content;column-gap:10px}
-.mk .r{grid-column:1/-1;display:grid;grid-template-columns:subgrid;grid-template-areas:"f w v c a";
+.mk .r{grid-column:1/-1;display:grid;grid-template-columns:subgrid;
+  grid-template-areas:"f w v c a" "f g v c a";
   align-items:center;padding:9px 12px;border-top:1px solid var(--line)}
 .mk .r:first-child{border-top:0}
 .mk .r[hidden],.mk .scrollbox[hidden],.mk .rows[hidden]{display:none}
@@ -1367,6 +1370,7 @@ section.mk{margin:0 0 22px}
   color:var(--ink-2);font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
 .mk .rank-dot.out-good{color:var(--good)} .mk .rank-dot.out-bad{color:var(--critical)}
 .mk .rank-dot.out-muted{color:var(--muted)}
+.mk .r>.tags{grid-area:g;min-width:0}
 .mk .rwho{grid-area:w;display:flex;flex-direction:column;min-width:0;line-height:1.3}
 .mk .rname{display:flex;align-items:center;gap:6px;min-width:0}
 .mk .rname b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -1410,7 +1414,9 @@ section.mk{margin:0 0 22px}
   .mk .rwho .meta{font-size:11px}
   .mk .rval{min-width:56px}
   .mk .rval b{font-size:14px}
-  .mk .rnote{font-size:10.5px}
+  .mk .rnote{font-size:10.5px;white-space:normal;text-align:right;max-width:110px}
+  .mk .r{grid-template-areas:"f w v v a" "f g g c c"}
+  .mk .rchip{justify-content:flex-end}
   .mk .rchip .mk-chip{font-size:10px;padding:2px 6px}
   .mk .rchip .clock{display:none}
   .mk .ract{gap:4px}
@@ -1420,9 +1426,9 @@ section.mk{margin:0 0 22px}
 }
 /* A phone has no room for both zones on one line: the chip and buttons go under, right. */
 @media (max-width:560px){
-  .mk .r{grid-template-columns:28px minmax(0,1fr) auto;grid-template-areas:"f w v" "f t t";
-    row-gap:6px;column-gap:8px}
-  .mk .rtail{grid-area:t;display:flex;justify-content:flex-end;align-items:center;gap:6px}
+  .mk .r{grid-template-columns:28px minmax(0,1fr) auto;grid-template-areas:"f w v" "f g g" "f z z";
+    row-gap:4px;column-gap:8px}
+  .mk .rtail{grid-area:z;display:flex;justify-content:flex-end;align-items:center;gap:6px}
   .mk .rval{max-width:150px}
   .mk .rnote{white-space:normal;text-align:right}
   .mk .rtail:not(:has(*)){display:none}
@@ -1657,20 +1663,28 @@ table.cmp tr:last-child td{border-bottom:0}
 .mk .big-note.up{color:var(--good)} .mk .big-note.down{color:var(--critical)}
 
 /* Vender: the rest of the squad, the eleven marked so a sale there is never by accident */
-.mk .xi-mark{color:var(--accent);font-weight:650;white-space:nowrap}
 .mk .src-rival{color:var(--warning)}
 .mk .mk-note.plan-warn{color:var(--warning)}
 
 /* futbolfantasy's hierarchy categories, in the colours of their own icons. The tint is light
    enough for the ink to read on it in both themes. */
-.role{--rc:var(--muted);display:inline-block;font-size:10px;font-weight:700;line-height:1.45;
-  padding:0 6px;border-radius:999px;color:var(--ink);white-space:nowrap;vertical-align:1px;
-  background:color-mix(in srgb,var(--rc) 30%,transparent);border:1px solid color-mix(in srgb,var(--rc) 80%,transparent)}
+/* The one small tag: a row's second line, the card's header, the role. Same height, padding and
+   font everywhere; a line of them wraps instead of being cut. */
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+.tg{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 6px;border-radius:5px;
+  font-size:10.5px;font-weight:600;line-height:1;white-space:nowrap;color:var(--ink-2);
+  background:var(--surface-2);border:1px solid var(--line);vertical-align:1px}
+.tg .crest{width:12px;height:12px}
+.tg-warn{color:var(--warning);background:color-mix(in srgb,var(--warning) 14%,transparent);
+  border-color:color-mix(in srgb,var(--warning) 40%,transparent)}
+.tg-bad{color:var(--critical);background:color-mix(in srgb,var(--critical) 12%,transparent);
+  border-color:color-mix(in srgb,var(--critical) 40%,transparent)}
+.tg-info{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.tg.role{--rc:var(--muted);color:var(--ink);font-weight:700;
+  background:color-mix(in srgb,var(--rc) 30%,transparent);border-color:color-mix(in srgb,var(--rc) 80%,transparent)}
 .role-clave{--rc:#3cc4c7} .role-importante{--rc:#d2b54a} .role-rotacion{--rc:#a3a3a3}
 .role-revulsivo{--rc:#b07f4f} .role-reserva{--rc:#c27752} .role-descarte{--rc:#6e6e6e}
 .role-revulsivo::after{content:" ▲";color:#3fae49;font-size:8px}
 .pc-role{margin:8px 0 0;font-size:12px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:4px 6px;
   align-items:baseline;line-height:1.45}
 .pc-role a{color:var(--accent);text-decoration:none;white-space:nowrap}
-.pc-role .mk-chip{font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;
-  background:color-mix(in srgb,var(--warning) 18%,transparent);color:var(--warning)}

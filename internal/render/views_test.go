@@ -107,7 +107,7 @@ func TestRestOfSquadPutsTheBenchFirstAndHonoursTheHoldRule(t *testing.T) {
 	keeper := html[strings.Index(html, `data-pid="9"`):]
 	keeper = keeper[:strings.Index(keeper, "</li>")]
 	for _, want := range []string{`data-act="sell_to_market"`, `data-act="always"`,
-		"● Siempre en mercado", "en tu once"} {
+		"● Siempre en mercado"} {
 		if !strings.Contains(keeper, want) {
 			t.Errorf("missing %q: %s", want, keeper)
 		}
@@ -175,7 +175,7 @@ func TestRoleChipAndTheDropWarning(t *testing.T) {
 	squad[6]["start_probability"] = 60.0
 	document.Advice["squad"] = squad
 	rest := document.restOfSquad()
-	if !strings.Contains(rest, `class="role role-rotacion"`) || !strings.Contains(rest, "bajó a Rotación") {
+	if !strings.Contains(rest, `role role-rotacion"`) || !strings.Contains(rest, "bajó a Rotación") {
 		t.Errorf("the chip and the warning in my rows: %.400s", rest)
 	}
 	if aside := document.elevenAside(); !strings.Contains(aside, "Portero bajó a Rotación en su equipo") {

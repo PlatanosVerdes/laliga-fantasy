@@ -802,14 +802,6 @@ func (d Document) squadSection() string {
 // squadRow is one of mine: what he gives, what he is worth and where his clause and his sale
 // stand.
 func squadRow(player map[string]any) string {
-	meta := Esc(text(player["team_short"]))
-	meta += startsMeta(player)
-	if truthy(player["sale_locked"]) {
-		meta += " · 🔒 venta " + esDay(text(player["hold_until"]))
-	}
-	if asking := number(mapOf(player["market"])["min_bid"]); asking > 0 {
-		meta += " · 🏷 en venta por " + esMoney(asking)
-	}
 	trend := number(player["pct_7d"])
 	class, sign := "up", "+"
 	if trend < 0 {
@@ -817,6 +809,9 @@ func squadRow(player map[string]any) string {
 	}
 	note := fmt.Sprintf(`%s · <span class="%s">%s%s %%</span>`, esMoney(number(player["value"])),
 		class, sign, esNum(trend, 1))
+	if asking := number(mapOf(player["market"])["min_bid"]); asking > 0 {
+		note = "🏷 " + esMoney(asking) + " · " + note
+	}
 	var chip string
 	switch {
 	case truthy(player["shielded"]):
@@ -826,8 +821,7 @@ func squadRow(player map[string]any) string {
 	case number(player["clause"]) > 0:
 		chip = tag("🔓 "+esMoney(number(player["clause"])), "warn")
 	}
-	chip = roleDrop(player) + chip
-	return row(player, meta, esNum(number(player["xpts"]), 1)+" xPts", note, chip,
+	return row(player, "", esNum(number(player["xpts"]), 1)+" xPts", note, chip,
 		Star(player)+CompareButton(player), "")
 }
 

@@ -1776,7 +1776,7 @@ function whenShort(stamp){
 
 // futbolfantasy's category for a player in his club, in the colour of their icon.
 function roleChip(r){
-  return r&&r.key?`<span class="role role-${r.key}" title="${String(r.note||'').replace(/"/g,'&quot;')}">${r.label}</span>`:'';
+  return r&&r.key?`<span class="tg role role-${r.key}" title="${String(r.note||'').replace(/"/g,'&quot;')}">${r.label}</span>`:'';
 }
 
 function shieldMark(p){
@@ -1812,8 +1812,14 @@ async function openDetail(playerId){
   // whether his offer is worth taking.
   const owner=p.is_mine ? 'tuyo'
     : (p.owner && p.owner_team_id
-        ? `de <button class="p-name" type="button" data-manager="${p.owner_team_id}">${p.owner}</button>`
-        : (p.owner?'de '+p.owner:'libre'));
+        ? `<button class="p-name" type="button" data-manager="${p.owner_team_id}">${p.owner}</button>`
+        : (p.owner||'libre'));
+  // The same tags as the rows: club, owner, role, starting odds, then the states that apply.
+  const tags=[`<span class="tg">${p.team_short||p.team||''}</span>`, `<span class="tg">${owner}</span>`,
+    p.role?roleChip(p.role):'', p.start_probability!=null?`<span class="tg">titular ${p.start_probability} %</span>`:'',
+    p.is_mine&&p.sale_locked&&p.hold_until?`<span class="tg tg-warn">🔒 hasta ${whenShort(p.hold_until)}</span>`:'',
+    p.role&&p.role.change==='down'?`<span class="tg tg-warn">bajó a ${p.role.label}</span>`:'',
+    p.starred?'<span class="tg">★</span>':''].join('');
   const h=health(p), a=p.absence||{};
   const status=h?`<div class="pc-status ${h.ring}">${h.glyph==='card'?'🟥':'✚'} ${
     [h.label,a.reason,a.since,a.until].filter(Boolean).join(' · ')}</div>`:'';
@@ -1876,7 +1882,7 @@ async function openDetail(playerId){
       : `<div class="${t.cls||''}">${inner}</div>`;
   };
   const role=p.role?`<div class="pc-role">${roleChip(p.role)}${p.role.change==='down'
-      ?` <span class="mk-chip warn">bajó a ${p.role.label}</span>`:''}${p.role.note?` <span class="pc-role-note">${p.role.note}</span>`:''}${
+      ?` <span class="tg tg-warn">bajó a ${p.role.label}</span>`:''}${p.role.note?` <span class="pc-role-note">${p.role.note}</span>`:''}${
       p.role.team_url?` <a href="${p.role.team_url}" target="_blank" rel="noopener">↗ jerarquías</a>`:''}</div>`:'';
   const grid=rowsOfTiles.map(group=>group.filter(Boolean)).filter(group=>group.length)
     .map(group=>`<div class="pc-grid">${group.map(drawTile).join('')}</div>`).join('');
@@ -1901,7 +1907,7 @@ async function openDetail(playerId){
       >← ${drawerFrom.label}</button>`:''}
     <div class="pc-head">${faceOf(p,'xl')}<div class="pc-who"><h3>${p.name}${shieldMark(p)}</h3>
       <div class="pc-sub"><span class="pos pos-${(p.position||'').toLowerCase().slice(0,3)}">${p.position}</span>
-        ${p.team||''} · ${owner}${p.starred?' · ★':''}
+        <span class="tags">${tags}</span>
         <button class="cmp-add" type="button" data-cmp="${p.id}" data-cmp-name="${p.name}"
           data-cmp-pos="${p.position||''}">+ comparar</button></div></div></div>
     ${status}

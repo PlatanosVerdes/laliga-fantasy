@@ -9,8 +9,10 @@ import (
 // ListRow is the panel's one list row: a lead (face or place), who with a second line, the
 // figure that decides with its note, a chip and the buttons. The list it sits in decides
 // whether it draws wide or compact, so the same markup works in a main column and an aside.
+// A player's second line is Tags: his basics as small tags, never prose. Meta and Sub are the
+// text lines of the rows that are not players.
 type ListRow struct {
-	Lead, Name, Tag, Meta, Sub, Value, Note, Chip, Action, Tone, Attrs string
+	Lead, Name, Tag, Tags, Meta, Sub, Value, Note, Why, Chip, Action, Tone, Attrs string
 }
 
 func (r ListRow) HTML() string {
@@ -23,9 +25,16 @@ func (r ListRow) HTML() string {
 		}
 	}
 	who.WriteString(`</span>`)
+	// The tags are the row's own grid item, so a narrow list can let them run under the figures.
+	if r.Tags != "" {
+		who.WriteString(`<span class="tags">` + r.Tags + `</span>`)
+	}
 	value := ""
 	if r.Value != "" || r.Note != "" {
 		value = `<span class="rval">`
+		if r.Why != "" {
+			value = `<span class="rval" title="` + r.Why + `">`
+		}
 		if r.Value != "" {
 			value += `<b>` + r.Value + `</b>`
 		}
@@ -44,16 +53,16 @@ func (r ListRow) HTML() string {
 		`</li>`
 }
 
-// row is a player as a list row.
-func row(player map[string]any, meta, value, note, chip, action, tone string) string {
-	return rowWith(player, "", meta, value, note, chip, action, tone)
+// row is a player as a list row; extra are tags of his that only this list has.
+func row(player map[string]any, extra, value, note, chip, action, tone string) string {
+	return rowWith(player, "", extra, value, note, chip, action, tone)
 }
 
 // rowWith is row with extra attributes on the line, which is what the filter bar reads.
-func rowWith(player map[string]any, attrs, meta, value, note, chip, action, tone string) string {
+func rowWith(player map[string]any, attrs, extra, value, note, chip, action, tone string) string {
 	line := playerRow(player)
-	line.Meta, line.Value, line.Note, line.Chip, line.Action, line.Tone = meta, value, note, chip,
-		action, tone
+	line.Tags += extra
+	line.Value, line.Note, line.Chip, line.Action, line.Tone = value, note, chip, action, tone
 	line.Attrs += attrs
 	return line.HTML()
 }
@@ -61,7 +70,7 @@ func rowWith(player map[string]any, attrs, meta, value, note, chip, action, tone
 // playerRow is the row's player half: face, name with the shield, position.
 func playerRow(player map[string]any) ListRow {
 	return ListRow{Lead: face(player, "sm"), Name: shieldName(player), Tag: posTag(player),
-		Attrs: ` data-pid="` + Esc(text(player["id"])) + `"`}
+		Tags: playerTags(player), Attrs: ` data-pid="` + Esc(text(player["id"])) + `"`}
 }
 
 // teamRow is a manager as a list row: his place where a face would be.
@@ -91,16 +100,48 @@ func scrollList(items []string, height int) string {
 		rowList(items) + `</div>`
 }
 
-// startsMeta is how likely he is to start and his role in his club, for a row's second line.
-func startsMeta(player map[string]any) string {
-	out := ""
+// tg is the one small tag of the panel: same height, padding and font in every list and in
+// the card's header.
+func tg(content, class string) string {
+	return `<span class="tg ` + class + `">` + content + `</span>`
+}
+
+// playerTags are a player's basics, always in this order: club, owner, role, starting odds,
+// and then only the states that apply (held, shielded, moved down, injured or in doubt).
+func playerTags(player map[string]any) string {
+	var out strings.Builder
+	if team := text(player["team_short"]); team != "" {
+		out.WriteString(tg(crestOf(text(player["team_id"]))+Esc(team), "tg-team"))
+	}
+	owner := text(player["owner"])
+	switch {
+	case truthy(player["is_mine"]):
+		owner = "tuyo"
+	case owner == "":
+		owner = fallbackText(text(mapOf(player["market"])["seller"]), "libre")
+	}
+	out.WriteString(tg(Esc(owner), "tg-owner"))
+	out.WriteString(roleChip(player))
 	if starts := asFloat(player["start_probability"]); starts != nil {
-		out = fmt.Sprintf(" · titular %.0f %%", *starts)
+		out.WriteString(tg(fmt.Sprintf("titular %.0f %%", *starts), "tg-starts"))
 	}
-	if chip := roleChip(player); chip != "" {
-		out += " " + chip
+	if truthy(player["is_mine"]) && truthy(player["sale_locked"]) {
+		out.WriteString(`<span class="tg tg-warn" title="no se puede vender hasta el ` +
+			Esc(esWhen(text(player["hold_until"]))) + `">🔒 hasta ` +
+			Esc(esDay(text(player["hold_until"]))) + `</span>`)
 	}
-	return out
+	if truthy(player["shielded"]) {
+		out.WriteString(tg("🛡", "tg-info"))
+	}
+	out.WriteString(roleDrop(player))
+	if ring, _, reason := health(player); ring != "" {
+		class := "tg-warn"
+		if ring == "out" {
+			class = "tg-bad"
+		}
+		out.WriteString(tg(Esc(reason), class))
+	}
+	return out.String()
 }
 
 // roleChip is futbolfantasy's category for him in his club, in the colour of their own icon.
@@ -110,7 +151,7 @@ func roleChip(player map[string]any) string {
 	if key == "" {
 		return ""
 	}
-	return `<span class="role role-` + Esc(key) + `" title="` + Esc(text(role["note"])) + `">` +
+	return `<span class="tg role role-` + Esc(key) + `" title="` + Esc(text(role["note"])) + `">` +
 		Esc(text(role["label"])) + `</span>`
 }
 
@@ -120,7 +161,7 @@ func roleDrop(player map[string]any) string {
 	if text(role["change"]) != "down" {
 		return ""
 	}
-	return `<span class="mk-chip warn" title="` + Esc(text(role["note"])) + `">bajó a ` +
+	return `<span class="tg tg-warn" title="` + Esc(text(role["note"])) + `">bajó a ` +
 		Esc(text(role["label"])) + `</span>`
 }
 
