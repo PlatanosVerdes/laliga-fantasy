@@ -867,7 +867,8 @@ func Traded(owners map[string]string, known map[string]bool, policies map[string
 	var stale []string
 	for _, id := range SortedIDs(policies) {
 		policy := policies[id]
-		if !policy.Raid || !known[id] {
+		// Presence, not the value: the caller passes is-mine, which is false for every target.
+		if _, seen := known[id]; !policy.Raid || !seen {
 			continue
 		}
 		if owners[id] == "" {
