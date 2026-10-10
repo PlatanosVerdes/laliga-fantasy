@@ -56,3 +56,27 @@ func TestForgetSoldIgnoresAWorldWithNothingYours(t *testing.T) {
 		t.Fatalf("%d instructions left, want 2", len(left))
 	}
 }
+
+// A raid target sold to the market: in the world, nobody's, and not yours. The order has no
+// clause left to pay, so it goes, and the log says why.
+func TestForgetSoldDisarmsARaidOnAPlayerNobodyOwns(t *testing.T) {
+	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
+	limit := 66_000_000.0
+	if err := policies.Save(map[string]policies.Policy{
+		"2387": {ID: "2387", Name: "Camello", Raid: true, MaxPay: &limit, Owner: "La rataneta"},
+	}); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	(&State{}).forgetSold(&model.Universe{Players: []model.Player{
+		{ID: "2387", Name: "Camello"},
+		{ID: "2", Name: "Yuri", IsMine: true},
+	}})
+
+	left, err := policies.Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if entry, still := left["2387"]; still && entry.Raid {
+		t.Error("the raid on a player nobody owns survived")
+	}
+}
