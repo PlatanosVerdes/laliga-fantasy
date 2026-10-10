@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 )
@@ -134,6 +135,12 @@ func (d Document) offerCards(actions []map[string]any, rate float64) []Card {
 		if value <= 0 {
 			continue
 		}
+		// A ban is no reason to sell: only an offer over his value is, and his zero xPts this
+		// matchday must not read as "your eleven will not notice".
+		banned := advice.Suspended(row)
+		if banned && amount <= value {
+			continue
+		}
 		if take, _ := d.offerAdvice(text(row["id"]), amount/value, stand != nil); !take {
 			continue
 		}
@@ -154,7 +161,10 @@ func (d Document) offerCards(actions []map[string]any, rate float64) []Card {
 				text(stand["name"]), esMoney(number(stand["cost"]))))
 		} else {
 			line := "Tu once no lo nota: entra otro igual."
-			if drop >= 0.05 {
+			switch {
+			case banned:
+				line = "Está sancionado, pero la sanción pasa: después lo echarías de menos."
+			case drop >= 0.05:
 				line = fmt.Sprintf("Tu once pierde %s xPts.", esNum(drop, 1))
 			}
 			if sale := sales[text(row["offer_id"])]; truthy(sale["match_pending"]) {

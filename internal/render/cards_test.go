@@ -361,3 +361,26 @@ func TestCardViewCarriesWhatTheCardDraws(t *testing.T) {
 		t.Errorf("card view: %+v", view)
 	}
 }
+
+// A ban zeroes his xPts for one matchday. An offer at his value is then no reason to sell, and
+// one over it must not claim the eleven will not notice.
+func TestASuspendedPlayersOfferNeedsAPremium(t *testing.T) {
+	document := decidingDocument()
+	for _, player := range rows(document.Advice["squad"]) {
+		if text(player["id"]) == "13" {
+			player["xpts"], player["available"], player["status"] = 0.0, false, "suspended"
+		}
+	}
+	offer := func(amount float64) []map[string]any {
+		return []map[string]any{{"id": "13", "name": "Ángel Pérez", "verdict": "cash",
+			"status": "suspended", "value": 36_000_000.0, "offer_amount": amount,
+			"offer_id": "o2", "market_id": "m13"}}
+	}
+	if cards := document.offerCards(offer(36_000_000), 1); len(cards) != 0 {
+		t.Errorf("an offer at his value became a card: %+v", cards)
+	}
+	cards := document.offerCards(offer(45_000_000), 1)
+	if len(cards) != 1 || !strings.Contains(strings.Join(cards[0].Why, " "), "sancionado") {
+		t.Errorf("a premium offer should say the ban passes: %+v", cards)
+	}
+}

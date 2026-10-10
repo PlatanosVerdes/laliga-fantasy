@@ -162,3 +162,23 @@ func TestSpendingPowerDiscountsLiveBids(t *testing.T) {
 		}
 	}
 }
+
+// Ángel Pérez: banned for one match, so his xPts read zero and any midfielder looked like an
+// upgrade. A ban says nothing about whether to sell; the plan leaves him alone.
+func TestASuspendedPlayerIsNotSwappedOut(t *testing.T) {
+	squad := squadOf(1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4)
+	banned := squad[5]
+	banned["xpts"], banned["available"], banned["status"] = 0.0, false, "suspended"
+	for _, player := range squad {
+		if player["status"] == nil {
+			player["available"] = true
+		}
+	}
+	buckets := Row{"squad": squad, "asks": []Row{forSale("fofana", 3, 3.1, 1_000_000)}}
+
+	for _, move := range rowsOf(Swaps(Row{}, buckets, 40_000_000)["moves"]) {
+		if text(mapOf(move["out"])["id"]) == text(banned["id"]) {
+			t.Fatalf("proposed selling the suspended player: %v", move)
+		}
+	}
+}

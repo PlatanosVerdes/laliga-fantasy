@@ -239,7 +239,8 @@ func Recommend(universe Row, budget, maxDebt float64, limit int) Row {
 		if need["surplus"] > 0 {
 			reasons = append(reasons, "exceso de "+positions[int(number(player["position_id"]))])
 		}
-		if number(player["points_value"]) < 0.15 && number(player["value"]) > 5e6 {
+		if number(player["points_value"]) < 0.15 && number(player["value"]) > 5e6 &&
+			!Suspended(player) {
 			reasons = append(reasons, "pocos puntos por millon")
 		}
 		sells = append(sells, merge(player, Row{

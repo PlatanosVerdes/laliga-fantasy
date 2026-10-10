@@ -19,15 +19,11 @@ type Reach struct {
 	Empty string `json:"empty,omitempty"`
 }
 
-// RivalsData is Rivales: each rival with his cash, whom it reaches and how far, the popups of
-// who exactly, and who looks worst for the matchday.
+// RivalsData is Equipos: each rival with his cash, whom it reaches and how far, the popups of
+// who exactly, and who looks worst for the matchday. Your own team sits in its place in the
+// table, to read the rest against, with nothing to reach.
 func (d Document) RivalsData() View {
-	rivals := []map[string]any{}
-	for _, team := range rows(d.Advice["rivals"]) {
-		if !truthy(team["is_me"]) {
-			rivals = append(rivals, team)
-		}
-	}
+	rivals := rows(d.Advice["rivals"])
 	if len(rivals) == 0 {
 		return View{Main: []Block{}}
 	}
@@ -51,6 +47,10 @@ func (d Document) RivalsData() View {
 	for _, team := range rivals {
 		cash := number(team["estimated_cash"])
 		manager := fallbackText(text(team["manager"]), text(team["name"]))
+		if truthy(team["is_me"]) {
+			lines = append(lines, d.myTeamLine(team, manager, cash))
+			continue
+		}
 		var top map[string]any
 		reach := 0
 		for _, player := range squad {
@@ -104,12 +104,28 @@ func (d Document) RivalsData() View {
 				map[string]any{"target": "rival-" + teamID})},
 			Tone: strings.TrimSpace(tone)})
 	}
-	view := View{Main: []Block{{Title: "Rivales", Count: count(len(lines)), Rows: lines,
+	view := View{Main: []Block{{Title: "Equipos", Count: count(len(lines)), Rows: lines,
 		Data: reaches}}}
 	if outlook := d.outlookBlock(); outlook != nil {
 		view.Aside = []Block{*outlook}
 	}
 	return view
+}
+
+// myTeamLine is your row among the rivals: the same numbers, your real cash, and a link to your
+// squad instead of the reach chip, which only means something for somebody else's money.
+func (d Document) myTeamLine(team map[string]any, manager string, cash float64) Row {
+	place := "—"
+	if position := number(team["position"]); position > 0 {
+		place = fmt.Sprintf("%.0fº", position)
+	}
+	return Row{Lead: []Seg{{T: place}}, Name: manager + " (tú)", Team: text(team["team_id"]),
+		Meta: metaSegs(fmt.Sprintf("%.0f pts · %.0f jugadores · plantilla %s",
+			number(team["points"]), number(team["players"]), esMoney(number(team["squad_value"])))),
+		Value: esMoney(cash), Note: []Seg{{T: "tu caja"}},
+		Acts: []Act{act("Ver plantilla", "ghost", "", "goto",
+			map[string]any{"target": "plantilla"})},
+		Tone: "accent me"}
 }
 
 // reachOf is which of my players a rival's cash reaches: best first, with the state of each

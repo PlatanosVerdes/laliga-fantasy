@@ -283,9 +283,10 @@ export function Notices() {
   const [list, setList] = useState(notices);
   useEffect(() => { noticeWatchers.add(setList); return () => noticeWatchers.delete(setList); }, []);
   const drop = (id) => { notices = notices.filter((n) => n.id !== id); noticeWatchers.forEach((watch) => watch(notices)); };
-  return list.map((n) => html`<div class="effect in" key=${n.id}>
+  if (!list.length) return null;
+  return html`<div class="effects">${list.map((n) => html`<div class="effect in" key=${n.id}>
     <button class="effect-close" aria-label="Cerrar" onClick=${() => drop(n.id)}>×</button>
     <h4>${n.title}</h4>${n.detail ? html`<p class="effect-line">${n.detail}</p>` : null}
     ${n.rows ? html`<table>${n.rows.map((r) => html`<tr><th>${r.label}</th><td>${r.before}</td><td class="arrow">→</td><td>${r.after}</td><td class=${'delta ' + r.sign}>${r.delta}</td></tr>`)}</table>` : null}
-  </div>`);
+  </div>`)}</div>`;
 }
