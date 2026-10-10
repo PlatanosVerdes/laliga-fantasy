@@ -70,6 +70,10 @@ type Document struct {
 	NecroRoster   map[string]string
 	NecroChosen   []string
 	NecroCanVote  bool
+	// NecroOpen is whether the round takes votes now; closed, the tab shows your last vote.
+	NecroOpen      bool
+	NecroLastRound int
+	NecroLastPicks []string
 	// NecroPreview forces the Decidir reminder to show even when you have already voted, for a
 	// local look at the card.
 	NecroPreview bool
@@ -161,7 +165,7 @@ func (d Document) Render() (string, map[string]any) {
 			Weight: fmt.Sprintf("%.0f%%", number(universe["current_weight"])*100)}}
 	if hasAdvice {
 		for _, tab := range Tabs {
-			// The side game's tab only while a round is configured and open.
+			// The side game's tab only while it has a round, open or just voted.
 			if tab.ID != "necroporra" || hasNecro {
 				page.Tabs = append(page.Tabs, tab)
 			}

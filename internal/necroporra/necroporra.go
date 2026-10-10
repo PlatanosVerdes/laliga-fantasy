@@ -75,16 +75,25 @@ type State struct {
 	Deadline string
 	ClosesAt time.Time
 	Chosen   []string
+	// Open is whether a round takes votes now; between rounds Gameweek is only the config's.
+	Open bool
+	// LastRound and LastPicks are your vote in the newest past round, by manager name.
+	LastRound int
+	LastPicks []string
 }
 
 // Voted is whether the current round already carries a pick.
 func (s State) Voted() bool { return len(s.Chosen) >= 2 }
 
 var (
-	reGameweek = regexp.MustCompile(`"gameweek":(\d+),"teams":\[\{"id":"\d+","managerName"`)
-	reChosen   = regexp.MustCompile(`"chosen":\[([^\]]*)\]`)
-	reDeadline = regexp.MustCompile(`"children":"(Round \d+ [^"]+)"`)
-	reID       = regexp.MustCompile(`"(\d+)"`)
+	reGameweek  = regexp.MustCompile(`"gameweek":(\d+),"teams":\[\{"id":"\d+","managerName"`)
+	reChosen    = regexp.MustCompile(`"chosen":\[([^\]]*)\]`)
+	reDeadline  = regexp.MustCompile(`"children":"(Round \d+ [^"]+)"`)
+	reID        = regexp.MustCompile(`"(\d+)"`)
+	reLastRound = regexp.MustCompile(`"gameweeks":\[[\d,]*\],"selected":(\d+)`)
+	reMyPast    = regexp.MustCompile(`"color":"var\(--board-you\)"\},"children":\[\["\$","span",null,` +
+		`\{"className":"truncate","children":"[^"]*"\}\],null,null\]\}\],\["\$","span",null,` +
+		`\{"className":"min-w-0 text-right","style":\{"color":"[^"]*"\},"children":\["([^"]+)"`)
 )
 
 // FetchState reads the open round. The response is cached briefly so the panel's repaint loop
@@ -109,9 +118,13 @@ func FetchState(cfg Config) State {
 	if err != nil {
 		return state
 	}
+	return parseState(body, state)
+}
+
+func parseState(body string, state State) State {
 	if match := reGameweek.FindStringSubmatch(body); match != nil {
 		if gw, err := strconv.Atoi(match[1]); err == nil {
-			state.Gameweek = gw
+			state.Gameweek, state.Open = gw, true
 		}
 	}
 	if match := reDeadline.FindStringSubmatch(body); match != nil {
@@ -122,6 +135,12 @@ func FetchState(cfg Config) State {
 		for _, id := range reID.FindAllStringSubmatch(match[1], -1) {
 			state.Chosen = append(state.Chosen, id[1])
 		}
+	}
+	if match := reLastRound.FindStringSubmatch(body); match != nil {
+		state.LastRound, _ = strconv.Atoi(match[1])
+	}
+	if match := reMyPast.FindStringSubmatch(body); match != nil {
+		state.LastPicks = strings.Split(match[1], ", ")
 	}
 	return state
 }

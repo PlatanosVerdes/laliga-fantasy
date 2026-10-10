@@ -1519,6 +1519,9 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 	document.NecroDeadline = necroState.Deadline
 	document.NecroClosesAt = necroState.ClosesAt
 	document.NecroChosen = necroState.Chosen
+	document.NecroOpen = necroState.Open
+	document.NecroLastRound = necroState.LastRound
+	document.NecroLastPicks = necroState.LastPicks
 	document.NecroRoster = necro.Roster
 	document.NecroCanVote = necro.CanVote()
 	document.NecroPreview = os.Getenv("FANTASY_NECRO_PREVIEW") != ""
@@ -1534,7 +1537,7 @@ func autoNecroVote(cfg necroporra.Config, universe func() *model.Universe, myTea
 	done := map[int]bool{}
 	attempt := func() {
 		state := necroporra.FetchState(cfg)
-		if state.Voted() || done[state.Gameweek] || state.ClosesAt.IsZero() {
+		if !state.Open || state.Voted() || done[state.Gameweek] || state.ClosesAt.IsZero() {
 			return
 		}
 		if left := time.Until(state.ClosesAt); left <= 0 || left > 2*time.Hour {
