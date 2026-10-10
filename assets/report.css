@@ -302,14 +302,17 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
   border-color:color-mix(in srgb,var(--warning) 45%,transparent)}
 .drawer-actions button[disabled]{opacity:.45;cursor:not-allowed}
 .drawer-note{font-size:11px;color:var(--muted);margin:16px 0 0}
-.effect{position:fixed;right:18px;bottom:18px;z-index:70;background:var(--surface);
+.effects{position:fixed;right:18px;bottom:18px;z-index:70;display:flex;flex-direction:column;
+  align-items:flex-end;gap:8px}
+.effect{position:relative;background:var(--surface);
   border:1px solid var(--line);border-radius:11px;padding:14px 16px 13px;
-  box-shadow:0 14px 40px rgba(0,0,0,.28);max-width:340px;
+  box-shadow:0 14px 40px rgba(0,0,0,.28);max-width:min(380px,calc(100vw - 36px));
   opacity:0;transform:translateY(10px);transition:opacity .28s,transform .28s}
 .effect.in{opacity:1;transform:none}
-.effect h4{margin:0 0 9px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;
+.effect h4{margin:0 26px 9px 0;font-size:12px;text-transform:uppercase;letter-spacing:.06em;
   color:var(--muted);font-weight:600}
-.effect table{border-collapse:collapse;font-size:12.5px}
+.effect table{border-collapse:collapse;font-size:12.5px;width:auto}
+.effect th,.effect td{border:0;white-space:nowrap}
 .effect th{text-align:left;font-weight:500;color:var(--ink-2);padding:2px 12px 2px 0;
   position:static;background:none;font-size:12.5px;text-transform:none;letter-spacing:0;
   cursor:default}
@@ -318,9 +321,10 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .effect td.delta{padding-left:11px;font-weight:600}
 .effect td.delta.up{color:var(--good)}
 .effect td.delta.down{color:var(--critical)}
-.effect-close{position:absolute;top:8px;right:10px;background:none;border:none;
-  color:var(--muted);font-size:17px;line-height:1;cursor:pointer;padding:2px}
-.effect-close:hover{color:var(--ink)}
+.effect-close{position:absolute;top:9px;right:9px;width:24px;height:24px;display:grid;
+  place-items:center;background:none;border:none;border-radius:6px;color:var(--muted);
+  font-size:17px;line-height:1;cursor:pointer;padding:0}
+.effect-close:hover{color:var(--ink);background:var(--mid)}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;
   justify-content:center;z-index:50;padding:20px}
 .modal[hidden]{display:none}
@@ -741,7 +745,8 @@ td .muted,span.muted{color:var(--muted)}
   /* Capped, or a line of one leaves the goalkeeper the width of the pitch. */
   .slot{width:auto;flex:1 1 0;max-width:112px;min-width:0;min-height:96px;padding:6px 3px}
 
-  .effect{left:10px;right:10px;max-width:none;bottom:calc(12px + env(safe-area-inset-bottom))}
+  .effects{left:10px;right:10px;align-items:stretch;bottom:calc(12px + env(safe-area-inset-bottom))}
+  .effect{max-width:none}
   .cmp-tray{left:10px;right:10px;transform:none;width:auto;max-width:none;
     bottom:calc(10px + env(safe-area-inset-bottom))}
   .cmp-find-wrap{flex:1 1 100%}
@@ -1351,7 +1356,7 @@ table.cmp tr:last-child td{border-bottom:0}
     box-sizing:border-box;font-size:16px}
 }
 .mk .evo,.mk .feed{max-width:none}
-.mk .board .r.me{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.mk .r.me{background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .mk .podium .rank-dot{color:#1a1a19;font-weight:800}
 button.reach-btn{font:inherit;border:0;cursor:pointer}
 button.reach-btn:hover{filter:brightness(1.1);text-decoration:underline}

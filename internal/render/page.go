@@ -13,7 +13,7 @@ type TabView struct {
 // is worse than no tab.
 var Tabs = []TabView{{"decidir", "Decidir"}, {"comprar", "Comprar"}, {"vender", "Vender"},
 	{"clausulas", "Cláusulas"}, {"plantilla", "Plantilla"}, {"partidos", "Partidos"},
-	{"rivales", "Rivales"}, {"liga", "Liga"}, {"ranking", "Ranking"},
+	{"rivales", "Equipos"}, {"liga", "Liga"}, {"ranking", "Jugadores"},
 	{"necroporra", "Necroporra"}, {"comparador", "Comparador"}}
 
 // SectionView is one section of the page: its id (what an address names), the tab it belongs

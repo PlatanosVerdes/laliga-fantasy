@@ -140,7 +140,7 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 		}
 		// The league's own rule outranks the plan: proposing what cannot be done is worse
 		// than proposing nothing.
-		if truthy(out["sale_locked"]) {
+		if truthy(out["sale_locked"]) || Suspended(out) {
 			continue
 		}
 		positionID := int(number(out["position_id"]))
@@ -329,7 +329,14 @@ func exitScore(player Row, offers map[string]Row) float64 {
 }
 
 func forced(player Row) bool {
-	return !truthy(player["available"])
+	return !truthy(player["available"]) && !Suspended(player)
+}
+
+// Suspended is a ban, which costs a matchday or two: his xPts read zero only because the next
+// match is the one he misses, so they say nothing about whether to sell him.
+func Suspended(player Row) bool {
+	status := text(player["status"])
+	return status == "suspended" || status == "sanctioned"
 }
 
 func reason(player Row) string {

@@ -202,3 +202,21 @@ func TestScheduledRaidsAreRowsOfMyBids(t *testing.T) {
 		t.Error("with a raid scheduled the box is not empty, and the raid is a row")
 	}
 }
+
+// Equipos lists you too, in your place of the table and marked, with no reach chip: what the
+// rest's cash reaches is about your players, not theirs.
+func TestEquiposIncludesYou(t *testing.T) {
+	document := Document{Advice: map[string]any{"rivals": []any{
+		map[string]any{"team_id": "1", "manager": "LILTEAM", "position": 1.0, "estimated_cash": 9e6},
+		map[string]any{"team_id": "2", "manager": "PlatanosVerdes", "position": 2.0,
+			"estimated_cash": 43e6, "is_me": true},
+	}}}
+	block := document.RivalsData().Main[0]
+	if block.Title != "Equipos" || len(block.Rows) != 2 {
+		t.Fatalf("block: %s %d rows", block.Title, len(block.Rows))
+	}
+	me := block.Rows[1]
+	if me.Name != "PlatanosVerdes (tú)" || me.Tone != "accent me" || len(me.Chips) != 0 {
+		t.Errorf("your row: %+v", me)
+	}
+}

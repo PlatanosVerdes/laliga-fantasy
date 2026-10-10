@@ -452,11 +452,11 @@ const OPERATION_LABELS = {sell_to_market: 'Puesto en venta', accept_offer: 'Ofer
 function showEffect(message) {
   const rows = Object.entries(message.changed || {}).map(([key, change]) => {
     const money = key === 'cash' || key === 'squad_value';
-    const show = (n) => money ? exact(n || 0) : String(n ?? 0);
+    const show = (n) => money ? esMoney(Math.abs(n || 0)) : String(Math.abs(n ?? 0));
     const worse = key === 'absences';
     const sign = change.delta > 0 ? (worse ? 'down' : 'up') : (change.delta < 0 ? (worse ? 'up' : 'down') : '');
     return {label: EFFECT_LABELS[key] || key, before: show(change.before), after: show(change.after),
-      delta: (change.delta > 0 ? '+' : '') + show(change.delta), sign};
+      delta: (change.delta > 0 ? '+' : change.delta < 0 ? '−' : '') + show(change.delta), sign};
   });
   if (rows.length) flash(OPERATION_LABELS[message.operation] || message.operation, null, rows);
 }
