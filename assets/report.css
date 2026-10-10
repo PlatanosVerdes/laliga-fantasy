@@ -1242,7 +1242,8 @@ section.mk{margin:0 0 22px}
 .x-lo .tx,.tx.x-lo,.x-lo-t,.tok-x.x-lo{color:var(--warning)}
 .x-bad .tx,.tx.x-bad,.x-bad-t,.tok-x.x-bad{color:var(--critical)}
 .mk .tchip.is-new{border-color:var(--accent)}
-.mk .tchip.is-new .tname::after{content:" ●";color:var(--accent);font-size:8px;vertical-align:2px}
+.mk .leg-new{display:inline-block;width:14px;height:9px;border:1.5px solid var(--accent);
+  border-radius:5px;vertical-align:-1px;margin-right:4px}
 .mk .total{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .mk .total .from{color:var(--muted);text-decoration:line-through;font-variant-numeric:tabular-nums}
 .mk .total .to{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
