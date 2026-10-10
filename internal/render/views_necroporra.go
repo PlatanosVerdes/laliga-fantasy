@@ -21,6 +21,7 @@ type Necro struct {
 	Facts    [][]Seg     `json:"facts"`
 	Teams    []NecroTeam `json:"teams"`
 	CanVote  bool        `json:"can_vote"`
+	Open     bool        `json:"open"`
 	Gameweek int         `json:"gameweek"`
 }
 
@@ -30,10 +31,10 @@ type Necro struct {
 //
 // Every row is a toggle: you pick the two you vote (your own team is left out, you cannot vote
 // for yourself). The suggestion is the two weakest and comes pre-marked, as does your current
-// vote. The gameweek, deadline and current vote are read live, not written by hand. Without an
-// open round there is no view and no tab.
+// vote. The gameweek, deadline and current vote are read live, not written by hand. Between
+// rounds the list stays as a forecast without toggles, under your vote in the last round.
 func (d Document) NecroData() (View, bool) {
-	if d.NecroGameweek == 0 {
+	if d.NecroGameweek == 0 && d.NecroLastRound == 0 {
 		return View{}, false
 	}
 	ranked := necroporra.Predict(d.Universe, d.NecroRoster, text(d.Universe["my_team_id"]))
@@ -42,26 +43,31 @@ func (d Document) NecroData() (View, bool) {
 	}
 	picks := necroporra.Picks(ranked)
 	selected := d.necroSelected(picks)
+	voting := d.NecroOpen && d.NecroCanVote
 	data := Necro{Facts: d.necroFacts(picks), Teams: []NecroTeam{}, CanVote: d.NecroCanVote,
-		Gameweek: d.NecroGameweek}
+		Open: d.NecroOpen, Gameweek: d.NecroGameweek}
 	for index, team := range ranked {
 		row := Row{Lead: []Seg{{T: fmt.Sprintf("%d", index+1)}}, Name: team.Name,
 			Meta:  []Seg{{T: fmt.Sprintf("%.0f pts temporada", team.SeasonPoints)}},
 			Value: esNum(team.Predicted, 1), Note: []Seg{{T: "once est."}}}
 		item := NecroTeam{Row: row}
-		if team.NecroID != "" && d.NecroCanVote {
+		if team.NecroID != "" && voting {
 			item.ID, item.On = team.NecroID, selected[team.NecroID]
 		}
 		data.Teams = append(data.Teams, item)
 	}
+	round := fmt.Sprintf("la jornada %d", d.NecroGameweek)
+	if !d.NecroOpen {
+		round = "la próxima jornada"
+	}
+	sub := "Quién acaba último " + round + ". Tu mejor once estimado, de más flojo a más fuerte."
+	if voting {
+		sub += " Marca los dos que votas."
+	}
 	return View{Plain: true, Main: []Block{{Title: "Necroporra", Count: count(len(ranked)),
-		Sub: fmt.Sprintf("Quién acaba último la jornada %d. Tu mejor once estimado, de más flojo "+
-			"a más fuerte. Marca los dos que votas.", d.NecroGameweek),
-		Kind: "necro", Data: data}}}, true
+		Sub: sub, Kind: "necro", Data: data}}}, true
 }
 
-// necroSelected is what comes pre-ticked: your current vote if you have one, otherwise the
-// suggestion.
 func (d Document) necroSelected(picks []necroporra.Ranked) map[string]bool {
 	selected := map[string]bool{}
 	if len(d.NecroChosen) > 0 {
@@ -78,10 +84,17 @@ func (d Document) necroSelected(picks []necroporra.Ranked) map[string]bool {
 
 func (d Document) necroFacts(picks []necroporra.Ranked) [][]Seg {
 	facts := [][]Seg{}
-	if d.NecroDeadline != "" {
+	if !d.NecroOpen {
+		facts = append(facts, []Seg{{T: "Votación cerrada hasta que nombren la siguiente ronda."}})
+		if d.NecroLastRound > 0 && len(d.NecroLastPicks) > 0 {
+			facts = append(facts, []Seg{{T: fmt.Sprintf("Tu voto en la jornada %d: ", d.NecroLastRound)},
+				{T: strings.Join(d.NecroLastPicks, " y "), El: "b"}})
+		}
+	}
+	if d.NecroOpen && d.NecroDeadline != "" {
 		facts = append(facts, []Seg{{T: "Ronda abierta: "}, {T: d.NecroDeadline, El: "b"}})
 	}
-	if len(d.NecroChosen) > 0 {
+	if d.NecroOpen && len(d.NecroChosen) > 0 {
 		facts = append(facts, []Seg{{T: "Tu voto actual: "},
 			{T: d.necroNames(d.NecroChosen), El: "b"}})
 	}
@@ -103,7 +116,7 @@ type NecroRemind struct {
 // it says it will cast the two weakest for you near the close; otherwise it points at the
 // Necroporra tab. NecroPreview forces it even once you have voted, for a local look at the card.
 func (d Document) necroReminder() *NecroRemind {
-	if d.NecroGameweek == 0 || !d.NecroCanVote {
+	if !d.NecroOpen || d.NecroGameweek == 0 || !d.NecroCanVote {
 		return nil
 	}
 	if len(d.NecroChosen) >= 2 && !d.NecroPreview {
