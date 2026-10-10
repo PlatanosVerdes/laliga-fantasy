@@ -83,7 +83,7 @@ function Tiles({data}) {
     starts >= 75 ? 't-good' : starts >= 50 ? 't-warn' : 't-bad') : null;
   const nextTile = p.next_rival ? tile('Próximo', html`<${Crest} id=${p.next_rival_id}/>${p.next_rival}`, p.next_home ? 'en casa' : 'fuera') : null;
   const valueTile = tile('Valor', mny(p.value), l.market_id ? `en venta por ${mny(l.min_bid)}` : '');
-  const ceilingTile = p.is_mine ? null : tile('Techo rentable', p.ideal_bid ? mny(p.ideal_bid) : 'sin margen',
+  const ceilingTile = tile('Techo rentable', p.ideal_bid ? mny(p.ideal_bid) : 'sin margen',
     p.ff_url ? '↗ futbolfantasy' : (p.ideal_bid ? 'futbolfantasy' : ''), 't-ceiling', p.ff_url);
   const clauseTile = p.clause ? tile('Cláusula', mny(p.clause), p.value ? `${dec(p.clause / p.value, 2)}x su valor` : '') : null;
   let payableTile = null;
