@@ -165,7 +165,7 @@ func (d Document) necroLive() (View, bool) {
 	}
 	legend = append(legend, Seg{Icon: "shield", C: "nc nc-escudo"}, Seg{T: " protegido   "},
 		Seg{Icon: "point", C: "nc nc-voto"}, Seg{T: " tu voto"})
-	facts := [][]Seg{legend, {{T: "Relleno: ahora y al final · claro: solo ahora · " +
+	facts := [][]Seg{legend, {{T: "Relleno: ahora y al final · borde: solo ahora · " +
 		"discontinuo: solo al final, si acaba como se prevé."}}}
 	data := Necro{Facts: facts, Teams: teams, CanVote: d.NecroCanVote,
 		Gameweek: d.NecroLastRound, Notice: d.necroNotice()}
