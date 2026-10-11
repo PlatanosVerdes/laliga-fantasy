@@ -1472,11 +1472,11 @@ a.role:hover,a.role:focus-visible{text-decoration:underline}
 .mk button.mb.necro-pick{padding:4px 10px;font-size:12px}
 .mk .mk-chip.acc{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
 .mk .mk-chip.den{background:color-mix(in srgb,var(--pos-def) 18%,transparent);color:var(--pos-def)}
-.mk .nc{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:7px;
-  background:color-mix(in srgb,currentColor 18%,transparent);vertical-align:middle}
-.mk .nc .ic{width:16px;height:16px;stroke-width:1.9}
-.mk .nc.fading{background:none;box-shadow:inset 0 0 0 1.5px currentColor}
-.mk .nc.proj{background:none;outline:1.5px dashed currentColor;outline-offset:-1.5px}
+.mk .nc{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:7px;
+  background:color-mix(in srgb,currentColor 15%,transparent);vertical-align:middle}
+.mk .nc .ic{width:15px;height:15px;stroke-width:1.7}
+.mk .nc.fading{background:none;box-shadow:inset 0 0 0 1px color-mix(in srgb,currentColor 70%,transparent)}
+.mk .nc.proj{background:none;outline:1px dashed color-mix(in srgb,currentColor 70%,transparent);outline-offset:-1px}
 .mk .nc-perdon{color:var(--critical)} .mk .nc-punto{color:var(--good)}
 .mk .nc-denigra{color:var(--pos-def)} .mk .nc-desayuno{color:var(--warning)}
 .mk .nc-escudo{color:var(--muted)} .mk .nc-voto{color:var(--accent)}
