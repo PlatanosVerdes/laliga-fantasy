@@ -1522,6 +1522,9 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 	document.NecroOpen = necroState.Open
 	document.NecroLastRound = necroState.LastRound
 	document.NecroLastPicks = necroState.LastPicks
+	document.NecroBallots = necroState.Ballots
+	document.NecroProblem = necroState.Problem
+	document.NecroShields = necroState.Shields
 	document.NecroRoster = necro.Roster
 	document.NecroCanVote = necro.CanVote()
 	document.NecroPreview = os.Getenv("FANTASY_NECRO_PREVIEW") != ""
