@@ -89,7 +89,9 @@ func (d Document) buyLine(item map[string]any, route string, gain float64,
 	if asking := number(item["asking"]); asking > 0 && asking < cost*0.99 {
 		note = append(note, Seg{T: " · piden " + esMoney(asking)})
 	}
-	if route != "clausula" {
+	if route == "clausula" {
+		note = append(note, clauseOverValue(cost, number(item["value"]))...)
+	} else {
 		if ceiling := number(item["ideal_bid"]); ceiling > 0 {
 			class, mark := "up", "+"
 			if ceiling < cost {
