@@ -171,8 +171,14 @@ func (d Document) plannedBlock() Block {
 				map[string]any{"player_id": text(raid["player_id"]), "name": text(raid["name"])}))
 		}
 		line.Value, line.Why = "≤ "+esMoney(limit), why
-		line.Note = append([]Seg{{T: "cláusula " + esMoney(clause)}},
-			clauseOverValue(clause, number(player["value"]))...)
+		// The aside is narrow: the clause goes under the name and only the bare ratio under the
+		// limit, where a longer note ran into the name.
+		line.Sub = []Seg{{T: "cláusula " + esMoney(clause)}}
+		if ratio := clauseOverValue(clause, number(player["value"])); len(ratio) == 2 {
+			short := ratio[1]
+			short.T, short.Tip = strings.TrimSuffix(short.T, " su valor"), "su cláusula, en veces su valor"
+			line.Note = []Seg{short}
+		}
 		lines = append(lines, line)
 	}
 	block := Block{Title: "Clausulazos programados", Count: count(len(lines)),
