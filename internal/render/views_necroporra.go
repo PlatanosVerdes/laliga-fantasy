@@ -107,8 +107,12 @@ func (d Document) necroLive() (View, bool) {
 		}
 	}
 
-	now := necroStandings(managers, "points")
-	end := necroStandings(managers, "projection")
+	shields := map[string]int{}
+	for name, rounds := range d.NecroShields {
+		shields[necroKey(name)] = rounds
+	}
+	now := necroStandings(managers, "points", shields)
+	end := necroStandings(managers, "projection", shields)
 	playing := truthy(matchday["live"])
 
 	ordered := append([]map[string]any(nil), managers...)
@@ -129,13 +133,10 @@ func (d Document) necroLive() (View, bool) {
 			line.Sub = append(line.Sub, Seg{T: "vota a " + strings.Join(picks, " y ")})
 		}
 		if by := votedBy[key]; len(by) > 0 {
-			if len(line.Sub) > 0 {
-				line.Sub = append(line.Sub, Seg{T: " · "})
-			}
 			line.Sub = append(line.Sub, Seg{T: fmt.Sprintf("le votan %d", len(by)),
 				Tip: strings.Join(by, ", ")})
 		}
-		line.Chips = necroChips(key, ballots[key], now, playing, end)
+		line.Chips = necroChips(key, ballots[key], now, playing, end, shields[key])
 		for _, voter := range votedBy[key] {
 			if necroKey(voter) == necroKey(me) {
 				line.Chips = append([]Chip{{T: "tu voto", C: "acc"}}, line.Chips...)
@@ -156,12 +157,19 @@ func (d Document) necroLive() (View, bool) {
 	if playing {
 		state = "en juego"
 	}
-	data := Necro{Facts: [][]Seg{}, Teams: teams, CanVote: d.NecroCanVote,
+	legend := []Seg{}
+	for _, outcome := range []necroOutcome{necroApology, necroPoint, necroDenigrate, necroBreakfast} {
+		legend = append(legend, Seg{Icon: outcome.icon, C: "nc " + outcome.class},
+			Seg{T: " " + strings.SplitN(outcome.tip, ":", 2)[0] + "   "})
+	}
+	legend = append(legend, Seg{Icon: "shield", C: "nc nc-escudo"}, Seg{T: " protegido"})
+	facts := [][]Seg{legend, {{T: "Relleno: ahora y al final · claro: solo ahora · " +
+		"discontinuo: solo al final, si acaba como se prevé."}}}
+	data := Necro{Facts: facts, Teams: teams, CanVote: d.NecroCanVote,
 		Gameweek: d.NecroLastRound, Notice: d.necroNotice()}
 	return View{Plain: true, Main: []Block{{Title: fmt.Sprintf("Necroporra · jornada %d %s",
 			d.NecroLastRound, state), Count: count(len(teams)), Kind: "necro", Data: data,
-			Sub: "De primero a último. Rojo, pide perdón; verde, suma el punto; morado, puede " +
-				"denigrar; ámbar, trae el desayuno. Con borde, lo que pasaría si acaba como se prevé."}}},
+			Sub: "De primero a último, con lo que la Constitución le da a cada uno."}}},
 		true
 }
 
@@ -179,12 +187,13 @@ func (d Document) necroNotice() string {
 
 // necroStanding is one order of the round: each manager's place, and who holds each end.
 type necroStanding struct {
-	place       map[string]int
-	first, last map[string]bool
+	place                  map[string]int
+	first, last, breakfast map[string]bool
 }
 
-func necroStandings(managers []map[string]any, key string) necroStanding {
-	out := necroStanding{place: map[string]int{}, first: map[string]bool{}, last: map[string]bool{}}
+func necroStandings(managers []map[string]any, key string, shields map[string]int) necroStanding {
+	out := necroStanding{place: map[string]int{}, first: map[string]bool{}, last: map[string]bool{},
+		breakfast: map[string]bool{}}
 	top, bottom := 0.0, 0.0
 	for index, row := range managers {
 		value := number(row[key])
@@ -207,42 +216,83 @@ func necroStandings(managers []map[string]any, key string) necroStanding {
 		out.first[name] = number(row[key]) == top
 		out.last[name] = number(row[key]) == bottom
 	}
+	// Breakfast walks up from the bottom to the lowest score held by somebody unshielded, and
+	// everyone unshielded on it brings it; with everyone shielded, the shields yield to the last.
+	scores := []float64{}
+	for _, row := range managers {
+		scores = append(scores, number(row[key]))
+	}
+	sort.Float64s(scores)
+	for _, score := range scores {
+		for _, row := range managers {
+			name := necroKey(text(row["manager"]))
+			if number(row[key]) == score && shields[name] == 0 {
+				out.breakfast[name] = true
+			}
+		}
+		if len(out.breakfast) > 0 {
+			return out
+		}
+	}
+	for name, last := range out.last {
+		out.breakfast[name] = last
+	}
 	return out
 }
 
-// necroChips is what one manager's ballot earns by the Constitution: solid by the table now,
-// outlined (projected) by the finish the panel expects, shown only while the round is played.
+// necroOutcome is one thing the Constitution can hand a manager this round, drawn as an icon.
+type necroOutcome struct{ icon, class, tip string }
+
+var (
+	necroApology   = necroOutcome{"bubble", "nc-perdon", "pide perdón: uno de sus dos va primero"}
+	necroPoint     = necroOutcome{"target", "nc-punto", "+1: uno de sus dos va último"}
+	necroDenigrate = necroOutcome{"flame", "nc-denigra", "puede denigrar: va primero y acertó el último"}
+	necroBreakfast = necroOutcome{"cup", "nc-desayuno", "trae el desayuno"}
+)
+
+// necroChips is what one manager's ballot earns, one icon per outcome: solid when it holds now
+// and at the projected finish, faded when only now, dashed when only at the finish.
 func necroChips(who string, picks []string, now necroStanding, playing bool,
-	end necroStanding) []Chip {
-	judge := func(order necroStanding, projected string) []Chip {
-		var chips []Chip
-		hit, apology := false, false
+	end necroStanding, shielded int) []Chip {
+	earns := func(order necroStanding) map[necroOutcome]bool {
+		out := map[necroOutcome]bool{}
 		for _, pick := range picks {
-			hit = hit || order.last[necroKey(pick)]
-			apology = apology || order.first[necroKey(pick)]
+			if order.first[necroKey(pick)] {
+				out[necroApology] = true
+			}
+			if order.last[necroKey(pick)] {
+				out[necroPoint] = true
+			}
 		}
-		if apology {
-			chips = append(chips, Chip{T: "perdón", C: "soon" + projected,
-				Tip: "uno de sus dos va primero"})
+		if out[necroPoint] && order.first[who] {
+			out[necroDenigrate] = true
 		}
-		if hit {
-			chips = append(chips, Chip{T: "+1", C: "ok" + projected, Tip: "uno de sus dos va último"})
+		if order.breakfast[who] {
+			out[necroBreakfast] = true
 		}
-		if hit && order.first[who] {
-			chips = append(chips, Chip{T: "denigra", C: "den" + projected,
-				Tip: "va primero y acertó el último"})
-		}
-		if order.last[who] {
-			chips = append(chips, Chip{T: "desayuno", C: "warn" + projected, Tip: "va último"})
-		}
-		return chips
+		return out
 	}
-	chips := judge(now, "")
-	if playing {
-		for _, chip := range judge(end, " proj") {
-			chip.Tip = "previsto: " + chip.Tip
-			chips = append(chips, chip)
+	nowEarns, endEarns := earns(now), earns(end)
+	if !playing {
+		endEarns = nowEarns
+	}
+	var chips []Chip
+	for _, outcome := range []necroOutcome{necroApology, necroPoint, necroDenigrate, necroBreakfast} {
+		has, will := nowEarns[outcome], endEarns[outcome]
+		switch {
+		case has && will:
+			chips = append(chips, Chip{Icon: outcome.icon, C: "nc " + outcome.class, Tip: outcome.tip})
+		case has:
+			chips = append(chips, Chip{Icon: outcome.icon, C: "nc fading " + outcome.class,
+				Tip: outcome.tip + " (ahora; al final, previsto que no)"})
+		case will:
+			chips = append(chips, Chip{Icon: outcome.icon, C: "nc proj " + outcome.class,
+				Tip: outcome.tip + " (previsto al final)"})
 		}
+	}
+	if shielded > 0 {
+		chips = append(chips, Chip{Icon: "shield", C: "nc nc-escudo",
+			Tip: fmt.Sprintf("protegido del desayuno: %d ronda(s) más", shielded)})
 	}
 	return chips
 }

@@ -35,3 +35,12 @@ func TestParseStateNamesWhatWentWrong(t *testing.T) {
 		t.Errorf("between rounds with no past round yet is fine: %q", got)
 	}
 }
+
+func TestParseShields(t *testing.T) {
+	body := `"children":"JMjugon"}],null,null,["$","span",null,{"aria-label":"Shielded, 1 round left","x":1}` +
+		`"children":"tete alejo"}],null,null,["$","span",null,{"aria-label":"Shielded, 3 rounds left"}`
+	got := parseShields(body)
+	if got["JMjugon"] != 1 || got["tete alejo"] != 3 || len(got) != 2 {
+		t.Errorf("shields: %v", got)
+	}
+}

@@ -82,6 +82,9 @@ type State struct {
 	LastPicks []string
 	// Ballots is every manager's vote in that round, by manager name; who has not voted is absent.
 	Ballots map[string][]string
+	// Shields is who is excused from breakfast in that round and for how many rounds more, read
+	// off the league's standings for the round.
+	Shields map[string]int
 	// Problem says why the page could not be read: the session expired, or the page no longer
 	// looks the way the parser expects. Empty when it read fine.
 	Problem string
@@ -132,7 +135,39 @@ func FetchState(cfg Config) State {
 	if err != nil {
 		return state
 	}
-	return parseState(body, state)
+	state = parseState(body, state)
+	if !state.Open && state.LastRound > 0 && state.Problem == "" {
+		state.Shields = fetchShields(cfg, state.LastRound)
+	}
+	return state
+}
+
+var reShield = regexp.MustCompile(`"children":"([^"]+)"\}\],null,null,\["\$","span",null,` +
+	`\{"aria-label":"Shielded, (\d+) rounds? left"`)
+
+// fetchShields reads who is shielded from breakfast in a round, from the league's standings
+// for it. A failed read is no shields, which only makes the breakfast guess less exact.
+func fetchShields(cfg Config, round int) map[string]int {
+	body, err := httpx.Fetch(httpx.Request{
+		URL:    fmt.Sprintf("https://tebasfury.vercel.app/standings?round=%d", round),
+		Method: http.MethodGet,
+		Headers: map[string]string{"rsc": "1", "accept": "text/x-component",
+			"cookie": "__Secure-better-auth.session_token=" + cfg.Cookie},
+		Tag: "necro-shields",
+		TTL: 5 * time.Minute,
+	})
+	if err != nil {
+		return nil
+	}
+	return parseShields(body)
+}
+
+func parseShields(body string) map[string]int {
+	shields := map[string]int{}
+	for _, match := range reShield.FindAllStringSubmatch(body, -1) {
+		shields[match[1]], _ = strconv.Atoi(match[2])
+	}
+	return shields
 }
 
 func parseState(body string, state State) State {

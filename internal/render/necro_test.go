@@ -95,25 +95,20 @@ func TestNecroLiveRoundReadsTheConstitution(t *testing.T) {
 	if strings.Join(order, ",") != "Villaone,cristian1206,PlatanosVerdes,tete alejo" {
 		t.Errorf("order: %v", order)
 	}
-	solid := func(name, label, class string) bool {
-		return strings.Contains(chips[name], `"t":"`+label+`","c":"`+class+`"`)
+	has := func(name, class string) bool { return strings.Contains(chips[name], class+`"`) }
+	// You named Villaone, first now but projected second: the apology holds only now.
+	if !has("PlatanosVerdes", "nc fading nc-perdon") {
+		t.Errorf("apology now only: %s", chips["PlatanosVerdes"])
 	}
-	if !solid("PlatanosVerdes", "perdón", "soon") || !solid("PlatanosVerdes", "+1", "ok") {
-		t.Errorf("you named the leader and the last: %s", chips["PlatanosVerdes"])
+	// tete alejo last now; projected, cristian1206 is last instead.
+	if !has("PlatanosVerdes", "nc fading nc-punto") || !has("Villaone", "nc fading nc-denigra") {
+		t.Errorf("point and denigration now only: %s / %s", chips["PlatanosVerdes"], chips["Villaone"])
 	}
-	if !solid("Villaone", "denigra", "den") || solid("Villaone", "perdón", "soon") {
-		t.Errorf("leading and naming the last: %s", chips["Villaone"])
-	}
-	if !solid("tete alejo", "desayuno", "warn") {
-		t.Errorf("last brings breakfast: %s", chips["tete alejo"])
+	if !has("tete alejo", "nc fading nc-desayuno") || !has("cristian1206", "nc proj nc-desayuno") {
+		t.Errorf("breakfast now and projected: %s / %s", chips["tete alejo"], chips["cristian1206"])
 	}
 	if !strings.Contains(chips["PlatanosVerdes"], "te vota cristian1206") {
 		t.Errorf("who named you: %s", chips["PlatanosVerdes"])
-	}
-	// Projected, PlatanosVerdes leads and tete alejo is no longer last: cristian1206 is.
-	if solid("PlatanosVerdes", "perdón", "soon proj") ||
-		!strings.Contains(chips["cristian1206"], `"t":"desayuno","c":"warn proj"`) {
-		t.Errorf("projection: %s / %s", chips["PlatanosVerdes"], chips["cristian1206"])
 	}
 	document.NecroOpen = true
 	if _, live := document.necroLive(); live {
@@ -129,5 +124,30 @@ func TestNecroNoticeWhenTebasChanged(t *testing.T) {
 	view, ok := document.NecroData()
 	if !ok || !strings.Contains(asJSON(view.Main[0].Data), "Tebas ha cambiado la página") {
 		t.Errorf("no banner: %v", ok)
+	}
+}
+
+// Breakfast walks up past the shielded: with the bottom two shielded the third from bottom brings
+// it, and the shield shows as an icon of its own.
+func TestNecroBreakfastSkipsTheShielded(t *testing.T) {
+	manager := func(name string, points float64) map[string]any {
+		return map[string]any{"manager": name, "points": points, "projection": points}
+	}
+	document := Document{NecroLastRound: 8, NecroLastPicks: []string{"A", "B"},
+		NecroShields: map[string]int{"-papi—": 2, "JMjugon": 1},
+		Advice: map[string]any{"matchday": map[string]any{"week": 8.0, "live": false,
+			"managers": []any{manager("Villaone", 34), manager("JMjugon", 33),
+				manager("PlatanosVerdes", 8), manager("-papi—", 4)}}}}
+	view, _ := document.NecroData()
+	for _, team := range view.Main[0].Data.(Necro).Teams {
+		chips := asJSON(team.Row.Chips)
+		breakfast := strings.Contains(chips, `nc nc-desayuno"`)
+		if breakfast != (team.Row.Name == "PlatanosVerdes") {
+			t.Errorf("%s breakfast=%v: %s", team.Row.Name, breakfast, chips)
+		}
+		if shielded := strings.Contains(chips, "nc-escudo"); shielded !=
+			(team.Row.Name == "-papi—" || team.Row.Name == "JMjugon") {
+			t.Errorf("%s shield=%v", team.Row.Name, shielded)
+		}
 	}
 }
