@@ -1481,6 +1481,7 @@ a.role:hover,a.role:focus-visible{text-decoration:underline}
 .mk .nc-denigra{color:var(--pos-def)} .mk .nc-desayuno{color:var(--warning)}
 .mk .nc-escudo{color:var(--muted)} .mk .nc-voto{color:var(--accent)}
 .mk .lead .nc{width:20px;height:20px;margin-right:2px}
+.mk .meta b.nb{color:var(--ink);font-weight:600}
 .mk .r.self{box-shadow:inset 3px 0 0 var(--ink);background:color-mix(in srgb,var(--ink) 6%,transparent)}
 .mk .r.pick{box-shadow:inset 3px 0 0 var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .mk .lead .up{color:var(--good)} .mk .lead .down{color:var(--critical)}

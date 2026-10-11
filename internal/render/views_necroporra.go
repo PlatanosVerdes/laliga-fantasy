@@ -131,11 +131,18 @@ func (d Document) necroLive() (View, bool) {
 			Meta: []Seg{{T: meta}}, Value: esNum(number(row["points"]), 0), Note: []Seg{{T: "pts"}},
 			Team: text(row["team_id"])}
 		if picks := ballots[key]; len(picks) > 0 {
-			line.Sub = append(line.Sub, Seg{T: "vota a " + strings.Join(picks, " y ")})
+			kids := []Seg{{T: "vota a "}}
+			for index, pick := range picks {
+				if index > 0 {
+					kids = append(kids, Seg{T: " y "})
+				}
+				kids = append(kids, Seg{T: pick, El: "b", C: "nb"})
+			}
+			line.Sub = append(line.Sub, Seg{Kids: kids})
 		}
 		if by := votedBy[key]; len(by) > 0 {
-			line.Sub = append(line.Sub, Seg{T: fmt.Sprintf("le votan %d", len(by)),
-				Tip: strings.Join(by, ", ")})
+			line.Sub = append(line.Sub, Seg{Tip: strings.Join(by, ", "), Kids: []Seg{
+				{T: "le votan "}, {T: fmt.Sprintf("%d", len(by)), El: "b", C: "nb"}}})
 		}
 		line.Chips = necroChips(key, ballots[key], now, playing, end, shields[key])
 		for _, voter := range votedBy[key] {
