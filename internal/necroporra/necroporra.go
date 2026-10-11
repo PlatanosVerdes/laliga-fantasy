@@ -80,7 +80,17 @@ type State struct {
 	// LastRound and LastPicks are your vote in the newest past round, by manager name.
 	LastRound int
 	LastPicks []string
+	// Ballots is every manager's vote in that round, by manager name; who has not voted is absent.
+	Ballots map[string][]string
+	// Problem says why the page could not be read: the session expired, or the page no longer
+	// looks the way the parser expects. Empty when it read fine.
+	Problem string
 }
+
+const (
+	ProblemLoggedOut = "logged_out"
+	ProblemChanged   = "changed"
+)
 
 // Voted is whether the current round already carries a pick.
 func (s State) Voted() bool { return len(s.Chosen) >= 2 }
@@ -91,7 +101,11 @@ var (
 	reDeadline  = regexp.MustCompile(`"children":"(Round \d+ [^"]+)"`)
 	reID        = regexp.MustCompile(`"(\d+)"`)
 	reLastRound = regexp.MustCompile(`"gameweeks":\[[\d,]*\],"selected":(\d+)`)
-	reMyPast    = regexp.MustCompile(`"color":"var\(--board-you\)"\},"children":\[\["\$","span",null,` +
+	reChunk     = regexp.MustCompile(`(?m)^([0-9a-f]+):(\[.*)$`)
+	reChunkRef  = regexp.MustCompile(`"\$L([0-9a-f]+)"`)
+	reBallot    = regexp.MustCompile(`"className":"truncate","children":"([^"]+)"\}\],null,null\]\}\],` +
+		`\["\$","span",null,\{"className":"min-w-0 text-right","style":\{"color":"[^"]*"\},"children":\["([^"]+)"`)
+	reMyPast = regexp.MustCompile(`"color":"var\(--board-you\)"\},"children":\[\["\$","span",null,` +
 		`\{"className":"truncate","children":"[^"]*"\}\],null,null\]\}\],\["\$","span",null,` +
 		`\{"className":"min-w-0 text-right","style":\{"color":"[^"]*"\},"children":\["([^"]+)"`)
 )
@@ -122,6 +136,10 @@ func FetchState(cfg Config) State {
 }
 
 func parseState(body string, state State) State {
+	if strings.Contains(body, "NEXT_REDIRECT;replace;/login") {
+		state.Problem = ProblemLoggedOut
+		return state
+	}
 	if match := reGameweek.FindStringSubmatch(body); match != nil {
 		if gw, err := strconv.Atoi(match[1]); err == nil {
 			state.Gameweek, state.Open = gw, true
@@ -139,10 +157,42 @@ func parseState(body string, state State) State {
 	if match := reLastRound.FindStringSubmatch(body); match != nil {
 		state.LastRound, _ = strconv.Atoi(match[1])
 	}
+	body = resolveChunks(body)
+	if at := strings.Index(body, `"Past rounds"`); at >= 0 {
+		for _, match := range reBallot.FindAllStringSubmatch(body[at:], -1) {
+			if state.Ballots == nil {
+				state.Ballots = map[string][]string{}
+			}
+			state.Ballots[match[1]] = strings.Split(match[2], ", ")
+		}
+	}
+	// Neither a ballot nor "Nothing open" with its past rounds: the page is not what this reads.
+	pastRead := !strings.Contains(body, `"Past rounds"`) || len(state.Ballots) > 0
+	if !state.Open && (!strings.Contains(body, `"Nothing open"`) || !pastRead) {
+		state.Problem = ProblemChanged
+	}
 	if match := reMyPast.FindStringSubmatch(body); match != nil {
 		state.LastPicks = strings.Split(match[1], ", ")
 	}
 	return state
+}
+
+// resolveChunks inlines the "$Lxx" references the page streams as separate lines, so a row the
+// server split in pieces reads as one. Bounded passes: a chunk can reference another chunk.
+func resolveChunks(body string) string {
+	chunks := map[string]string{}
+	for _, match := range reChunk.FindAllStringSubmatch(body, -1) {
+		chunks[match[1]] = match[2]
+	}
+	for pass := 0; pass < 4 && reChunkRef.MatchString(body); pass++ {
+		body = reChunkRef.ReplaceAllStringFunc(body, func(ref string) string {
+			if chunk, ok := chunks[reChunkRef.FindStringSubmatch(ref)[1]]; ok {
+				return chunk
+			}
+			return ref
+		})
+	}
+	return body
 }
 
 // parseCloses turns "Round 8 — closes Fri 09 Oct, 21:00" into a time. The label carries no

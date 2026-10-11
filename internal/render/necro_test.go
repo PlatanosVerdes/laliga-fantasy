@@ -60,18 +60,23 @@ func TestNecroClosedShowsLastVote(t *testing.T) {
 	}
 }
 
-// The round you voted, while it is played: your picks against the round's table, by the
-// Constitution. tete alejo last is the point, Villaone level at the top is the apology, and
-// the projection is judged on its own.
+// The round you voted, while it is played: first to last, and every ballot read by the
+// Constitution, now and projected. Villaone leads, so whoever named him owes an apology; tete
+// alejo is last, so naming him is the point, and Villaone, leading and naming him, may denigrate.
 func TestNecroLiveRoundReadsTheConstitution(t *testing.T) {
 	manager := func(name string, points, projection float64, me bool) map[string]any {
 		return map[string]any{"manager": name, "points": points, "projection": projection,
 			"is_me": me, "waiting": 1.0}
 	}
 	document := Document{NecroLastRound: 8, NecroLastPicks: []string{"Villaone", "tete alejo"},
+		NecroBallots: map[string][]string{
+			"PlatanosVerdes": {"Villaone", "tete alejo"},
+			"Villaone":       {"cristian1206", "tete alejo"},
+			"cristian1206":   {"PlatanosVerdes", "tete alejo"},
+		},
 		Advice: map[string]any{"matchday": map[string]any{"week": 8.0, "live": true,
 			"managers": []any{
-				manager("PlatanosVerdes", 50, 60, true),
+				manager("PlatanosVerdes", 30, 60, true),
 				manager("Villaone", 50, 55, false),
 				manager("cristian1206", 40, 45, false),
 				manager("tete alejo", 20, 50, false),
@@ -80,17 +85,49 @@ func TestNecroLiveRoundReadsTheConstitution(t *testing.T) {
 	if !ok {
 		t.Fatal("a voted round in play has a tab")
 	}
-	data := asJSON(view.Main[0].Data)
-	for _, want := range []string{"Jornada 8 en juego", "Villaone y tete alejo",
-		"Ahora: ", "aciertas, tete alejo va último (+1).", "Villaone va primero: tocaría pedir perdón.",
-		"te ganas la denigración", "Previsto al final: ", "ninguno de tus dos va último.",
-		"Último ahora mismo: ", `"tone":"pick"`, `"tone":"accent me"`} {
-		if !strings.Contains(data, want) {
-			t.Errorf("missing %q in %s", want, data)
-		}
+	teams := view.Main[0].Data.(Necro).Teams
+	order := []string{}
+	chips := map[string]string{}
+	for _, team := range teams {
+		order = append(order, team.Row.Name)
+		chips[team.Row.Name] = asJSON(team.Row.Chips)
+	}
+	if strings.Join(order, ",") != "Villaone,cristian1206,PlatanosVerdes,tete alejo" {
+		t.Errorf("order: %v", order)
+	}
+	solid := func(name, label, class string) bool {
+		return strings.Contains(chips[name], `"t":"`+label+`","c":"`+class+`"`)
+	}
+	if !solid("PlatanosVerdes", "perdón", "soon") || !solid("PlatanosVerdes", "+1", "ok") {
+		t.Errorf("you named the leader and the last: %s", chips["PlatanosVerdes"])
+	}
+	if !solid("Villaone", "denigra", "den") || solid("Villaone", "perdón", "soon") {
+		t.Errorf("leading and naming the last: %s", chips["Villaone"])
+	}
+	if !solid("tete alejo", "desayuno", "warn") {
+		t.Errorf("last brings breakfast: %s", chips["tete alejo"])
+	}
+	if !strings.Contains(chips["PlatanosVerdes"], "te vota cristian1206") {
+		t.Errorf("who named you: %s", chips["PlatanosVerdes"])
+	}
+	// Projected, PlatanosVerdes leads and tete alejo is no longer last: cristian1206 is.
+	if solid("PlatanosVerdes", "perdón", "soon proj") ||
+		!strings.Contains(chips["cristian1206"], `"t":"desayuno","c":"warn proj"`) {
+		t.Errorf("projection: %s / %s", chips["PlatanosVerdes"], chips["cristian1206"])
 	}
 	document.NecroOpen = true
 	if _, live := document.necroLive(); live {
 		t.Error("an open ballot is the voting view, not the live one")
+	}
+}
+
+// A page the parser cannot read still shows the tab, with a banner saying so.
+func TestNecroNoticeWhenTebasChanged(t *testing.T) {
+	document := universeWithRivals()
+	document.NecroGameweek, document.NecroProblem = 8, "changed"
+	document.NecroRoster = map[string]string{"cristian": "1", "tete": "2"}
+	view, ok := document.NecroData()
+	if !ok || !strings.Contains(asJSON(view.Main[0].Data), "Tebas ha cambiado la página") {
+		t.Errorf("no banner: %v", ok)
 	}
 }

@@ -74,6 +74,8 @@ type Document struct {
 	NecroOpen      bool
 	NecroLastRound int
 	NecroLastPicks []string
+	NecroBallots   map[string][]string
+	NecroProblem   string
 	// NecroPreview forces the Decidir reminder to show even when you have already voted, for a
 	// local look at the card.
 	NecroPreview bool

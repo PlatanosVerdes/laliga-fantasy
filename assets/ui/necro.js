@@ -26,6 +26,7 @@ function NecroBlock({b}) {
     finally { setBusy(false); }
   };
   return html`<div class="mk-box">
+    ${n.notice ? html`<p class="necro-remind warn">${n.notice}</p>` : null}
     ${n.facts.map((line) => html`<p class="lead"><${Segs} list=${line}/></p>`)}
     <ul class="rows">${n.teams.map((t) => {
       const on = order.includes(t.id);

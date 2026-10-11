@@ -1470,6 +1470,9 @@ a.role:hover,a.role:focus-visible{text-decoration:underline}
 .mk .necro-msg.ok{color:var(--good)}
 .mk .necro-msg.err{color:var(--warning)}
 .mk button.mb.necro-pick{padding:4px 10px;font-size:12px}
+.mk .mk-chip.acc{background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+.mk .mk-chip.den{background:color-mix(in srgb,var(--pos-def) 18%,transparent);color:var(--pos-def)}
+.mk .mk-chip.proj{background:none;box-shadow:inset 0 0 0 1px currentColor}
 .mk .r.pick{box-shadow:inset 3px 0 0 var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .mk .lead .up{color:var(--good)} .mk .lead .down{color:var(--critical)}
 .mk button.mb.necro-pick.on{background:var(--accent);color:#fff;border-color:var(--accent)}
