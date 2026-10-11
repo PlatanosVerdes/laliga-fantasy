@@ -35,8 +35,9 @@ KINDS.eleven = ({b}) => {
       <div class="total">${e.from ? html`<span class="from">${e.from}</span>` : null}<span class="to">${e.to}</span>${e.gain ? html`<span class="gain">${e.gain}</span>` : null}</div>
       ${e.lines.map((line) => html`<div class="line"><span class=${'pos pos-' + line.pos}>${line.pos.toUpperCase()}</span><div class="chips">${
         line.players.map((c) => html`<span class=${'tchip ' + c.class} data-pid=${c.player.id}><${Face} p=${c.player} size="xs"/>
-          <span class="tname">${c.player.name}<${ShieldMark} p=${c.player}/></span><span class="tx">${c.xpts}</span></span>`)}</div></div>`)}
-      <div class="mk-legend">${e.fresh ? html`<span class="leg-new"></span>fichaje nuevo · ` : ''}xPts por jornada: <span class="x-hi-t">≥6</span> · <span class="x-lo-t">2–3,5</span> · <span class="x-bad-t">${'<2'}</span></div>
+          <span class="tname">${c.player.name}<${ShieldMark} p=${c.player}/></span><span class="tx">${c.xpts}</span>${
+            c.pending ? html`<span class="fcs">${c.pending}</span>` : null}</span>`)}</div></div>`)}
+      ${e.live ? html`<div class="mk-legend">puntos de la jornada: <span class="leg-pts pts-g">≥8</span> <span class="leg-pts pts-bl">4–7</span> <span class="leg-pts pts-br">0–3</span> <span class="leg-pts pts-rd">${'<0'}</span> · en gris, por jugar (sus xPts)</div>` : html`<div class="mk-legend">${e.fresh ? html`<span class="leg-new"></span>fichaje nuevo · ` : ''}xPts por jornada: <span class="x-hi-t">≥6</span> · <span class="x-lo-t">2–3,5</span> · <span class="x-bad-t">${'<2'}</span></div>`}
     </div>
     ${(e.warnings || []).map((w) => html`<p class="mk-note plan-warn" data-pid=${w.pid || undefined}>${w.t}</p>`)}
     ${e.place ? html`<p class="mk-note finish">Tu puesto previsto en la J${e.week}: <button class="linkish" type="button"

@@ -424,3 +424,29 @@ func TestRaiseBlockWaitsForTheDayBefore(t *testing.T) {
 		t.Errorf("folds: %+v", block.Folds)
 	}
 }
+
+// While the matchday is played, Tu once is the eleven you saved: points so far in the player
+// sheet's colours, the ones still to play with their xPts, and your place now and projected.
+func TestLiveElevenShowsTheSavedElevenScoring(t *testing.T) {
+	document := decidingDocument()
+	document.Universe["my_team_id"] = "100"
+	document.Universe["lineups"] = map[string]any{"100": []any{
+		map[string]any{"id": "7", "name": "Unai Lopez", "position_id": 3.0, "points": 4.0},
+		map[string]any{"id": "9", "name": "Portero", "position_id": 1.0, "points": nil},
+		map[string]any{"id": "8", "name": "O. Rey", "position_id": 3.0, "points": -1.0},
+	}}
+	document.Advice["matchday"] = map[string]any{"week": 8.0, "live": true, "managers": []any{
+		map[string]any{"is_me": true, "points": 8.0, "points_rank": 11.0, "projection_rank": 4.0}}}
+	block := document.elevenBlock()
+	data := asJSON(block)
+	for _, want := range []string{`"to":"8 pts"`, `"live":true`, "J8 en juego · 11º ahora · previsto 4º",
+		`"xpts":"4","class":"pts pts-bl"`, `"class":"pts pts-rd"`, `"class":"pending","pending":"6,0"`} {
+		if !strings.Contains(data, want) {
+			t.Errorf("missing %s in %s", want, data)
+		}
+	}
+	document.Advice["matchday"] = map[string]any{"week": 8.0, "live": false}
+	if strings.Contains(asJSON(document.elevenBlock()), `"live":true`) {
+		t.Error("a finished matchday goes back to the plan")
+	}
+}

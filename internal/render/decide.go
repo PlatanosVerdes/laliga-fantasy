@@ -106,6 +106,8 @@ type ElevenChip struct {
 	Player map[string]any `json:"player"`
 	XPts   string         `json:"xpts"`
 	Class  string         `json:"class"`
+	// Pending is the xPts of a man still to play, shown small beside his empty score.
+	Pending string `json:"pending,omitempty"`
 }
 
 type ElevenLine struct {
@@ -122,10 +124,15 @@ type Eleven struct {
 	Warnings []Seg        `json:"warnings,omitempty"`
 	Week     int          `json:"week,omitempty"`
 	Place    int          `json:"place,omitempty"`
+	Live     bool         `json:"live,omitempty"`
 }
 
-// elevenBlock is the best eleven the squad can field, or the one the plan leaves.
+// elevenBlock is the best eleven the squad can field, or the one the plan leaves. While a
+// matchday is played it is the eleven you saved instead, with what each man has scored.
 func (d Document) elevenBlock() *Block {
+	if live := d.liveEleven(); live != nil {
+		return live
+	}
 	squad := rows(d.Advice["squad"])
 	if len(squad) == 0 {
 		return nil
@@ -178,6 +185,73 @@ func (d Document) elevenBlock() *Block {
 	}
 	data.Week, data.Place = d.myFinish()
 	return &Block{Title: "Tu once", Sub: shape, Kind: "eleven", Data: data}
+}
+
+// liveEleven is the eleven you saved for the matchday in play: each man's points so far, the
+// ones still to play greyed with their xPts, and your total and place now and projected.
+func (d Document) liveEleven() *Block {
+	matchday := mapOf(d.Advice["matchday"])
+	if !truthy(matchday["live"]) {
+		return nil
+	}
+	myTeam := text(d.Universe["my_team_id"])
+	shirts := rows(mapOf(d.Universe["lineups"])[myTeam])
+	if len(shirts) == 0 {
+		return nil
+	}
+	var me map[string]any
+	for _, row := range rows(matchday["managers"]) {
+		if truthy(row["is_me"]) {
+			me = row
+		}
+	}
+	if me == nil {
+		return nil
+	}
+	known := map[string]map[string]any{}
+	for _, player := range rows(d.Universe["players"]) {
+		known[text(player["id"])] = player
+	}
+	byPosition := map[int][]ElevenChip{}
+	for _, shirt := range shirts {
+		player := known[text(shirt["id"])]
+		if player == nil {
+			player = shirt
+		}
+		chip := ElevenChip{Player: RowPlayer(player)}
+		if points, scored := shirt["points"]; scored && points != nil {
+			chip.XPts, chip.Class = esNum(number(points), 0), pointsClass(number(points))
+		} else {
+			chip.XPts, chip.Class = "–", "pending"
+			chip.Pending = esNum(number(player["xpts"]), 1)
+		}
+		position := int(number(shirt["position_id"]))
+		byPosition[position] = append(byPosition[position], chip)
+	}
+	data := Eleven{To: esNum(number(me["points"]), 0) + " pts", Lines: []ElevenLine{}, Live: true}
+	for index, position := range []int{4, 3, 2, 1} {
+		if chips := byPosition[position]; len(chips) > 0 {
+			data.Lines = append(data.Lines, ElevenLine{
+				Pos: []string{"del", "med", "def", "por"}[index], Players: chips})
+		}
+	}
+	data.Week, data.Place = d.myFinish()
+	sub := fmt.Sprintf("J%.0f en juego · %.0fº ahora · previsto %.0fº", number(matchday["week"]),
+		number(me["points_rank"]), number(me["projection_rank"]))
+	return &Block{Title: "Tu once", Sub: sub, Kind: "eleven", Data: data}
+}
+
+// pointsClass colours a matchday score the way the player sheet's week tiles do.
+func pointsClass(points float64) string {
+	switch {
+	case points < 0:
+		return "pts pts-rd"
+	case points >= 8:
+		return "pts pts-g"
+	case points >= 4:
+		return "pts pts-bl"
+	}
+	return "pts pts-br"
 }
 
 // planWarnings are the plan's warnings about the eleven itself: a squad that cannot field
