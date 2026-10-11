@@ -128,7 +128,8 @@ func (d Document) necroLive() (View, bool) {
 			meta += fmt.Sprintf(" · le faltan %d", waiting)
 		}
 		line := Row{Lead: []Seg{{T: fmt.Sprintf("%dº", now.place[key])}}, Name: name,
-			Meta: []Seg{{T: meta}}, Value: esNum(number(row["points"]), 0), Note: []Seg{{T: "pts"}}}
+			Meta: []Seg{{T: meta}}, Value: esNum(number(row["points"]), 0), Note: []Seg{{T: "pts"}},
+			Team: text(row["team_id"])}
 		if picks := ballots[key]; len(picks) > 0 {
 			line.Sub = append(line.Sub, Seg{T: "vota a " + strings.Join(picks, " y ")})
 		}

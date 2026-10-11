@@ -66,7 +66,7 @@ func TestNecroClosedShowsLastVote(t *testing.T) {
 func TestNecroLiveRoundReadsTheConstitution(t *testing.T) {
 	manager := func(name string, points, projection float64, me bool) map[string]any {
 		return map[string]any{"manager": name, "points": points, "projection": projection,
-			"is_me": me, "waiting": 1.0}
+			"is_me": me, "waiting": 1.0, "team_id": "t-" + name}
 	}
 	document := Document{NecroLastRound: 8, NecroLastPicks: []string{"Villaone", "tete alejo"},
 		NecroBallots: map[string][]string{
@@ -86,6 +86,9 @@ func TestNecroLiveRoundReadsTheConstitution(t *testing.T) {
 		t.Fatal("a voted round in play has a tab")
 	}
 	teams := view.Main[0].Data.(Necro).Teams
+	if teams[0].Row.Team != "t-Villaone" {
+		t.Errorf("a row opens its manager: team %q", teams[0].Row.Team)
+	}
 	order := []string{}
 	chips := map[string]string{}
 	for _, team := range teams {
