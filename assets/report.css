@@ -1306,7 +1306,11 @@ section.mk{margin:0 0 22px}
 .md-xi .line{display:flex;gap:8px;align-items:center}
 .md-xi .line>.pos{width:30px;text-align:center;flex:none}
 .md-xi .chips{display:flex;flex-wrap:wrap;gap:5px}
-.md-xi .fcs{font-size:10px;color:var(--muted);font-weight:500}
+.md-xi .fcs,.mk .pitchlist .fcs{font-size:10px;color:var(--muted);font-weight:500}
+.mk .tchip.pending .tx{color:var(--muted)}
+.mk .tchip.pts .tx,.mk .leg-pts{color:#fff;border-radius:6px;padding:0 6px;min-width:12px;text-align:center}
+.mk .pts-g .tx,.mk .leg-pts.pts-g{background:#1f9d3a} .mk .pts-bl .tx,.mk .leg-pts.pts-bl{background:#2a78d6}
+.mk .pts-br .tx,.mk .leg-pts.pts-br{background:#8a6a45} .mk .pts-rd .tx,.mk .leg-pts.pts-rd{background:#d03b3b}
 
 footer,header.topline{margin-top:24px}
 
