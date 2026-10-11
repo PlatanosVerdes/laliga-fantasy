@@ -144,7 +144,7 @@ func (d Document) necroLive() (View, bool) {
 			}
 		}
 		if key == necroKey(me) {
-			line.Tone = "accent me"
+			line.Tone, line.Name = "self", name+" (tú)"
 			for _, voter := range votedBy[key] {
 				line.Chips = append(line.Chips, Chip{T: "te vota " + voter, C: "acc"})
 			}

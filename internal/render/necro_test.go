@@ -90,9 +90,9 @@ func TestNecroLiveRoundReadsTheConstitution(t *testing.T) {
 	chips := map[string]string{}
 	for _, team := range teams {
 		order = append(order, team.Row.Name)
-		chips[team.Row.Name] = asJSON(team.Row.Chips)
+		chips[strings.TrimSuffix(team.Row.Name, " (tú)")] = asJSON(team.Row.Chips)
 	}
-	if strings.Join(order, ",") != "Villaone,cristian1206,PlatanosVerdes,tete alejo" {
+	if strings.Join(order, ",") != "Villaone,cristian1206,PlatanosVerdes (tú),tete alejo" {
 		t.Errorf("order: %v", order)
 	}
 	has := func(name, class string) bool { return strings.Contains(chips[name], class+`"`) }
