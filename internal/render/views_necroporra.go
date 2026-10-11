@@ -139,7 +139,8 @@ func (d Document) necroLive() (View, bool) {
 		line.Chips = necroChips(key, ballots[key], now, playing, end, shields[key])
 		for _, voter := range votedBy[key] {
 			if necroKey(voter) == necroKey(me) {
-				line.Chips = append([]Chip{{T: "tu voto", C: "acc"}}, line.Chips...)
+				line.Chips = append([]Chip{{Icon: "ballot", C: "nc nc-voto", Tip: "tu voto"}},
+					line.Chips...)
 			}
 		}
 		if key == necroKey(me) {
@@ -158,11 +159,12 @@ func (d Document) necroLive() (View, bool) {
 		state = "en juego"
 	}
 	legend := []Seg{}
-	for _, outcome := range []necroOutcome{necroApology, necroPoint, necroDenigrate, necroBreakfast} {
+	for _, outcome := range []necroOutcome{necroDenigrate, necroPoint, necroApology, necroBreakfast} {
 		legend = append(legend, Seg{Icon: outcome.icon, C: "nc " + outcome.class},
 			Seg{T: " " + strings.SplitN(outcome.tip, ":", 2)[0] + "   "})
 	}
-	legend = append(legend, Seg{Icon: "shield", C: "nc nc-escudo"}, Seg{T: " protegido"})
+	legend = append(legend, Seg{Icon: "shield", C: "nc nc-escudo"}, Seg{T: " protegido   "},
+		Seg{Icon: "ballot", C: "nc nc-voto"}, Seg{T: " tu voto"})
 	facts := [][]Seg{legend, {{T: "Relleno: ahora y al final · claro: solo ahora · " +
 		"discontinuo: solo al final, si acaba como se prevé."}}}
 	data := Necro{Facts: facts, Teams: teams, CanVote: d.NecroCanVote,
@@ -277,7 +279,7 @@ func necroChips(who string, picks []string, now necroStanding, playing bool,
 		endEarns = nowEarns
 	}
 	var chips []Chip
-	for _, outcome := range []necroOutcome{necroApology, necroPoint, necroDenigrate, necroBreakfast} {
+	for _, outcome := range []necroOutcome{necroDenigrate, necroPoint, necroApology, necroBreakfast} {
 		has, will := nowEarns[outcome], endEarns[outcome]
 		switch {
 		case has && will:
