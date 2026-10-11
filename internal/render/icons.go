@@ -24,7 +24,7 @@ const IconSprite = `<svg width="0" height="0" style="position:absolute" aria-hid
 	`<symbol id="i-bubble" viewBox="0 0 16 16"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/><path d="M5.5 7h5"/></symbol>` +
 	`<symbol id="i-flame" viewBox="0 0 16 16"><path d="M8 14c-2.6 0-4.3-1.8-4.3-4.1 0-2.6 2.3-3.9 2.6-6.9 1.6 1 2.3 2.4 2.2 3.8.8-.4 1.3-1.1 1.4-2 1.6 1.4 2.4 3.1 2.4 5.1C12.3 12.2 10.6 14 8 14z"/></symbol>` +
 	`<symbol id="i-cup" viewBox="0 0 16 16"><path d="M3 6h8v4.5a2.5 2.5 0 0 1-2.5 2.5h-3A2.5 2.5 0 0 1 3 10.5z"/><path d="M11 7h1.2a1.6 1.6 0 0 1 0 3.2H11M5.5 2.5v1.8M8.5 2.5v1.8"/></symbol>` +
-	`<symbol id="i-ballot" viewBox="0 0 16 16"><path d="M2.5 8.5h11v5h-11zM5.5 8.5V2.5h5v6"/><path d="M6.8 5.6l1 1 1.8-2"/></symbol>` +
+	`<symbol id="i-point" viewBox="0 0 16 16"><path d="M7 7.2V3.1a1.1 1.1 0 0 1 2.2 0v4.1"/><path d="M9.2 6.6a1.1 1.1 0 0 1 2.2 0v1.2a1.1 1.1 0 0 1 2.1.3V10c0 2.4-1.8 4.2-4.3 4.2H8.4c-1.3 0-2.3-.6-3-1.6L3 9.2a1.1 1.1 0 0 1 1.8-1.2L7 10"/></symbol>` +
 	`</svg>`
 
 type outcomeMark struct{ Symbol, Tone, Label string }

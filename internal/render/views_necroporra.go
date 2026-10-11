@@ -139,7 +139,7 @@ func (d Document) necroLive() (View, bool) {
 		line.Chips = necroChips(key, ballots[key], now, playing, end, shields[key])
 		for _, voter := range votedBy[key] {
 			if necroKey(voter) == necroKey(me) {
-				line.Chips = append([]Chip{{Icon: "ballot", C: "nc nc-voto", Tip: "tu voto"}},
+				line.Chips = append([]Chip{{Icon: "point", C: "nc nc-voto", Tip: "tu voto"}},
 					line.Chips...)
 			}
 		}
@@ -164,7 +164,7 @@ func (d Document) necroLive() (View, bool) {
 			Seg{T: " " + strings.SplitN(outcome.tip, ":", 2)[0] + "   "})
 	}
 	legend = append(legend, Seg{Icon: "shield", C: "nc nc-escudo"}, Seg{T: " protegido   "},
-		Seg{Icon: "ballot", C: "nc nc-voto"}, Seg{T: " tu voto"})
+		Seg{Icon: "point", C: "nc nc-voto"}, Seg{T: " tu voto"})
 	facts := [][]Seg{legend, {{T: "Relleno: ahora y al final · claro: solo ahora · " +
 		"discontinuo: solo al final, si acaba como se prevé."}}}
 	data := Necro{Facts: facts, Teams: teams, CanVote: d.NecroCanVote,
