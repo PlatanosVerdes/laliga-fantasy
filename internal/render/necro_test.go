@@ -59,3 +59,38 @@ func TestNecroClosedShowsLastVote(t *testing.T) {
 		t.Errorf("open: %s", open)
 	}
 }
+
+// The round you voted, while it is played: your picks against the round's table, by the
+// Constitution. tete alejo last is the point, Villaone level at the top is the apology, and
+// the projection is judged on its own.
+func TestNecroLiveRoundReadsTheConstitution(t *testing.T) {
+	manager := func(name string, points, projection float64, me bool) map[string]any {
+		return map[string]any{"manager": name, "points": points, "projection": projection,
+			"is_me": me, "waiting": 1.0}
+	}
+	document := Document{NecroLastRound: 8, NecroLastPicks: []string{"Villaone", "tete alejo"},
+		Advice: map[string]any{"matchday": map[string]any{"week": 8.0, "live": true,
+			"managers": []any{
+				manager("PlatanosVerdes", 50, 60, true),
+				manager("Villaone", 50, 55, false),
+				manager("cristian1206", 40, 45, false),
+				manager("tete alejo", 20, 50, false),
+			}}}}
+	view, ok := document.NecroData()
+	if !ok {
+		t.Fatal("a voted round in play has a tab")
+	}
+	data := asJSON(view.Main[0].Data)
+	for _, want := range []string{"Jornada 8 en juego", "Villaone y tete alejo",
+		"Ahora: ", "aciertas, tete alejo va último (+1).", "Villaone va primero: tocaría pedir perdón.",
+		"te ganas la denigración", "Previsto al final: ", "ninguno de tus dos va último.",
+		"Último ahora mismo: ", `"tone":"pick"`, `"tone":"accent me"`} {
+		if !strings.Contains(data, want) {
+			t.Errorf("missing %q in %s", want, data)
+		}
+	}
+	document.NecroOpen = true
+	if _, live := document.necroLive(); live {
+		t.Error("an open ballot is the voting view, not the live one")
+	}
+}

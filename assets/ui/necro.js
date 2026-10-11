@@ -31,7 +31,7 @@ function NecroBlock({b}) {
       const on = order.includes(t.id);
       const acts = t.id ? [{text: false, label: on ? 'voto ✓' : 'votar', class: 'mb mb-ghost necro-pick' + (on ? ' on' : ''),
         do: 'necro', args: {id: t.id}, pressed: on, toggle}] : [];
-      return html`<${RowView} r=${{...t.row, tone: on ? 'pick' : '', acts}}/>`;
+      return html`<${RowView} r=${{...t.row, tone: on ? 'pick' : (t.row.tone || ''), acts}}/>`;
     })}</ul>
     ${!n.open ? null : n.can_vote ? html`<div class="necro-actions"><span class=${('necro-msg ' + msg.cls).trim()}>${msg.text}</span>
       <button type="button" class="mb mb-primary necro-vote" disabled=${order.length !== 2 || busy} onClick=${send}>Enviar</button></div>`

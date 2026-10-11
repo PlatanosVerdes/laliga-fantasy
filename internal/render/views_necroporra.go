@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -37,6 +38,9 @@ func (d Document) NecroData() (View, bool) {
 	if d.NecroGameweek == 0 && d.NecroLastRound == 0 {
 		return View{}, false
 	}
+	if live, ok := d.necroLive(); ok {
+		return live, true
+	}
 	ranked := necroporra.Predict(d.Universe, d.NecroRoster, text(d.Universe["my_team_id"]))
 	if len(ranked) == 0 {
 		return View{}, false
@@ -66,6 +70,142 @@ func (d Document) NecroData() (View, bool) {
 	}
 	return View{Plain: true, Main: []Block{{Title: "Necroporra", Count: count(len(ranked)),
 		Sub: sub, Kind: "necro", Data: data}}}, true
+}
+
+// necroLive is the round you already voted while it is played: the league's table of the round,
+// your two picks marked in it, and what the Constitution makes of them now and at the projected
+// finish. One point if a pick ends last; an apology if a pick ends first, level at the top
+// included; the denigration if a pick ends last and you end first.
+func (d Document) necroLive() (View, bool) {
+	matchday := mapOf(d.Advice["matchday"])
+	if d.NecroOpen || d.NecroLastRound == 0 || len(d.NecroLastPicks) == 0 ||
+		int(number(matchday["week"])) != d.NecroLastRound {
+		return View{}, false
+	}
+	managers := rows(matchday["managers"])
+	if len(managers) == 0 {
+		return View{}, false
+	}
+	picked := map[string]bool{}
+	for _, name := range d.NecroLastPicks {
+		picked[strings.ToLower(strings.TrimSpace(name))] = true
+	}
+	isPick := func(row map[string]any) bool { return picked[strings.ToLower(text(row["manager"]))] }
+
+	playing := truthy(matchday["live"])
+	state := "terminada"
+	if playing {
+		state = "en juego"
+	}
+	facts := [][]Seg{{{T: fmt.Sprintf("Jornada %d %s. Tu voto: ", d.NecroLastRound, state)},
+		{T: strings.Join(d.NecroLastPicks, " y "), El: "b"}}}
+	facts = append(facts, necroVerdict("Ahora", managers, "points", isPick))
+	if playing {
+		facts = append(facts, necroVerdict("Previsto al final", managers, "projection", isPick))
+	}
+	if last := necroEnds(managers, "points", false); len(last) > 0 {
+		facts = append(facts, []Seg{{T: "Último ahora mismo: "}, {T: strings.Join(last, " y "),
+			El: "b"}, {T: " (trae el desayuno salvo que esté protegido)."}})
+	}
+
+	ordered := append([]map[string]any(nil), managers...)
+	sort.SliceStable(ordered, func(one, two int) bool {
+		return number(ordered[one]["points"]) < number(ordered[two]["points"])
+	})
+	teams := []NecroTeam{}
+	for _, row := range ordered {
+		meta := fmt.Sprintf("previsto %dº", necroPlace(managers, "projection", row))
+		if waiting := int(number(row["waiting"])); waiting > 0 {
+			meta += fmt.Sprintf(" · le faltan %d", waiting)
+		}
+		line := Row{Lead: []Seg{{T: fmt.Sprintf("%dº", necroPlace(managers, "points", row))}},
+			Name: text(row["manager"]), Meta: []Seg{{T: meta}},
+			Value: esNum(number(row["points"]), 0), Note: []Seg{{T: "pts"}}}
+		switch {
+		case isPick(row):
+			line.Tone = "pick"
+		case truthy(row["is_me"]):
+			line.Tone = "accent me"
+		}
+		teams = append(teams, NecroTeam{Row: line})
+	}
+	data := Necro{Facts: facts, Teams: teams, CanVote: d.NecroCanVote, Gameweek: d.NecroLastRound}
+	return View{Plain: true, Main: []Block{{Title: "Necroporra", Count: count(len(teams)),
+		Sub: fmt.Sprintf("Cómo va tu voto de la jornada %d: la clasificación de la jornada, "+
+			"de último a primero, con tus dos marcados.", d.NecroLastRound),
+		Kind: "necro", Data: data}}}, true
+}
+
+// necroVerdict reads the Constitution off one order of the round: by points now, or by the
+// projected finish.
+func necroVerdict(when string, managers []map[string]any, key string,
+	isPick func(map[string]any) bool) []Seg {
+	lastNames, firstNames := map[string]bool{}, map[string]bool{}
+	for _, name := range necroEnds(managers, key, false) {
+		lastNames[name] = true
+	}
+	for _, name := range necroEnds(managers, key, true) {
+		firstNames[name] = true
+	}
+	var hit, apology []string
+	meFirst := false
+	for _, row := range managers {
+		name := text(row["manager"])
+		if isPick(row) && lastNames[name] {
+			hit = append(hit, name)
+		}
+		if isPick(row) && firstNames[name] {
+			apology = append(apology, name)
+		}
+		if truthy(row["is_me"]) && firstNames[name] {
+			meFirst = true
+		}
+	}
+	out := []Seg{{T: when + ": "}}
+	switch {
+	case len(hit) > 0:
+		out = append(out, Seg{T: "aciertas, " + strings.Join(hit, " y ") + " va último (+1).",
+			C: "up"})
+	default:
+		out = append(out, Seg{T: "ninguno de tus dos va último."})
+	}
+	if len(apology) > 0 {
+		out = append(out, Seg{T: " " + strings.Join(apology, " y ") +
+			" va primero: tocaría pedir perdón.", C: "down"})
+	}
+	if meFirst && len(hit) > 0 {
+		out = append(out, Seg{T: " Y vas primero: te ganas la denigración.", C: "up"})
+	}
+	return out
+}
+
+// necroEnds is who holds the bottom (or the top) of the round by key, everyone level there.
+func necroEnds(managers []map[string]any, key string, top bool) []string {
+	best := 0.0
+	for index, row := range managers {
+		value := number(row[key])
+		if index == 0 || (top && value > best) || (!top && value < best) {
+			best = value
+		}
+	}
+	var names []string
+	for _, row := range managers {
+		if number(row[key]) == best {
+			names = append(names, text(row["manager"]))
+		}
+	}
+	return names
+}
+
+// necroPlace is a manager's place in the round by key, level teams sharing it.
+func necroPlace(managers []map[string]any, key string, row map[string]any) int {
+	place := 1
+	for _, other := range managers {
+		if number(other[key]) > number(row[key]) {
+			place++
+		}
+	}
+	return place
 }
 
 func (d Document) necroSelected(picks []necroporra.Ranked) map[string]bool {

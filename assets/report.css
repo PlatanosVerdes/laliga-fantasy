@@ -1470,6 +1470,8 @@ a.role:hover,a.role:focus-visible{text-decoration:underline}
 .mk .necro-msg.ok{color:var(--good)}
 .mk .necro-msg.err{color:var(--warning)}
 .mk button.mb.necro-pick{padding:4px 10px;font-size:12px}
+.mk .r.pick{box-shadow:inset 3px 0 0 var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.mk .lead .up{color:var(--good)} .mk .lead .down{color:var(--critical)}
 .mk button.mb.necro-pick.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 .mk li.r.pick{background:color-mix(in srgb, var(--accent) 9%, transparent)}
 .mk .necro-remind{margin:0 0 12px;padding:9px 12px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:9px;font-size:13px;background:color-mix(in srgb, var(--accent) 6%, transparent)}
