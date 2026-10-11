@@ -41,12 +41,16 @@ func (d Document) ClauseData() View {
 // raiseBlock is the clauses worth raising, the ones about to open first, and folded under them
 // the rest with why not.
 func (d Document) raiseBlock() Block {
-	var worth, rest []map[string]any
+	var worth, later, rest []map[string]any
 	for _, raise := range rows(d.Raise["rows"]) {
 		switch text(raise["verdict"]) {
 		case "sube", "no te llega":
 			if number(raise["pay"]) > 0 && d.raiseWanted(raise) {
-				worth = append(worth, raise)
+				if lockedPastHorizon(raise) {
+					later = append(later, raise)
+				} else {
+					worth = append(worth, raise)
+				}
 				continue
 			}
 		}
@@ -95,6 +99,18 @@ func (d Document) raiseBlock() Block {
 	}
 	block := Block{Title: "Recomendaciones", Count: count(len(lines)), Rows: lines,
 		Empty: "Ninguna cláusula tuya merece subirse ahora."}
+	if len(later) > 0 {
+		soon := []Row{}
+		for _, raise := range later {
+			line := playerLine(raise)
+			line.Value = esMoney(number(raise["pay"]))
+			line.Note = []Seg{{T: "subirla el día antes"}}
+			line.Chips = clockChip(text(raise["clause_locked_until"]), "se libera su cláusula")
+			soon = append(soon, line)
+		}
+		block.Folds = append(block.Folds, Fold{
+			Summary: fmt.Sprintf("%d para más adelante", len(soon)), Rows: soon})
+	}
 	if len(rest) > 0 {
 		others := []Row{}
 		for _, raise := range rest {
@@ -112,8 +128,8 @@ func (d Document) raiseBlock() Block {
 			}
 			others = append(others, line)
 		}
-		block.Folds = []Fold{{Summary: fmt.Sprintf("%d que no merece la pena subir", len(rest)),
-			Rows: others}}
+		block.Folds = append(block.Folds, Fold{
+			Summary: fmt.Sprintf("%d que no merece la pena subir", len(rest)), Rows: others})
 	}
 	return block
 }
@@ -154,8 +170,9 @@ func (d Document) plannedBlock() Block {
 			line.Acts = append(line.Acts, act("Cancelar", "ghost", "op", "cancel_raid",
 				map[string]any{"player_id": text(raid["player_id"]), "name": text(raid["name"])}))
 		}
-		line.Value, line.Note, line.Why = "≤ "+esMoney(limit),
-			[]Seg{{T: "cláusula " + esMoney(clause)}}, why
+		line.Value, line.Why = "≤ "+esMoney(limit), why
+		line.Note = append([]Seg{{T: "cláusula " + esMoney(clause)}},
+			clauseOverValue(clause, number(player["value"]))...)
 		lines = append(lines, line)
 	}
 	block := Block{Title: "Clausulazos programados", Count: count(len(lines)),
@@ -177,6 +194,31 @@ func (d Document) plannedBlock() Block {
 			Rows: history, Scroll: 320}}
 	}
 	return block
+}
+
+// lockedPastHorizon is a clause still locked beyond the day ahead: it gets raised the day before
+// it opens, so the cash stays free until then.
+func lockedPastHorizon(raise map[string]any) bool {
+	if !truthy(raise["clause_locked"]) {
+		return false
+	}
+	when, ok := parseStamp(text(raise["clause_locked_until"]))
+	return ok && when.After(time.Now().Add(RaiseHorizon))
+}
+
+// clauseOverValue is how far a clause sits over the player's market value, " · ×1,25 su valor":
+// what paying it costs beyond what he is worth. Dearer than ClauseIsASale reads as a warning.
+func clauseOverValue(clause, value float64) []Seg {
+	if clause <= 0 || value <= 0 {
+		return nil
+	}
+	ratio := clause / value
+	class := ""
+	if ratio >= ClauseIsASale {
+		class = "down"
+	}
+	return []Seg{{T: " · "}, {T: "×" + strings.Replace(fmt.Sprintf("%.2f", ratio), ".", ",", 1) +
+		" su valor", C: class}}
 }
 
 // cheapBlock is the clauses that return more points per million than the squad already does:
@@ -208,8 +250,9 @@ func (d Document) cheapBlock(seen map[string]bool) *Block {
 			}
 		}
 		line.Value = esMoney(number(item["clause"]))
-		line.Note = []Seg{{T: fmt.Sprintf("%s · %s pts/M de tu plantilla", text(item["verdict"]),
-			esRatio(number(item["vs_market"])))}}
+		line.Note = append([]Seg{{T: fmt.Sprintf("%s · %s pts/M de tu plantilla", text(item["verdict"]),
+			esRatio(number(item["vs_market"])))}},
+			clauseOverValue(number(item["clause"]), number(item["value"]))...)
 		line.Acts = raidActs(item, "mb mb-ghost raid-btn")
 		lines = append(lines, line)
 	}

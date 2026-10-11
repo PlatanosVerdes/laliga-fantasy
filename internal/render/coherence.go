@@ -20,7 +20,7 @@ const SellerFloor = 0.98
 const ClauseIsASale = 1.25
 
 // RaiseHorizon is how far ahead a raise has to be decided to earn a card in Decidir.
-const RaiseHorizon = 48 * time.Hour
+const RaiseHorizon = 24 * time.Hour
 
 // StarterSaleSlack is how many xPts the best eleven may lose when one of its players is sold.
 const StarterSaleSlack = 1.0

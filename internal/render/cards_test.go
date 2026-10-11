@@ -229,7 +229,10 @@ func TestRaiseCardsOnlyWhenWorthItAndSoon(t *testing.T) {
 		"clause": 2_600_000.0, "xpts": 2.0})
 	late := merge(raises[0], map[string]any{"clause_locked": true,
 		"clause_locked_until": time.Now().Add(11 * 24 * time.Hour).Format(time.RFC3339)})
-	for _, row := range []map[string]any{cheap, late} {
+	// Raised the day before it opens, not two: a card a day and a half early is noise.
+	tomorrow := merge(raises[0], map[string]any{"clause_locked": true,
+		"clause_locked_until": time.Now().Add(36 * time.Hour).Format(time.RFC3339)})
+	for _, row := range []map[string]any{cheap, late, tomorrow} {
 		document.Raise = map[string]any{"rows": []any{row}}
 		for _, card := range document.decisionCards(time.Now()) {
 			if card.Kind == "raise" {
@@ -382,5 +385,42 @@ func TestASuspendedPlayersOfferNeedsAPremium(t *testing.T) {
 	cards := document.offerCards(offer(45_000_000), 1)
 	if len(cards) != 1 || !strings.Contains(strings.Join(cards[0].Why, " "), "sancionado") {
 		t.Errorf("a premium offer should say the ban passes: %+v", cards)
+	}
+}
+
+// Paying a clause costs what he is worth and the rest on top: the ratio says how much rest.
+func TestClauseOverValue(t *testing.T) {
+	if got := asJSON(clauseOverValue(26_200_000, 20_960_000)); !strings.Contains(got, "×1,25 su valor") ||
+		!strings.Contains(got, `"c":"down"`) {
+		t.Errorf("dear clause: %s", got)
+	}
+	if got := asJSON(clauseOverValue(10_000_000, 10_000_000)); !strings.Contains(got, "×1,00 su valor") ||
+		strings.Contains(got, "down") {
+		t.Errorf("clause at value: %s", got)
+	}
+	if clauseOverValue(10_000_000, 0) != nil {
+		t.Error("no value, no ratio")
+	}
+}
+
+// Miguel Sierra: locked for thirteen more days, so not a recommendation yet, only a reminder of
+// when; Suazo opening in minutes stays at the top.
+func TestRaiseBlockWaitsForTheDayBefore(t *testing.T) {
+	document := decidingDocument()
+	raise := rows(document.Raise["rows"])[0]
+	far := merge(raise, map[string]any{"id": "2746", "name": "Miguel Sierra", "verdict": "sube",
+		"value": 16_000_000.0, "clause": 16_600_000.0, "clause_locked": true,
+		"clause_locked_until": time.Now().Add(13 * 24 * time.Hour).Format(time.RFC3339)})
+	near := merge(raise, map[string]any{"id": "2753", "name": "Suazo", "verdict": "sube",
+		"value": 9_000_000.0, "clause": 10_200_000.0, "clause_locked": true,
+		"clause_locked_until": time.Now().Add(12 * time.Minute).Format(time.RFC3339)})
+	document.Raise = map[string]any{"rows": []any{far, near}}
+	block := document.raiseBlock()
+	if len(block.Rows) != 1 || text(block.Rows[0].Player["name"]) != "Suazo" {
+		t.Fatalf("recommended: %+v", block.Rows)
+	}
+	if len(block.Folds) == 0 || block.Folds[0].Summary != "1 para más adelante" ||
+		text(block.Folds[0].Rows[0].Player["name"]) != "Miguel Sierra" {
+		t.Errorf("folds: %+v", block.Folds)
 	}
 }
