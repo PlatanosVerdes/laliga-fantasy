@@ -37,6 +37,7 @@ var outcomeMarks = map[string]outcomeMark{
 	"rechazada": {"slash", "bad", "rechazada"},
 	"perdida":   {"person", "warn", "perdida: se lo llevó otro"},
 	"caducada":  {"clock", "muted", "caducada"},
+	"retirada":  {"x", "muted", "la retiraste tú"},
 	// Standing orders.
 	"pagada":    {"coin", "good", "pagada"},
 	"cumplida":  {"check", "good", "cumplida"},

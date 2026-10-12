@@ -19,7 +19,7 @@ func (d Document) BuyData() View {
 		line.Value, line.Note = esMoney(number(bid["my_bid"])), []Seg{{T: "pide " +
 			esMoney(number(bid["asking"]))}}
 		line.Chips = clockChip(text(bid["closes"]), "cierra")
-		line.Acts = bidActs(bid, "bid", "")
+		line.Acts = ownBidActs(bid)
 		bids = append(bids, line)
 	}
 	bids = append(bids, d.raidLines()...)
@@ -161,9 +161,9 @@ func (d Document) raidLines() []Row {
 		}
 		clause, limit := number(raid["clause"]), number(raid["max_pay"])
 		line := playerLine(player)
-		line.Note = []Seg{{T: "cláusula " + esMoney(clause)}}
+		line.Sub = []Seg{{T: "cláusula " + esMoney(clause)}}
 		if limit > 0 && clause > limit {
-			line.Note = append(line.Note, Seg{T: " · "}, Seg{T: "pasa tu límite", C: "down"})
+			line.Note = []Seg{{T: "pasa tu límite", C: "down"}}
 		}
 		switch {
 		case truthy(player["shielded"]):
@@ -173,12 +173,28 @@ func (d Document) raidLines() []Row {
 		default:
 			line.Chips = []Chip{{T: "pagable", C: "ok"}}
 		}
-		line.Value, line.Why = "hasta "+esMoney(limit), "clausulazo programado"
+		line.Value, line.Why = "≤ "+esMoney(limit), "clausulazo programado"
 		line.Acts = []Act{act("Cancelar", "ghost", "op", "cancel_raid", map[string]any{
 			"player_id": text(raid["player_id"]), "name": text(raid["name"])})}
 		out = append(out, line)
 	}
 	return out
+}
+
+// ownBidActs drops what the bid's own button says about the amount: the row's value already
+// says it, and in the narrow aside the repeat pushed the name out.
+func ownBidActs(bid map[string]any) []Act {
+	acts := []Act{}
+	for _, one := range bidActs(bid, "bid", "") {
+		if one.Text {
+			continue
+		}
+		if one.Do == "bid" {
+			one.Label = "Cambiar"
+		}
+		acts = append(acts, one)
+	}
+	return acts
 }
 
 // outcomeLine is a resolved bid, offer or standing order: the icon of how it ended where the

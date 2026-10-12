@@ -444,6 +444,9 @@ func (s *Server) confirm(writer http.ResponseWriter, request *http.Request) {
 // offer that is gone is gone, a bid that changed is that amount. Everything else waits for the
 // rebuild, which is the authority.
 func (s *Server) applied(operation string, args writes.Args) {
+	if operation == "cancel_bid" || operation == "cancel_offer" {
+		s.state.Withdrawn(args.MarketID, args.PlayerID)
+	}
 	s.state.Patch(operation, func(universe *model.Universe) bool {
 		return patch(universe, operation, args)
 	})
@@ -481,7 +484,7 @@ func patch(universe *model.Universe, operation string, args writes.Args) bool {
 				changed = true
 			}
 
-		case "cancel_bid":
+		case "cancel_bid", "cancel_offer":
 			if listing := player.MarketEntry; listing != nil && listing.MarketID == args.MarketID {
 				listing.MyBidID, listing.MyBid, listing.MyBidStatus = nil, nil, nil
 				changed = true

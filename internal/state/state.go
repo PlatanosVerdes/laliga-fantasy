@@ -75,6 +75,9 @@ type State struct {
 	// What I had pending on the previous pass, to be able to tell how each one ended. Nil until
 	// the first pass, which only learns.
 	minePending map[string]outcomes.Pending
+	// Bids and offers I cancelled, by market id. The market keeps listing them for a minute or
+	// two after the DELETE answers, and a rebuild in that window brought them back.
+	withdrawn   map[string]withdrawal
 	generatedAt time.Time
 	lastFull    time.Time
 	lastError   string
@@ -341,6 +344,7 @@ func (s *State) RefreshWith(cause string, force bool) error {
 		return err
 	}
 
+	s.hideWithdrawn(universe, time.Now())
 	print := fingerprint(universe)
 	s.mu.Lock()
 	s.revision++
@@ -457,6 +461,56 @@ func (s *State) logMoves(universe *model.Universe) {
 		}
 		slog.Info("league move", fields...)
 	}
+}
+
+// WithdrawGrace is how long a bid or offer I cancelled stays hidden while the market still lists
+// it. Past that, whatever the market says wins: a cancel that never landed shows up again.
+const WithdrawGrace = 5 * time.Minute
+
+type withdrawal struct {
+	playerID string
+	until    time.Time
+}
+
+// Withdrawn records that I cancelled my bid or offer on this listing.
+func (s *State) Withdrawn(marketID, playerID string) {
+	if marketID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.withdrawn == nil {
+		s.withdrawn = map[string]withdrawal{}
+	}
+	s.withdrawn[marketID] = withdrawal{playerID: playerID, until: time.Now().Add(WithdrawGrace)}
+}
+
+// hideWithdrawn takes my cancelled bids off a freshly built world until the market catches up.
+func (s *State) hideWithdrawn(universe *model.Universe, now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for marketID, entry := range s.withdrawn {
+		if now.After(entry.until) {
+			delete(s.withdrawn, marketID)
+		}
+	}
+	for index := range universe.Market {
+		listing := &universe.Market[index]
+		if _, gone := s.withdrawn[listing.MarketID]; gone && listing.MyBidID != nil {
+			listing.MyBidID, listing.MyBid, listing.MyBidStatus = nil, nil, nil
+		}
+	}
+}
+
+func (s *State) withdrewFor(playerID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, entry := range s.withdrawn {
+		if entry.playerID == playerID {
+			return true
+		}
+	}
+	return false
 }
 
 // trackMine notices how my bids and offers ended.
@@ -596,6 +650,9 @@ func (s *State) trackMine(universe *model.Universe) {
 		}, now)
 		if ending == nil {
 			continue
+		}
+		if s.withdrewFor(playerID) && !mine[playerID] {
+			ending.Outcome, ending.NewOwner = "retirada", ""
 		}
 		endings = append(endings, *ending)
 		slog.Info("offer ended", "outcome", ending.Outcome, "kind", ending.Kind,
