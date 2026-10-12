@@ -193,7 +193,7 @@ func TestScheduledRaidsAreRowsOfMyBids(t *testing.T) {
 		"clause": 25_000_000.0, "max_pay": 20_000_000.0, "action": "esperando"}}
 	box := document.BuyData().Aside[0]
 	blob := asJSON(box)
-	for _, want := range []string{"hasta 20,0M", "pasa tu límite", `"do":"cancel_raid"`} {
+	for _, want := range []string{"≤ 20,0M", "cláusula 25,0M", "pasa tu límite", `"do":"cancel_raid"`} {
 		if !strings.Contains(blob, want) {
 			t.Errorf("missing %q in %s", want, blob)
 		}
@@ -218,5 +218,16 @@ func TestEquiposIncludesYou(t *testing.T) {
 	me := block.Rows[1]
 	if me.Name != "PlatanosVerdes (tú)" || me.Tone != "accent me" || len(me.Chips) != 0 {
 		t.Errorf("your row: %+v", me)
+	}
+}
+
+// The amount offered is the row's value; saying it again on a button pushed the name out of the
+// narrow aside.
+func TestMyOfferRowSaysTheAmountOnce(t *testing.T) {
+	acts := ownBidActs(map[string]any{"id": "7", "name": "Kike Salas",
+		"market": map[string]any{"market_id": "m1", "kind": "venta", "my_bid_id": "o1",
+			"my_bid": 14_110_001.0}})
+	if len(acts) != 1 || acts[0].Label != "Retirar" {
+		t.Errorf("acts = %+v, want only Retirar", acts)
 	}
 }

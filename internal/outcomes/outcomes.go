@@ -28,7 +28,7 @@ type Ending struct {
 	Amount   float64 `json:"amount"`
 	// Kind is "puja" for the game's own market and "oferta" for a rival's sale.
 	Kind string `json:"kind"`
-	// Outcome is one of: aceptada, rechazada, perdida, caducada.
+	// Outcome is one of: aceptada, rechazada, perdida, caducada, retirada.
 	Outcome string `json:"outcome"`
 	// Who is the manager on the other side, when there is one.
 	Who string `json:"who,omitempty"`
