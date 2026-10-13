@@ -260,3 +260,20 @@ func TestPostponedMatchesSayWhenTheyArePlayed(t *testing.T) {
 		t.Errorf("the undated one should say so: %+v", matches[1])
 	}
 }
+
+// A bid I already have stays withdrawable even when the price has run past what I can reach.
+func TestBuyLineOutOfReachKeepsMyBid(t *testing.T) {
+	document := Document{Advice: map[string]any{"budget": 1e6}}
+	item := map[string]any{"id": "7", "name": "Kike Salas", "entry_cost": 20e6,
+		"market": map[string]any{"market_id": "m1", "kind": "venta", "my_bid_id": "o1",
+			"my_bid": 14e6}}
+	line := document.buyLine(item, "oferta al dueño", 0, nil)
+	if line.Tone != "dim" || len(line.Acts) != 2 || line.Acts[1].Label != "Retirar" {
+		t.Errorf("acts = %+v, want my offer and Retirar", line.Acts)
+	}
+	delete(mapOf(item["market"]), "my_bid_id")
+	line = document.buyLine(item, "oferta al dueño", 0, nil)
+	if len(line.Acts) != 1 || !line.Acts[0].Off {
+		t.Errorf("acts = %+v, want one disabled button", line.Acts)
+	}
+}
