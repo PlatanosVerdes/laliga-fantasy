@@ -250,8 +250,8 @@ func TestMyOfferRowSaysTheAmountOnce(t *testing.T) {
 	acts := ownBidActs(map[string]any{"id": "7", "name": "Kike Salas",
 		"market": map[string]any{"market_id": "m1", "kind": "venta", "my_bid_id": "o1",
 			"my_bid": 14_110_001.0}})
-	if len(acts) != 2 || acts[0].Label != "Cambiar" || acts[1].Label != "Retirar" {
-		t.Errorf("acts = %+v, want Cambiar and Retirar", acts)
+	if len(acts) != 1 || acts[0].Label != "Cambiar" {
+		t.Errorf("acts = %+v, want one Cambiar, like a bid", acts)
 	}
 	if acts[0].Args["operation"] != "change_offer" || acts[0].Args["offer"] != "o1" {
 		t.Errorf("Cambiar should change the offer o1: %+v", acts[0].Args)
@@ -297,8 +297,9 @@ func TestBuyLineOutOfReachKeepsMyBid(t *testing.T) {
 		"market": map[string]any{"market_id": "m1", "kind": "venta", "my_bid_id": "o1",
 			"my_bid": 14e6}}
 	line := document.buyLine(item, "oferta al dueño", 0, nil)
-	if line.Tone != "dim" || len(line.Acts) != 3 || line.Acts[2].Label != "Retirar" {
-		t.Errorf("acts = %+v, want my offer, Cambiar and Retirar", line.Acts)
+	if line.Tone != "dim" || len(line.Acts) != 1 || line.Acts[0].Label != "Tu oferta 14.0M" ||
+		line.Acts[0].Args["operation"] != "change_offer" {
+		t.Errorf("acts = %+v, want my offer as one button that changes it", line.Acts)
 	}
 	delete(mapOf(item["market"]), "my_bid_id")
 	line = document.buyLine(item, "oferta al dueño", 0, nil)

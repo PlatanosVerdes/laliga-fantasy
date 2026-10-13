@@ -40,7 +40,7 @@ export function openBid(data) {
   show('amount', {p: {operation, market_id: data.market, player_id: data.player, name: data.name,
     min_bid: min, ideal, value: +data.value, bid_id: existing, offer_id: data.offer, bids: +data.bids || 0, expires: data.expires,
     title: existing ? 'Cambiar tu puja por' : changing ? 'Cambiar tu oferta por' : (operation === 'buy_offer' ? 'Ofertar por' : 'Pujar por'),
-    label: 'Importe de la puja', suggested: ideal && ideal >= min ? ideal : min, focus: true}});
+    label: changing ? 'Importe de la oferta' : 'Importe de la puja', suggested: ideal && ideal >= min ? ideal : min, focus: true}});
 }
 
 // One of the card's amount actions, with the player already resolved.
@@ -60,7 +60,7 @@ function Rivals({p}) {
   const isBid = ['bid', 'modify_bid', 'buy_offer', 'change_offer'].includes(p.operation) || !p.operation;
   if (!isBid) return null;
   // One of those bids can be mine, and counting it as a rival's is counting wrong.
-  const mine = p.bid_id ? 1 : 0, others = Math.max(0, p.bids - mine);
+  const mine = p.bid_id || p.operation === 'change_offer' ? 1 : 0, others = Math.max(0, p.bids - mine);
   const text = !p.bids ? 'ninguna' : mine ? (others ? `${p.bids} · ${others} de rivales y la tuya` : 'solo la tuya') : String(p.bids);
   return html`<span class="bid-rivals-wrap">Pujas vigentes <b class=${'bid-rivals' + (others ? ' rivals-on' : '')}>${text}</b></span>`;
 }
@@ -121,15 +121,18 @@ function AmountDialog({p}) {
       setStep({...step, n: 2, summary: data, token: data.token, error: ''});
     } catch (e) { setStep({...step, error: e.message}); }
   };
+  // The bid or the offer being changed can be taken back from here instead.
+  const dropOp = op === 'change_offer' ? 'cancel_offer' : 'cancel_bid';
   const drop = async () => {
     try {
-      const data = await prepare({operation: 'cancel_bid', market_id: p.market_id, bid_id: p.bid_id, player_id: p.player_id});
-      traced.become('cancel_bid');
+      const data = await prepare({operation: dropOp, market_id: p.market_id, bid_id: p.bid_id,
+        offer_id: p.offer_id, player_id: p.player_id});
+      traced.become(dropOp);
       setStep({...step, n: 2, summary: null, token: data.token, drop: true, error: ''});
     } catch (e) { setStep({...step, error: e.message}); }
   };
   const send = async () => {
-    const operation = step.drop ? 'cancel_bid' : op;
+    const operation = step.drop ? dropOp : op;
     setStep({...step, sending: true, error: ''});
     try {
       const data = await confirm(step.token);
@@ -160,7 +163,7 @@ function AmountDialog({p}) {
       ${warn ? html`<p class="bid-warn">${warn}</p>` : null}
     </div>` : html`<div id="bid-summary-step"><div class="bid-summary">
       ${step.done ? html`<p class="bid-ok">${step.done}.</p>`
-        : step.drop ? html`<p>Vas a <strong>retirar tu puja</strong> por ${p.name}.</p>`
+        : step.drop ? html`<p>Vas a <strong>retirar tu ${dropOp === 'cancel_offer' ? 'oferta' : 'puja'}</strong> por ${p.name}.</p>`
         : html`<dl class="bid-dl">
           <dt>Jugador</dt><dd>${s.player_name || p.name}</dd>
           <dt>${AMOUNT_LABEL[op] || 'Importe'}</dt><dd><strong>${exact(s.amount)}</strong></dd>
@@ -171,7 +174,7 @@ function AmountDialog({p}) {
     </div></div>`}
     <p class="bid-error">${step.error}</p>
     <div class="modal-actions">
-      ${step.n === 1 && p.bid_id ? html`<button class="bid-drop" type="button" onClick=${drop}>Retirar mi puja</button>` : null}
+      ${step.n === 1 && (p.bid_id || op === 'change_offer') ? html`<button class="bid-drop" type="button" onClick=${drop}>${dropOp === 'cancel_offer' ? 'Retirar mi oferta' : 'Retirar mi puja'}</button>` : null}
       <button class="bid-cancel" type="button" onClick=${closeDialog}>${step.done ? 'Cerrar' : 'Cancelar'}</button>
       ${step.n === 1 ? html`<button class="bid-next primary" type="button" onClick=${next}>Continuar</button>` : null}
       ${step.n === 2 && !step.done ? html`<button class="bid-confirm" type="button" disabled=${step.sending} onClick=${send}>${step.sending ? 'Enviando…' : 'Aceptar'}</button>` : null}
