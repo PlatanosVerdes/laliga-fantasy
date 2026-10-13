@@ -543,6 +543,10 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 
 	// The answer goes through .../market/{id}/offer/{id}: an offer for somebody I never listed
 	// has no market id, and no route for it has been seen yet.
+	// Without the bid's id the path ends in .../bid//cancel and the bid stays live.
+	if (name == "cancel_bid" || name == "modify_bid") && args.BidID == "" {
+		return nil, errors.New("falta el id de tu puja: abre la puja desde el mercado")
+	}
 	if (name == "accept_offer" || name == "decline_offer") && args.MarketID == "" {
 		return nil, errors.New("esta oferta es por un jugador que no tienes en venta: " +
 			"respondela en la app de LaLiga")

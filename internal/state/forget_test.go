@@ -80,3 +80,25 @@ func TestForgetSoldDisarmsARaidOnAPlayerNobodyOwns(t *testing.T) {
 		t.Error("the raid on a player nobody owns survived")
 	}
 }
+
+// A rival squad that fails to load leaves its players without an owner for one pass; that is not
+// a sale, and the raids on them stay armed.
+func TestAMissingSquadDoesNotDisarmRaids(t *testing.T) {
+	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
+	if err := policies.Save(map[string]policies.Policy{
+		"5": {ID: "5", Name: "Yoel Lago", Raid: true, Owner: "-papi—"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	(&State{}).forgetSold(&model.Universe{UnreadSquads: 1, Players: []model.Player{
+		{ID: "1", Name: "Mine", IsMine: true},
+		{ID: "5", Name: "Yoel Lago"},
+	}})
+	left, err := policies.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !left["5"].Raid {
+		t.Error("a raid was disarmed because its target's squad failed to load")
+	}
+}

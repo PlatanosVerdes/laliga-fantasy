@@ -70,11 +70,19 @@ func (d Document) offersBlock() Block {
 		decline := act("Rechazar", "primary", "op", "op", opArgs("decline_offer"))
 		decline.Tip = "recomendado: " + why
 		tone := ""
-		if take {
+		blocked := AcceptBlocked(offer)
+		if take && blocked == "" {
 			tone = "good"
 			accept = act("Aceptar", "primary", "op", "op", opArgs("accept_offer"))
 			accept.Tip = "recomendado: " + why
 			decline = act("Rechazar", "ghost", "op", "op", opArgs("decline_offer"))
+		}
+		if blocked != "" {
+			accept = Act{Label: "Aceptar", Class: "mb mb-ghost", Off: true, Tip: blocked, Wrap: blocked}
+			// Without a listing there is nothing to answer it against, either way.
+			if text(offer["market_id"]) == "" {
+				decline = Act{Label: "Rechazar", Class: "mb mb-ghost", Off: true, Tip: blocked, Wrap: blocked}
+			}
 		}
 		if planned {
 			facts = append(facts, "si fichas a "+plannedFor[text(offer["id"])])
@@ -316,4 +324,19 @@ func (d Document) sellAct(player map[string]any) (Act, *Chip) {
 	when := text(player["hold_until"])
 	return sell, &Chip{T: "acepta desde " + esDay(when),
 		Tip: "Puedes ponerlo ya en venta; aceptar una oferta tendrá que esperar al " + esWhen(when)}
+}
+
+// AcceptBlocked is why taking this offer would be refused, or "" when it can be taken. Every
+// place that shows an Aceptar asks it first, so no button promises what the server refuses.
+func AcceptBlocked(row map[string]any) string {
+	if text(row["market_id"]) == "" {
+		return "Es por un jugador que no tienes en venta: respóndela en la app de LaLiga"
+	}
+	if truthy(row["sale_locked"]) {
+		// Out injured or banned is the league rule's own exception.
+		if available, known := row["available"].(bool); !known || available {
+			return "La norma de la liga no deja venderlo hasta el " + esWhen(text(row["hold_until"]))
+		}
+	}
+	return ""
 }

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/files"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 )
 
@@ -29,7 +30,14 @@ import (
 const (
 	RefreshMargin   = 2 * time.Minute
 	RefreshCooldown = 10 * time.Minute
+	// MaxFailedRefreshes is how many renewals in a row may fail before the panel stops asking:
+	// a revoked session retried forever is a burst of security notices and a locked account.
+	MaxFailedRefreshes = 3
 )
+
+// ErrStopped is the session given up on after MaxFailedRefreshes: only a new login restarts it.
+var ErrStopped = errors.New("la renovacion del login ha fallado 3 veces seguidas: " +
+	"el panel no vuelve a intentarlo hasta que inicies sesion de nuevo")
 
 // Tokens is the stored session. The JSON names match the Python file exactly, because
 // both implementations read and write the same tokens.json.
@@ -43,7 +51,14 @@ type Tokens struct {
 	Name         string  `json:"name,omitempty"`
 	IDP          string  `json:"idp,omitempty"`
 	RefreshedAt  float64 `json:"refreshed_at,omitempty"`
+	// FailedRefreshes counts renewals failed in a row and LastAttempt is the latest, failed or
+	// not: the cooldown runs from it, so a failing renewal is not retried on every call.
+	FailedRefreshes int     `json:"failed_refreshes,omitempty"`
+	LastAttempt     float64 `json:"last_attempt,omitempty"`
 }
+
+// Stopped is whether the session was given up on.
+func (t *Tokens) Stopped() bool { return t != nil && t.FailedRefreshes >= MaxFailedRefreshes }
 
 func (t *Tokens) SecondsLeft() int64 {
 	if t == nil {
@@ -80,7 +95,7 @@ func Save(tokens *Tokens) error {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	return os.WriteFile(config.TokenFile, blob, 0o600)
+	return files.WriteAtomic(config.TokenFile, blob, 0o600)
 }
 
 func seedFromEnv() (*Tokens, error) {
@@ -207,9 +222,18 @@ func Refresh(tokens *Tokens) (*Tokens, error) {
 		strings.Join(failures, ", "))
 }
 
+// renew is Refresh, swapped out in tests so a failing provider needs no network.
+var renew = Refresh
+
+// bearerMu makes check, renew and save one step: two requests near the expiry each renewed the
+// same refresh token.
+var bearerMu sync.Mutex
+
 // Bearer is the current access token, refreshing only when it is genuinely about to
 // die.
 func Bearer() (string, error) {
+	bearerMu.Lock()
+	defer bearerMu.Unlock()
 	tokens, err := Load()
 	if err != nil {
 		return "", err
@@ -224,13 +248,28 @@ func Bearer() (string, error) {
 		return tokens.AccessToken, nil
 	}
 
+	if tokens.Stopped() {
+		return "", ErrStopped
+	}
+
 	if left := tokens.SecondsLeft(); left < int64(RefreshMargin.Seconds()) && tokens.RefreshToken != "" {
-		since := time.Since(time.Unix(int64(tokens.RefreshedAt), 0))
+		since := time.Since(time.Unix(int64(max(tokens.RefreshedAt, tokens.LastAttempt)), 0))
 		if since >= RefreshCooldown {
-			if fresh, err := Refresh(tokens); err == nil {
+			if fresh, err := renew(tokens); err == nil {
 				tokens = fresh
 			} else {
-				slog.Warn("refresh failed, using the token we have", "reason", err.Error())
+				tokens.FailedRefreshes++
+				tokens.LastAttempt = float64(time.Now().Unix())
+				if saveErr := Save(tokens); saveErr != nil {
+					slog.Error("could not record a failed refresh", "reason", saveErr.Error())
+				}
+				if tokens.Stopped() {
+					slog.Error("login stopped after failed refreshes", "failed", tokens.FailedRefreshes,
+						"reason", err.Error())
+					return "", ErrStopped
+				}
+				slog.Warn("refresh failed, using the token we have", "failed", tokens.FailedRefreshes,
+					"reason", err.Error())
 			}
 		} else {
 			slog.Debug("refresh skipped by cooldown", "seconds_since", int(since.Seconds()))

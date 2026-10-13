@@ -220,7 +220,8 @@ func (d Document) saleSwaps() map[string]advice.Clausulazo {
 	blocked := []map[string]any{}
 	for _, offer := range rows(d.Advice["offers"]) {
 		id := text(offer["id"])
-		if number(offer["vs_value"]) >= policies.GoodOverValue && keep[id] {
+		// Paying the clause first and then finding the sale refused would leave the money spent.
+		if number(offer["vs_value"]) >= policies.GoodOverValue && keep[id] && AcceptBlocked(offer) == "" {
 			blocked = append(blocked, offer)
 		}
 	}

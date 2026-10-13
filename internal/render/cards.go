@@ -144,7 +144,7 @@ func (d Document) offerCards(actions []map[string]any, rate float64) []Card {
 	_, xiNow := bestElevenOf(squad)
 	var out []Card
 	for _, row := range actions {
-		if text(row["verdict"]) != "cash" {
+		if text(row["verdict"]) != "cash" || AcceptBlocked(row) != "" {
 			continue
 		}
 		stand := mapOf(row["stand_in"])

@@ -14,10 +14,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/files"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 )
 
@@ -108,8 +110,13 @@ func Load() (map[string]Policy, error) {
 		return nil, err
 	}
 	var out map[string]Policy
+	// A file that will not parse is an error, never an empty set: the next save would turn it
+	// into one and every armed instruction would be gone.
 	if err := json.Unmarshal(body, &out); err != nil {
-		return map[string]Policy{}, nil
+		return nil, fmt.Errorf("%s no es un JSON valido: %w", config.PolicyFile, err)
+	}
+	if out == nil {
+		out = map[string]Policy{}
 	}
 	return out, nil
 }
@@ -122,7 +129,27 @@ func Save(policies map[string]Policy) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(config.PolicyFile, blob, 0o600)
+	return files.WriteAtomic(config.PolicyFile, blob, 0o600)
+}
+
+// fileMu makes every read-modify-write of the file one step. The engine, a rebuild and a click
+// all edit it, and two edits that read the same version lost each other's changes.
+var fileMu sync.Mutex
+
+// Update loads the instructions, lets change edit them and saves them if it says so, all under
+// the one lock. Every edit goes through here.
+func Update(change func(armed map[string]Policy) (bool, error)) error {
+	fileMu.Lock()
+	defer fileMu.Unlock()
+	armed, err := Load()
+	if err != nil {
+		return err
+	}
+	changed, err := change(armed)
+	if err != nil || !changed {
+		return err
+	}
+	return Save(armed)
 }
 
 // GoodOfferFloor is (bar, which reference set it). The winning reference is quoted in the
@@ -679,10 +706,15 @@ func truthy(value any) bool {
 // Set writes one instruction, merging with whatever is already stored so a page that only
 // knows about one switch cannot wipe the amounts. Keys listed in unset are cleared.
 func Set(id string, apply func(*Policy), unset ...string) (Policy, error) {
-	armed, err := Load()
-	if err != nil {
-		return Policy{}, err
-	}
+	var entry Policy
+	err := Update(func(armed map[string]Policy) (bool, error) {
+		entry = set(armed, id, apply, unset...)
+		return true, nil
+	})
+	return entry, err
+}
+
+func set(armed map[string]Policy, id string, apply func(*Policy), unset ...string) Policy {
 	entry := armed[id]
 	entry.ID = id
 	apply(&entry)
@@ -699,20 +731,20 @@ func Set(id string, apply func(*Policy), unset ...string) (Policy, error) {
 		}
 	}
 	armed[id] = entry
-	return entry, Save(armed)
+	return entry
 }
 
 // Clear takes one instruction off a player and leaves the rest alone: somebody can have a
 // player always-listed and shield-armed, and calling off one is not calling off the other. With
 // nothing left the entry goes, so the file does not fill up with instructions that say nothing.
 func Clear(id, what string) error {
-	armed, err := Load()
-	if err != nil {
-		return err
-	}
+	return Update(func(armed map[string]Policy) (bool, error) { return clearOne(armed, id, what) })
+}
+
+func clearOne(armed map[string]Policy, id, what string) (bool, error) {
 	entry, exists := armed[id]
 	if !exists {
-		return nil
+		return false, nil
 	}
 	switch what {
 	case "raid":
@@ -723,14 +755,14 @@ func Clear(id, what string) error {
 		entry.AlwaysList, entry.AutoSell = false, false
 		entry.MinPrice, entry.AcceptAbove = nil, nil
 	default:
-		return fmt.Errorf("no se que instruccion es %q", what)
+		return false, fmt.Errorf("no se que instruccion es %q", what)
 	}
 	if entry.silent() {
 		delete(armed, id)
 	} else {
 		armed[id] = entry
 	}
-	return Save(armed)
+	return true, nil
 }
 
 // silent is an entry that no longer asks for anything.
@@ -766,10 +798,10 @@ func BookShield(id, name, at string) (Policy, error) {
 
 // UnbookShield drops one booked hour, and the whole instruction with the last one.
 func UnbookShield(id, at string) error {
-	armed, err := Load()
-	if err != nil {
-		return err
-	}
+	return Update(func(armed map[string]Policy) (bool, error) { return unbook(armed, id, at) })
+}
+
+func unbook(armed map[string]Policy, id, at string) (bool, error) {
 	kept := []string{}
 	for _, booked := range armed[id].ShieldTimes() {
 		if booked != at {
@@ -777,25 +809,23 @@ func UnbookShield(id, at string) error {
 		}
 	}
 	if len(kept) == 0 {
-		return Clear(id, "shield")
+		return clearOne(armed, id, "shield")
 	}
-	_, err = Set(id, func(policy *Policy) {
+	set(armed, id, func(policy *Policy) {
 		policy.ShieldAt, policy.ShieldQueue = &kept[0], kept[1:]
 	})
-	return err
+	return true, nil
 }
 
 // AdvanceShield moves the next booked shield up once the current one is bought or stale.
 func AdvanceShield(id string) error {
-	armed, err := Load()
-	if err != nil {
-		return err
-	}
-	times := armed[id].ShieldTimes()
-	if len(times) <= 1 {
-		return Clear(id, "shield")
-	}
-	return UnbookShield(id, times[0])
+	return Update(func(armed map[string]Policy) (bool, error) {
+		times := armed[id].ShieldTimes()
+		if len(times) <= 1 {
+			return clearOne(armed, id, "shield")
+		}
+		return unbook(armed, id, times[0])
+	})
 }
 
 func stampBefore(one, two string) bool {
@@ -808,12 +838,11 @@ func stampBefore(one, two string) bool {
 }
 
 func Remove(id string) error {
-	armed, err := Load()
-	if err != nil {
-		return err
-	}
-	delete(armed, id)
-	return Save(armed)
+	return Update(func(armed map[string]Policy) (bool, error) {
+		_, found := armed[id]
+		delete(armed, id)
+		return found, nil
+	})
 }
 
 // Sold is the ids whose sell-side instructions can never run again: the player is in the
@@ -892,10 +921,18 @@ func Disarm(ids ...string) ([]Dropped, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	armed, err := Load()
+	var gone []Dropped
+	err := Update(func(armed map[string]Policy) (bool, error) {
+		gone = disarm(armed, ids)
+		return len(gone) > 0, nil
+	})
 	if err != nil {
 		return nil, err
 	}
+	return gone, nil
+}
+
+func disarm(armed map[string]Policy, ids []string) []Dropped {
 	var gone []Dropped
 	for _, id := range ids {
 		entry, found := armed[id]
@@ -914,10 +951,7 @@ func Disarm(ids ...string) ([]Dropped, error) {
 		}
 		armed[id] = entry
 	}
-	if len(gone) == 0 {
-		return nil, nil
-	}
-	return gone, Save(armed)
+	return gone
 }
 
 // Dropped is an instruction that was taken down, carrying enough to write it into a log: an id
@@ -934,10 +968,18 @@ func Forget(ids ...string) ([]Dropped, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	armed, err := Load()
+	var gone []Dropped
+	err := Update(func(armed map[string]Policy) (bool, error) {
+		gone = forget(armed, ids)
+		return len(gone) > 0, nil
+	})
 	if err != nil {
 		return nil, err
 	}
+	return gone, nil
+}
+
+func forget(armed map[string]Policy, ids []string) []Dropped {
 	var gone []Dropped
 	for _, id := range ids {
 		entry, found := armed[id]
@@ -957,8 +999,5 @@ func Forget(ids ...string) ([]Dropped, error) {
 		entry.MinPrice, entry.AcceptAbove = nil, nil
 		armed[id] = entry
 	}
-	if len(gone) == 0 {
-		return nil, nil
-	}
-	return gone, Save(armed)
+	return gone
 }

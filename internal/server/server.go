@@ -155,7 +155,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/refresh", s.refresh)
 	mux.HandleFunc("/assets/", s.asset)
 	mux.HandleFunc("/", s.index)
-	return logging(mux)
+	return logging(sameSiteOnly(mux))
 }
 
 func (s *Server) ListenAndServe() error {
@@ -193,6 +193,22 @@ func (c *counted) Flush() {
 	if flusher, ok := c.ResponseWriter.(http.Flusher); ok {
 		flusher.Flush()
 	}
+}
+
+// sameSiteOnly refuses an API write that is not JSON. A page on another site can make your
+// browser post a form or plain text here, but not JSON without this server's consent, which it
+// never gives; so an armed clausulazo or a swapped session can only come from the panel.
+// The usage beacon is exempt: it records clicks and moves nothing.
+func sameSiteOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		write := request.Method != http.MethodGet && request.Method != http.MethodHead
+		api := strings.HasPrefix(request.URL.Path, "/api/") && request.URL.Path != "/api/usage"
+		if write && api && !strings.HasPrefix(request.Header.Get("Content-Type"), "application/json") {
+			http.Error(writer, `{"error":"solo JSON"}`, http.StatusUnsupportedMediaType)
+			return
+		}
+		next.ServeHTTP(writer, request)
+	})
 }
 
 func logging(next http.Handler) http.Handler {
@@ -256,7 +272,12 @@ func (s *Server) payload(writer http.ResponseWriter, _ *http.Request) {
 	s.json(writer, http.StatusOK, payload)
 }
 
-func (s *Server) refresh(writer http.ResponseWriter, _ *http.Request) {
+func (s *Server) refresh(writer http.ResponseWriter, request *http.Request) {
+	// A forced rebuild reads the whole league: not something a link preview should set off.
+	if request.Method != http.MethodPost {
+		s.json(writer, http.StatusMethodNotAllowed, map[string]any{"error": "solo POST"})
+		return
+	}
 	if s.opts.Refresh == nil {
 		s.json(writer, http.StatusNotImplemented, map[string]any{"error": "sin refresco"})
 		return

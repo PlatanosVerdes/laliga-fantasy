@@ -399,3 +399,12 @@ func TestTheHoldStopsTakingAnOfferNotListing(t *testing.T) {
 		t.Errorf("an injured player in his hold is the rule's exception: %v", err)
 	}
 }
+
+// Cancelling a bid without its id sent DELETE .../bid//cancel and left the bid live.
+func TestABidIsNeverCancelledWithoutItsID(t *testing.T) {
+	for _, name := range []string{"cancel_bid", "modify_bid"} {
+		if _, err := check(name, Args{MarketID: "m", Amount: 1}, Player{}, nil, nil); err == nil {
+			t.Errorf("%s without a bid id went through", name)
+		}
+	}
+}

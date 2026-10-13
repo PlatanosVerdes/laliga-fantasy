@@ -155,6 +155,9 @@ type Universe struct {
 	Market          []Listing          `json:"market"`
 	MyTeamID        *string            `json:"my_team_id"`
 	OwnershipLoaded bool               `json:"ownership_loaded"`
+	// UnreadSquads is how many squads failed to load this pass. Their players then have no
+	// owner, which reads exactly like a player nobody owns.
+	UnreadSquads int `json:"unread_squads,omitempty"`
 	CompletedWeeks  int                `json:"completed_weeks"`
 	NextWeekOpens   string             `json:"next_week_opens"`
 	CurrentWeight   float64            `json:"current_weight"`
@@ -349,7 +352,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 	// player list carries none.
 	faces := map[string]string{}
 	if leagueID != "" {
-		ownership, universe.LeagueTeams, err = loadOwnership(client, leagueID)
+		ownership, universe.LeagueTeams, universe.UnreadSquads, err = loadOwnership(client, leagueID)
 		if err != nil {
 			return nil, fmt.Errorf("ownership: %w", err)
 		}
@@ -641,11 +644,12 @@ type slot struct {
 // the shield and the squad-slot id — and that slot id, not the player's own id, is what
 // the write endpoints want.
 func loadOwnership(client *api.Client, leagueID string) (map[string]slot,
-	map[string]*LeagueTeam, error) {
+	map[string]*LeagueTeam, int, error) {
 	standings, err := client.Standings(leagueID, 30*time.Minute)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
+	unread := 0
 	now := time.Now()
 	ownership := map[string]slot{}
 	teams := map[string]*LeagueTeam{}
@@ -668,6 +672,7 @@ func loadOwnership(client *api.Client, leagueID string) (map[string]slot,
 		squad, err := client.TeamSquad(leagueID, teamID, 30*time.Minute)
 		if err != nil {
 			slog.Warn("squad unreachable", "team", teamID, "reason", err.Error())
+			unread++
 			continue
 		}
 		squadValue, clauseTotal, count := 0.0, 0.0, 0
@@ -710,7 +715,7 @@ func loadOwnership(client *api.Client, leagueID string) (map[string]slot,
 			ClauseTotal: clauseTotal, Players: count, CashIsEstimate: true,
 		}
 	}
-	return ownership, teams, nil
+	return ownership, teams, unread, nil
 }
 
 // standing is the flattened standings row. The endpoint nests half of it under "team"

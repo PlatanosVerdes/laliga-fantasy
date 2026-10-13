@@ -752,13 +752,16 @@ func cmdAlways(args []string) error {
 			fmt.Println(cli.Red(fmt.Sprintf("'%s' no esta en tu plantilla.", name)))
 			return nil
 		}
-		if _, existed := armed[id]; existed {
-			delete(armed, id)
-			fmt.Printf("Quitado: %s\n", label)
-		} else {
+		if _, existed := armed[id]; !existed {
 			fmt.Printf("No estaba: %s\n", label)
+			return nil
 		}
-		return policies.Save(armed)
+		// Only the listing side: a shield or a raid booked on him is another instruction.
+		if err := policies.Clear(id, "listing"); err != nil {
+			return err
+		}
+		fmt.Printf("Quitado: %s\n", label)
+		return nil
 	}
 
 	if action != "add" {
@@ -777,27 +780,29 @@ func cmdAlways(args []string) error {
 		return nil
 	}
 
-	policy := armed[id]
-	policy.ID, policy.Name, policy.AlwaysList = id, label, true
-	if *minPrice != 0 {
-		policy.MinPrice = minPrice
-	} else if policy.MinPrice == nil {
-		var player map[string]any
-		for _, row := range state.Players {
-			if text(row["id"]) == id {
-				player = row
-			}
+	var value float64
+	for _, row := range state.Players {
+		if text(row["id"]) == id {
+			value = number(row["value"])
 		}
-		value := number(player["value"])
-		policy.MinPrice = &value
 	}
-	if *accept != 0 {
-		policy.AcceptAbove = accept
+	policy, err := policies.Set(id, func(policy *policies.Policy) {
+		policy.Name, policy.AlwaysList = label, true
+		if *minPrice != 0 {
+			policy.MinPrice = minPrice
+		} else if policy.MinPrice == nil {
+			policy.MinPrice = &value
+		}
+		if *accept != 0 {
+			policy.AcceptAbove = accept
+		}
+		if *auto {
+			policy.AutoSell = true
+		}
+	})
+	if err != nil {
+		return err
 	}
-	if *auto {
-		policy.AutoSell = true
-	}
-	armed[id] = policy
 
 	tail := "no lo vendo solo; con --auto o --accept <importe> lo autorizas."
 	if policy.AcceptAbove != nil && *policy.AcceptAbove != 0 {
@@ -807,7 +812,7 @@ func cmdAlways(args []string) error {
 	}
 	fmt.Println(cli.Green(fmt.Sprintf("%s: siempre en mercado a %s, %s", label,
 		cli.Money(*policy.MinPrice), tail)))
-	return policies.Save(armed)
+	return nil
 }
 
 func cmdRaid(args []string) error {
@@ -867,9 +872,11 @@ func cmdRaid(args []string) error {
 	id := text(found["id"])
 
 	if action == "rm" {
-		delete(armed, id)
+		if err := policies.Clear(id, "raid"); err != nil {
+			return err
+		}
 		fmt.Printf("Quitado el clausulazo de %s\n", text(found["name"]))
-		return policies.Save(armed)
+		return nil
 	}
 
 	ceiling := *maxPay
@@ -880,15 +887,17 @@ func cmdRaid(args []string) error {
 			ceiling = number(found["value"]) * 1.5
 		}
 	}
-	policy := armed[id]
-	policy.ID, policy.Name, policy.Raid = id, text(found["name"]), true
-	policy.MaxPay = &ceiling
-	policy.Owner = text(found["owner"])
-	armed[id] = policy
+	if _, err := policies.Set(id, func(policy *policies.Policy) {
+		policy.Name, policy.Raid = text(found["name"]), true
+		policy.MaxPay = &ceiling
+		policy.Owner = text(found["owner"])
+	}); err != nil {
+		return err
+	}
 	fmt.Println(cli.Green(fmt.Sprintf(
 		"%s: clausulazo programado, pago maximo %s. Se paga en cuanto se libere y solo si "+
 			"sigue por debajo de ese importe.", text(found["name"]), cli.Money(ceiling))))
-	return policies.Save(armed)
+	return nil
 }
 
 // --- leagues ----------------------------------------------------------------------------

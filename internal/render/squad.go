@@ -48,7 +48,9 @@ func (d Document) SquadData() View {
 		}
 		line.Note, line.Why = []Seg{{T: note}}, strings.Join(asStrings(player["reasons"]), ", ")
 		switch {
-		case best > 0 && offerID != "":
+		case best > 0 && offerID != "" && AcceptBlocked(map[string]any{"market_id": listing["market_id"],
+			"sale_locked": player["sale_locked"], "available": player["available"],
+			"hold_until": player["hold_until"]}) == "":
 			line.Acts = []Act{act("Aceptar "+esMoney(best), "primary", "op", "op", map[string]any{
 				"op": "accept_offer", "market_id": text(listing["market_id"]), "offer_id": offerID,
 				"player_id": text(player["id"]), "name": text(player["name"]),
