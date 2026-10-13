@@ -25,6 +25,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/dismissed"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/engine"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/forecast"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
@@ -1270,6 +1271,14 @@ func orderRows() []map[string]any {
 	return rows
 }
 
+func dismissedKeys() map[string]bool {
+	out := map[string]bool{}
+	for key := range dismissed.Load() {
+		out[key] = true
+	}
+	return out
+}
+
 func endingRows() []map[string]any {
 	saved := outcomes.Load()
 	if len(saved) == 0 {
@@ -1497,7 +1506,7 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 	document := render.Document{
 		Universe: generic, Advice: buckets, Generated: stamp, LeagueName: league,
 		MineByWeek: mineByWeek(universe), Mode: mode, Endings: endingRows(),
-		Orders: orderRows(),
+		Orders: orderRows(), Dismissed: dismissedKeys(),
 		// The plan reads the same buckets the tables do, so what it proposes and what they
 		// list can never disagree.
 		Swaps:          advice.Swaps(generic, buckets, cash),

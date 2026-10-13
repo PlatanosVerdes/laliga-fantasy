@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/dismissed"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/outcomes"
@@ -264,6 +265,34 @@ func (s *Server) cancelRaid(writer http.ResponseWriter, request *http.Request) {
 	}
 	s.settle("raid")
 	s.json(writer, http.StatusOK, map[string]any{"id": id, "raid": false})
+}
+
+// dismiss hides a decision card, or with restore brings them all back. Only the page changes,
+// so the world is patched rather than rebuilt.
+func (s *Server) dismiss(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		s.json(writer, http.StatusMethodNotAllowed, map[string]any{"error": "solo POST"})
+		return
+	}
+	body := s.body(request)
+	key := text(body["key"])
+	var err error
+	switch {
+	case truthy(body["restore"]):
+		err = dismissed.Clear()
+	case key != "":
+		err = dismissed.Add(key)
+	default:
+		s.json(writer, http.StatusBadRequest, map[string]any{"error": "falta la tarjeta"})
+		return
+	}
+	if err != nil {
+		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	slog.Info("decision dismissed", "key", key, "restore", truthy(body["restore"]))
+	s.state.Patch("dismiss", func(*model.Universe) bool { return true })
+	s.json(writer, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (s *Server) raid(writer http.ResponseWriter, request *http.Request) {

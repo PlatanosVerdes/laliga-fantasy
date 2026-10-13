@@ -48,8 +48,14 @@ type Card struct {
 
 // decisionCards is every card the advice supports, already in the order to act on them.
 func (d Document) decisionCards(now time.Time) []Card {
+	cards, _ := d.visibleCards(now)
+	return cards
+}
+
+// visibleCards is decisionCards plus how many of them were dismissed.
+func (d Document) visibleCards(now time.Time) ([]Card, int) {
 	if len(d.Advice) == 0 {
-		return nil
+		return nil, 0
 	}
 	rate := number(d.Advice["squad_ppm_benchmark"])
 	actions := d.actionRows()
@@ -64,7 +70,25 @@ func (d Document) decisionCards(now time.Time) []Card {
 		covered[card.Key] = true
 	}
 	cards = append(cards, d.upgradeCards(covered)...)
-	return orderCards(cards, now)
+	kept, hidden := cards[:0], 0
+	for _, card := range cards {
+		if d.Dismissed[DismissKey(card)] {
+			hidden++
+			continue
+		}
+		kept = append(kept, card)
+	}
+	return orderCards(kept, now), hidden
+}
+
+// DismissKey is the card as the exact proposal it is: who, for whom, until when. Key alone
+// would hide every later card about the same player.
+func DismissKey(card Card) string {
+	key := card.Kind + ":" + text(card.Player["id"])
+	if card.In != nil {
+		key += ">" + text(card.In["id"])
+	}
+	return key + "@" + card.Deadline
 }
 
 // orderCards puts what expires first on top, an hour being the grain at which two deadlines

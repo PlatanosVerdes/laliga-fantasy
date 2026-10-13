@@ -450,3 +450,25 @@ func TestLiveElevenShowsTheSavedElevenScoring(t *testing.T) {
 		t.Error("a finished matchday goes back to the plan")
 	}
 }
+
+func TestADismissedCardIsHiddenAndCounted(t *testing.T) {
+	document := decidingDocument()
+	before := document.decisionCards(time.Now())
+	if len(before) == 0 {
+		t.Fatal("the fixture proposes nothing")
+	}
+	gone := DismissKey(before[0])
+	document.Dismissed = map[string]bool{gone: true}
+	after, hidden := document.visibleCards(time.Now())
+	for _, card := range after {
+		if DismissKey(card) == gone {
+			t.Fatalf("%s is still proposed after being dismissed", gone)
+		}
+	}
+	if hidden != 1 {
+		t.Errorf("hidden = %d, want 1", hidden)
+	}
+	if data := document.DecideData().Main[0].Data.(Cards); data.Hidden != 1 {
+		t.Errorf("the page does not offer to bring it back: %+v", data)
+	}
+}

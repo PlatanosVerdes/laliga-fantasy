@@ -1,9 +1,16 @@
 import {html, panel} from './lib.js';
+import {postJSON, changed} from './api.js';
 import {KINDS, ActView, ChipView, Segs, Seg} from './view.js';
 import {Face, ShieldMark, PosTag, Empty, Countdown} from './components.js';
 
 // Decidir's own pieces: the decision cards, the eleven they are about, and the way out to the
 // other tabs.
+
+// Saying no to a card is an instruction to the panel, not to LaLiga: one step, no confirmation.
+async function dismiss(body) {
+  try { await postJSON('/api/dismiss', body); changed(); }
+  catch (e) { alert('No he podido descartarla: ' + e.message); }
+}
 
 function Card({card, rank}) {
   const p = card.player;
@@ -15,7 +22,8 @@ function Card({card, rank}) {
       <span class="meta"><${PosTag} p=${p}/>${card.meta}</span></div>${(card.chips || []).map((c) => html`<${ChipView} c=${c}/>`)}</div>
     <div class="verb">${card.verb}</div><div class="big">${card.big}${card.big_note ? html`<span class=${'big-note ' + (card.note_class || '')}>${card.big_note}</span>` : null}</div>
     <ul class="why">${card.why.map((line) => html`<li>${line}</li>`)}</ul>
-    <div class="card-foot">${card.buttons.map((a) => html`<${ActView} a=${a}/>`)}<span class="impact">${card.impact}</span></div>
+    <div class="card-foot">${card.buttons.map((a) => html`<${ActView} a=${a}/>`)}<span class="impact">${card.impact}</span>${
+      card.dismiss ? html`<button type="button" class="linkish dismiss" onClick=${() => dismiss({key: card.dismiss})}>Descartar</button>` : null}</div>
   </article>`;
 }
 
@@ -25,7 +33,8 @@ const Remind = ({r}) => html`<div class="necro-remind warn"><b>Necroporra J${r.w
 
 const Cards = ({b}) => html`${b.data.remind ? html`<${Remind} r=${b.data.remind}/>` : null}<div class="sec-head"><h2>Qué hacer ahora</h2></div>${b.data.cards.length
   ? html`<div class="cards">${b.data.cards.map((card, i) => html`<${Card} card=${card} rank=${i + 1}/>`)}</div><p class="rest">${b.data.rest}</p>`
-  : html`<${Empty}>${b.data.empty}<//>`}`;
+  : html`<${Empty}>${b.data.empty}<//>`}${b.data.hidden ? html`<p class="rest">${b.data.hidden === 1 ? 'Una descartada' : b.data.hidden + ' descartadas'} · <button type="button" class="linkish"
+    onClick=${() => dismiss({restore: true})}>recuperarlas</button></p>` : null}`;
 Cards.full = true;
 KINDS.cards = Cards;
 

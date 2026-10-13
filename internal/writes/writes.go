@@ -533,6 +533,13 @@ func (g *Guard) Confirm(token string, allowWrites, dryRun bool) (map[string]any,
 func check(name string, args Args, who Player, cash *int64, window *Window) ([]string, error) {
 	var warnings []string
 
+	// The answer goes through .../market/{id}/offer/{id}: an offer for somebody I never listed
+	// has no market id, and no route for it has been seen yet.
+	if (name == "accept_offer" || name == "decline_offer") && args.MarketID == "" {
+		return nil, errors.New("esta oferta es por un jugador que no tienes en venta: " +
+			"respondela en la app de LaLiga")
+	}
+
 	// The clause window is the calendar's rule and not the market's: the API refuses a payment
 	// while a fixture starts within the day (030.01.17). Reading it here turns that refusal into
 	// a sentence with an hour in it, before anything is sent.

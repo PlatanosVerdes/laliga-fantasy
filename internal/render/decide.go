@@ -31,6 +31,7 @@ type CardView struct {
 	Why       []string       `json:"why"`
 	Buttons   []Act          `json:"buttons"`
 	Impact    string         `json:"impact"`
+	Dismiss   string         `json:"dismiss"`
 }
 
 type Cards struct {
@@ -39,16 +40,18 @@ type Cards struct {
 	Cards  []CardView   `json:"cards"`
 	Rest   string       `json:"rest,omitempty"`
 	Empty  string       `json:"empty,omitempty"`
+	// Hidden is how many cards were dismissed, so they can be brought back.
+	Hidden int `json:"hidden,omitempty"`
 }
 
 // DecideData is "Qué hacer ahora": the cards to act on, and beside them the eleven they are
 // about, the crack worth aiming at and the way to every other list.
 func (d Document) DecideData() View {
-	cards := d.decisionCards(time.Now())
+	cards, hidden := d.visibleCards(time.Now())
 	if len(cards) > MaxCards {
 		cards = cards[:MaxCards]
 	}
-	data := Cards{Cards: []CardView{}, Remind: d.necroReminder()}
+	data := Cards{Cards: []CardView{}, Remind: d.necroReminder(), Hidden: hidden}
 	if len(cards) == 0 {
 		data.Empty = "Nada que decidir ahora: ninguna oferta que cobrar, ninguna cláusula que " +
 			"subir y ningún fichaje que mejore tu once a su precio."
@@ -84,6 +87,7 @@ func cardView(card Card) CardView {
 	view := CardView{Kind: card.Kind, Tone: fallbackText(card.Tone, "muted"),
 		Player: RowPlayer(player), Verb: card.Verb, Big: card.Big, BigNote: card.BigNote,
 		NoteClass: card.NoteClass, Why: card.Why, Buttons: card.Buttons, Impact: card.Impact,
+		Dismiss: DismissKey(card),
 		Meta: fmt.Sprintf("%s · %s xPts", text(player["team_short"]),
 			esNum(number(player["xpts"]), 1))}
 	if card.In != nil {

@@ -66,6 +66,11 @@ data source.
   `render.PyFloat` decides how a number becomes text, everywhere.
 * Blind surname matching once marked 24 healthy players injured (Pau López inherited Diego
   López's injury). Absences match on unique surnames plus compatible first names.
+* The bulk `/players` list lags each player's own `/player/{id}` on status: on 2026-10-12 an
+  injury showed on the player page and the lineup for over an hour while the list still said
+  `ok`. Our own squad's status is read per player, and the graver of the two wins.
+* Offers can arrive for a player that is not listed. They are read for the whole squad, but
+  answering one needs a market id it does not have, so the panel says to answer it in the app.
 * Cash cannot be read for rivals. It is reconstructed from the transfer log and anchored on
   the one balance that *can* be read — ours — so the residual error is only the difference in
   daily rewards claimed.

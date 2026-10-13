@@ -361,3 +361,12 @@ func TestFavouriteIsTheAppsCall(t *testing.T) {
 		t.Errorf("not the app's call: %s %s %s", call.Method, call.Path, blob)
 	}
 }
+
+// An offer for a player I never listed has no market id, and the reply route needs one.
+func TestAnOfferWithoutAListingIsAnsweredInTheApp(t *testing.T) {
+	for _, name := range []string{"accept_offer", "decline_offer"} {
+		if _, err := check(name, Args{OfferID: "1"}, Player{Available: true}, nil, nil); err == nil {
+			t.Errorf("%s without a market id went through", name)
+		}
+	}
+}
