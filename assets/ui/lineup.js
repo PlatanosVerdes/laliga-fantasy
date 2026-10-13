@@ -10,6 +10,19 @@ import {dec, mny, whenShort, health, xClass} from './format.js';
 const LINE_ORDER = ['striker', 'midfield', 'defender', 'goalkeeper'];   // top to bottom
 const LINE_LABEL = {goalkeeper: 'POR', defender: 'DEF', midfield: 'MED', striker: 'DEL'};
 const LINE_POS = {goalkeeper: 1, defender: 2, midfield: 3, striker: 4};
+const POS_LINE = {1: 'goalkeeper', 2: 'defender', 3: 'midfield', 4: 'striker'};
+
+// While a player is held, the page says where he may land: his own line, and the bench when he
+// comes from the pitch. Kept on <body> so the drag never re-renders the node being dragged.
+function marking(moving) {
+  const data = document.body.dataset;
+  if (moving) { data.dropLine = POS_LINE[moving.pos] || ''; data.dropFrom = moving.from; return; }
+  delete data.dropLine; delete data.dropFrom;
+  document.querySelectorAll('.drop-target').forEach((node) => node.classList.remove('drop-target'));
+}
+const fits = (moving, where) => where.bench ? moving.from !== 'bench'
+  : LINE_POS[where.line] === moving.pos
+    && !(moving.from === 'pitch' && moving.line === where.line && moving.index === where.index);
 const LINE_WORD = {goalkeeper: ['portero', 'porteros'], defender: ['defensa', 'defensas'],
   midfield: ['medio', 'medios'], striker: ['delantero', 'delanteros']};
 const POS_WORD = {1: 'portero', 2: 'defensa', 3: 'medio', 4: 'delantero'};
@@ -35,11 +48,12 @@ function Lineup() {
 
   const load = async () => {
     try { st.state = await getJSON('/api/lineup'); st.failed = false; } catch (e) { st.failed = true; }
-    st.dirty = false; st.status = ''; st.lifted = null;
+    st.dirty = false; st.status = ''; st.lifted = null; marking(null);
     redraw();
   };
   // A rebuild must not throw away unsaved changes: the pitch is reloaded only when clean.
   useEffect(() => { if (!st.state || !st.dirty) load(); }, [stamp]);
+  useEffect(() => () => marking(null), []);
 
   if (st.failed) return html`<${Frame} st=${st}><div class="pitch" id="pitch"><p class="slot empty" style="width:auto">Solo disponible en la version servida</p></div><//>`;
   const s = st.state;
@@ -84,7 +98,7 @@ function Lineup() {
   const place = (target) => {
     if (!st.lifted) return false;
     const moving = st.lifted;
-    st.lifted = null; st.status = '';
+    st.lifted = null; st.status = ''; marking(null);
     if (target.bench) dropOnBench(moving); else dropOnSlot(moving, target.line, target.index);
     redraw();
     return true;
@@ -151,19 +165,20 @@ function Lineup() {
   };
 
   // What drags: who and from where.
-  const source = (p, from, line, index) => ({id: String(p.id), from, line, index});
+  const source = (p, from, line, index) => ({id: String(p.id), pos: p.position_id, from, line, index});
   const draggable = (p, from, line, index) => ({
     draggable: true,
     onDragStart: (e) => {
       st.dragged = source(p, from, line, index);
       e.currentTarget.classList.add('dragging');
+      marking(st.dragged);
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', String(p.id));
     },
     onDragEnd: (e) => {
       e.currentTarget.classList.remove('dragging'); st.dragged = null;
       st.justDragged = true; setTimeout(() => { st.justDragged = false; }, 250);
-      document.querySelectorAll('.drop-target').forEach((n) => n.classList.remove('drop-target'));
+      marking(null);
     },
     // Dragging and clicking start the same way, so a drop must not open the card.
     onClick: (e) => {
@@ -174,8 +189,14 @@ function Lineup() {
     },
   });
   const target = (where) => ({
-    onDragOver: (e) => { e.preventDefault(); e.currentTarget.classList.add('drop-target'); },
-    onDragLeave: (e) => e.currentTarget.classList.remove('drop-target'),
+    // Not preventing the default is what tells the browser "not here": it shows the no-drop cursor.
+    onDragOver: (e) => {
+      if (!st.dragged || !fits(st.dragged, where)) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+      e.currentTarget.classList.add('drop-target');
+    },
+    // Moving over the face or the name inside fires a leave too; only leaving the box counts.
+    onDragLeave: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('drop-target'); },
     onDrop: (e) => {
       e.preventDefault(); e.currentTarget.classList.remove('drop-target');
       if (!st.dragged) return;
@@ -188,6 +209,7 @@ function Lineup() {
       e.stopPropagation();
       if (st.lifted && st.lifted.id === String(p.id)) { st.lifted = null; st.status = ''; }
       else { st.lifted = source(p, from, line, index); st.status = 'Toca el hueco donde va'; }
+      marking(st.lifted);
       redraw();
     }}>⇅</button>`;
   const liftedHere = (p) => st.lifted && st.lifted.id === String(p.id) ? ' lifted' : '';

@@ -62,6 +62,10 @@ type State struct {
 	warm func()
 
 	mu          sync.RWMutex
+	// rebuilding lets one rebuild run at a time. Side by side, each compared the world against
+	// the same "before" and announced the same change, and a slow one could land last with older
+	// data than a quick one.
+	rebuilding  sync.Mutex
 	universe    *model.Universe
 	version     int
 	// revision moves on every rebuild and every in-place patch, unlike version, which only
@@ -332,6 +336,8 @@ func (s *State) Refresh(cause string) error {
 // /refresh is a person pressing a button and expecting the page to react: staying silent
 // because the fingerprint matched would look like the button is broken.
 func (s *State) RefreshWith(cause string, force bool) error {
+	s.rebuilding.Lock()
+	defer s.rebuilding.Unlock()
 	started := time.Now()
 	before := s.Snapshot()
 	universe, err := s.builder()

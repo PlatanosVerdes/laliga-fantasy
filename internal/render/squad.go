@@ -55,8 +55,12 @@ func (d Document) SquadData() View {
 				"amount": int64(best)})}
 		case text(listing["market_id"]) != "":
 			line.Acts = []Act{cardAct("Quitar", text(player["id"]), "withdraw")}
-		case !truthy(player["sale_locked"]):
-			line.Acts = []Act{cardAct("Poner en venta", text(player["id"]), "sell_to_market")}
+		default:
+			sell, exception := d.sellAct(player)
+			line.Acts = []Act{sell}
+			if exception != nil {
+				line.Chips = []Chip{*exception}
+			}
 		}
 		if !truthy(player["sale_locked"]) {
 			line.Chips = []Chip{{T: "se puede ya", C: "ok"}}

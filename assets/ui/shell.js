@@ -132,7 +132,6 @@ function showTab(id, {section = null, updateHash = true} = {}) {
   // A link to one rival overrides the one picked in the dropdown.
   if (section && section.startsWith('rival-')) { nav.rival = section; store(RIVAL_KEY, section); }
   nav.tab = tab; nav.section = section;
-  store('fantasy-tab', tab);
   usage.tab(tab);
   // replaceState, not assignment: neither a history entry per click nor a hashchange on itself.
   if (updateHash) history.replaceState(null, '', '#' + (section || tab));
@@ -444,6 +443,8 @@ const EFFECT_LABELS = {cash: 'Saldo', squad: 'Jugadores', squad_value: 'Valor de
   offers: 'Ofertas recibidas', points: 'Puntos de la plantilla', absences: 'Bajas'};
 const OPERATION_LABELS = {sell_to_market: 'Puesto en venta', accept_offer: 'Oferta aceptada', decline_offer: 'Oferta rechazada',
   withdraw: 'Retirado del mercado', bid: 'Puja enviada', modify_bid: 'Puja modificada', cancel_bid: 'Puja cancelada',
+  cancel_offer: 'Oferta retirada', always: 'Siempre en mercado', raid: 'Clausulazo programado',
+  favourite: 'Favorito', desfasado: 'Actualizado',
   direct_offer: 'Oferta directa', pay_clause: 'Clausulazo pagado', raise_clause: 'Clausula subida', save_lineup: 'Alineacion guardada',
   policy: 'Instruccion ejecutada', shield_player: 'Jugador blindado', shield: 'Blindaje programado', traspaso: 'Se ha movido la liga',
   mercado: 'Cambios en el mercado', partido: 'Partido en juego', vencimiento: 'Ha vencido algo', refresco: 'Actualizado'};
@@ -510,10 +511,8 @@ export function start(appRoot) {
   addEventListener('popstate', route);
   // A plain <a href="#..."> link moves the hash without popstate in some browsers.
   addEventListener('hashchange', route);
+  // The address picks the tab; without one the panel opens on Decidir, not wherever it was left.
   if (resolveTarget('#' + hashParts().base)) route();
-  else {
-    const saved = stored('fantasy-tab');
-    showTab(TAB_ALIASES[saved] || saved || 'decidir');
-  }
+  else showTab('decidir');
   if (window.EventSource && location.protocol.startsWith('http')) connect();
 }

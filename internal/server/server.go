@@ -29,6 +29,8 @@ type Options struct {
 	Host        string
 	Port        int
 	AllowWrites bool
+	// Rehearse is writes.Rehearsal seen from here: nothing is sent, so nothing is rebuilt after.
+	Rehearse bool
 	// Mode is what this server may do, in one word: auto, manual or solo lectura. Shown on the
 	// page and answered by /api/state, because "can it act by itself" is the first question.
 	Mode   string
@@ -144,6 +146,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/always", s.always)
 	mux.HandleFunc("/api/raid", s.raid)
 	mux.HandleFunc("/api/raid/cancel", s.cancelRaid)
+	mux.HandleFunc("/api/dismiss", s.dismiss)
 	mux.HandleFunc("/api/shield", s.shield)
 	mux.HandleFunc("/api/shield/cancel", s.cancelShield)
 	mux.HandleFunc("/api/bid/prepare", s.prepare)

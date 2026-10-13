@@ -1,8 +1,8 @@
 import {html, useState, useEffect, panel} from './lib.js';
 import {ApiFace, Countdown} from './components.js';
+import {CompareButton} from './view.js';
 import {getJSON} from './api.js';
 import {fmt, exact} from './format.js';
-import {compare, useTray} from './compare.js';
 
 // The side drawer's views: a rival's squad, the squads of a past matchday, and a matchday's
 // forecast against what it made.
@@ -25,12 +25,6 @@ const byLine = (squad) => LINES.map((line) => ({...line, players: (squad || []).
 const posClass = (p) => 'pos pos-' + String(p.position || '').toLowerCase().slice(0, 3);
 const open = (id) => (e) => { e.stopPropagation(); panel().openDetail(id); };
 
-function SmallCmp({p}) {
-  const list = useTray();
-  const on = list.some((item) => item.id === String(p.id));
-  return html`<button class=${'cmp-add small' + (on ? ' on' : '')} type="button" title=${on ? 'Quitar del comparador' : 'Añadir al comparador'}
-    onClick=${(e) => { e.stopPropagation(); if (on) compare.drop(p.id); else compare.add(p.id, p.name, p.position || ''); }}>${on ? '✓' : '+'}</button>`;
-}
 
 // One row per player: what decides whether he can be reached, and for how much.
 function ManagerRow({p}) {
@@ -47,7 +41,7 @@ function ManagerRow({p}) {
   return html`<div class="squad-row">
     <span class="squad-who"><${ApiFace} p=${p}/>
       <button class="p-name" type="button" onClick=${open(p.id)}>${p.name}</button>
-      <span class=${posClass(p)}>${p.position}</span><${SmallCmp} p=${p}/></span>
+      <span class=${posClass(p)}>${p.position}</span><${CompareButton} id=${p.id} name=${p.name} pos=${p.position} small/></span>
     <span class="squad-nums"><b>${fmt(p.value)}</b><span title="Clausula">${p.clause ? fmt(p.clause) : '—'}</span>
       <span title="xPts por jornada">${(p.xpts || 0).toFixed(1)}</span></span>
     <span class="squad-chips">${chips}</span>

@@ -49,6 +49,12 @@ export function useCash() {
 }
 export const getViews = () => views;
 
+// The next views to arrive, for whoever has to wait until the page shows a change.
+export const nextViews = () => new Promise((done) => {
+  const once = (next) => { viewWatchers.delete(once); done(next); };
+  viewWatchers.add(once);
+});
+
 export function useMeta() {
   const [all, setAll] = useState(views);
   useEffect(() => { viewWatchers.add(setAll); setAll(views); return () => viewWatchers.delete(setAll); }, []);

@@ -361,3 +361,41 @@ func TestFavouriteIsTheAppsCall(t *testing.T) {
 		t.Errorf("not the app's call: %s %s %s", call.Method, call.Path, blob)
 	}
 }
+
+// An offer for a player I never listed has no market id, and the reply route needs one.
+func TestAnOfferWithoutAListingIsAnsweredInTheApp(t *testing.T) {
+	for _, name := range []string{"accept_offer", "decline_offer"} {
+		if _, err := check(name, Args{OfferID: "1"}, Player{Available: true}, nil, nil); err == nil {
+			t.Errorf("%s without a market id went through", name)
+		}
+	}
+}
+
+// A rehearsal never reaches the API: with no session at all, a real send would fail on the bearer.
+func TestARehearsedWriteIsNotSent(t *testing.T) {
+	Rehearsal = true
+	defer func() { Rehearsal = false }()
+	call, err := Build("decline_offer", Args{LeagueID: "1", MarketID: "2", OfferID: "3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Send(call); err != nil {
+		t.Errorf("a rehearsed send failed, so it tried to send: %v", err)
+	}
+}
+
+// Selling is taking an offer: during the hold a fit player may be listed, not sold.
+func TestTheHoldStopsTakingAnOfferNotListing(t *testing.T) {
+	held := Player{Name: "Sierra", SaleLocked: true, Available: true, HoldUntil: "2026-10-15T21:01:00+02:00"}
+	warnings, err := check("sell_to_market", Args{PlayerTeamID: "slot", Amount: 1}, held, nil, nil)
+	if err != nil || len(warnings) == 0 {
+		t.Errorf("listing in the hold: err %v, warnings %v; want allowed with a warning", err, warnings)
+	}
+	if _, err := check("accept_offer", Args{MarketID: "m", OfferID: "o"}, held, nil, nil); err == nil {
+		t.Error("an offer was taken during the hold")
+	}
+	held.Available = false
+	if _, err := check("accept_offer", Args{MarketID: "m", OfferID: "o"}, held, nil, nil); err != nil {
+		t.Errorf("an injured player in his hold is the rule's exception: %v", err)
+	}
+}

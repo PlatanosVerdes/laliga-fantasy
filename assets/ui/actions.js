@@ -50,13 +50,13 @@ export async function toggleAlways(player) {
 }
 
 // A view's button, as render/viewmodel.go described it.
-export async function runAct(a) {
+export async function runAct(a, origin = null) {
   const x = a.args || {};
   const page = panel();
   switch (a.do) {
     case 'op':
       confirmOp({op: x.op, name: x.name, player_id: x.player_id, market_id: x.market_id,
-        offer_id: x.offer_id, amount: x.amount || null});
+        offer_id: x.offer_id, amount: x.amount || null, origin});
       return;
     case 'card': await runCardAction(x.player_id, x.op); return;
     case 'bid': openBid(x); return;

@@ -43,6 +43,8 @@ type Document struct {
 
 	// Endings is how my previous bids and offers finished, read from where they were saved.
 	Endings []map[string]any
+	// Dismissed are the decision cards I said no to, by DismissKey.
+	Dismissed map[string]bool
 	// MineByWeek is how many of my players each team had on a past matchday, keyed by week.
 	// Reconstructed outside, because that needs the transfer log and this package only draws.
 	MineByWeek map[int]map[string]int

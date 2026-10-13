@@ -358,6 +358,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		if err != nil {
 			return nil, fmt.Errorf("market: %w", err)
 		}
+		freshStatus(client, raw, ownership, myTeamID)
 	}
 
 	for _, entry := range raw {
@@ -496,7 +497,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 	for index := range universe.Market {
 		listingByPlayer[universe.Market[index].PlayerID] = &universe.Market[index]
 	}
-	offersByPlayer := loadOffers(client, leagueID, universe.Market, ownership)
+	offersByPlayer := loadOffers(client, leagueID, myTeamID, ownership)
 	for index := range universe.Players {
 		id := universe.Players[index].ID
 		universe.Players[index].MarketEntry = listingByPlayer[id]
@@ -573,6 +574,47 @@ func faceFor(entry map[string]any, market, squad string) string {
 		}
 	}
 	return ""
+}
+
+// OwnStatusTTL is how stale my own players' status may be. The bulk list lagged the player's own
+// page by hours on an injury, which is long enough to field somebody who cannot play.
+const OwnStatusTTL = 10 * time.Minute
+
+// freshStatus reads my players' status from each one's own page and keeps the graver of that
+// and the bulk list's: sending out an injured man costs more than benching a fit one.
+func freshStatus(client *api.Client, raw []map[string]any, ownership map[string]slot,
+	myTeamID string) {
+	if myTeamID == "" {
+		return
+	}
+	for _, entry := range raw {
+		id := text(entry["id"])
+		if held, ok := ownership[id]; !ok || held.TeamID != myTeamID {
+			continue
+		}
+		detail, err := client.Player(id, OwnStatusTTL)
+		if err != nil {
+			slog.Debug("player status unreachable", "player", id, "reason", err.Error())
+			continue
+		}
+		entry["playerStatus"] = graverStatus(text(entry["playerStatus"]), text(detail["playerStatus"]))
+	}
+}
+
+func graverStatus(bulk, own string) string {
+	bulk, own = strings.ToLower(bulk), strings.ToLower(own)
+	switch {
+	case own == "" || own == bulk:
+		return bulk
+	case bulk == "" || bulk == "ok":
+		return own
+	case own == "ok":
+		return bulk
+	case severeStatus[bulk] && !severeStatus[own]:
+		return bulk
+	default:
+		return own
+	}
 }
 
 func allPlayers(client *api.Client) ([]map[string]any, error) {
@@ -784,25 +826,21 @@ func myBid(entry map[string]any) map[string]any {
 	return nil
 }
 
-// loadOffers asks only for our own listings: one request each, and there is no route that
-// lists them all.
-func loadOffers(client *api.Client, leagueID string, listings []Listing,
+// loadOffers asks for the offers on every player of mine, listed or not: a rival can offer for
+// somebody who is not on the market, and asking only for the listed ones never saw it.
+func loadOffers(client *api.Client, leagueID, myTeamID string,
 	ownership map[string]slot) map[string][]map[string]any {
 	offers := map[string][]map[string]any{}
-	if leagueID == "" {
+	if leagueID == "" || myTeamID == "" {
 		return offers
 	}
-	for _, listing := range listings {
-		if !listing.IsMine {
-			continue
-		}
-		held, ok := ownership[listing.PlayerID]
-		if !ok || held.PlayerTeamID == nil {
+	for playerID, held := range ownership {
+		if held.TeamID != myTeamID || held.PlayerTeamID == nil {
 			continue
 		}
 		received, err := client.PlayerOffers(leagueID, *held.PlayerTeamID, time.Minute)
 		if err != nil {
-			slog.Debug("offers unreachable", "player", listing.PlayerID, "reason", err.Error())
+			slog.Debug("offers unreachable", "player", playerID, "reason", err.Error())
 			continue
 		}
 		pending := make([]map[string]any, 0, len(received))
@@ -834,7 +872,7 @@ func loadOffers(client *api.Client, leagueID string, listings []Listing,
 		sort.SliceStable(pending, func(i, j int) bool {
 			return number(pending[i]["money"]) > number(pending[j]["money"])
 		})
-		offers[listing.PlayerID] = pending
+		offers[playerID] = pending
 	}
 	return offers
 }
