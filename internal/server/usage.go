@@ -19,6 +19,7 @@ type usageRecord struct {
 	Label   string  `json:"label"`
 	Seconds float64 `json:"seconds"`
 	Phone   bool    `json:"phone"`
+	Session string  `json:"session"`
 }
 
 // usage takes a batch of events from the page. A bad event inside a good body is dropped rather
@@ -52,7 +53,7 @@ func (s *Server) usage(writer http.ResponseWriter, request *http.Request) {
 		}
 		events = append(events, usage.Event{At: when, Kind: record.Kind, What: record.What,
 			Where: record.Where, Label: record.Label, Seconds: record.Seconds,
-			Phone: record.Phone})
+			Phone: record.Phone, Session: record.Session})
 	}
 	stored, err := usage.Append(events)
 	if err != nil {

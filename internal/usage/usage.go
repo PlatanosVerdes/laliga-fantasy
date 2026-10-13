@@ -37,11 +37,16 @@ type Event struct {
 	Label   string    `json:"label,omitempty"`
 	Seconds float64   `json:"seconds,omitempty"`
 	Phone   bool      `json:"phone,omitempty"`
+	// Session is one page load. Older events have none and are split by their gaps instead.
+	Session string `json:"session,omitempty"`
 }
 
 // Kinds are the only verbs accepted: a page can change faster than this file, and an unknown
 // kind from an old tab would land in the summary as a column nobody can read.
-var Kinds = map[string]bool{"tab": true, "click": true, "sort": true, "op": true}
+// "nav" is Back or Forward in the browser, "drawer" a card closed with the seconds it was open,
+// and "dead" a click on something that does not look clickable.
+var Kinds = map[string]bool{"tab": true, "click": true, "sort": true, "op": true, "nav": true,
+	"drawer": true, "dead": true}
 
 // MaxBatch is what one POST may carry. The collector batches every 15 seconds and on the way
 // out, so a body larger than this is not a busy afternoon, it is a mistake or somebody else.
@@ -72,6 +77,7 @@ func Append(events []Event) (int, error) {
 		event.What = trim(event.What)
 		event.Where = trim(event.Where)
 		event.Label = trim(event.Label)
+		event.Session = trim(event.Session)
 		clean = append(clean, event)
 	}
 	if len(clean) == 0 {

@@ -1,5 +1,5 @@
 import {html, useState, useEffect, useRef, panel} from './lib.js';
-import {Modal} from './components.js';
+import {Modal, useDialogTrace} from './components.js';
 import {prepare, confirm, postJSON, changed, closeDialog, openDialog, useCash, useMeta} from './api.js';
 import {exact, group, digits, stampText} from './format.js';
 
@@ -85,6 +85,7 @@ function AmountDialog({p}) {
   const [step, setStep] = useState({n: 1, summary: null, token: null, error: '', sending: false, done: '', drop: false});
   const input = useRef(null);
   useEffect(() => { if (p.focus && input.current) input.current.focus(); }, []);
+  const traced = useDialogTrace(p.operation || 'bid');
   const amount = digits(text) || 0;
   let warn = '';
   if (p.raise) {
@@ -129,6 +130,7 @@ function AmountDialog({p}) {
     try {
       const data = await confirm(step.token);
       const done = DONE_LABEL[operation] || 'Hecho';
+      traced();
       if (data.dry_run) { setStep({...step, sending: false, done: done + ' (simulacro)'}); return; }
       changed();
       flash(done, p.name);
