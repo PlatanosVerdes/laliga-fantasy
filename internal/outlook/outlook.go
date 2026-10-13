@@ -211,8 +211,12 @@ func fitness(player Row, week int) (float64, string) {
 	if verdict != "" {
 		if found := absenceWeek.FindStringSubmatch(verdict); found != nil {
 			named, _ := strconv.Atoi(found[1])
+			hopeful := strings.HasPrefix(verdict, "disponible") ||
+				strings.HasPrefix(verdict, "duda")
 			switch {
-			case named > week:
+			// Only a ruled-out verdict reaches back to this matchday; one about being fit
+			// later says nothing about now, so the status decides.
+			case named > week && !hopeful:
 				return 0, fmt.Sprintf("vuelve en la J%d", named)
 			case named == week:
 				switch {
