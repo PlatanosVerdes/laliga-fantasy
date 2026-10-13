@@ -1,5 +1,5 @@
 import {html, useState, useEffect, panel} from './lib.js';
-import {Face, Tags, ShieldMark, PosTag, Countdown, Empty} from './components.js';
+import {Face, Tags, ShieldMark, PosTag, Countdown, Empty, CmpIcon} from './components.js';
 import {useView, postJSON, changed} from './api.js';
 import {runAct, toggleAlways} from './actions.js';
 import {compare, useTray} from './compare.js';
@@ -66,16 +66,19 @@ function AlwaysAct({a}) {
     onClick=${flip}>${on ? '● ' : ''}Siempre en mercado</button>`;
 }
 
-// The comparator's "+" follows the tray.
-function CmpAct({a}) {
+// The comparator's button, the one everywhere: a round mark in lists, words on a player's sheet.
+// It follows the tray, so every copy of it on screen flips together.
+export function CompareButton({id, name, pos, small = false}) {
   const list = useTray();
-  const on = list.some((item) => item.id === String(a.args.id));
-  const short = a.class.includes('small');
-  return html`<button type="button" class=${a.class + (on ? ' on' : '')}
+  const on = list.some((item) => item.id === String(id));
+  return html`<button type="button" class=${'cmp-add' + (small ? ' small' : '') + (on ? ' on' : '')}
     title=${on ? 'Quitar del comparador' : 'Añadir al comparador'}
-    onClick=${(e) => { e.stopPropagation(); if (on) compare.drop(a.args.id); else compare.add(a.args.id, a.args.name, a.args.pos); }}>${
-    on ? (short ? '✓' : '✓ comparando') : (short ? '+' : '+ comparar')}</button>`;
+    onClick=${(e) => { e.stopPropagation(); if (on) compare.drop(id); else compare.add(id, name, pos || ''); }}>${
+    small ? html`<${CmpIcon} on=${on}/>` : on ? '✓ comparando' : '+ comparar'}</button>`;
 }
+
+const CmpAct = ({a}) => html`<${CompareButton} id=${a.args.id} name=${a.args.name} pos=${a.args.pos}
+  small=${(a.class || '').includes('small')}/>`;
 
 // A followed player's star, painted at once and confirmed by the answer.
 export function StarAct({a}) {
@@ -101,7 +104,7 @@ export function ActView({a}) {
   if (a.do === 'always') return html`<${AlwaysAct} a=${a}/>`;
   const button = html`<button type="button" class=${a.class === '' ? undefined : a.class || 'mb mb-ghost'}
     disabled=${!!a.off} data-tip=${a.tip || undefined}
-    onClick=${(event) => { event.stopPropagation(); runAct(a); }}>${a.label}</button>`;
+    onClick=${(event) => { event.stopPropagation(); runAct(a, event.currentTarget.closest('.r')); }}>${a.label}</button>`;
   return a.wrap ? html`<span data-tip=${a.wrap}>${button}</span>` : button;
 }
 

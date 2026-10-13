@@ -2,6 +2,7 @@ import {html, useState, useEffect, useRef, panel} from './lib.js';
 import {esWhen, exact, chipText, countdownText, health} from './format.js';
 import {prepare, confirm, changed, closeDialog, useDialog} from './api.js';
 import {DIALOGS, Notices, flash} from './dialogs.js';
+import {leave, putBack} from './motion.js';
 
 // The sprite render.IconSprite puts once at the top of the page.
 export const Icon = ({name}) =>
@@ -120,6 +121,23 @@ const DONE_LABEL = {sell_to_market: 'Puesto en venta', accept_offer: 'Oferta ace
   decline_offer: 'Oferta rechazada', withdraw: 'Retirado del mercado', cancel_bid: 'Puja retirada',
   cancel_offer: 'Oferta retirada', shield_player: 'Blindado 24h', pay_clause: 'Clausula pagada'};
 
+// The confirm button says what it does: "Aceptar" on a dialog that rejects an offer read as
+// taking it.
+const GO_LABEL = {accept_offer: 'Aceptar oferta', decline_offer: 'Rechazar', withdraw: 'Retirar',
+  sell_to_market: 'Poner en venta', cancel_offer: 'Retirar oferta', cancel_bid: 'Cancelar puja',
+  pay_clause: 'Pagar cláusula', shield_player: 'Blindar'};
+const AMOUNT_NAME = {accept_offer: 'Oferta', decline_offer: 'Oferta', pay_clause: 'Cláusula',
+  sell_to_market: 'Precio'};
+// Only these move the balance, so only these show it: in with an offer taken, out with a clause.
+const CASH_SIGN = {accept_offer: 1, pay_clause: -1};
+
+// The round comparator button's mark, drawn rather than typed: a text "+" sits on the font's
+// baseline and looked low in its circle.
+export const CmpIcon = ({on}) => html`<svg viewBox="0 0 16 16" aria-hidden="true"><path d=${on ? 'M3.5 8.5l3 3 6-7' : 'M8 3.5v9M3.5 8h9'}/></svg>`;
+
+// The operations after which the row they were started from is no longer there.
+const GONE_AFTER = new Set(['accept_offer', 'decline_offer', 'withdraw', 'cancel_offer', 'cancel_bid']);
+
 // The operation confirmed twice, for the ones without an amount to type: what the server
 // answers to prepare is shown, and only Aceptar spends the token.
 export function ConfirmOp({op}) {
@@ -138,32 +156,37 @@ export function ConfirmOp({op}) {
       const data = await confirm(token.current);
       const done = DONE_LABEL[op.op] || 'Hecho';
       if (data.dry_run) { setStep((s) => ({...s, sending: false, done: done + ' (simulacro)'})); return; }
-      changed();
-      flash(done, op.name);
       closeDialog();
+      // What the operation took away leaves the list now, and the notice comes once it is gone:
+      // the page itself takes seconds to be drawn again.
+      const origin = GONE_AFTER.has(op.op) ? op.origin : null;
+      await leave(origin);
+      flash(done, op.name);
+      changed();
+      putBack(origin, {afterViews: true});
     } catch (error) {
       setStep((s) => ({...s, sending: false, error: error.message}));
     }
   };
   const s = step.summary;
-  return html`<${Modal} label="Confirmar operacion" onClose=${closeDialog}>
+  const sign = CASH_SIGN[op.op];
+  const undoing = op.op === 'cancel_bid' || op.op === 'cancel_offer';
+  return html`<${Modal} label="Confirmar operación" onClose=${closeDialog}>
     <h3><span class="bid-action">${OP_LABELS[op.op] || 'Confirmar'}</span> <span class="bid-who">${op.name}</span></h3>
     <div class="bid-summary">
       ${step.done ? html`<p class="bid-ok">${step.done}.</p>`
         : s ? html`<dl class="bid-dl">
-            <dt>Operacion</dt><dd>${s.label}</dd>
-            <dt>Jugador</dt><dd>${s.player_name || op.name}</dd>
-            ${s.amount ? html`<dt>Importe</dt><dd><strong>${exact(s.amount)}</strong></dd>` : null}
-            <dt>Saldo</dt><dd>${exact(s.cash_before)}</dd>
+            ${s.amount ? html`<dt>${AMOUNT_NAME[op.op] || 'Importe'}</dt><dd><strong>${exact(s.amount)}</strong></dd>` : null}
+            ${sign && s.amount ? html`<dt>Saldo</dt><dd>${exact(s.cash_before)} → ${exact(s.cash_before + sign * s.amount)}</dd>` : null}
           </dl>${(s.warnings || []).map((w) => html`<p class="bid-warn-line">⚠ ${w}</p>`)}`
         : step.error ? null : html`<p>Comprobando…</p>`}
     </div>
     <p class="bid-error">${step.error}</p>
     <div class="modal-actions">
-      <button class="bid-cancel" type="button" onClick=${closeDialog}>${step.done ? 'Cerrar' : 'Cancelar'}</button>
-      ${s && !step.done ? html`<button class="bid-confirm" type="button" disabled=${step.sending} onClick=${send}>${step.sending ? 'Enviando…' : 'Aceptar'}</button>` : null}
+      <button class="bid-cancel" type="button" onClick=${closeDialog}>${step.done ? 'Cerrar' : undoing ? 'Volver' : 'Cancelar'}</button>
+      ${s && !step.done ? html`<button class="bid-confirm" type="button" disabled=${step.sending} onClick=${send}>${step.sending ? 'Enviando…' : GO_LABEL[op.op] || 'Confirmar'}</button>` : null}
     </div>
-    <p class="modal-note">Se comprueba contra tu saldo antes de ejecutar.</p>
+    ${sign < 0 ? html`<p class="modal-note">Se comprueba contra tu saldo antes de ejecutar.</p>` : null}
   <//>`;
 }
 

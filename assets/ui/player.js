@@ -3,8 +3,7 @@ import {Face, Tags, Role, Crest, Countdown, Button, ShieldMark, Switch, Icon} fr
 import {dec, mny, fmt, signed, exact, group, digits, whenShort, since, health} from './format.js';
 import {getJSON, postJSON, useStamp} from './api.js';
 import {runAction, toggleAlways} from './actions.js';
-import {compare, useTray} from './compare.js';
-import {StarAct} from './view.js';
+import {StarAct, CompareButton} from './view.js';
 
 const weekClass = (w) => {
   const p = w.points;
@@ -270,17 +269,6 @@ function Actions({data, reopen}) {
   return html`<div class="pc-h">Acciones</div><div class="pc-groups">${sections}</div>`;
 }
 
-function CompareButton({p}) {
-  const list = useTray();
-  const on = list.some((item) => item.id === String(p.id));
-  const flip = (event) => {
-    event.stopPropagation();
-    if (on) compare.drop(p.id); else compare.add(p.id, p.name, p.position || '');
-  };
-  return html`<button class=${'cmp-add' + (on ? ' on' : '')} type="button" onClick=${flip}
-    title=${on ? 'Quitar del comparador' : 'Añadir al comparador'}>${on ? '✓ comparando' : '+ comparar'}</button>`;
-}
-
 export function PlayerPopup({id, from}) {
   const [state, setState] = useState({data: null, error: null});
   // Asked again whenever the world moves, a write of ours included: the card shows what is.
@@ -309,7 +297,7 @@ export function PlayerPopup({id, from}) {
       <div class="pc-sub"><span class=${'pos pos-' + (p.position || '').toLowerCase().slice(0, 3)}>${p.position}</span>
         <span class="tags"><${Tags} p=${row} owner=${owner} roleLink
           lock=${p.hold_until ? whenShort(p.hold_until) : ''} alerts=${false}/></span>
-        <${CompareButton} p=${p}/></div></div></div>
+        <${CompareButton} id=${p.id} name=${p.name} pos=${p.position}/></div></div></div>
     ${h ? html`<div class=${'pc-status ' + h.ring}>${h.glyph === 'card' ? '' : '✚ '}${[h.label, a.reason, a.since, a.until].filter(Boolean).join(' · ')}</div>` : null}
     <${Tiles} data=${data}/>
     <${Weeks} weeks=${data.weeks}/>
