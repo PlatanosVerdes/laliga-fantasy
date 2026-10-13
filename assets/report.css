@@ -1216,7 +1216,7 @@ section.mk{margin:0 0 22px}
 .mk .rank-dot.out-icon{background:var(--surface-2)}
 .mk .rchip .oi{margin-right:2px}
 .mk .r>.tags{grid-area:g;min-width:0}
-.mk .rwho{grid-area:w;display:flex;flex-direction:column;min-width:0;line-height:1.3}
+.mk .rwho{grid-area:w;display:flex;flex-direction:column;min-width:0;line-height:1.3;overflow:hidden}
 .mk .rname{display:flex;align-items:center;gap:6px;min-width:0}
 .mk .rname b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .mk .rname .pos{flex:none}
