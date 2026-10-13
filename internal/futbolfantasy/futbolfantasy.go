@@ -16,6 +16,7 @@ package futbolfantasy
 import (
 	"fmt"
 	"html"
+	"maps"
 	"regexp"
 	"sort"
 	"strconv"
@@ -313,12 +314,39 @@ func ParseDetail(page string) map[string]any {
 // real and the code has to stop for a whole cycle when it is hit.
 const DetailTTL = 4 * time.Hour
 
+// Parsing a page is most of what drawing the panel costs, and every redraw asked for the same
+// few hundred: each parsed page is kept for as long as the page it came from is fresh.
+var (
+	detailMu   sync.Mutex
+	detailSeen = map[string]parsedDetail{}
+)
+
+type parsedDetail struct {
+	detail  map[string]any
+	written time.Time
+}
+
 func PlayerDetail(ffID string, ttl time.Duration) (map[string]any, error) {
-	page, err := fetch(strings.ReplaceAll(config.FFDetailURL, "{ff_id}", ffID), ttl, "ff_detail")
+	url := strings.ReplaceAll(config.FFDetailURL, "{ff_id}", ffID)
+	if ttl > 0 && !httpx.Frozen {
+		detailMu.Lock()
+		kept, ok := detailSeen[url]
+		detailMu.Unlock()
+		if ok && time.Since(kept.written) <= ttl {
+			return maps.Clone(kept.detail), nil
+		}
+	}
+	page, err := fetch(url, ttl, "ff_detail")
 	if err != nil {
 		return nil, err
 	}
-	return ParseDetail(page), nil
+	detail := ParseDetail(page)
+	if written, ok := httpx.CachedAt(url, "ff_detail"); ok && ttl > 0 {
+		detailMu.Lock()
+		detailSeen[url] = parsedDetail{detail: detail, written: written}
+		detailMu.Unlock()
+	}
+	return maps.Clone(detail), nil
 }
 
 // --- the per-player page ----------------------------------------------------------------

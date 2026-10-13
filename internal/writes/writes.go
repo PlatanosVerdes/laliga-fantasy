@@ -236,7 +236,15 @@ func Build(name string, args Args) (Call, error) {
 
 // Send puts the call on the wire. One attempt only: a write is not idempotent, and a retry
 // is how you bid twice.
+// Rehearsal makes every write a pretence: it is checked, confirmed and patched into the world as
+// usual, and never reaches LaLiga. For trying the panel's flows against the real league.
+var Rehearsal bool
+
 func Send(call Call) (any, error) {
+	if Rehearsal {
+		slog.Info("write rehearsed, not sent", "method", call.Method, "path", call.Path)
+		return nil, nil
+	}
 	headers := config.APIHeaders()
 	bearer, err := auth.Bearer()
 	if err != nil {
@@ -553,13 +561,20 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 
 	// The house rule first: it is not the API that refuses, it is the league, and finding out
 	// afterwards means having sold somebody you had agreed not to sell.
+	// Selling is taking an offer. Listing him is not, and offers take a while to come, so he may
+	// be listed during the hold; only accepting waits for its end.
 	if who.SaleLocked {
+		until := who.HoldUntil
+		if len(until) > 10 {
+			until = until[:10]
+		}
 		switch name {
-		case "sell_to_market", "accept_offer", "direct_offer":
-			until := who.HoldUntil
-			if len(until) > 10 {
-				until = until[:10]
+		case "sell_to_market":
+			if who.Available {
+				warnings = append(warnings, fmt.Sprintf(
+					"la norma no deja aceptar ofertas por el hasta el %s", until))
 			}
+		case "accept_offer", "direct_offer":
 			if who.Available {
 				reason := fmt.Sprintf("la norma de la liga no deja venderlo hasta el %s", until)
 				if who.HoldExceptions != "" {

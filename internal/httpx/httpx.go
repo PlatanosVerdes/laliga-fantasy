@@ -157,6 +157,16 @@ func Cached(rawURL, tag string, ttl time.Duration) (string, bool) {
 	return readCache(rawURL, tag, ttl)
 }
 
+// CachedAt is when the cached response was written, which is how old it is to whoever keeps a
+// copy of it in memory.
+func CachedAt(rawURL, tag string) (time.Time, bool) {
+	info, err := os.Stat(cachePath(rawURL, tag))
+	if err != nil {
+		return time.Time{}, false
+	}
+	return info.ModTime(), true
+}
+
 // Invalidate drops cached responses by tag, so the next read goes to the wire. Used
 // when something just learned makes a long TTL wrong: a transfer means every squad is
 // stale however recently it was read.

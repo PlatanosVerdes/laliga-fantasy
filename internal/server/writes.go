@@ -464,7 +464,10 @@ func (s *Server) confirm(writer http.ResponseWriter, request *http.Request) {
 	// it did is read off the token, which is the only thing the page sends at this point.
 	args, _ := result["args"].(writes.Args)
 	s.applied(cause, args)
-	s.settle(cause)
+	// A rebuild would read the league as it really is and undo the pretence at once.
+	if !s.opts.Rehearse {
+		s.settle(cause)
+	}
 	s.json(writer, http.StatusOK, result)
 }
 

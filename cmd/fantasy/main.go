@@ -204,6 +204,8 @@ func cmdServe(args []string) error {
 	readOnly := flags.Bool("read-only", false, "no ejecutar ninguna escritura")
 	noAuto := flags.Bool("no-auto", false,
 		"mostrar las instrucciones permanentes sin ejecutarlas")
+	rehearse := flags.Bool("rehearse", false,
+		"ensayo: las operaciones se confirman y se ven hechas, pero no se envia nada a LaLiga")
 	deep := flags.Bool("deep", false,
 		"leer la ficha de futbolfantasy de los candidatos sin historico")
 	if err := flags.Parse(args); err != nil {
@@ -217,6 +219,9 @@ func cmdServe(args []string) error {
 	flags.Visit(func(given *flag.Flag) { tickFromFlag = tickFromFlag || given.Name == "interval" })
 	clocks := services.New(config.ServicesFile, serviceJobs(tick, tickFromFlag)...)
 	allowWrites := !*readOnly
+	if *rehearse && allowWrites {
+		writes.Rehearsal, *noAuto = true, true
+	}
 
 	client := api.New()
 	var (
@@ -626,9 +631,13 @@ func cmdServe(args []string) error {
 	// Three modes, and the page says which one it is running in: what it may do is not something
 	// to guess from whether a button works.
 	mode := "auto"
-	if !allowWrites {
+	switch {
+	case !allowWrites:
 		mode = "solo lectura"
-	} else if *noAuto {
+	case writes.Rehearsal:
+		mode = "ensayo"
+		fmt.Println("--rehearse: nada de lo que confirmes llega a LaLiga.")
+	case *noAuto:
 		mode = "manual"
 	}
 	fmt.Printf("Modo: %s\n", mode)
@@ -636,7 +645,7 @@ func cmdServe(args []string) error {
 	league, team, _ := currentLeague(&mu, &leagueID, &teamID)
 	necroCfg := necroporra.Load()
 	panel := server.New(world, server.Options{
-		Host: *host, Port: *port, AllowWrites: allowWrites, Mode: mode,
+		Host: *host, Port: *port, AllowWrites: allowWrites, Mode: mode, Rehearse: writes.Rehearsal,
 		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
 		Client: client, Guard: guard, LeagueID: league, MyTeamID: team,
 		HoldExceptions: rules.For(league).HoldExceptions,

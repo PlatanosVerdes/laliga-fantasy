@@ -64,3 +64,18 @@ func TestSellOffersRecommendOneButton(t *testing.T) {
 		}
 	}
 }
+
+// The hold stops taking an offer, never listing: a fit player says when he can be sold, one out
+// injured that he can be sold now.
+func TestTheHoldRuleNeverStopsAListing(t *testing.T) {
+	d := Document{HoldExceptions: "lesiones, hablandolo antes"}
+	fit := map[string]any{"id": "1", "sale_locked": true, "available": true, "hold_until": "2026-10-15"}
+	if sell, chip := d.sellAct(fit); sell.Off || chip == nil || !strings.HasPrefix(chip.T, "acepta desde") {
+		t.Errorf("a fit player in his hold could not be listed: %+v %+v", sell, chip)
+	}
+	hurt := map[string]any{"id": "2", "sale_locked": true, "available": false, "hold_until": "2026-10-15"}
+	sell, chip := d.sellAct(hurt)
+	if sell.Off || chip == nil || chip.T != "excepción: baja" {
+		t.Errorf("an injured player in his hold was not offered for sale: %+v %+v", sell, chip)
+	}
+}

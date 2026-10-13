@@ -93,8 +93,10 @@ func TestRestOfSquadPutsTheBenchFirstAndHonoursTheHoldRule(t *testing.T) {
 		t.Error("the keeper starts, so he is listed with the eleven")
 	}
 	rey := rowOf(block, "8")
-	if rey.Player["locked_until"] == nil || !rey.Acts[0].Off || rey.Acts[0].Do != "" {
-		t.Errorf("a held player cannot be put on sale: %+v", rey)
+	// The hold stops taking an offer, not listing him: the button works and a chip says when.
+	if rey.Player["locked_until"] == nil || rey.Acts[0].Off || rey.Acts[0].Args["op"] != "sell_to_market" ||
+		len(rey.Chips) == 0 || !strings.HasPrefix(rey.Chips[0].T, "acepta desde") {
+		t.Errorf("a held player should be listable, with the day he can be sold: %+v", rey)
 	}
 	keeper := rowOf(block, "9")
 	if keeper.Acts[0].Args["op"] != "sell_to_market" || keeper.Acts[1].Do != "always" ||

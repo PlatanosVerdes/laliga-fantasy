@@ -182,10 +182,9 @@ func (d Document) restBlock() Block {
 		line.Value = esNum(number(player["xpts"]), 1) + " xPts"
 		line.Note = []Seg{{T: esMoney(number(player["value"])) + " · "},
 			{T: sign + esNum(trend, 1) + " %", C: class}, {T: " 7d"}}
-		sell := cardAct("Poner en venta", id, "sell_to_market")
-		if truthy(player["sale_locked"]) {
-			why := "No se puede vender hasta el " + esWhen(text(player["hold_until"]))
-			sell = Act{Label: "Poner en venta", Class: "mb mb-ghost", Off: true, Tip: why, Wrap: why}
+		sell, exception := d.sellAct(player)
+		if exception != nil {
+			line.Chips = append(line.Chips, *exception)
 		}
 		label, class := "Siempre en mercado", "mb mb-ghost act"
 		if always[id] {
@@ -297,4 +296,24 @@ func RowPlayer(player map[string]any) map[string]any {
 		out["locked_day"] = esDay(text(player["hold_until"]))
 	}
 	return out
+}
+
+// sellAct is "Poner en venta", which the league's hold rule never stops: selling is taking an
+// offer, and offers take a while to come. Within the hold a chip says when one can be taken, or
+// that he can be sold now because he is out, which is the rule's own exception.
+func (d Document) sellAct(player map[string]any) (Act, *Chip) {
+	sell := cardAct("Poner en venta", text(player["id"]), "sell_to_market")
+	if !truthy(player["sale_locked"]) {
+		return sell, nil
+	}
+	if available, known := player["available"].(bool); known && !available {
+		tip := "La norma deja venderlo si está de baja"
+		if d.HoldExceptions != "" {
+			tip += " (" + d.HoldExceptions + ")"
+		}
+		return sell, &Chip{T: "excepción: baja", C: "warn", Tip: tip}
+	}
+	when := text(player["hold_until"])
+	return sell, &Chip{T: "acepta desde " + esDay(when),
+		Tip: "Puedes ponerlo ya en venta; aceptar una oferta tendrá que esperar al " + esWhen(when)}
 }

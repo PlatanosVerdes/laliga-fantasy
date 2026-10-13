@@ -17,6 +17,10 @@ func (s *Server) necroVote(writer http.ResponseWriter, request *http.Request) {
 		s.json(writer, http.StatusForbidden, map[string]any{"error": "el panel es de solo lectura"})
 		return
 	}
+	if s.opts.Rehearse {
+		s.json(writer, http.StatusForbidden, map[string]any{"error": "en ensayo no se vota"})
+		return
+	}
 	body := s.body(request)
 	a, b := text(body["a"]), text(body["b"])
 	if a == "" || b == "" {

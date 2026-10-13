@@ -288,16 +288,18 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 		if marketID := text(listing["market_id"]); marketID != "" {
 			actions = append(actions, map[string]any{"op": "withdraw",
 				"label": "Quitar del mercado", "kind": "confirm", "market_id": marketID})
-		} else if locked {
-			actions = append(actions, map[string]any{"op": "note", "kind": "note",
-				"group": "mercado",
-				"label": "Lo fichaste hace poco: la norma de la liga no deja venderlo hasta " +
-					"el " + until})
 		} else {
 			actions = append(actions, map[string]any{"op": "sell_to_market",
 				"label": "Poner en venta", "kind": "amount",
 				"suggested":      int64(number(player["value"])),
 				"player_team_id": player["player_team_id"]})
+			// Listing is free during the hold; it is taking an offer that waits.
+			if locked && truthy(player["available"]) {
+				actions = append(actions, map[string]any{"op": "note", "kind": "note",
+					"group": "mercado",
+					"label": "Lo fichaste hace poco: puedes ponerlo ya, pero la norma no deja " +
+						"aceptar ofertas hasta el " + until})
+			}
 		}
 		for _, offer := range offers {
 			amount := int64(number(offer["money"]))
