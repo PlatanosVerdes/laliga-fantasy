@@ -457,7 +457,7 @@ func cmdUsage(args []string) error {
 		}
 		out := make([][]string, 0, len(rows))
 		for _, row := range rows {
-			line := []string{row.Name, fmt.Sprintf("%d", row.Times)}
+			line := []string{tabName(row.Name), fmt.Sprintf("%d", row.Times)}
 			if withTime {
 				line = append(line, usage.Duration(row.Seconds))
 			}
@@ -475,7 +475,84 @@ func cmdUsage(args []string) error {
 	table("pestaña", summary.Tabs, true)
 	table("clic", summary.Clicks, false)
 	table("orden", summary.Sorts, false)
+	printBehaviour(usage.Behave(events), *top)
 	return nil
+}
+
+// tabNames are the tabs whose id is older than their label.
+var tabNames = map[string]string{"rivales": "equipos", "ranking": "jugadores"}
+
+func tabName(id string) string {
+	if name, ok := tabNames[id]; ok {
+		return name
+	}
+	return id
+}
+
+// printBehaviour is where the visits stumble, each table only when there is something in it.
+func printBehaviour(b usage.Behaviour, top int) {
+	cut := func(rows [][]string) [][]string {
+		if len(rows) > top {
+			return rows[:top]
+		}
+		return rows
+	}
+	show := func(title string, head []string, rows [][]string, right map[int]bool) {
+		if len(rows) == 0 {
+			return
+		}
+		cli.Heading(title)
+		fmt.Println(cli.Table(head, cut(rows), right))
+		fmt.Println()
+	}
+	renamed := func(text string) string {
+		for id, name := range tabNames {
+			text = strings.ReplaceAll(text, id, name)
+		}
+		return text
+	}
+	counts := func(rows []usage.Count) [][]string {
+		out := [][]string{}
+		for _, row := range rows {
+			out = append(out, []string{renamed(row.Name), fmt.Sprintf("%d", row.Times)})
+		}
+		return out
+	}
+	fmt.Printf("  %d visitas\n\n", b.Sessions)
+
+	tabs := [][]string{}
+	for _, tab := range b.Tabs {
+		tabs = append(tabs, []string{tabName(tab.Name), fmt.Sprintf("%d", tab.Visits),
+			usage.Duration(tab.Seconds), usage.Duration(tab.Median),
+			fmt.Sprintf("%.0f %%", 100*float64(tab.Bounces)/float64(max(1, tab.Visits)))})
+	}
+	show("Pestañas: rebote es irse en menos de 3 s",
+		[]string{"pestaña", "visitas", "tiempo", "mediana", "rebote"}, tabs,
+		map[int]bool{1: true, 2: true, 3: true, 4: true})
+	show("Pasos rápidos: una pestaña de paso hacia otra", []string{"de → a", "veces"},
+		counts(b.Hops), map[int]bool{1: true})
+	show("Idas y vueltas: la del medio, menos de 10 s", []string{"ida y vuelta", "veces"},
+		counts(b.RoundTrips), map[int]bool{1: true})
+	show("Atrás con el navegador", []string{"de → a", "veces"}, counts(b.Backs),
+		map[int]bool{1: true})
+
+	dialogs := [][]string{}
+	for _, d := range b.Dialogs {
+		dialogs = append(dialogs, []string{d.Name, fmt.Sprintf("%d", d.Opened),
+			fmt.Sprintf("%d", d.Confirmed), fmt.Sprintf("%d", d.Cancelled)})
+	}
+	show("Diálogos", []string{"operación", "abiertos", "confirmados", "cancelados"}, dialogs,
+		map[int]bool{1: true, 2: true, 3: true})
+
+	drawers := [][]string{}
+	for _, d := range b.Drawers {
+		drawers = append(drawers, []string{d.Name, fmt.Sprintf("%d", d.Times),
+			usage.Duration(d.Median), fmt.Sprintf("%d", d.Quick)})
+	}
+	show("Fichas y paneles: cerrados en menos de 3 s", []string{"panel", "veces", "mediana", "al momento"},
+		drawers, map[int]bool{1: true, 2: true, 3: true})
+	show("Clics en algo que no es un botón", []string{"dónde · qué", "veces"}, counts(b.Dead),
+		map[int]bool{1: true})
 }
 
 // --- daily reward -----------------------------------------------------------------------

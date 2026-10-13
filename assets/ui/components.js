@@ -131,6 +131,18 @@ const AMOUNT_NAME = {accept_offer: 'Oferta', decline_offer: 'Oferta', pay_clause
 // Only these move the balance, so only these show it: in with an offer taken, out with a clause.
 const CASH_SIGN = {accept_offer: 1, pay_clause: -1};
 
+// A dialog's own trace: opened, and cancelled when it closes without the operation going through.
+// Confirmed is logged where it is sent, so the three read together as how often one is abandoned.
+export function useDialogTrace(name) {
+  const done = useRef(false);
+  useEffect(() => {
+    const trace = panel().usage || {op() {}};
+    trace.op('abrir ' + name);
+    return () => { if (!done.current) trace.op('cancelar ' + name); };
+  }, []);
+  return () => { done.current = true; };
+}
+
 // The round comparator button's mark, drawn rather than typed: a text "+" sits on the font's
 // baseline and looked low in its circle.
 export const CmpIcon = ({on}) => html`<svg viewBox="0 0 16 16" aria-hidden="true"><path d=${on ? 'M3.5 8.5l3 3 6-7' : 'M8 3.5v9M3.5 8h9'}/></svg>`;
@@ -143,6 +155,7 @@ const GONE_AFTER = new Set(['accept_offer', 'decline_offer', 'withdraw', 'cancel
 export function ConfirmOp({op}) {
   const [step, setStep] = useState({summary: null, error: '', sending: false, done: ''});
   const token = useRef(null);
+  const traced = useDialogTrace(op.op);
   useEffect(() => {
     prepare({operation: op.op, market_id: op.market_id, offer_id: op.offer_id,
       player_id: op.player_id, amount: op.amount || undefined})
@@ -155,6 +168,7 @@ export function ConfirmOp({op}) {
     try {
       const data = await confirm(token.current);
       const done = DONE_LABEL[op.op] || 'Hecho';
+      traced();
       if (data.dry_run) { setStep((s) => ({...s, sending: false, done: done + ' (simulacro)'})); return; }
       closeDialog();
       // What the operation took away leaves the list now, and the notice comes once it is gone:

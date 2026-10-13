@@ -16,11 +16,13 @@ import {compare} from './compare.js';
 // and the order of a table. The why is in internal/usage.
 const seed = (() => { try { return JSON.parse(document.getElementById('views-data').textContent || '{}'); } catch (e) { return {}; } })();
 export const usage = (() => {
-  const OFF = {tab() {}, click() {}, sort() {}, op() {}};
+  const OFF = {tab() {}, click() {}, sort() {}, op() {}, nav() {}, drawer() {}, dead() {}};
   const mode = (seed.meta || {}).mode || '';
   // The static report has nowhere to send it.
   if (!mode || mode === 'informe' || !location.protocol.startsWith('http')) return OFF;
   const phone = matchMedia('(max-width: 700px)').matches;
+  // One per page load, so a visit reads as a visit rather than as gaps between timestamps.
+  const session = Math.random().toString(36).slice(2, 10);
   let queue = [], timer = null, tab = null, since = 0, seen = 0;
   const send = (beacon) => {
     if (!queue.length) return;
@@ -32,7 +34,7 @@ export const usage = (() => {
     } catch (e) { /* a lost batch is a lost measurement, nothing more */ }
   };
   const push = (event) => {
-    queue.push({at: new Date().toISOString(), phone, ...event});
+    queue.push({at: new Date().toISOString(), phone, session, ...event});
     if (queue.length >= 200) { send(false); return; }
     if (!timer) timer = setTimeout(() => { timer = null; send(false); }, 15000);
   };
@@ -51,6 +53,12 @@ export const usage = (() => {
     click(where, label, what) { push({kind: 'click', where, label, what}); },
     sort(where, column) { push({kind: 'sort', where, what: column}); },
     op(name, where) { push({kind: 'op', what: name, where: where || tab || ''}); },
+    // Back or forward in the browser, from where to where: going back is the trace of a wrong turn.
+    nav(from, to) { push({kind: 'nav', what: to || '#', where: tab || '', label: from || '#'}); },
+    // A card or panel closed, and how long it stayed open: three seconds is a misclick.
+    drawer(name, seconds) { push({kind: 'drawer', what: name, where: tab || '', seconds: Math.round(seconds)}); },
+    // A click on something that does not look clickable: what the page made look like a button.
+    dead(what) { push({kind: 'dead', what, where: tab || ''}); },
   };
 })();
 
@@ -178,11 +186,14 @@ export function labelDrawer(label) { if (nav.drawer) nav.drawer.label = label; }
 
 export function shutDrawer() { if (nav.drawer) { nav.drawer = null; moved(); } }
 
+// Set while the page steps back on its own (closing a card), so that step is not read as a Back.
+let stepping = false;
+
 export function closeDrawer() {
   const depth = (history.state && history.state.depth) || 0;
   // Opened from this page: step back to where it was. From a pasted link there is no page
   // behind it, so the address is rewritten instead.
-  if (depth > 0) { history.go(-depth); return; }
+  if (depth > 0) { stepping = true; history.go(-depth); return; }
   if (hashParts().view) history.replaceState(null, '', '#' + (hashParts().base || 'decidir'));
   routed = location.hash;
   shutDrawer();
@@ -426,6 +437,11 @@ function Drawer() {
     document.addEventListener('keydown', escape);
     return () => document.removeEventListener('keydown', escape);
   }, [!!d]);
+  useEffect(() => {
+    if (!d) return undefined;
+    const opened = Date.now();
+    return () => usage.drawer(d.name, (Date.now() - opened) / 1000);
+  }, [d ? d.name + '/' + d.arg : '']);
   const View = d && DRAWER[d.name];
   return html`<div class=${'drawer' + (d && POPUPS.has(d.name) ? ' as-pop' : '')} id="drawer" hidden=${!d} role="dialog" aria-modal="true"
       onClick=${(e) => { if (e.target === e.currentTarget) closeDrawer(); }}>
@@ -489,6 +505,24 @@ function connect() {
 // ---- start -------------------------------------------------------------------------------
 
 // Faces, names and rows in the views open the player's card; a button inside them does its own.
+// What a dead click is called by: its own class, else its tag, plus the section it sits in.
+const describe = (el) => {
+  const own = (el.className && typeof el.className === 'string' ? el.className.split(' ')[0] : '') || el.tagName.toLowerCase();
+  const section = el.closest('section[id], [data-view]');
+  return (section ? (section.id || section.dataset.view) + ' · ' : '') + own;
+};
+let lastDead = '', lastDeadAt = 0;
+document.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!target.closest || target.closest('button, a, input, select, label, summary, [role=button], [data-pid], [data-team]')) return;
+  // Not a dead click: selecting text, or something drawn as clickable with a handler of its own.
+  if (String(getSelection() || '') || getComputedStyle(target).cursor === 'pointer') return;
+  if (!target.closest('.mk, #drawer')) return;
+  const what = describe(target);
+  if (what !== lastDead || Date.now() - lastDeadAt > 2000) usage.dead(what);
+  lastDead = what; lastDeadAt = Date.now();
+});
+
 document.addEventListener('click', (event) => {
   const target = event.target;
   if (!target.closest || target.closest('button, a, input, select, label')) return;
@@ -508,6 +542,8 @@ export function start(appRoot) {
   const drawerHost = document.createElement('div');
   document.body.appendChild(drawerHost);
   render(html`<${Drawer}/>`, drawerHost);
+  // Before route, while `routed` still says where the page was.
+  addEventListener('popstate', () => { if (stepping) stepping = false; else usage.nav(routed, location.hash); });
   addEventListener('popstate', route);
   // A plain <a href="#..."> link moves the hash without popstate in some browsers.
   addEventListener('hashchange', route);
