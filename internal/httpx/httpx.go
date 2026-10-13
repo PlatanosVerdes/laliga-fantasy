@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -198,6 +199,11 @@ func Invalidate(tags ...string) int {
 
 // Fetch performs the request, honouring the cache, and retries what is worth retrying.
 func Fetch(request Request) (string, error) {
+	body, _, err := fetch(request)
+	return body, err
+}
+
+func fetch(request Request) (string, bool, error) {
 	if request.Method == "" {
 		request.Method = http.MethodGet
 	}
@@ -215,11 +221,11 @@ func Fetch(request Request) (string, error) {
 		bump(&stats.CacheHits)
 		slog.Debug("http cache hit", "url", request.URL, "tag", request.Tag,
 			"bytes", len(body))
-		return body, nil
+		return body, true, nil
 	}
 
 	if Frozen {
-		return "", &FrozenMiss{URL: request.URL, Tag: request.Tag}
+		return "", false, &FrozenMiss{URL: request.URL, Tag: request.Tag}
 	}
 
 	var lastErr error
@@ -231,18 +237,18 @@ func Fetch(request Request) (string, error) {
 			if request.TTL > 0 || request.Store {
 				writeCache(request.URL, request.Tag, body)
 			}
-			return body, nil
+			return body, false, nil
 		}
 
 		var limited *RateLimited
 		if errors.As(err, &limited) {
-			return "", err
+			return "", false, err
 		}
 		var httpErr *Error
 		if errors.As(err, &httpErr) &&
 			(httpErr.Status == 400 || httpErr.Status == 401 || httpErr.Status == 403 ||
 				httpErr.Status == 404) {
-			return "", err
+			return "", false, err
 		}
 		lastErr = err
 		slog.Warn("http failure", "url", request.URL, "tag", request.Tag,
@@ -252,7 +258,7 @@ func Fetch(request Request) (string, error) {
 	if lastErr == nil {
 		lastErr = fmt.Errorf("unreachable: %s", request.URL)
 	}
-	return "", lastErr
+	return "", false, lastErr
 }
 
 func once(request Request) (string, int, error) {
@@ -322,13 +328,36 @@ func truncate(text string, limit int) string {
 	return text[:limit]
 }
 
-// GetJSON fetches and unmarshals into target.
+// GetJSON fetches and unmarshals into target. A cached body that no longer parses is dropped
+// and fetched again once, or it would stay an error for its whole TTL.
 func GetJSON(request Request, target any) error {
-	body, err := Fetch(request)
+	body, cached, err := fetch(request)
+	if err != nil {
+		return err
+	}
+	err = json.Unmarshal([]byte(body), target)
+	if err == nil || !cached || Frozen {
+		return err
+	}
+	slog.Warn("cached response does not parse, fetching again", "url", request.URL,
+		"tag", request.Tag, "reason", err.Error())
+	_ = os.Remove(cachePath(request.URL, request.Tag))
+	// A failed decode can leave fields behind; an Unmarshaler resets its own state.
+	if _, custom := target.(json.Unmarshaler); !custom {
+		Reset(target)
+	}
+	body, err = Fetch(request)
 	if err != nil {
 		return err
 	}
 	return json.Unmarshal([]byte(body), target)
+}
+
+// Reset zeroes what target points to.
+func Reset(target any) {
+	if value := reflect.ValueOf(target); value.Kind() == reflect.Pointer && !value.IsNil() {
+		value.Elem().SetZero()
+	}
 }
 
 // PostForm is the shape the identity provider wants: form-encoded, JSON back.
