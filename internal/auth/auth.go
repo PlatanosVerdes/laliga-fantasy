@@ -35,6 +35,11 @@ const (
 	MaxFailedRefreshes = 3
 )
 
+// ErrRejected is the provider turning the renewal down (a 4xx such as invalid_grant), as
+// opposed to not being reachable: only this counts towards stopping, so a night without internet
+// does not end a session that is fine.
+var ErrRejected = errors.New("el proveedor ha rechazado la renovacion")
+
 // ErrStopped is the session given up on after MaxFailedRefreshes: only a new login restarts it.
 var ErrStopped = errors.New("la renovacion del login ha fallado 3 veces seguidas: " +
 	"el panel no vuelve a intentarlo hasta que inicies sesion de nuevo")
@@ -188,6 +193,7 @@ func Refresh(tokens *Tokens) (*Tokens, error) {
 	url := config.B2CTokenURL + "?p=" + config.B2CSignInPolicy
 
 	var failures []string
+	rejected := true
 	for _, clientID := range dedupe(tokens.ClientID, config.B2CWebClientID, config.B2CNativeClientID) {
 		var answer map[string]any
 		err := httpx.PostForm(url, map[string]string{
@@ -200,6 +206,7 @@ func Refresh(tokens *Tokens) (*Tokens, error) {
 			var httpErr *httpx.Error
 			if errors.As(err, &httpErr) {
 				failures = append(failures, fmt.Sprintf("%s: %d", clientID, httpErr.Status))
+				rejected = rejected && httpErr.Status >= 400 && httpErr.Status < 500
 				continue
 			}
 			return nil, err
@@ -218,8 +225,11 @@ func Refresh(tokens *Tokens) (*Tokens, error) {
 			"expires_in_min", fresh.SecondsLeft()/60)
 		return fresh, nil
 	}
-	return nil, fmt.Errorf("el refresh ha fallado con todos los client_id: %s",
-		strings.Join(failures, ", "))
+	err := fmt.Errorf("el refresh ha fallado con todos los client_id: %s", strings.Join(failures, ", "))
+	if rejected {
+		return nil, fmt.Errorf("%w: %w", ErrRejected, err)
+	}
+	return nil, err
 }
 
 // renew is Refresh, swapped out in tests so a failing provider needs no network.
@@ -258,7 +268,9 @@ func Bearer() (string, error) {
 			if fresh, err := renew(tokens); err == nil {
 				tokens = fresh
 			} else {
-				tokens.FailedRefreshes++
+				if errors.Is(err, ErrRejected) {
+					tokens.FailedRefreshes++
+				}
 				tokens.LastAttempt = float64(time.Now().Unix())
 				if saveErr := Save(tokens); saveErr != nil {
 					slog.Error("could not record a failed refresh", "reason", saveErr.Error())

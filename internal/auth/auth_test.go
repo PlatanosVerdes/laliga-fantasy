@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,7 +14,7 @@ import (
 func TestFailedRefreshesStopAfterThree(t *testing.T) {
 	config.TokenFile = filepath.Join(t.TempDir(), "tokens.json")
 	calls := 0
-	renew = func(*Tokens) (*Tokens, error) { calls++; return nil, errors.New("invalid_grant") }
+	renew = func(*Tokens) (*Tokens, error) { calls++; return nil, fmt.Errorf("%w: invalid_grant", ErrRejected) }
 	defer func() { renew = Refresh }()
 	if err := Save(&Tokens{AccessToken: "a", RefreshToken: "r",
 		ExpiresOn: time.Now().Add(time.Minute).Unix()}); err != nil {
@@ -37,5 +38,27 @@ func TestFailedRefreshesStopAfterThree(t *testing.T) {
 	}
 	if calls != MaxFailedRefreshes {
 		t.Errorf("a stopped session still asked the provider: %d calls", calls)
+	}
+}
+
+// No internet is not a refused session: it waits out the cooldown and never stops the panel.
+func TestAnUnreachableProviderNeverStopsTheSession(t *testing.T) {
+	config.TokenFile = filepath.Join(t.TempDir(), "tokens.json")
+	renew = func(*Tokens) (*Tokens, error) { return nil, errors.New("dial tcp: no route to host") }
+	defer func() { renew = Refresh }()
+	if err := Save(&Tokens{AccessToken: "a", RefreshToken: "r",
+		ExpiresOn: time.Now().Add(time.Minute).Unix()}); err != nil {
+		t.Fatal(err)
+	}
+	for range MaxFailedRefreshes + 2 {
+		_, _ = Bearer()
+		tokens, _ := Load()
+		tokens.LastAttempt -= RefreshCooldown.Seconds() + 1
+		if err := Save(tokens); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if tokens, _ := Load(); tokens.Stopped() || tokens.FailedRefreshes != 0 {
+		t.Errorf("network failures counted as refusals: %+v", tokens)
 	}
 }
