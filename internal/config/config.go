@@ -4,6 +4,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,27 +101,14 @@ var Tags = map[string]bool{
 }
 
 func init() {
-	ConfigDir, StateDir, CacheDir = resolveDirs()
-	TokenFile = filepath.Join(ConfigDir, "tokens.json")
-	SettingsFile = filepath.Join(ConfigDir, "settings.json")
-	PolicyFile = filepath.Join(ConfigDir, "policies.json")
-	// The league's house rules, per league id: they belong with the session and the
-	// preferences, not with the cache, because nothing can regenerate them.
-	RulesFile = filepath.Join(ConfigDir, "rules.json")
-	ReportFile = filepath.Join(StateDir, "report.html")
-	LogFile = filepath.Join(StateDir, "fantasy.log")
-	// Usage is regenerable in the sense that losing it costs a measurement and nothing else,
-	// and the .log suffix is load-bearing: Vector tails *.log, so it reaches VictoriaLogs
-	// with no configuration, exactly like fantasy.log.
-	UsageFile = filepath.Join(StateDir, "usage.log")
-	// What was forecast for each saved eleven before kick-off: once the ball rolls it cannot be
-	// asked again, so losing the file loses that history.
-	ForecastFile = filepath.Join(StateDir, "forecasts.json")
-	// The clauses seen at the last build: the log does not tell a clause paid from an offer
-	// accepted, and the clause before the transfer is the only way to.
-	ClauseFile = filepath.Join(StateDir, "clauses.json")
-	// The job intervals changed from the page: a preference, so it sits with the settings.
-	ServicesFile = filepath.Join(ConfigDir, "services.json")
+	ConfigRoot, StateRoot, CacheRoot = resolveDirs()
+	ConfigDir, StateDir, CacheDir = ConfigRoot, StateRoot, CacheRoot
+	if err := migrate(); err != nil {
+		// The single-account files stay where they were and the panel asks for a login: better
+		// than half a move.
+		fmt.Fprintln(os.Stderr, "no he podido pasar los datos a perfiles:", err)
+	}
+	Use(Active())
 }
 
 // resolveDirs honours one override and the XDG spec, in the same order as Python.
@@ -174,7 +162,7 @@ func exists(path string) bool {
 // EnsureDirs creates the three directories. Tokens are written 0600 by the auth
 // package; the directories themselves are 0700 because two of them hold credentials.
 func EnsureDirs() error {
-	for _, dir := range []string{ConfigDir, StateDir, CacheDir} {
+	for _, dir := range []string{ConfigRoot, StateRoot, CacheRoot, ConfigDir, StateDir, CacheDir} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return err
 		}

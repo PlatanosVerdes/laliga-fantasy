@@ -849,7 +849,13 @@ type Health struct {
 	LastError   *string `json:"last_error"`
 	LastEffect  *Effect `json:"last_effect"`
 	Frozen      bool    `json:"frozen"`
+	// Building is how far a build in course has got, for a page waiting on the first one.
+	Building *model.Progress `json:"building,omitempty"`
+	// Started tells a page waiting on a restart that the process answering is the new one.
+	Started string `json:"started"`
 }
+
+var started = time.Now().UTC().Format(time.RFC3339Nano)
 
 const staleGrace = 30 * time.Minute
 
@@ -857,7 +863,7 @@ func (s *State) Health() Health {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	health := Health{Version: s.version, Runs: s.runs, Subscribers: len(s.subs),
-		LastEffect: s.lastEffect, Status: "degraded", Frozen: httpx.Frozen}
+		LastEffect: s.lastEffect, Status: "degraded", Frozen: httpx.Frozen, Started: started}
 	if !s.generatedAt.IsZero() {
 		stamp := s.generatedAt.UTC().Format(time.RFC3339)
 		age := time.Since(s.generatedAt)
@@ -875,6 +881,9 @@ func (s *State) Health() Health {
 	if s.lastError != "" {
 		reason := s.lastError
 		health.LastError = &reason
+	}
+	if current, building := model.CurrentProgress(); building {
+		health.Building = &current
 	}
 	return health
 }

@@ -37,9 +37,17 @@ func (s *Server) setup(writer http.ResponseWriter, request *http.Request) {
 		}
 	}
 
+	adding := request.URL.Query().Get("cuenta") == "nueva" && HasSession()
+	title, lead, back := "Inicia sesión", "Entra con tu cuenta de LaLiga Fantasy y el panel se pone en marcha.", ""
+	if adding {
+		title, lead = "Añadir cuenta", "Entra con otra cuenta de LaLiga Fantasy. Queda guardada y el panel pasa a usarla."
+		back = `<a class="back" href="/">← Volver al panel</a>`
+	}
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	writer.Header().Set("Cache-Control", "no-store")
-	fmt.Fprintf(writer, setupPage, html.EscapeString(pending.URL))
+	fmt.Fprint(writer, authPage(title, strings.NewReplacer("{{title}}", html.EscapeString(title),
+		"{{lead}}", html.EscapeString(lead), "{{login}}", html.EscapeString(pending.URL),
+		"{{back}}", back).Replace(setupBody)))
 }
 
 // session finishes the login: it accepts the pasted redirect URL, a bare code, or a whole
@@ -58,7 +66,7 @@ func (s *Server) session(writer http.ResponseWriter, request *http.Request) {
 	}
 	// A working session is replaced only on purpose: a stray post used to overwrite it, and a
 	// failed check then deleted the file.
-	if HasSession() && !truthy(body["replace"]) {
+	if HasSession() && !truthy(body["replace"]) && !truthy(body["add"]) {
 		s.json(writer, http.StatusConflict, map[string]any{
 			"error": "ya hay una sesion que funciona; para cambiarla manda replace: true"})
 		return
@@ -79,8 +87,9 @@ func (s *Server) session(writer http.ResponseWriter, request *http.Request) {
 			return
 		}
 		// Prove it works before saying it does: a pasted session that cannot read anything
-		// looks identical to a good one until the first request fails, hours later.
-		if s.opts.Client != nil {
+		// looks identical to a good one until the first request fails, hours later. Only the
+		// active account can be asked from here; another one is proved by starting on it.
+		if s.opts.Client != nil && config.AccountID(tokens.Email) == config.Account {
 			if _, err := s.opts.Client.Me(0); err != nil {
 				restore()
 				s.json(writer, http.StatusBadRequest,
@@ -113,6 +122,13 @@ func (s *Server) session(writer http.ResponseWriter, request *http.Request) {
 
 func (s *Server) sessionReady(writer http.ResponseWriter, who string) {
 	slog.Info("session stored", "email", who)
+	// Another account, or one with no league yet: every path has to point at it, so the
+	// process starts again on it and the page reloads into the panel or the league choice.
+	if config.AccountID(who) != config.Account || config.League == "" {
+		s.json(writer, http.StatusOK, map[string]any{"ok": true, "email": who, "restarting": true})
+		s.restartSoon()
+		return
+	}
 	// The world is empty until something reads the API with the new session, and that read
 	// can take a while, so it happens in the background and the page waits on /healthz.
 	if s.opts.Adopted != nil {
@@ -121,55 +137,36 @@ func (s *Server) sessionReady(writer http.ResponseWriter, who string) {
 	s.json(writer, http.StatusOK, map[string]any{"ok": true, "email": who})
 }
 
-const setupPage = `<!doctype html><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Fantasy · sesion</title>
-<style>
- :root{color-scheme:dark}
- body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f1115;
-      color:#e6e6e6;font:15px/1.55 system-ui,sans-serif}
- main{width:min(680px,92vw);background:#161a21;border:1px solid #262c37;border-radius:14px;
-      padding:28px}
- h1{margin:0 0 4px;font-size:20px}
- p{color:#9aa4b2}
- ol{padding-left:20px} li{margin:10px 0}
- a.link{color:#6ea8fe}
- textarea{width:100%%;box-sizing:border-box;min-height:88px;margin-top:6px;padding:10px;
-          border-radius:8px;border:1px solid #2c3442;background:#0f1319;color:#e6e6e6;
-          font:13px/1.4 ui-monospace,monospace}
- button{margin-top:12px;padding:10px 16px;border:0;border-radius:8px;background:#2f6feb;
-        color:#fff;font-weight:600;cursor:pointer}
- button[disabled]{opacity:.5;cursor:default}
- #msg{margin-top:12px;min-height:20px}
- .bad{color:#ff8080} .good{color:#79d67a}
-</style>
-<main>
- <h1>Falta la sesion</h1>
- <p>Entra con tu cuenta de LaLiga Fantasy y pega aqui la direccion a la que te redirija.</p>
- <ol>
-  <li><a class="link" href="%s" target="_blank" rel="noreferrer">Abrir el login de LaLiga</a></li>
-  <li>Al terminar el navegador intentara ir a <code>authredirect://…</code> y dara error:
-      eso es lo normal. Copia la direccion completa de la barra.</li>
-  <li>Pegala aqui:
-   <textarea id="paste" placeholder="authredirect://com.lfp.laligafantasy?code=..."></textarea>
-   <button id="go">Guardar sesion</button>
-  </li>
- </ol>
- <div id="msg"></div>
-</main>
+const setupBody = `<h1>{{title}}</h1><p class="lead">{{lead}}</p>
+<ol class="steps">
+ <li><div><b>Abre el login de LaLiga</b>
+  <p>Entra como en la app: Google, Apple o correo.</p>
+  <a class="btn" href="{{login}}" target="_blank" rel="noreferrer">Abrir el login ↗</a></div></li>
+ <li><div><b>Copia la dirección final</b>
+  <p>Al terminar, el navegador intentará abrir <code>authredirect://…</code> y dará error: es lo
+  normal. Copia la dirección completa de la barra.</p></div></li>
+ <li><div><b>Pégala aquí</b>
+  <textarea id="paste" placeholder="authredirect://com.lfp.laligafantasy?code=…"></textarea>
+  <button class="btn" id="go">Entrar</button></div></li>
+</ol>
+<div id="msg"></div>{{back}}
 <script>
 const msg=document.getElementById('msg'), go=document.getElementById('go');
 go.onclick=async()=>{
   const paste=document.getElementById('paste').value.trim();
   if(!paste) return;
-  go.disabled=true; msg.className=''; msg.textContent='Canjeando…';
+  go.disabled=true; msg.className=''; msg.textContent='Comprobando…';
   try{
     const res=await fetch('/api/session',{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({paste})});
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({paste, add: new URLSearchParams(location.search).get('cuenta')==='nueva'})});
     const data=await res.json();
     if(!res.ok) throw new Error(data.error||res.status);
     msg.className='good';
-    msg.textContent='Sesion guardada'+(data.email?' ('+data.email+')':'')+'. Cargando…';
+    msg.textContent='Sesión guardada'+(data.email?' ('+data.email+')':'')+'. Cargando…';
+    // A new account restarts the panel on it: reload once it is back, into the panel or the
+    // choice of league.
+    if(data.restarting){reloadWhenReady();return;}
     // The first build reads the whole league, so wait for it instead of showing a broken page.
     const wait=setInterval(async()=>{
       try{

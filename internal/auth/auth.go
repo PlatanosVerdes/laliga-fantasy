@@ -110,7 +110,7 @@ func seedFromEnv() (*Tokens, error) {
 			return nil, fmt.Errorf("FANTASY_TOKENS no es un JSON valido: %w", err)
 		}
 		tokens := Normalize(raw)
-		if err := Save(tokens); err != nil {
+		if _, err := Store(tokens); err != nil {
 			return nil, err
 		}
 		slog.Info("session seeded from FANTASY_TOKENS")
@@ -120,6 +120,9 @@ func seedFromEnv() (*Tokens, error) {
 		tokens, err := Refresh(&Tokens{RefreshToken: token})
 		if err != nil {
 			return nil, fmt.Errorf("no se ha podido usar FANTASY_REFRESH_TOKEN: %w", err)
+		}
+		if _, err := Store(tokens); err != nil {
+			return nil, err
 		}
 		slog.Info("session seeded from FANTASY_REFRESH_TOKEN")
 		return tokens, nil

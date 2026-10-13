@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/files"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 )
 
@@ -33,7 +34,8 @@ type Pending struct {
 	URL      string  `json:"url"`
 }
 
-func pendingPath() string { return filepath.Join(config.ConfigDir, "pending_auth.json") }
+// A login in progress belongs to no account yet: whose it is, the answer says.
+func pendingPath() string { return filepath.Join(config.ConfigRoot, "pending_auth.json") }
 
 // StartLogin builds the authorize URL for the app's own client (auth code + PKCE).
 //
@@ -139,7 +141,7 @@ func ExtractCode(text, expectedState string) (string, error) {
 	return code, nil
 }
 
-// ExchangeCode finishes the login and stores the session.
+// ExchangeCode finishes the login and stores the session in its account.
 func ExchangeCode(code, verifier string) (*Tokens, error) {
 	var answer map[string]any
 	err := httpx.PostForm(config.B2CTokenURL+"?p="+config.B2CSignInPolicy, map[string]string{
@@ -158,7 +160,7 @@ func ExchangeCode(code, verifier string) (*Tokens, error) {
 	if tokens.AccessToken == "" {
 		return nil, errors.New("la respuesta no traia ningun token")
 	}
-	if err := Save(tokens); err != nil {
+	if _, err := Store(tokens); err != nil {
 		return nil, err
 	}
 	// The pending verifier is spent either way.
@@ -185,8 +187,32 @@ func Adopt(blob string) (*Tokens, error) {
 	if tokens.RefreshToken == "" && tokens.AccessToken == "" {
 		return nil, errors.New("el JSON no trae ni access_token ni refresh_token")
 	}
-	if err := Save(tokens); err != nil {
+	if _, err := Store(tokens); err != nil {
 		return nil, err
 	}
 	return tokens, nil
+}
+
+// Store keeps a session in its own account, named by its email, and makes a new account the
+// active one; its league is chosen on the next start. Logging in again to the active account
+// only renews its session.
+func Store(tokens *Tokens) (string, error) {
+	account := config.AccountID(tokens.Email)
+	if err := os.MkdirAll(config.AccountDir(account), 0o700); err != nil {
+		return "", err
+	}
+	blob, err := json.MarshalIndent(tokens, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	mu.Lock()
+	err = files.WriteAtomic(config.AccountTokenFile(account), blob, 0o600)
+	mu.Unlock()
+	if err != nil {
+		return "", err
+	}
+	if account != config.Account {
+		return account, config.SetActive(account, "")
+	}
+	return account, nil
 }

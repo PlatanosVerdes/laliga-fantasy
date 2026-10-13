@@ -193,6 +193,7 @@ type State struct {
 func BuildLive(client *api.Client, leagueID, myTeamID string, state State,
 	ffTTL time.Duration) (*Universe, error) {
 	bridge, err := LoadBridge(client, ffTTL)
+	reached("Datos de futbolfantasy", 4, 4)
 	if err != nil {
 		return nil, err
 	}
@@ -227,6 +228,7 @@ func LoadBridge(client *api.Client, ffTTL time.Duration) (*Bridge, error) {
 			"shortName": team.ShortName})
 	}
 
+	reached("Datos de futbolfantasy", 1, 4)
 	market, err := futbolfantasy.Market(ffTTL)
 	if err != nil {
 		return nil, err
@@ -246,7 +248,9 @@ func LoadBridge(client *api.Client, ffTTL time.Duration) (*Bridge, error) {
 		}
 	}
 
+	reached("Datos de futbolfantasy", 2, 4)
 	absences := MatchAbsences(players, futbolfantasy.Absences(3*time.Hour))
+	reached("Datos de futbolfantasy", 3, 4)
 	loose := make([]any, 0, len(unmatched))
 	for _, row := range unmatched {
 		loose = append(loose, row)
@@ -271,6 +275,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 	if err != nil {
 		return nil, fmt.Errorf("players: %w", err)
 	}
+	reached("Jugadores de LaLiga", 1, 1)
 
 	teamName := map[string]string{}
 	teamShort := map[string]string{}
@@ -361,6 +366,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		if err != nil {
 			return nil, fmt.Errorf("market: %w", err)
 		}
+		reached("Mercado", 1, 1)
 		freshStatus(client, raw, ownership, myTeamID)
 	}
 
@@ -590,11 +596,19 @@ func freshStatus(client *api.Client, raw []map[string]any, ownership map[string]
 	if myTeamID == "" {
 		return
 	}
+	mine, done := 0, 0
+	for _, held := range ownership {
+		if held.TeamID == myTeamID {
+			mine++
+		}
+	}
 	for _, entry := range raw {
 		id := text(entry["id"])
 		if held, ok := ownership[id]; !ok || held.TeamID != myTeamID {
 			continue
 		}
+		done++
+		reached("Estado de tus jugadores", done, mine)
 		detail, err := client.Player(id, OwnStatusTTL)
 		if err != nil {
 			slog.Debug("player status unreachable", "player", id, "reason", err.Error())
@@ -654,7 +668,8 @@ func loadOwnership(client *api.Client, leagueID string) (map[string]slot,
 	ownership := map[string]slot{}
 	teams := map[string]*LeagueTeam{}
 
-	for _, entry := range standings {
+	for index, entry := range standings {
+		reached("Plantillas de la liga", index+1, len(standings))
 		row := normalizeStanding(entry)
 		teamID := row.TeamID
 		if teamID == "" {
@@ -839,10 +854,18 @@ func loadOffers(client *api.Client, leagueID, myTeamID string,
 	if leagueID == "" || myTeamID == "" {
 		return offers
 	}
+	mine, done := 0, 0
+	for _, held := range ownership {
+		if held.TeamID == myTeamID && held.PlayerTeamID != nil {
+			mine++
+		}
+	}
 	for playerID, held := range ownership {
 		if held.TeamID != myTeamID || held.PlayerTeamID == nil {
 			continue
 		}
+		done++
+		reached("Ofertas recibidas", done, mine)
 		received, err := client.PlayerOffers(leagueID, *held.PlayerTeamID, time.Minute)
 		if err != nil {
 			slog.Debug("offers unreachable", "player", playerID, "reason", err.Error())
@@ -887,6 +910,8 @@ func loadOffers(client *api.Client, leagueID, myTeamID string,
 func loadActivity(client *api.Client, leagueID string, managers, names map[string]string) []Event {
 	var raw []map[string]any
 	for index := 0; index < 20; index++ {
+		// How many pages there are is learnt from the empty one, so the step shows half done.
+		reached("Movimientos de la liga", index+1, 0)
 		page, err := client.ActivityRaw(leagueID, index, time.Minute, false)
 		if err != nil {
 			slog.Warn("activity unreachable", "index", index, "reason", err.Error())
@@ -988,6 +1013,7 @@ func LoadSchedule(client *api.Client, week api.Week, teams []api.Team) []Fixture
 	// matchday never changes, so it is cached for a week instead of a day, but only once the
 	// copy says every match is over: one written mid-match would otherwise stick for a week.
 	for number := 1; number < week.WeekNumber+UpcomingWeeks; number++ {
+		reached("Calendario", number, week.WeekNumber+UpcomingWeeks-1)
 		const short, long = 24 * time.Hour, 7 * 24 * time.Hour
 		ttl := short
 		if number < week.WeekNumber {
