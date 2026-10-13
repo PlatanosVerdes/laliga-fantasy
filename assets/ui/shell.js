@@ -331,7 +331,7 @@ async function waitForRestart(message, was) {
   const step = document.querySelector('.acct-wait .load-step'), pct = document.querySelector('.acct-wait .load-pct');
   const show = (p) => {
     bar.style.width = Math.max(2, p.percent) + '%';
-    step.textContent = p.step + (p.total > 0 ? ' · ' + p.done + ' de ' + p.total : '');
+    step.textContent = p.step + (p.total > 1 ? ' · ' + p.done + ' de ' + p.total : '');
     pct.textContent = p.percent + ' %';
   };
   // Done once a new process has finished building, a world or a failure: a league that fails
@@ -557,7 +557,7 @@ const EFFECT_LABELS = {cash: 'Saldo', squad: 'Jugadores', squad_value: 'Valor de
   offers: 'Ofertas recibidas', points: 'Puntos de la plantilla', absences: 'Bajas'};
 const OPERATION_LABELS = {sell_to_market: 'Puesto en venta', accept_offer: 'Oferta aceptada', decline_offer: 'Oferta rechazada',
   withdraw: 'Retirado del mercado', bid: 'Puja enviada', modify_bid: 'Puja modificada', cancel_bid: 'Puja cancelada',
-  cancel_offer: 'Oferta retirada', always: 'Siempre en mercado', raid: 'Clausulazo programado',
+  cancel_offer: 'Oferta retirada', change_offer: 'Oferta cambiada', always: 'Siempre en mercado', raid: 'Clausulazo programado',
   favourite: 'Favorito', desfasado: 'Actualizado',
   direct_offer: 'Oferta directa', pay_clause: 'Clausulazo pagado', raise_clause: 'Clausula subida', save_lineup: 'Alineacion guardada',
   policy: 'Instruccion ejecutada', shield_player: 'Jugador blindado', shield: 'Blindaje programado', traspaso: 'Se ha movido la liga',

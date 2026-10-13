@@ -72,7 +72,7 @@ function showProgress(p){
   }
   if(!p) return;
   document.querySelector('.load-track i').style.width=Math.max(2,p.percent)+'%';
-  document.querySelector('.load-step').textContent=p.step+(p.total>0?' · '+p.done+' de '+p.total:'');
+  document.querySelector('.load-step').textContent=p.step+(p.total>1?' · '+p.done+' de '+p.total:'');
   document.querySelector('.load-pct').textContent=p.percent+' %';
 }
 // Reload once the build is over: a new world, a new failure, or a new process that has finished

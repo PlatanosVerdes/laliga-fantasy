@@ -63,6 +63,22 @@ type ComingWeek struct {
 	Yours   string        `json:"yours"`
 }
 
+// ComingAgenda is the next matchdays as a list, and the whole season as days for a calendar.
+type ComingAgenda struct {
+	Weeks []ComingWeek `json:"weeks"`
+	Days  []MatchDate  `json:"days"`
+}
+
+// MatchDate is one matchday's matches on one date; a date holding a postponed match and the
+// next matchday has one entry for each.
+type MatchDate struct {
+	Date    string `json:"date"`
+	Week    int    `json:"week"`
+	Matches int    `json:"matches"`
+	Mine    int    `json:"mine"`
+	Played  int    `json:"played"`
+}
+
 type ComingMatch struct {
 	// Day and Hour say when it is played, each match on its own: a matchday spans four days.
 	Day        string `json:"day"`
@@ -275,8 +291,24 @@ func (d Document) comingBlock(current int) *Block {
 	}
 	weeks := map[int]*week{}
 	var order []int
+	days := map[string]*MatchDate{}
+	var dayOrder []string
 	for _, fixture := range rows(d.Universe["schedule"]) {
 		round := int(number(fixture["week"]))
+		if when, ok := parseStamp(text(fixture["kickoff"])); ok && int(number(fixture["state"])) != PostponedMatch {
+			key := fmt.Sprintf("%s/%d", when.Format("2006-01-02"), round)
+			day := days[key]
+			if day == nil {
+				day = &MatchDate{Date: when.Format("2006-01-02"), Week: round}
+				days[key] = day
+				dayOrder = append(dayOrder, key)
+			}
+			day.Matches++
+			day.Mine += mine[text(fixture["local_id"])] + mine[text(fixture["visitor_id"])]
+			if int(number(fixture["state"])) == FinishedMatch {
+				day.Played++
+			}
+		}
 		if int(number(fixture["state"])) == FinishedMatch || round == current {
 			continue
 		}
@@ -321,7 +353,7 @@ func (d Document) comingBlock(current int) *Block {
 	for _, key := range order {
 		entry := weeks[key]
 		if key > 0 {
-			if shown == 3 {
+			if shown == 2 {
 				continue
 			}
 			shown++
@@ -342,7 +374,12 @@ func (d Document) comingBlock(current int) *Block {
 	if len(out) == 0 {
 		return nil
 	}
-	return &Block{Title: "Próximas jornadas", Kind: "weeks", Data: out}
+	sort.Strings(dayOrder)
+	calendar := make([]MatchDate, 0, len(dayOrder))
+	for _, key := range dayOrder {
+		calendar = append(calendar, *days[key])
+	}
+	return &Block{Title: "Próximas jornadas", Kind: "weeks", Data: ComingAgenda{Weeks: out, Days: calendar}}
 }
 
 // myFinish is the place my saved eleven would finish the matchday in, or 0.

@@ -178,7 +178,7 @@ var actionGroups = map[string]string{
 	"accept_offer": "oferta", "decline_offer": "oferta",
 	"always": "mercado", "sell_to_market": "mercado", "withdraw": "mercado",
 	"raise_clause": "clausula", "shield": "clausula", "cancel_shield": "clausula",
-	"bid": "fichar", "modify_bid": "fichar", "cancel_bid": "fichar", "buy_offer": "fichar",
+	"bid": "fichar", "modify_bid": "fichar", "cancel_bid": "fichar", "buy_offer": "fichar", "change_offer": "fichar",
 	"cancel_offer": "fichar", "direct_offer": "fichar", "raid": "fichar", "pay_clause": "fichar",
 }
 
@@ -530,14 +530,14 @@ func bidActions(listing map[string]any, suggested float64) []map[string]any {
 	// The game's own market is bid on; a rival's sale is offered for. Sending a bid for the
 	// second answers 404 and reads like a bug in the tool.
 	if text(listing["kind"]) == "venta" {
-		// One offer at a time: the API refuses a second and there is no route to change one, so
-		// the only honest button is to take it back.
+		// One offer at a time and no route to change it: changing withdraws it and sends another.
 		if existing := text(listing["my_bid_id"]); existing != "" {
 			amount := int64(number(listing["my_bid"]))
-			return []map[string]any{{"op": "cancel_offer",
-				"label": "Retirar tu oferta de " + short(float64(amount)),
-				"kind": "confirm", "danger": true, "market_id": marketID, "offer_id": existing,
-				"note": "No se puede cambiar una oferta: se retira y se hace otra."}}
+			return []map[string]any{{"op": "change_offer", "label": "Cambiar tu oferta",
+				"kind": "amount", "market_id": marketID, "offer_id": existing, "suggested": amount,
+				"min": minBid, "note": "Se retira la de " + short(float64(amount)) + " y se manda la nueva."},
+				{"op": "cancel_offer", "label": "Retirar tu oferta de " + short(float64(amount)),
+					"kind": "confirm", "danger": true, "market_id": marketID, "offer_id": existing}}
 		}
 		return []map[string]any{{"op": "buy_offer", "label": "Ofertar por su venta",
 			"kind": "amount", "market_id": marketID, "suggested": int64(suggested),

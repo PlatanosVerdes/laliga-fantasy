@@ -16,16 +16,16 @@ const CLAUSE_FACTOR = 2;
 // When the money comes in rather than goes out, and what has not happened yet: a bid takes
 // nothing until it is won, an offer nothing until it is accepted.
 const CASH_IN = new Set(['sell_to_market', 'accept_offer']);
-const CASH_WHEN = {bid: 'si la ganas', modify_bid: 'si la ganas', buy_offer: 'si te la aceptan',
+const CASH_WHEN = {bid: 'si la ganas', modify_bid: 'si la ganas', buy_offer: 'si te la aceptan', change_offer: 'si te la aceptan',
   direct_offer: 'si te la aceptan', sell_to_market: 'si te lo compran', accept_offer: 'al aceptarla'};
 const DONE_LABEL = {bid: 'Puja enviada', sell_to_market: 'Puesto en venta', accept_offer: 'Oferta aceptada',
   decline_offer: 'Oferta rechazada', withdraw: 'Retirado del mercado', direct_offer: 'Oferta enviada',
   pay_clause: 'Clausula pagada', raise_clause: 'Clausula subida', cancel_bid: 'Puja retirada',
-  modify_bid: 'Puja cambiada', buy_offer: 'Oferta enviada', cancel_offer: 'Oferta retirada',
+  modify_bid: 'Puja cambiada', buy_offer: 'Oferta enviada', change_offer: 'Oferta cambiada', cancel_offer: 'Oferta retirada',
   shield_player: 'Blindado 24h'};
-const AMOUNT_LABEL = {bid: 'Pujas', modify_bid: 'Nueva puja', buy_offer: 'Ofreces', sell_to_market: 'Precio de venta',
+const AMOUNT_LABEL = {bid: 'Pujas', modify_bid: 'Nueva puja', buy_offer: 'Ofreces', change_offer: 'Nueva oferta', sell_to_market: 'Precio de venta',
   accept_offer: 'Cobras', direct_offer: 'Ofreces', pay_clause: 'Pagas', raise_clause: 'Pagas'};
-const MOVES_CASH = new Set(['bid', 'modify_bid', 'buy_offer', 'direct_offer', 'pay_clause', 'accept_offer',
+const MOVES_CASH = new Set(['bid', 'modify_bid', 'buy_offer', 'change_offer', 'direct_offer', 'pay_clause', 'accept_offer',
   'raise_clause', 'sell_to_market']);
 
 const usage = () => panel().usage || {op() {}, click() {}};
@@ -34,12 +34,13 @@ const usage = () => panel().usage || {op() {}, click() {}};
 // placed is changed rather than doubled.
 export function openBid(data) {
   const existing = data.bid || null;
+  const changing = data.operation === 'change_offer';
   const operation = existing ? 'modify_bid' : (data.operation || 'bid');
   const min = +data.min || 0, ideal = +data.ideal || 0;
   show('amount', {p: {operation, market_id: data.market, player_id: data.player, name: data.name,
-    min_bid: min, ideal, value: +data.value, bid_id: existing, bids: +data.bids || 0, expires: data.expires,
-    title: existing ? 'Cambiar tu puja por' : (operation === 'buy_offer' ? 'Ofertar por' : 'Pujar por'),
-    label: 'Importe de la puja', suggested: ideal && ideal >= min ? ideal : min, focus: true}});
+    min_bid: min, ideal, value: +data.value, bid_id: existing, offer_id: data.offer, bids: +data.bids || 0, expires: data.expires,
+    title: existing ? 'Cambiar tu puja por' : changing ? 'Cambiar tu oferta por' : (operation === 'buy_offer' ? 'Ofertar por' : 'Pujar por'),
+    label: changing ? 'Importe de la oferta' : 'Importe de la puja', suggested: ideal && ideal >= min ? ideal : min, focus: true}});
 }
 
 // One of the card's amount actions, with the player already resolved.
@@ -56,10 +57,10 @@ export function openAmount(a, player) {
 }
 
 function Rivals({p}) {
-  const isBid = ['bid', 'modify_bid', 'buy_offer'].includes(p.operation) || !p.operation;
+  const isBid = ['bid', 'modify_bid', 'buy_offer', 'change_offer'].includes(p.operation) || !p.operation;
   if (!isBid) return null;
   // One of those bids can be mine, and counting it as a rival's is counting wrong.
-  const mine = p.bid_id ? 1 : 0, others = Math.max(0, p.bids - mine);
+  const mine = p.bid_id || p.operation === 'change_offer' ? 1 : 0, others = Math.max(0, p.bids - mine);
   const text = !p.bids ? 'ninguna' : mine ? (others ? `${p.bids} · ${others} de rivales y la tuya` : 'solo la tuya') : String(p.bids);
   return html`<span class="bid-rivals-wrap">Pujas vigentes <b class=${'bid-rivals' + (others ? ' rivals-on' : '')}>${text}</b></span>`;
 }
@@ -120,15 +121,18 @@ function AmountDialog({p}) {
       setStep({...step, n: 2, summary: data, token: data.token, error: ''});
     } catch (e) { setStep({...step, error: e.message}); }
   };
+  // The bid or the offer being changed can be taken back from here instead.
+  const dropOp = op === 'change_offer' ? 'cancel_offer' : 'cancel_bid';
   const drop = async () => {
     try {
-      const data = await prepare({operation: 'cancel_bid', market_id: p.market_id, bid_id: p.bid_id, player_id: p.player_id});
-      traced.become('cancel_bid');
+      const data = await prepare({operation: dropOp, market_id: p.market_id, bid_id: p.bid_id,
+        offer_id: p.offer_id, player_id: p.player_id});
+      traced.become(dropOp);
       setStep({...step, n: 2, summary: null, token: data.token, drop: true, error: ''});
     } catch (e) { setStep({...step, error: e.message}); }
   };
   const send = async () => {
-    const operation = step.drop ? 'cancel_bid' : op;
+    const operation = step.drop ? dropOp : op;
     setStep({...step, sending: true, error: ''});
     try {
       const data = await confirm(step.token);
@@ -159,7 +163,7 @@ function AmountDialog({p}) {
       ${warn ? html`<p class="bid-warn">${warn}</p>` : null}
     </div>` : html`<div id="bid-summary-step"><div class="bid-summary">
       ${step.done ? html`<p class="bid-ok">${step.done}.</p>`
-        : step.drop ? html`<p>Vas a <strong>retirar tu puja</strong> por ${p.name}.</p>`
+        : step.drop ? html`<p>Vas a <strong>retirar tu ${dropOp === 'cancel_offer' ? 'oferta' : 'puja'}</strong> por ${p.name}.</p>`
         : html`<dl class="bid-dl">
           <dt>Jugador</dt><dd>${s.player_name || p.name}</dd>
           <dt>${AMOUNT_LABEL[op] || 'Importe'}</dt><dd><strong>${exact(s.amount)}</strong></dd>
@@ -170,7 +174,7 @@ function AmountDialog({p}) {
     </div></div>`}
     <p class="bid-error">${step.error}</p>
     <div class="modal-actions">
-      ${step.n === 1 && p.bid_id ? html`<button class="bid-drop" type="button" onClick=${drop}>Retirar mi puja</button>` : null}
+      ${step.n === 1 && (p.bid_id || op === 'change_offer') ? html`<button class="bid-drop" type="button" onClick=${drop}>${dropOp === 'cancel_offer' ? 'Retirar mi oferta' : 'Retirar mi puja'}</button>` : null}
       <button class="bid-cancel" type="button" onClick=${closeDialog}>${step.done ? 'Cerrar' : 'Cancelar'}</button>
       ${step.n === 1 ? html`<button class="bid-next primary" type="button" onClick=${next}>Continuar</button>` : null}
       ${step.n === 2 && !step.done ? html`<button class="bid-confirm" type="button" disabled=${step.sending} onClick=${send}>${step.sending ? 'Enviando…' : 'Aceptar'}</button>` : null}

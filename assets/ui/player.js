@@ -227,7 +227,7 @@ function AlwaysBlock({a, player, lead}) {
     ${error ? html`<p class="bid-error">${error}</p>` : null}`;
 }
 
-const FICHAR_ORDER = ['bid', 'modify_bid', 'cancel_bid', 'buy_offer', 'cancel_offer', 'direct_offer', 'raid', 'pay_clause'];
+const FICHAR_ORDER = ['bid', 'modify_bid', 'cancel_bid', 'buy_offer', 'change_offer', 'cancel_offer', 'direct_offer', 'raid', 'pay_clause'];
 const GROUPS = [['oferta', 'Oferta'], ['mercado', 'Mercado'], ['clausula', 'Cláusula'], ['fichar', 'Fichar']];
 
 function offerWho(a) {

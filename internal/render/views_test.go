@@ -250,8 +250,11 @@ func TestMyOfferRowSaysTheAmountOnce(t *testing.T) {
 	acts := ownBidActs(map[string]any{"id": "7", "name": "Kike Salas",
 		"market": map[string]any{"market_id": "m1", "kind": "venta", "my_bid_id": "o1",
 			"my_bid": 14_110_001.0}})
-	if len(acts) != 1 || acts[0].Label != "Retirar" {
-		t.Errorf("acts = %+v, want only Retirar", acts)
+	if len(acts) != 1 || acts[0].Label != "Cambiar" {
+		t.Errorf("acts = %+v, want one Cambiar, like a bid", acts)
+	}
+	if acts[0].Args["operation"] != "change_offer" || acts[0].Args["offer"] != "o1" {
+		t.Errorf("Cambiar should change the offer o1: %+v", acts[0].Args)
 	}
 }
 
@@ -269,8 +272,13 @@ func TestPostponedMatchesSayWhenTheyArePlayed(t *testing.T) {
 	if block == nil {
 		t.Fatal("no block")
 	}
-	weeks := block.Data.([]ComingWeek)
+	agenda := block.Data.(ComingAgenda)
+	weeks := agenda.Weeks
 	matches := weeks[0].Matches
+	// The undated one has no day on the calendar; the moved one is on its new date.
+	if len(agenda.Days) != 1 || agenda.Days[0].Date != "2026-10-21" || agenda.Days[0].Week != 7 {
+		t.Errorf("calendar days: %+v", agenda.Days)
+	}
 	if weeks[0].Day != "" || len(matches) != 2 {
 		t.Fatalf("postponed week: %+v", weeks[0])
 	}
@@ -282,15 +290,16 @@ func TestPostponedMatchesSayWhenTheyArePlayed(t *testing.T) {
 	}
 }
 
-// A bid I already have stays withdrawable even when the price has run past what I can reach.
+// A bid I already have stays changeable and withdrawable even when the price has run past what I can reach.
 func TestBuyLineOutOfReachKeepsMyBid(t *testing.T) {
 	document := Document{Advice: map[string]any{"budget": 1e6}}
 	item := map[string]any{"id": "7", "name": "Kike Salas", "entry_cost": 20e6,
 		"market": map[string]any{"market_id": "m1", "kind": "venta", "my_bid_id": "o1",
 			"my_bid": 14e6}}
 	line := document.buyLine(item, "oferta al dueño", 0, nil)
-	if line.Tone != "dim" || len(line.Acts) != 2 || line.Acts[1].Label != "Retirar" {
-		t.Errorf("acts = %+v, want my offer and Retirar", line.Acts)
+	if line.Tone != "dim" || len(line.Acts) != 1 || line.Acts[0].Label != "Tu oferta 14.0M" ||
+		line.Acts[0].Args["operation"] != "change_offer" {
+		t.Errorf("acts = %+v, want my offer as one button that changes it", line.Acts)
 	}
 	delete(mapOf(item["market"]), "my_bid_id")
 	line = document.buyLine(item, "oferta al dueño", 0, nil)

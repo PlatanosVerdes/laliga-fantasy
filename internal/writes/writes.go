@@ -92,6 +92,14 @@ var Operations = map[string]operation{
 			map[string]any{"money": a.Amount}}
 	}, []string{"market", "money"}},
 
+	// An offer cannot be changed, only withdrawn: this one sends the new offer, and confirm
+	// withdraws the old one (OfferID) just before.
+	"change_offer": {"cambiar la oferta", func(a Args) Call {
+		return Call{http.MethodPost,
+			fmt.Sprintf("%s/league/%s/market/%s/offer", config.CMP, a.LeagueID, a.MarketID),
+			map[string]any{"money": a.Amount}}
+	}, []string{"market", "money"}},
+
 	"modify_bid": {"modificar puja", func(a Args) Call {
 		return Call{http.MethodPut,
 			fmt.Sprintf("%s/league/%s/market/%s/bid/%s", config.CMP, a.LeagueID, a.MarketID, a.BidID),
@@ -240,6 +248,9 @@ func Build(name string, args Args) (Call, error) {
 // usual, and never reaches LaLiga. For trying the panel's flows against the real league.
 var Rehearsal bool
 
+// send is what confirm calls, so a test can stand in for LaLiga.
+var send = Send
+
 func Send(call Call) (any, error) {
 	if Rehearsal {
 		slog.Info("write rehearsed, not sent", "method", call.Method, "path", call.Path)
@@ -330,7 +341,7 @@ const ClauseFactor = 2
 // Spends are the operations that take money out of the balance. Only they need a balance to be
 // checked against, and an unattended one must not run without it.
 var Spends = map[string]bool{
-	"bid": true, "modify_bid": true, "buy_offer": true, "direct_offer": true,
+	"bid": true, "modify_bid": true, "buy_offer": true, "change_offer": true, "direct_offer": true,
 	"pay_clause": true, "raise_clause": true,
 }
 
@@ -544,8 +555,24 @@ func (g *Guard) confirm(token string, allowWrites, dryRun, recheck bool) (map[st
 			"summary": entry.summary, "call": call}, nil
 	}
 
-	answer, err := Send(call)
+	if entry.name == "change_offer" {
+		withdraw, err := Build("cancel_offer", entry.args)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := send(withdraw); err != nil {
+			return nil, fmt.Errorf("no he podido retirar tu oferta anterior, sigue en pie: %w", err)
+		}
+		slog.Info("write done", "operation", "cancel_offer", "player", entry.summary.PlayerName,
+			"method", withdraw.Method, "path", withdraw.Path, "for", "change_offer")
+	}
+	answer, err := send(call)
 	if err != nil {
+		if entry.name == "change_offer" {
+			httpx.Invalidate(Operations[entry.name].Effects...)
+			return nil, fmt.Errorf("he retirado tu oferta anterior, pero LaLiga ha rechazado la "+
+				"nueva: ahora no tienes ninguna oferta por %s: %w", entry.summary.PlayerName, err)
+		}
 		return nil, fmt.Errorf("la API ha rechazado la operacion: %w", err)
 	}
 	dropped := httpx.Invalidate(Operations[entry.name].Effects...)
@@ -648,6 +675,33 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 			warnings = append(warnings,
 				"te pagan mas de lo que futbolfantasy considera rentable: buena venta")
 		}
+
+	case "change_offer":
+		if args.OfferID == "" {
+			return nil, errors.New("falta el id de tu oferta: abrela desde el mercado")
+		}
+		if args.Amount <= 0 {
+			return nil, errors.New("la oferta tiene que ser un importe positivo")
+		}
+		if who.MyBid > 0 && args.Amount == who.MyBid {
+			return nil, fmt.Errorf("ya le ofreces %s", money(who.MyBid))
+		}
+		// Committed counts the other listings only, so the offer being replaced frees its money.
+		if cash != nil && args.Amount > *cash-who.Committed {
+			return nil, fmt.Errorf("no te llega: tienes %s y %s en otras pujas", money(*cash),
+				money(who.Committed))
+		}
+		if who.MinBid > 0 && args.Amount < who.MinBid {
+			warnings = append(warnings, fmt.Sprintf("piden %s: por debajo puede que ni la miren",
+				money(who.MinBid)))
+		}
+		if who.IdealBid > 0 && args.Amount > who.IdealBid {
+			warnings = append(warnings,
+				fmt.Sprintf("por encima de la puja maxima rentable de futbolfantasy (%s)",
+					money(who.IdealBid)))
+		}
+		warnings = append(warnings, "se retira tu oferta actual y se manda esta: la nueva le "+
+			"llega como otra oferta")
 
 	case "buy_offer":
 		if args.Amount <= 0 {
@@ -754,7 +808,7 @@ func after(cash *int64, amount int64, name string) *int64 {
 		return cash
 	}
 	switch name {
-	case "bid", "modify_bid", "buy_offer", "direct_offer", "pay_clause", "raise_clause":
+	case "bid", "modify_bid", "buy_offer", "change_offer", "direct_offer", "pay_clause", "raise_clause":
 		left := *cash - amount
 		return &left
 	// Money coming in. A listing does not pay today — it pays if somebody buys — and the

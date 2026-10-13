@@ -31,7 +31,7 @@ func TestAWithdrawnOfferStaysGoneAndEndsAsWithdrawn(t *testing.T) {
 		t.Fatalf("refresh: %v", err)
 	}
 
-	world.Withdrawn("52857370", "7")
+	world.Withdrawn("52857370", "164412914", "7")
 	if err := world.Refresh("cancel_offer"); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
@@ -47,10 +47,24 @@ func TestAWithdrawnOfferStaysGoneAndEndsAsWithdrawn(t *testing.T) {
 
 func TestAWithdrawalThatNeverLandedShowsUpAgain(t *testing.T) {
 	world := &State{}
-	world.Withdrawn("52857370", "7")
+	world.Withdrawn("52857370", "164412914", "7")
 	universe := worldWithMyOffer()
 	world.hideWithdrawn(universe, time.Now().Add(WithdrawGrace+time.Second))
 	if universe.Market[0].MyBidID == nil {
 		t.Error("past the grace the market should win")
+	}
+}
+
+// A new offer on the same listing right after withdrawing the old one is real: hiding it left the
+// page offering "Ofrecer" and the API refusing with "Team has pending offer in this player".
+func TestANewOfferAfterAWithdrawalShows(t *testing.T) {
+	world := &State{}
+	world.Withdrawn("52857370", "164412914", "7")
+	universe := worldWithMyOffer()
+	fresh := "166182455"
+	universe.Market[0].MyBidID = &fresh
+	world.hideWithdrawn(universe, time.Now())
+	if universe.Market[0].MyBidID == nil || *universe.Market[0].MyBidID != fresh {
+		t.Error("the new offer was hidden as if it were the withdrawn one")
 	}
 }

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Nothing here can reach the network: Cash is stubbed and Send is never called. Every case
+// Nothing here can reach the network: Cash is stubbed and Send is never called (send is). Every case
 // is a guarantee that stands between a click and somebody's money.
 
 func guard(cash int64) *Guard {
@@ -435,5 +435,52 @@ func TestABidFitsCashPlusDebtRoomMinusOtherBids(t *testing.T) {
 	}
 	if _, err := check("bid", Args{MarketID: "m", Amount: 6_000_000}, who, &cash, nil); err != nil {
 		t.Errorf("a bid within the limit was refused: %v", err)
+	}
+}
+
+// Changing an offer is two calls in order: the old one withdrawn, then the new one sent. When
+// LaLiga refuses the second, the message must say there is no offer left at all.
+func TestChangingAnOfferWithdrawsThenOffers(t *testing.T) {
+	var calls []string
+	refuseNew := false
+	send = func(call Call) (any, error) {
+		calls = append(calls, call.Method+" "+call.Path)
+		if refuseNew && call.Method == http.MethodPost {
+			return nil, errors.New("400 bad request")
+		}
+		return nil, nil
+	}
+	defer func() { send = Send }()
+	args := Args{LeagueID: "L", TeamID: "T", MarketID: "M", OfferID: "old", Amount: 16_200_000}
+	who := Player{Name: "Kike Salas", MyBidID: "old", MyBid: 15_700_000}
+
+	for _, refuse := range []bool{false, true} {
+		calls, refuseNew = nil, refuse
+		g := guard(28_000_000)
+		summary, err := g.Prepare("change_offer", args, who, true)
+		if err != nil {
+			t.Fatalf("prepare: %v", err)
+		}
+		_, err = g.Confirm(summary.Token, true, false)
+		want := []string{"DELETE /v1/competition/1/league/L/market/M/offer/old/cancel",
+			"POST /v1/competition/1/league/L/market/M/offer"}
+		if strings.Join(calls, " | ") != strings.Join(want, " | ") {
+			t.Errorf("calls = %v, want %v", calls, want)
+		}
+		if refuse && (err == nil || !strings.Contains(err.Error(), "ninguna oferta")) {
+			t.Errorf("a refused new offer should say none is left: %v", err)
+		}
+		if !refuse && err != nil {
+			t.Errorf("confirm: %v", err)
+		}
+	}
+}
+
+// The same amount again is not a change: it would withdraw and resend for nothing.
+func TestChangingAnOfferToTheSameAmountIsRefused(t *testing.T) {
+	_, err := check("change_offer", Args{OfferID: "old", Amount: 15_700_000},
+		Player{MyBid: 15_700_000}, nil, nil)
+	if err == nil {
+		t.Error("the same amount went through")
 	}
 }
