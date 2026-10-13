@@ -87,3 +87,25 @@ func TestPatchingWhileReadersMarshal(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// The hooks are wired while the engine and the server already run; under -race this would flag
+// an unguarded write.
+func TestHooksCanBeWiredWhileRunning(t *testing.T) {
+	world := patchableWorld()
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		world.SetWarm(func() {})
+		world.OnFirstWatcher(func(string) {})
+	}()
+	go func() {
+		defer wg.Done()
+		for range 50 {
+			channel := world.Subscribe()
+			world.Patch("test", patchOfferAndBid)
+			world.Unsubscribe(channel)
+		}
+	}()
+	wg.Wait()
+}

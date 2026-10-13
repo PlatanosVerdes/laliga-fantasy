@@ -101,7 +101,11 @@ func New(builder Builder) *State {
 // OnFirstWatcher is called when a browser connects and nobody was watching. The engine
 // uses it to tighten the cadence immediately rather than at the end of a wait planned for
 // an empty room.
-func (s *State) OnFirstWatcher(hook func(string)) { s.nudged = hook }
+func (s *State) OnFirstWatcher(hook func(string)) {
+	s.mu.Lock()
+	s.nudged = hook
+	s.mu.Unlock()
+}
 
 func (s *State) Universe() *model.Universe {
 	s.mu.RLock()
@@ -765,27 +769,28 @@ func cloneForPatch(universe *model.Universe) *model.Universe {
 
 // SetWarm hands over the page render. Optional: without it everything still works, only the
 // first request after a change pays for the render.
-func (s *State) SetWarm(warm func()) { s.warm = warm }
+func (s *State) SetWarm(warm func()) {
+	s.mu.Lock()
+	s.warm = warm
+	s.mu.Unlock()
+}
 
 // announce warms the page and only then says there is something new, so the browser's refresh
 // lands on a cache that is already built.
 func (s *State) announce(message map[string]any) {
 	// Warming is for whoever is watching. With nobody connected, publishing goes nowhere and
 	// rendering would be four seconds of a Raspberry's CPU spent on a page no one asked for.
-	if s.warm == nil || !s.watched() {
+	s.mu.RLock()
+	warm, watched := s.warm, len(s.subs) > 0
+	s.mu.RUnlock()
+	if warm == nil || !watched {
 		s.publish(message)
 		return
 	}
 	go func() {
-		s.warm()
+		warm()
 		s.publish(message)
 	}()
-}
-
-func (s *State) watched() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return len(s.subs) > 0
 }
 
 func (s *State) Subscribe() chan []byte {
@@ -793,9 +798,10 @@ func (s *State) Subscribe() chan []byte {
 	s.mu.Lock()
 	first := len(s.subs) == 0
 	s.subs[channel] = true
+	nudged := s.nudged
 	s.mu.Unlock()
-	if first && s.nudged != nil {
-		s.nudged("se ha abierto la pagina")
+	if first && nudged != nil {
+		nudged("se ha abierto la pagina")
 	}
 	return channel
 }
