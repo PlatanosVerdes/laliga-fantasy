@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/services"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
@@ -56,6 +57,10 @@ type Options struct {
 	// HoldExceptions is what the league agreed as an escape hatch to its own hold rule,
 	// quoted verbatim when an operation is refused because of it.
 	HoldExceptions string
+	// Restart starts the process again on the active profile, and Leagues lists the active
+	// account's leagues. Both optional: without them switching is not offered.
+	Restart func()
+	Leagues func() ([]LeagueChoice, error)
 	// MaxDebtPct is the league's debt cap for market bids, in percent of the squad's value.
 	MaxDebtPct float64
 	// Settle makes the world catch up after a write, and is expected to block.
@@ -199,6 +204,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/necroporra/vote", s.necroVote)
 	mux.HandleFunc("/refresh", s.refresh)
 	mux.HandleFunc("/assets/", s.asset)
+	mux.HandleFunc("/api/accounts", s.accounts)
+	mux.HandleFunc("/api/accounts/use", s.useAccount)
+	mux.HandleFunc("/api/accounts/logout", s.logout)
+	mux.HandleFunc("/api/accounts/avatar", s.avatar)
 	mux.HandleFunc("/", s.index)
 	return logging(sameSiteOnly(mux))
 }
@@ -433,9 +442,30 @@ func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 	}
 	// No session: ask for one from the page itself rather than expecting somebody to ssh in
 	// and drop a tokens.json next to the binary.
-	if !HasSession() {
-		slog.Warn("no session: serving the login page instead of the report")
+	if !HasSession() || request.URL.Query().Get("cuenta") == "nueva" {
+		slog.Warn("no session or adding one: serving the login page")
 		s.setup(writer, request)
+		return
+	}
+	if config.League == "" {
+		s.leaguePicker(writer)
+		return
+	}
+	// The league never loaded (left it, or it is gone): say so and offer the way out, rather
+	// than an empty page with no menu to leave it by.
+	if health := s.state.Health(); s.state.Universe() == nil {
+		if health.LastError != nil {
+			s.leagueFailed(writer, *health.LastError)
+			return
+		}
+		// The first build reads the whole league: a page that says so rather than a blank one.
+		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		writer.Header().Set("Cache-Control", "no-store")
+		fmt.Fprint(writer, authPage("Preparando", `<h1>Preparando la liga…</h1>
+<p class="lead">La primera vez se lee la liga entera: plantillas, mercado, calendario y movimientos.</p>
+<div class="load"><div class="load-track"><i></i></div>
+<div class="load-meta"><span class="load-step">Empezando…</span><span class="load-pct"></span></div></div>
+<script>reloadWhenReady();</script>`))
 		return
 	}
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")

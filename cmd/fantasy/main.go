@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
@@ -194,6 +195,7 @@ uso: fantasy [-v|-q] <comando>
 
 // cmdServe runs the engine and the HTTP surface.
 func cmdServe(args []string) error {
+	askLeague = true
 	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
 	host := flags.String("host", "0.0.0.0", "interfaz")
 	port := flags.Int("port", 8000, "puerto")
@@ -254,6 +256,7 @@ func cmdServe(args []string) error {
 		if err != nil {
 			return nil, err
 		}
+		model.Reached("Detalle de candidatos", 0, 1)
 		if *deep {
 			shortlist := make([]*model.Player, 0, len(universe.Players))
 			for index := range universe.Players {
@@ -266,6 +269,7 @@ func cmdServe(args []string) error {
 				model.ApplyScores(universe.Players)
 			}
 		}
+		model.Reached("Preparando la página", 0, 1)
 		now := time.Now()
 		if err := model.MarkClausulazos(universe, now); err != nil {
 			slog.Warn("clausulazos not marked", "reason", err.Error())
@@ -597,11 +601,21 @@ func cmdServe(args []string) error {
 	// boot is everything that needs a session: the first build, the probe seed and the loop.
 	// Called at startup when there is one, and from the setup page when one arrives.
 	var once sync.Once
+	// The panel is made further down; the first build waits for it to draw the page.
+	var warmPage func()
+	panelMade := make(chan struct{})
 	boot := func() {
 		once.Do(func() {
+			// The bar covers drawing the page too: a page waiting on the build reloads into a
+			// panel already drawn, not into seconds of a blank one.
+			model.StartProgress()
 			if err := world.Refresh("arranque"); err != nil {
 				slog.Error("first build failed", "reason", err.Error())
+			} else {
+				<-panelMade
+				warmPage()
 			}
+			model.EndProgress()
 			// Seed the probe from what the first rebuild already read, so the loop does not
 			// begin by asking the API to confirm data it is holding.
 			if league, _, err := ensureLeague(); err == nil {
@@ -616,9 +630,23 @@ func cmdServe(args []string) error {
 		})
 	}
 
-	if server.HasSession() {
-		boot()
-	} else {
+	switch {
+	case server.HasSession() && config.League != "":
+		// In the background: the page answers at once, with the build's progress, instead of
+		// refusing every connection for the minute a cold build takes.
+		go boot()
+	case server.HasSession():
+		// An account with no league chosen: one league is chosen for it, several are asked.
+		if leagues, err := listLeagues(client); err != nil {
+			slog.Error("leagues unreadable", "reason", err.Error())
+		} else if len(leagues) == 1 {
+			if err := config.SetActive(config.Account, leagues[0].ID); err == nil {
+				restart()
+			}
+		} else {
+			fmt.Println("Varias ligas: elige una en la pagina.")
+		}
+	default:
 		fmt.Println("Sin sesion: abre la pagina y pega el login.")
 	}
 	if *noAuto {
@@ -667,6 +695,8 @@ func cmdServe(args []string) error {
 			}
 		},
 		Adopted:  boot,
+		Restart:  restart,
+		Leagues:  func() ([]server.LeagueChoice, error) { return listLeagues(client) },
 		Services: clocks,
 		// The page is rendered on demand from whatever the last rebuild left, so a slow
 		// refresh never blocks a request and a failed one still serves the last good world.
@@ -701,6 +731,8 @@ func cmdServe(args []string) error {
 	// Nobody is told about a change until the page for it exists: rendering costs about four
 	// seconds here, and the browser was the one paying for it after every write.
 	world.SetWarm(panel.Warm)
+	warmPage = panel.Warm
+	close(panelMade)
 	return panel.ListenAndServe()
 }
 
@@ -782,7 +814,8 @@ func contains(values []string, wanted string) bool {
 // league it belongs to, and our team inside it.
 func resolveLeague(wanted string) (string, string, error) {
 	settings := loadSettings()
-	leagueID := fallbackText(wanted, text(settings["league_id"]))
+	// The profile's league first: a league just switched to has no settings yet.
+	leagueID := fallbackText(wanted, fallbackText(config.League, text(settings["league_id"])))
 	teamID := text(settings["team_id"])
 	if leagueID != "" && teamID != "" {
 		return leagueID, teamID, nil
@@ -797,6 +830,23 @@ func resolveLeague(wanted string) (string, string, error) {
 		return "", "", fmt.Errorf("la cuenta no esta en ninguna liga")
 	}
 	chosen := entries[0]
+	// No league in the profile yet. The server asks on its page when there are several; the
+	// command line, which nobody can ask, takes the first or the one named.
+	if config.League == "" && config.Account != "" && askLeague && len(entries) > 1 && wanted == "" {
+		return "", "", errChooseLeague
+	}
+	if config.League == "" && config.Account != "" {
+		for _, entry := range entries {
+			if leagueID != "" && text(entry["id"]) == leagueID {
+				chosen = entry
+			}
+		}
+		if err := config.SetActive(config.Account, text(chosen["id"])); err != nil {
+			return "", "", err
+		}
+		config.Use(config.Account, text(chosen["id"]))
+		leagueID = text(chosen["id"])
+	}
 	if leagueID != "" {
 		for _, entry := range entries {
 			if text(entry["id"]) == leagueID {
@@ -836,6 +886,12 @@ func resolveLeague(wanted string) (string, string, error) {
 	slog.Info("league resolved", "league", leagueID, "team", teamID)
 	return leagueID, teamID, nil
 }
+
+// askLeague is set by serve: with several leagues and none chosen, the page asks instead of
+// the first being taken.
+var askLeague bool
+
+var errChooseLeague = errors.New("la cuenta esta en varias ligas: elige una en la pagina")
 
 func loadSettings() map[string]any {
 	settings := map[string]any{}
@@ -1516,7 +1572,7 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 	}
 	render.Build = buildVersion
 	var crests map[string]string
-	if body, err := os.ReadFile(filepath.Join(config.CacheDir, "crests.json")); err == nil {
+	if body, err := os.ReadFile(filepath.Join(config.CacheRoot, "crests.json")); err == nil {
 		if json.Unmarshal(body, &crests) == nil {
 			render.Crests = crests
 		}
@@ -1650,7 +1706,7 @@ func cmdPage(args []string) error {
 	// The crests come from the same cache file Python fills, so the page carries the same
 	// badges rather than a second download.
 	var crests map[string]string
-	if body, err := os.ReadFile(filepath.Join(config.CacheDir, "crests.json")); err == nil {
+	if body, err := os.ReadFile(filepath.Join(config.CacheRoot, "crests.json")); err == nil {
 		_ = json.Unmarshal(body, &crests)
 		render.Crests = crests
 	}
@@ -1899,3 +1955,29 @@ func cmdProbe(args []string) error {
 }
 
 
+
+// restart runs the binary again in place, on the profile active.json now names. Every path
+// points at the active profile, so a switch is a fresh start rather than a swap under readers.
+func restart() {
+	self, err := os.Executable()
+	if err == nil {
+		slog.Info("restarting on the active profile", "account", config.Account)
+		err = syscall.Exec(self, os.Args, os.Environ())
+	}
+	// Exec failed: exit, and the container's restart policy starts it on the new profile.
+	slog.Error("could not restart in place", "reason", err.Error())
+	os.Exit(1)
+}
+
+// listLeagues is every league the active account plays in.
+func listLeagues(client *api.Client) ([]server.LeagueChoice, error) {
+	entries, err := client.Leagues(time.Hour)
+	if err != nil {
+		return nil, err
+	}
+	out := []server.LeagueChoice{}
+	for _, entry := range entries {
+		out = append(out, server.LeagueChoice{ID: text(entry["id"]), Name: text(entry["name"])})
+	}
+	return out, nil
+}

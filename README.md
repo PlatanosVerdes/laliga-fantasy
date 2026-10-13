@@ -334,9 +334,35 @@ cannot be regenerated:
 
 | Directory | Default | Holds |
 |---|---|---|
-| config | `~/.config/laliga-fantasy/` | `tokens.json` (`0600`), `settings.json`, `policies.json` |
-| state | `~/.local/state/laliga-fantasy/` | `report.html`, `fantasy.log` |
-| cache | `~/.cache/laliga-fantasy/` | scraped futbolfantasy pages, 24 h TTL — safe to delete |
+| config | `~/.config/laliga-fantasy/` | `active.json`, each account's `tokens.json` (`0600`), each league's `settings.json` and `policies.json` |
+| state | `~/.local/state/laliga-fantasy/` | each league's `report.html` and history, the shared `fantasy.log` |
+| cache | `~/.cache/laliga-fantasy/` | scraped futbolfantasy pages, 24 h TTL, safe to delete |
+
+### Accounts and leagues
+
+Several LaLiga accounts can be saved, one of them active at a time, each with its own leagues.
+The session belongs to the account; settings, standing instructions, house rules, history and
+cache belong to the league, because an instruction in one league means nothing in another:
+
+```
+<config>/active.json                          which account and league are in use
+<config>/accounts/<account>/tokens.json       the account's session
+<config>/accounts/<account>/leagues/<id>/     the league's settings and instructions
+<state>/accounts/<account>/leagues/<id>/      its history
+<cache>/accounts/<account>/leagues/<id>/      its cache
+```
+
+The account menu at the top right switches league or account, adds an account and logs out.
+A switch writes `active.json` and restarts the process in place, so no path ever changes under
+a reader; the page shows the build's progress until the new league is ready. An account in a
+single league gets it chosen automatically; with several, the page asks. Logging out deletes
+only that account's session; its leagues' instructions stay for the next login.
+
+An install from before profiles is moved into its first profile on the first start, once.
+Back up the data directory before upgrading.
+
+To watch two leagues **at the same time**, run a second instance with its own
+`FANTASY_DATA_DIR` and `--port`: one process works on one profile.
 
 `XDG_CONFIG_HOME`, `XDG_STATE_HOME` and `XDG_CACHE_HOME` are honoured. Two overrides:
 

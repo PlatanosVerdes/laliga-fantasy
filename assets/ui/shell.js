@@ -1,7 +1,7 @@
 import {html, render, useState, useEffect, useRef} from './lib.js';
 import {ViewScreen} from './view.js';
 import {ApiFace, Icon, Countdown} from './components.js';
-import {getJSON, useView, useCash, changed, getViews} from './api.js';
+import {getJSON, postJSON, useView, useCash, changed, getViews} from './api.js';
 import {fmt, esMoney, exact, countdownText} from './format.js';
 import {flash} from './dialogs.js';
 import {compare} from './compare.js';
@@ -321,6 +321,94 @@ export function onLiveDot(action, hint = 'pulsa para ver los servicios') {
   liveDotWatchers.forEach((watch) => watch(action));
 }
 
+// ---- the account menu: which account and league the panel works with ---------------------
+// A switch restarts the server on the new profile, so the page waits for it to answer again.
+async function waitForRestart(message, was) {
+  document.body.insertAdjacentHTML('beforeend', `<div class="acct-wait"><div class="acct-wait-box">
+    <b>${message}</b><div class="load-track"><i></i></div>
+    <div class="load-meta"><span class="load-step">Reiniciando el panel…</span><span class="load-pct"></span></div></div></div>`);
+  const bar = document.querySelector('.acct-wait .load-track i');
+  const step = document.querySelector('.acct-wait .load-step'), pct = document.querySelector('.acct-wait .load-pct');
+  const show = (p) => {
+    bar.style.width = Math.max(2, p.percent) + '%';
+    step.textContent = p.step + (p.total > 0 ? ' · ' + p.done + ' de ' + p.total : '');
+    pct.textContent = p.percent + ' %';
+  };
+  // Done once a new process has finished building, a world or a failure: a league that fails
+  // again fails with the same error, so a changed error alone would never come.
+  const poll = setInterval(async () => {
+    const now = await serverHealth();
+    if (!now) return;
+    if (now.building) { show(now.building); return; }
+    if (now.started !== was.started && (now.generated_at || now.last_error)) {
+      clearInterval(poll);
+      show({step: now.last_error ? 'No ha cargado' : 'Listo', done: 0, total: 0, percent: 100});
+      setTimeout(() => { location.href = '/'; }, 450);
+    }
+  }, 700);
+  setTimeout(() => { clearInterval(poll); location.href = '/'; }, 60000);
+}
+
+const serverHealth = async () => { try { return await (await fetch('/healthz', {cache: 'no-store'})).json(); } catch (e) { return null; } };
+
+// The account's DiceBear picture, or its initial while it loads or when there is no network.
+function Avatar({account, name, big}) {
+  const [failed, setFailed] = useState(false);
+  const cls = 'acct-avatar' + (big ? ' big' : '');
+  if (!account || !account.id || failed) return html`<span class=${cls}>${(name || '·').slice(0, 1).toUpperCase()}</span>`;
+  return html`<img class=${cls} alt="" src=${'/api/accounts/avatar?account=' + encodeURIComponent(account.id)} onError=${() => setFailed(true)}/>`;
+}
+
+// The active account is known before the menu opens, so the button shows its picture at once.
+let myAccount = '';
+getJSON('/api/accounts').then((data) => { myAccount = data.account || ''; dispatchEvent(new Event('panel:account')); }, () => {});
+
+function AccountMenu() {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState(null);
+  const [, setKnown] = useState(myAccount);
+  useEffect(() => { const seen = () => setKnown(myAccount); addEventListener('panel:account', seen); return () => removeEventListener('panel:account', seen); }, []);
+  const box = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    getJSON('/api/accounts').then(setData, () => setData({accounts: []}));
+    const away = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('pointerdown', away);
+    return () => document.removeEventListener('pointerdown', away);
+  }, [open]);
+  const act = async (url, body, message) => {
+    try {
+      const was = (await serverHealth()) || {};
+      const answer = await postJSON(url, body);
+      if (answer.restarting) waitForRestart(message, was); else { setOpen(false); location.reload(); }
+    } catch (e) { flash('No se ha podido', e.message); }
+  };
+  const accounts = (data && data.accounts) || [];
+  const active = accounts.find((a) => a.active);
+  const leagues = (active && active.leagues) || [];
+  // The manager name first: the login's own name is often a generic "Google user".
+  const who = (a) => a.manager || (a.name && !/ user$/i.test(a.name) ? a.name : '') || a.email || a.id;
+  return html`<div class="acct" ref=${box}>
+    <button type="button" class="acct-btn" aria-haspopup="menu" aria-expanded=${open ? 'true' : 'false'}
+      title="Cuenta y liga" onClick=${() => setOpen(!open)}>
+      <${Avatar} account=${active || {id: myAccount}} name=${active ? who(active) : ''}/></button>
+    ${open ? html`<div class="acct-menu" role="menu">
+      ${!data ? html`<p class="acct-note">Cargando…</p>` : html`
+      ${active ? html`<div class="acct-who"><${Avatar} account=${active} name=${who(active)} big/><div><b>${who(active)}</b>${active.email && who(active) !== active.email ? html`<span>${active.email}</span>` : null}</div></div>` : null}
+      ${leagues.length > 1 ? html`<div class="acct-head">Liga</div>${leagues.map((l) => html`<button type="button" role="menuitem"
+        class=${'acct-item' + (l.id === data.league ? ' on' : '')} disabled=${l.id === data.league}
+        onClick=${() => act('/api/accounts/use', {account: data.account, league: l.id}, 'Cambiando de liga…')}>${l.name || l.id}</button>`)}` : null}
+      ${accounts.length > 1 ? html`<div class="acct-head">Cuentas</div>${accounts.map((a) => html`<button type="button" role="menuitem"
+        class=${'acct-item acct-row' + (a.active ? ' on' : '')} disabled=${a.active}
+        onClick=${() => act('/api/accounts/use', {account: a.id, league: (a.leagues[0] || {}).id || ''}, 'Cambiando de cuenta…')}><${Avatar} account=${a} name=${who(a)}/>${who(a)}</button>`)}` : null}
+      ${leagues.length > 1 || accounts.length > 1 ? html`<div class="acct-sep"></div>` : null}
+      <a class="acct-item" role="menuitem" href="/?cuenta=nueva">Añadir cuenta</a>
+      ${active ? html`<button type="button" role="menuitem" class="acct-item acct-out"
+        onClick=${() => { if (confirm('Cerrar la sesión de ' + who(active) + '? Sus instrucciones se guardan por si vuelves.')) act('/api/accounts/logout', {account: active.id}, 'Cerrando sesión…'); }}>Cerrar sesión</button>` : null}`}
+    </div>` : null}
+  </div>`;
+}
+
 function LiveDot({build}) {
   const l = useLive();
   const [action, setAction] = useState(() => liveDotAction);
@@ -372,7 +460,7 @@ function Header({page, meta}) {
   return html`<div class="topbar">${page.tabs && page.tabs.length ? html`<div class="tabs" id="tabs" role="tablist" ref=${bar}>${page.tabs.map((t) => html`
       <button class=${'tab' + (n.tab === t.id ? ' on' : '')} role="tab" data-tab=${t.id} aria-selected=${n.tab === t.id ? 'true' : 'false'}
         type="button" onClick=${() => click(t.id)}>${t.label}</button>`)}</div>` : null}
-    <div class="topright"><${LiveDot} build=${meta.build}/>${meta.build ? html`<span class="build-tag">${meta.build}</span>` : null}<${Find}/></div>
+    <div class="topright"><${LiveDot} build=${meta.build}/>${meta.build ? html`<span class="build-tag">${meta.build}</span>` : null}<${Find}/><${AccountMenu}/></div>
   </div>
   ${page.stats && page.stats.length ? html`<div class="strip">${page.stats.map((s) => html`<${Stat} s=${s}/>`)}</div>` : null}`;
 }
