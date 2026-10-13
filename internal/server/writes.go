@@ -86,7 +86,7 @@ func (s *Server) favourite(writer http.ResponseWriter, request *http.Request) {
 			}
 		}
 	}
-	args := writes.Args{TeamID: s.opts.MyTeamID, PlayerID: id, Favourite: starred}
+	args := writes.Args{TeamID: s.myTeamID(), PlayerID: id, Favourite: starred}
 	if _, err := s.opts.Guard.Do("favourite", args, writes.Player{Name: text(body["name"])},
 		s.opts.AllowWrites); err != nil {
 		s.writeError(writer, err)
@@ -416,8 +416,8 @@ func (s *Server) prepare(writer http.ResponseWriter, request *http.Request) {
 		operation = "bid"
 	}
 	args := writes.Args{
-		LeagueID:     s.opts.LeagueID,
-		TeamID:       s.opts.MyTeamID,
+		LeagueID:     s.leagueID(),
+		TeamID:       s.myTeamID(),
 		Amount:       int64(amount),
 		MarketID:     text(body["market_id"]),
 		BidID:        text(body["bid_id"]),
@@ -547,7 +547,7 @@ func (s *Server) playerFor(id string) writes.Player {
 		if player.HoldUntil != nil {
 			who.HoldUntil = *player.HoldUntil
 		}
-		who.HoldExceptions = s.opts.HoldExceptions
+		who.HoldExceptions = s.holdExceptions()
 		who.DebtRoom, who.Committed = s.biddingRoom(universe, id)
 		if player.Clause != nil {
 			who.Clause = int64(*player.Clause)
@@ -637,5 +637,5 @@ func (s *Server) biddingRoom(universe *model.Universe, playerID string) (int64, 
 			committed += *listing.MyBid
 		}
 	}
-	return int64(squad * s.opts.MaxDebtPct / 100), int64(committed)
+	return int64(squad * s.maxDebtPct() / 100), int64(committed)
 }

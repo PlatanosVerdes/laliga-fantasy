@@ -170,7 +170,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 		"row": render.RowPlayer(player),
 		// What the card needs to know about the league and the page used to stamp in itself.
 		"facts": map[string]any{"window_open": window.Open, "opens": window.OpensAt,
-			"closes": window.ClosesAt, "hold_except": s.opts.HoldExceptions}})
+			"closes": window.ClosesAt, "hold_except": s.holdExceptions()}})
 }
 
 // actionGroups is the topic each button is shown under in the card.
@@ -570,11 +570,11 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 		s.saveLineup(writer, request)
 		return
 	}
-	if s.opts.Client == nil || s.opts.MyTeamID == "" {
+	if s.opts.Client == nil || s.myTeamID() == "" {
 		s.json(writer, http.StatusBadRequest, map[string]any{"error": "sin equipo resuelto"})
 		return
 	}
-	payload, err := s.opts.Client.Lineup(s.opts.MyTeamID, time.Minute)
+	payload, err := s.opts.Client.Lineup(s.myTeamID(), time.Minute)
 	if err != nil {
 		s.json(writer, http.StatusBadGateway,
 			map[string]any{"error": "no he podido leer la alineacion: " + err.Error()})
@@ -606,7 +606,7 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 	// The lineup payload carries the points series only for the eleven on the pitch; the squad
 	// payload carries it for the whole squad, and it is what gives a reserve his form back.
 	masters := map[string]map[string]any{}
-	if squad, err := s.opts.Client.TeamSquad(s.opts.LeagueID, s.opts.MyTeamID,
+	if squad, err := s.opts.Client.TeamSquad(s.leagueID(), s.myTeamID(),
 		30*time.Minute); err == nil {
 		for _, key := range []string{"players", "playersTeams", "teamPlayers"} {
 			for _, held := range listOf(squad[key]) {
@@ -892,10 +892,10 @@ func bestOffer(row map[string]any) any {
 // budget is the cash the actions are judged against. Read from the API rather than the built
 // world so a blocked button is blocked on the real balance.
 func (s *Server) budget() float64 {
-	if s.opts.Client == nil || s.opts.MyTeamID == "" {
+	if s.opts.Client == nil || s.myTeamID() == "" {
 		return 0
 	}
-	money, err := s.opts.Client.Money(s.opts.MyTeamID, time.Minute)
+	money, err := s.opts.Client.Money(s.myTeamID(), time.Minute)
 	if err != nil {
 		return 0
 	}
@@ -927,8 +927,8 @@ func (s *Server) saveLineup(writer http.ResponseWriter, request *http.Request) {
 	}
 	body := s.body(request)
 	args := writes.Args{
-		LeagueID:   s.opts.LeagueID,
-		TeamID:     s.opts.MyTeamID,
+		LeagueID:   s.leagueID(),
+		TeamID:     s.myTeamID(),
 		Goalkeeper: text(body["goalkeeper"]),
 		Defender:   idsOf(body["defender"]),
 		Midfield:   idsOf(body["midfield"]),
