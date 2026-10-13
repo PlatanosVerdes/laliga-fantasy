@@ -300,7 +300,8 @@ func (d Document) calendarBlock() Block {
 		if !ok || !when.After(now) || when.After(horizon) {
 			continue
 		}
-		key := when.Local().Format("2006-01-02")
+		// Key and label both read the stamp in its own offset, whatever zone the host runs in.
+		key := when.Format("2006-01-02")
 		if days[key] == nil {
 			days[key] = &day{label: esDay(text(player["clause_locked_until"]))}
 		}
