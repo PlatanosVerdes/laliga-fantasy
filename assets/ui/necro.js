@@ -10,6 +10,9 @@ function NecroBlock({b}) {
   const [order, setOrder] = useState(initial);
   const [msg, setMsg] = useState({text: '', cls: ''});
   const [busy, setBusy] = useState(false);
+  // What the ballot holds now: the server's, then whatever this page just sent.
+  const [sent, setSent] = useState(n.voted || []);
+  useEffect(() => setSent(n.voted || []), [(n.voted || []).join()]);
   useEffect(() => setOrder(n.teams.filter((t) => t.on).map((t) => t.id)), [n.teams.map((t) => t.id + t.on).join()]);
   const toggle = (id) => {
     if (order.includes(id)) setOrder(order.filter((x) => x !== id));
@@ -22,6 +25,7 @@ function NecroBlock({b}) {
     try {
       await postJSON('/api/necroporra/vote', {gw: n.gameweek, a: order[0], b: order[1]});
       setMsg({text: 'Voto enviado ✓', cls: 'ok'});
+      setSent([...order]);
     } catch (e) { setMsg({text: String(e.message || e), cls: 'err'}); }
     finally { setBusy(false); }
   };
@@ -30,7 +34,10 @@ function NecroBlock({b}) {
     ${n.facts.map((line) => html`<p class="lead"><${Segs} list=${line}/></p>`)}
     <ul class="rows">${n.teams.map((t) => {
       const on = order.includes(t.id);
-      const acts = t.id ? [{text: false, label: on ? 'voto ✓' : 'votar', class: 'mb mb-ghost necro-pick' + (on ? ' on' : ''),
+      // What the ballot already holds turns green; a pick not sent yet stays blue.
+      const cast = on && sent.includes(t.id);
+      const label = on ? 'voto ✓' : 'votar';
+      const acts = t.id ? [{text: false, label, class: 'mb mb-ghost necro-pick' + (cast ? ' sent' : on ? ' on' : ''),
         do: 'necro', args: {id: t.id}, pressed: on, toggle}] : [];
       return html`<${RowView} r=${{...t.row, tone: on ? 'pick' : (t.row.tone || ''), acts}}/>`;
     })}</ul>

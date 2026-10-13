@@ -95,6 +95,8 @@ var Tags = map[string]bool{
 	"standing": true, "teams": true, "week": true,
 	// futbolfantasy's pages, cached the same way.
 	"ff_market": true, "ff_detail": true, "ff_player": true, "ff_absences": true,
+	// The Necroporra's round, dropped once a vote is cast.
+	"necro-state": true,
 }
 
 func init() {

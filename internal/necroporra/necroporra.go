@@ -55,9 +55,31 @@ func exists(path string) bool {
 	return err == nil
 }
 
+// Fake is a stand-in for the Necroporra, for trying the tab locally: FANTASY_NECRO_FAKE names a
+// JSON file holding a config and a round, the round is read from it and a vote is written back
+// to it. Nothing reaches the real app.
+type Fake struct {
+	Config Config `json:"config"`
+	State  State  `json:"state"`
+}
+
+func fakeFile() string { return os.Getenv("FANTASY_NECRO_FAKE") }
+
+func loadFake() (Fake, bool) {
+	var fake Fake
+	body, err := os.ReadFile(fakeFile())
+	if fakeFile() == "" || err != nil || json.Unmarshal(body, &fake) != nil {
+		return fake, false
+	}
+	return fake, true
+}
+
 // Load reads the config. A read error returns the zero Config, which disables voting without
 // failing the page.
 func Load() Config {
+	if fake, ok := loadFake(); ok {
+		return fake.Config
+	}
 	var cfg Config
 	body, err := os.ReadFile(file())
 	if err != nil {
@@ -117,6 +139,9 @@ var (
 // does not hammer the external app, and a read failure falls back to the configured gameweek
 // rather than breaking the page. The call also keeps the sliding session alive.
 func FetchState(cfg Config) State {
+	if fake, ok := loadFake(); ok {
+		return fake.State
+	}
 	state := State{Gameweek: cfg.Gameweek}
 	if cfg.Cookie == "" {
 		return state
@@ -349,6 +374,14 @@ const (
 // the session has expired (the app bounces the request to its login page) so the caller can
 // tell "rejected" from "network failed".
 func CastVote(cfg Config, gameweek int, teamA, teamB string) (loggedOut bool, err error) {
+	if fake, ok := loadFake(); ok {
+		fake.State.Chosen = []string{teamA, teamB}
+		blob, err := json.MarshalIndent(fake, "", "  ")
+		if err != nil {
+			return false, err
+		}
+		return false, os.WriteFile(fakeFile(), blob, 0o600)
+	}
 	if cfg.Cookie == "" || cfg.ActionID == "" {
 		return false, fmt.Errorf("necroporra sin configurar")
 	}
@@ -411,4 +444,10 @@ func num(value any) float64 {
 		return float64(v)
 	}
 	return 0
+}
+
+// Faked is whether the Necroporra is the local stand-in, which may be voted in a rehearsal.
+func Faked() bool {
+	_, ok := loadFake()
+	return ok
 }

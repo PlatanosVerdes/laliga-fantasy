@@ -3,6 +3,8 @@ package server
 import (
 	"net/http"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/necroporra"
 )
 
@@ -17,7 +19,7 @@ func (s *Server) necroVote(writer http.ResponseWriter, request *http.Request) {
 		s.json(writer, http.StatusForbidden, map[string]any{"error": "el panel es de solo lectura"})
 		return
 	}
-	if s.opts.Rehearse {
+	if s.opts.Rehearse && !necroporra.Faked() {
 		s.json(writer, http.StatusForbidden, map[string]any{"error": "en ensayo no se vota"})
 		return
 	}
@@ -49,5 +51,8 @@ func (s *Server) necroVote(writer http.ResponseWriter, request *http.Request) {
 		s.json(writer, http.StatusBadGateway, map[string]any{"error": err.Error()})
 		return
 	}
+	// The round is cached for half a minute and the page with it: both have to say the vote now.
+	httpx.Invalidate("necro-state")
+	s.state.Patch("necro_vote", func(*model.Universe) bool { return true })
 	s.json(writer, http.StatusOK, map[string]any{"ok": true})
 }

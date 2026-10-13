@@ -200,6 +200,7 @@ th.right{text-align:right}
 .evo-h9{--c:#74b816} .evo-h10{--c:#c084fc} .evo-h11{--c:#22b8cf}
 .evo-name.evo-pick{fill:var(--c)}
 .evo-controls{display:grid;gap:8px;padding:2px 14px 10px}
+.evo-bar{display:flex;flex-wrap:wrap;gap:8px}
 .evo-mode{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;width:max-content}
 .evo-mode button{font:inherit;font-size:12px;padding:4px 12px;background:none;border:0;color:var(--muted);cursor:pointer}
 .evo-mode button.on{background:var(--surface-2);color:var(--ink);font-weight:600}
@@ -292,6 +293,13 @@ button.danger:hover{background:color-mix(in srgb,var(--critical) 12%,transparent
 .chart-tip .up{color:var(--pole-pos)}
 .chart-tip .down{color:var(--pole-neg)}
 .drawer-chart{margin:0 0 20px}
+.chart-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:14px 0 6px}
+.chart-head .pc-h{margin:0}
+.range-pick{display:inline-flex;gap:2px;padding:2px;border-radius:8px;background:var(--surface-2)}
+.range-pick button{font:inherit;font-size:11px;font-weight:600;border:0;border-radius:6px;padding:3px 9px;
+  background:transparent;color:var(--muted);cursor:pointer}
+.range-pick button:hover{color:var(--ink)}
+.range-pick button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.25)}
 .drawer-actions{display:flex;flex-direction:column;gap:8px}
 .drawer-actions button{font:inherit;font-size:13px;font-weight:600;padding:10px 13px;
   border-radius:8px;cursor:pointer;text-align:left;border:1px solid var(--line);
@@ -1514,6 +1522,7 @@ a.role:hover,a.role:focus-visible{text-decoration:underline}
 .mk .r.pick{box-shadow:inset 3px 0 0 var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .mk .lead .up{color:var(--good)} .mk .lead .down{color:var(--critical)}
 .mk button.mb.necro-pick.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.mk button.mb.necro-pick.sent{background:var(--good);color:#fff;border-color:var(--good)}
 .mk li.r.pick{background:color-mix(in srgb, var(--accent) 9%, transparent)}
 .mk .necro-remind{margin:0 0 12px;padding:9px 12px;border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:9px;font-size:13px;background:color-mix(in srgb, var(--accent) 6%, transparent)}
 .mk .necro-remind.warn{border-left-color:var(--warning);background:color-mix(in srgb, var(--warning) 8%, transparent)}
