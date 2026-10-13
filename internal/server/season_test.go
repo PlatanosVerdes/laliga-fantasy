@@ -52,3 +52,22 @@ func TestRankByWeekIsEachMatchdayOnItsOwn(t *testing.T) {
 		t.Errorf("places: %v %v", tete["week_rank"], cristian["week_rank"])
 	}
 }
+
+// The newest finished matchday is still corrected, and a payload without points is no figure.
+func TestOnlySettledWeeksAreKept(t *testing.T) {
+	scored := map[string]any{"points": 57.0}
+	cases := []struct {
+		payload    map[string]any
+		week, last int
+		want       bool
+	}{
+		{scored, 3, 5, true},
+		{scored, 5, 5, false},
+		{map[string]any{}, 3, 5, false},
+	}
+	for _, test := range cases {
+		if got := settled(test.payload, test.week, test.last); got != test.want {
+			t.Errorf("settled(%v, J%d, last J%d) = %v", test.payload, test.week, test.last, got)
+		}
+	}
+}

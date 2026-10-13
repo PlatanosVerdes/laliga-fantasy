@@ -15,13 +15,13 @@ import (
 )
 
 // A finished matchday never scores again, so its points are kept for as long as the process
-// lives and only the newest week costs requests.
+// lives. The newest finished one is still being corrected for a while, so it is read again.
 type season struct {
 	mu     sync.Mutex
 	points map[string]float64
 }
 
-func (s *Server) weekPoints(teamID string, week int) (float64, bool) {
+func (s *Server) weekPoints(teamID string, week, last int) (float64, bool) {
 	key := teamID + "/" + strconv.Itoa(week)
 	s.season.mu.Lock()
 	if points, known := s.season.points[key]; known {
@@ -30,11 +30,18 @@ func (s *Server) weekPoints(teamID string, week int) (float64, bool) {
 	}
 	s.season.mu.Unlock()
 
-	payload, err := s.opts.Client.TeamLineupWeek(teamID, week, 24*time.Hour)
+	ttl := 24 * time.Hour
+	if week >= last {
+		ttl = 10 * time.Minute
+	}
+	payload, err := s.opts.Client.TeamLineupWeek(teamID, week, ttl)
 	if err != nil {
 		return 0, false
 	}
 	points := number(payload["points"])
+	if !settled(payload, week, last) {
+		return points, true
+	}
 	s.season.mu.Lock()
 	if s.season.points == nil {
 		s.season.points = map[string]float64{}
@@ -42,6 +49,13 @@ func (s *Server) weekPoints(teamID string, week int) (float64, bool) {
 	s.season.points[key] = points
 	s.season.mu.Unlock()
 	return points, true
+}
+
+// settled is whether a week's points can be kept for good: older than the newest finished
+// matchday, and actually carrying a figure rather than a payload that left it out.
+func settled(payload map[string]any, week, last int) bool {
+	_, scored := payload["points"]
+	return week < last && scored
 }
 
 // placeByWeek writes down where each manager stood once each matchday was in, level on points
@@ -108,7 +122,7 @@ func (s *Server) seasonTable(writer http.ResponseWriter, request *http.Request) 
 		scored, running := []any{}, []any{}
 		total := 0.0
 		for _, week := range weeks {
-			points, ok := s.weekPoints(teamID, week)
+			points, ok := s.weekPoints(teamID, week, last)
 			if !ok {
 				scored, running = append(scored, nil), append(running, nil)
 				continue
