@@ -32,14 +32,14 @@ function NecroBlock({b}) {
   return html`<div class="mk-box">
     ${n.notice ? html`<p class="necro-remind warn">${n.notice}</p>` : null}
     ${n.facts.map((line) => html`<p class="lead"><${Segs} list=${line}/></p>`)}
-    <ul class="rows">${n.teams.map((t) => {
+    <ul class="rows">${n.teams.map((t, i) => {
       const on = order.includes(t.id);
       // What the ballot already holds turns green; a pick not sent yet stays blue.
       const cast = on && sent.includes(t.id);
       const label = on ? 'voto ✓' : 'votar';
       const acts = t.id ? [{text: false, label, class: 'mb mb-ghost necro-pick' + (cast ? ' sent' : on ? ' on' : ''),
         do: 'necro', args: {id: t.id}, pressed: on, toggle}] : [];
-      return html`<${RowView} r=${{...t.row, tone: on ? 'pick' : (t.row.tone || ''), acts}}/>`;
+      return html`<${RowView} key=${t.id || '#' + i} r=${{...t.row, tone: on ? 'pick' : (t.row.tone || ''), acts}}/>`;
     })}</ul>
     ${!n.open ? null : n.can_vote ? html`<div class="necro-actions"><span class=${('necro-msg ' + msg.cls).trim()}>${msg.text}</span>
       <button type="button" class="mb mb-primary necro-vote" disabled=${order.length !== 2 || busy} onClick=${send}>Enviar</button></div>`

@@ -1,5 +1,5 @@
 import {html, useState, useEffect, panel} from './lib.js';
-import {KINDS, list, Segs, ActView, RowView} from './view.js';
+import {KINDS, list, Segs, ActView, rowsView} from './view.js';
 import {Empty} from './components.js';
 import {useView} from './api.js';
 
@@ -48,6 +48,6 @@ export function ReachPopup({team}) {
   if (!reach) return html`<p class="empty">Cargando…</p>`;
   return html`<h3 class="pc-title">${reach.title}</h3><div class="mk reach">
     <p class="mk-note"><${Segs} list=${reach.note}/></p>
-    ${reach.rows.length ? html`<ul class="rows">${reach.rows.map((r) => html`<${RowView} r=${r}/>`)}</ul>`
+    ${reach.rows.length ? html`<ul class="rows">${rowsView(reach.rows)}</ul>`
       : html`<${Empty}>${reach.empty}<//>`}</div>`;
 }

@@ -778,6 +778,8 @@ td .muted,span.muted{color:var(--muted)}
   .cmp-results{width:calc(100vw - 44px)}
   .cmp-acts{margin-left:0;flex:1 1 100%}
   .cmp-acts button{flex:1 1 auto}
+  /* The bar wraps to three lines here: the drawer's last rows must scroll above it. */
+  body.tray-on .drawer-panel{padding-bottom:calc(190px + env(safe-area-inset-bottom))}
 }
 
 /* Without a mouse a hover sticks from the previous tap and never comes off. */
@@ -884,8 +886,9 @@ header.topline h1{font-size:11px;font-weight:600;margin:0;letter-spacing:0;color
 header.topline p{font-size:11px;color:var(--muted)}
 header.topline .mode{margin-left:0}
 
-/* Above the card: a dialog opened from it has to be in front of it. */
-.modal{z-index:65}
+/* Above the card and the comparator bar: a dialog opened from either has to be in front. */
+.modal{z-index:75}
+body:has(.modal:not([hidden])) .cmp-tray{display:none}
 
 /* Faces: the status ring is the absence, red confirmed and yellow a doubt. */
 .face{position:relative;flex:none;border-radius:50%;background:color-mix(in srgb,#fff 6%,var(--surface));

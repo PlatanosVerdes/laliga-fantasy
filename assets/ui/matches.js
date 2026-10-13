@@ -34,22 +34,34 @@ KINDS.weeks = ({b}) => html`<ul class="calendar">${b.data.map((w) => html`<li cl
   <span class="mk-cal-body">${w.matches.map((m) => html`<span class="mk-cal-them"><${Crest} id=${m.local_id} known=${m.local_crest}/>${m.local}–${m.visitor}<${Crest} id=${m.visitor_id} known=${m.visitor_crest}/> <i>${m.count}</i></span>`)}<span class="meta">${w.yours}</span></span>
 </li>`)}</ul>`;
 
-let seasonCache = null;
-async function season(week) {
-  if (!seasonCache) {
-    seasonCache = Promise.all([
+// One fetch per matchday and world state; an answer with a failed half is shown but not kept.
+const seasonCache = new Map();
+function season(week, stamp) {
+  const key = week + '@' + stamp;
+  if (!seasonCache.has(key)) {
+    seasonCache.clear();
+    const load = Promise.all([
       getJSON('/api/season').catch(() => null),
-      getJSON('/api/forecast/' + week).catch(() => null)]);
+      getJSON('/api/forecast/' + week).catch(() => null)]).then((got) => {
+      if (got.includes(null) && seasonCache.get(key) === load) seasonCache.delete(key);
+      return got;
+    });
+    seasonCache.set(key, load);
   }
-  return seasonCache;
+  return seasonCache.get(key);
 }
 
 // Previsto vs real: my points and place each matchday, and this matchday's forecast, as bars on
 // one scale. Each matchday opens its popup.
 function HistoryBlock({b}) {
   const {week, planned: plannedHere, hit} = b.data;
+  const stamp = useStamp();
   const [data, setData] = useState(null);
-  useEffect(() => { season(week).then(setData); }, [week]);
+  useEffect(() => {
+    let current = true;
+    season(week, stamp).then((got) => current && setData((old) => (old && !got.some(Boolean) ? old : got)));
+    return () => { current = false; };
+  }, [week, stamp]);
   let rows = html`<li class="mk-note">Cargando…</li>`, sub = '';
   if (data) {
     const [table, forecast] = data;

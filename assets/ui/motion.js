@@ -20,8 +20,8 @@ export async function leave(el) {
   {duration: 200, easing: 'ease-out', fill: 'forwards'}).finished;
 }
 
-// Undoes leave. Rows are not keyed, so the element may be handed to the next row once the new view
-// is drawn: it is only put back after that, or at once when the change did not happen.
+// Undoes leave. Only after the new view is drawn, so a row that is gone never flashes back; at once
+// when the change did not happen.
 export async function putBack(el, {afterViews = false} = {}) {
   if (!el) return;
   if (afterViews) {
