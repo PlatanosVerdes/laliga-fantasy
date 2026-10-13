@@ -964,6 +964,16 @@ func loadMarket(client *api.Client, leagueID, myTeamID string,
 // cached for a day.
 const UpcomingWeeks = 10
 
+// AllFinished is whether every match of a matchday has been played.
+func AllFinished(matches []api.Match) bool {
+	for _, match := range matches {
+		if match.MatchState != MatchFinished {
+			return false
+		}
+	}
+	return len(matches) > 0
+}
+
 // LoadSchedule is the fixture list beyond this week: same shape as the live fixtures, one
 // entry per match, tagged with its matchday so the page can group it.
 func LoadSchedule(client *api.Client, week api.Week, teams []api.Team) []Fixture {
@@ -975,13 +985,18 @@ func LoadSchedule(client *api.Client, week api.Week, teams []api.Team) []Fixture
 	out := []Fixture{}
 	// From matchday one, not from today: what already happened is what tells you whether a run
 	// was easy or brutal, and the page could only ever show what was still to come. A played
-	// matchday never changes, so it is cached for a week instead of a day.
+	// matchday never changes, so it is cached for a week instead of a day, but only once the
+	// copy says every match is over: one written mid-match would otherwise stick for a week.
 	for number := 1; number < week.WeekNumber+UpcomingWeeks; number++ {
-		ttl := 24 * time.Hour
+		const short, long = 24 * time.Hour, 7 * 24 * time.Hour
+		ttl := short
 		if number < week.WeekNumber {
-			ttl = 7 * 24 * time.Hour
+			ttl = long
 		}
 		matches, err := client.Calendar(number, ttl)
+		if err == nil && ttl == long && !AllFinished(matches) {
+			matches, err = client.Calendar(number, short)
+		}
 		if err != nil {
 			slog.Debug("calendar unavailable", "week", number, "reason", err.Error())
 			continue

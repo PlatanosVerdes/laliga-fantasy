@@ -224,3 +224,26 @@ func TestAChangedCadenceAppliesOnTheNextWait(t *testing.T) {
 		t.Fatalf("la proxima es un sondeo sin partido: %+v", clocks)
 	}
 }
+
+// A matchday's calendar read mid-match holds the live score; it has to go with the points.
+func TestALiveMatchInvalidatesTheCalendar(t *testing.T) {
+	now := time.Now()
+	var dropped []string
+	engine := New(Deps{
+		Payload: func() schedule.Payload {
+			return schedule.Payload{Fixtures: []schedule.Fixture{
+				{Kickoff: now.Add(-20 * time.Minute).Format(time.RFC3339), State: 1}}}
+		},
+		Probe:      (&recorder{}).probe,
+		Rebuild:    (&recorder{}).rebuild,
+		Now:        func() time.Time { return now },
+		Invalidate: func(tags ...string) { dropped = append(dropped, tags...) },
+	})
+	engine.doWork(schedule.Decision{Kind: schedule.Probe})
+	for _, tag := range dropped {
+		if tag == "calendar" {
+			return
+		}
+	}
+	t.Fatalf("calendar not invalidated during a live match: %v", dropped)
+}
