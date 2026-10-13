@@ -310,6 +310,9 @@ var months = []string{"", "ene", "feb", "mar", "abr", "may", "jun",
 // See schedule.FinishedMatch, which has to agree.
 const FinishedMatch = 7
 
+// PostponedMatch is a match put off with no new date: the feed keeps the original one.
+const PostponedMatch = 10
+
 // PyFloat writes a float the way Python's str() does.
 //
 // Go's default (%v, fmt.Sprint) switches to scientific notation around ten million, which

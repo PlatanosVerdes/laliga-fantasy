@@ -1254,6 +1254,18 @@ section.mk{margin:0 0 22px}
 .mk .kv{display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line)}
 .mk .kv:first-of-type{border-top:0}
 .mk .kv span{color:var(--muted)}
+.mk .agenda-week{padding:8px 0;border-top:1px solid var(--line)}
+.mk .agenda-week:first-child{border-top:0;padding-top:0}
+.mk .agenda-week h4{display:flex;align-items:baseline;justify-content:space-between;margin:0 0 4px;
+  font-size:14px}
+.mk .agenda-week ul{list-style:none;margin:0;padding:0}
+.mk .fx{display:grid;grid-template-columns:78px 44px minmax(0,1fr) auto;align-items:center;gap:6px;
+  padding:3px 0;font-size:13px;font-variant-numeric:tabular-nums}
+.mk .fx-day{color:var(--muted);white-space:nowrap}
+.mk .fx-hour{color:var(--ink-2)}
+.mk .fx-match{display:flex;align-items:center;gap:4px;min-width:0;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+.mk .fx-mine{color:var(--good);font-size:12px;white-space:nowrap}
 .mk .calendar .mk-cal{display:grid;grid-template-columns:78px minmax(0,1fr);gap:8px;padding:7px 0;
   border-top:1px solid var(--line)}
 .mk .calendar .mk-cal:first-child{border-top:0}
@@ -1495,7 +1507,7 @@ button.reach-btn:hover{filter:brightness(1.1);text-decoration:underline}
 a.role{color:inherit;text-decoration:none;cursor:pointer}
 a.role:hover,a.role:focus-visible{text-decoration:underline}
 /* A crest beside a club code reads at the size of the text around it. */
-.cmp-hit-num .crest,.mk-cal-them .crest,.cmp-sub .crest,table.cmp td .crest{width:13px;height:13px;
+.cmp-hit-num .crest,.mk-cal-them .crest,.fx-match .crest,.cmp-sub .crest,table.cmp td .crest{width:13px;height:13px;
   vertical-align:-2px;margin:0 2px}
 .pc-grid b .crest{width:16px;height:16px;vertical-align:-2px;margin-right:4px}
 .build-tag{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;

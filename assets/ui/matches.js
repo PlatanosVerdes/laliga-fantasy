@@ -29,10 +29,16 @@ KINDS.matchday = ({b}) => {
   </div>`;
 };
 
-KINDS.weeks = ({b}) => html`<ul class="calendar">${b.data.map((w) => html`<li class="mk-cal">
-  <span class="mk-cal-day">${w.label}<span class="meta">${w.day}</span></span>
-  <span class="mk-cal-body">${w.matches.map((m) => html`<span class="mk-cal-them"><${Crest} id=${m.local_id} known=${m.local_crest}/>${m.local}–${m.visitor}<${Crest} id=${m.visitor_id} known=${m.visitor_crest}/> <i>${m.count}</i></span>`)}<span class="meta">${w.yours}</span></span>
-</li>`)}</ul>`;
+// An agenda: each match on its line with its day and hour, the day written once for the matches
+// that share it, and how many of mine play in it.
+const Fixture = ({m, day}) => html`<li class="fx">
+  <span class="fx-day">${day ? m.day : ''}</span><span class="fx-hour">${m.hour}</span>
+  <span class="fx-match"><${Crest} id=${m.local_id} known=${m.local_crest}/>${m.local} – ${m.visitor}<${Crest} id=${m.visitor_id} known=${m.visitor_crest}/></span>
+  <span class="fx-mine">${m.count ? m.count + (m.count === 1 ? ' tuyo' : ' tuyos') : ''}</span></li>`;
+KINDS.weeks = ({b}) => html`<div class="agenda">${b.data.map((w) => html`<section class="agenda-week">
+  <h4><b>${w.label}</b>${w.yours ? html`<span class="meta">${w.yours}</span>` : null}</h4>
+  <ul>${w.matches.map((m, i) => html`<${Fixture} key=${m.local_id + '-' + m.visitor_id} m=${m} day=${i === 0 || m.day !== w.matches[i - 1].day}/>`)}</ul>
+</section>`)}</div>`;
 
 // One fetch per matchday and world state; an answer with a failed half is shown but not kept.
 const seasonCache = new Map();

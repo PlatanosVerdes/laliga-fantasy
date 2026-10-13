@@ -233,3 +233,30 @@ func TestMyOfferRowSaysTheAmountOnce(t *testing.T) {
 		t.Errorf("acts = %+v, want only Retirar", acts)
 	}
 }
+
+// A match put off with no new date keeps its original, past date in the feed: it reads "sin
+// fecha" and goes last, while one already moved shows when it is played now.
+func TestPostponedMatchesSayWhenTheyArePlayed(t *testing.T) {
+	document := decidingDocument()
+	document.Universe["schedule"] = []any{
+		map[string]any{"week": 7.0, "state": 10.0, "kickoff": "2026-10-10T14:00:00+02:00",
+			"local_id": "1", "visitor_id": "2", "local": "RAY", "visitor": "ATH"},
+		map[string]any{"week": 7.0, "state": 1.0, "kickoff": "2026-10-21T20:00:00+02:00",
+			"local_id": "3", "visitor_id": "2", "local": "LEV", "visitor": "ATH"},
+	}
+	block := document.comingBlock(9)
+	if block == nil {
+		t.Fatal("no block")
+	}
+	weeks := block.Data.([]ComingWeek)
+	matches := weeks[0].Matches
+	if weeks[0].Day != "" || len(matches) != 2 {
+		t.Fatalf("postponed week: %+v", weeks[0])
+	}
+	if matches[0].Local != "LEV" || matches[0].Day != "mié 21 oct" || matches[0].Hour != "20:00" {
+		t.Errorf("the rescheduled match should come first with its new date: %+v", matches[0])
+	}
+	if matches[1].Day != "sin fecha" || matches[1].Hour != "" {
+		t.Errorf("the undated one should say so: %+v", matches[1])
+	}
+}
