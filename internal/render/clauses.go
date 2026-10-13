@@ -223,7 +223,7 @@ func clauseOverValue(clause, value float64) []Seg {
 	if ratio >= ClauseIsASale {
 		class = "down"
 	}
-	return []Seg{{T: " · "}, {T: "×" + strings.Replace(fmt.Sprintf("%.2f", ratio), ".", ",", 1) +
+	return []Seg{{T: " · "}, {T: "×" + fmt.Sprintf("%.2f", ratio) +
 		" su valor", C: class}}
 }
 

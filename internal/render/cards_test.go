@@ -120,7 +120,7 @@ func TestDecisionCardsComeFromTheAdvice(t *testing.T) {
 	if !ok {
 		t.Fatalf("the offer worth taking has no card: %+v", cards)
 	}
-	if offer.Big != "21,7M" || offer.Buttons[0].Args["op"] != "accept_offer" ||
+	if offer.Big != "21.7M" || offer.Buttons[0].Args["op"] != "accept_offer" ||
 		offer.Buttons[0].Args["offer_id"] != "o1" {
 		t.Errorf("offer card = %q / %+v", offer.Big, offer.Buttons)
 	}
@@ -128,7 +128,7 @@ func TestDecisionCardsComeFromTheAdvice(t *testing.T) {
 	if !ok {
 		t.Fatal("the raise in the plan has no card")
 	}
-	if !strings.Contains(raise.Why[0], "JMjugon tiene 66,2M") ||
+	if !strings.Contains(raise.Why[0], "JMjugon tiene 66.2M") ||
 		raise.Buttons[0].Class != "raise dcard-go" || raise.Buttons[0].Do != "raise" ||
 		raise.Buttons[0].Args["pay"] != int64(2000000) {
 		t.Errorf("raise card = %v / %+v", raise.Why, raise.Buttons)
@@ -166,8 +166,8 @@ func TestDecideSectionRendersOneSwappableSection(t *testing.T) {
 
 func TestSpanishNumbers(t *testing.T) {
 	cases := map[string]string{
-		esMoney(21_724_064): "21,7M", esMoney(757_000): "757K", esMoney(-1_100_000): "−1,1M",
-		esNum(-0.04, 1): "0,0", esNum(-2.7, 1): "−2,7", esSigned(5.25): "+5,3",
+		esMoney(21_724_064): "21.7M", esMoney(757_000): "757K", esMoney(-1_100_000): "−1.1M",
+		esNum(-0.04, 1): "0.0", esNum(-2.7, 1): "−2.7", esSigned(5.25): "+5.3",
 	}
 	for got, want := range cases {
 		if got != want {
@@ -193,7 +193,7 @@ func TestElevenAsideShowsThePlan(t *testing.T) {
 	}
 }
 
-// Pedrosa: 3,1M for a 3,2M player is not a sale worth a card, unless the advice wants him out
+// Pedrosa: 3.1M for a 3.2M player is not a sale worth a card, unless the advice wants him out
 // anyway and it is close to his value.
 func TestOfferCardOnlyWhenItPays(t *testing.T) {
 	document := decidingDocument()
@@ -209,19 +209,19 @@ func TestOfferCardOnlyWhenItPays(t *testing.T) {
 		return false
 	}
 	if has(document) {
-		t.Error("×0,97 su valor no es una venta que empujar")
+		t.Error("×0.97 su valor no es una venta que empujar")
 	}
 	document.Advice["sells"] = []any{map[string]any{"id": "7", "reasons": []any{"no juega"}}}
 	offers[0]["offer_amount"] = 19_700_000.0
 	if !has(document) {
-		t.Error("si el consejo ya quiere venderlo, ×0,97 basta")
+		t.Error("si el consejo ya quiere venderlo, ×0.97 basta")
 	}
-	if note, class := ratioWords(0.97); note != "×0,97 su valor" || class != "down" {
+	if note, class := ratioWords(0.97); note != "×0.97 su valor" || class != "down" {
 		t.Errorf("ratio: %q %q", note, class)
 	}
 }
 
-// Unai: a clause at 1,27x his value is already a good sale, and Agoumé's lock lifts in 11 days.
+// Unai: a clause at 1.27x his value is already a good sale, and Agoumé's lock lifts in 11 days.
 func TestRaiseCardsOnlyWhenWorthItAndSoon(t *testing.T) {
 	document := decidingDocument()
 	raises := rows(document.Raise["rows"])
@@ -240,12 +240,12 @@ func TestRaiseCardsOnlyWhenWorthItAndSoon(t *testing.T) {
 			}
 		}
 	}
-	// O. Rey is among the three best outfield players, so his 1,75x clause is still defended.
+	// O. Rey is among the three best outfield players, so his 1.75x clause is still defended.
 	document.Raise = map[string]any{"rows": []any{raises[0]}}
 	found := false
 	for _, card := range document.decisionCards(time.Now()) {
 		if card.Kind == "raise" {
-			found = strings.Contains(card.Impact, "retrasa tu crack 2,0M")
+			found = strings.Contains(card.Impact, "retrasa tu crack 2.0M")
 		}
 	}
 	if !found {
@@ -271,7 +271,7 @@ func TestCrackBoxNamesTheBestIDoNotHave(t *testing.T) {
 		"available": true, "owner": "Rival", "clause": 200_000_000.0}
 	document.Universe["players"] = append(toAny(players), crack)
 	box := asJSON(document.crackBlock())
-	if !strings.Contains(box, "Raphinha") || !strings.Contains(box, "200,0M") ||
+	if !strings.Contains(box, "Raphinha") || !strings.Contains(box, "200.0M") ||
 		!strings.Contains(box, "te faltan") {
 		t.Errorf("objetivo: %s", box)
 	}
@@ -316,10 +316,10 @@ func TestCrackReachIsWhatCanBeRaisedToday(t *testing.T) {
 	}
 }
 
-// Unai's 1,02x is not a sale when the eleven loses 3,9 xPts without him, and it says so.
+// Unai's 1.02x is not a sale when the eleven loses 3.9 xPts without him, and it says so.
 func TestOfferAdviceSaysWhyNot(t *testing.T) {
 	take, why := decidingDocument().offerAdvice("13", 1.04, false)
-	if take || !strings.Contains(why, "×1,04 su valor pero tu once pierde") {
+	if take || !strings.Contains(why, "×1.04 su valor pero tu once pierde") {
 		t.Errorf("%v %q", take, why)
 	}
 	if take, _ := decidingDocument().offerAdvice("13", 1.04, true); !take {
@@ -327,7 +327,7 @@ func TestOfferAdviceSaysWhyNot(t *testing.T) {
 	}
 }
 
-// Ángel Pérez's 1,04x costs the eleven too much on its own, but not when it pays a rival's
+// Ángel Pérez's 1.04x costs the eleven too much on its own, but not when it pays a rival's
 // better midfielder's clause: one card with both legs, and Vender recommends accepting.
 func TestSaleSwapCardSellsAndTakes(t *testing.T) {
 	document := decidingDocument()
@@ -360,7 +360,7 @@ func TestCardViewCarriesWhatTheCardDraws(t *testing.T) {
 		Buttons: []Act{{Label: "Aceptar", Do: "op"}}}
 	view := cardView(card)
 	if view.Tone != "muted" || view.In["id"] != "2" || len(view.Chips) != 2 ||
-		view.Meta != "RMA · 3,0 xPts" || len(view.Buttons) != 1 || view.Why == nil {
+		view.Meta != "RMA · 3.0 xPts" || len(view.Buttons) != 1 || view.Why == nil {
 		t.Errorf("card view: %+v", view)
 	}
 }
@@ -390,11 +390,11 @@ func TestASuspendedPlayersOfferNeedsAPremium(t *testing.T) {
 
 // Paying a clause costs what he is worth and the rest on top: the ratio says how much rest.
 func TestClauseOverValue(t *testing.T) {
-	if got := asJSON(clauseOverValue(26_200_000, 20_960_000)); !strings.Contains(got, "×1,25 su valor") ||
+	if got := asJSON(clauseOverValue(26_200_000, 20_960_000)); !strings.Contains(got, "×1.25 su valor") ||
 		!strings.Contains(got, `"c":"down"`) {
 		t.Errorf("dear clause: %s", got)
 	}
-	if got := asJSON(clauseOverValue(10_000_000, 10_000_000)); !strings.Contains(got, "×1,00 su valor") ||
+	if got := asJSON(clauseOverValue(10_000_000, 10_000_000)); !strings.Contains(got, "×1.00 su valor") ||
 		strings.Contains(got, "down") {
 		t.Errorf("clause at value: %s", got)
 	}
@@ -440,7 +440,7 @@ func TestLiveElevenShowsTheSavedElevenScoring(t *testing.T) {
 	block := document.elevenBlock()
 	data := asJSON(block)
 	for _, want := range []string{`"to":"8 pts"`, `"live":true`, "J8 en juego · 11º ahora · previsto 4º",
-		`"xpts":"4","class":"pts pts-bl"`, `"class":"pts pts-rd"`, `"class":"pending","pending":"6,0"`} {
+		`"xpts":"4","class":"pts pts-bl"`, `"class":"pts pts-rd"`, `"class":"pending","pending":"6.0"`} {
 		if !strings.Contains(data, want) {
 			t.Errorf("missing %s in %s", want, data)
 		}

@@ -38,8 +38,8 @@ func TestEveryOutcomeHasAnIcon(t *testing.T) {
 
 // A lost bid says who took him and for how much, when that is known.
 func TestLostBidNamesTheWinner(t *testing.T) {
-	seg := outcomeSeg("perdida", "ganó -papi— (30,0M)")
-	if seg.Icon != "person" || seg.Tip != "perdida: ganó -papi— (30,0M)" {
+	seg := outcomeSeg("perdida", "ganó -papi— (30.0M)")
+	if seg.Icon != "person" || seg.Tip != "perdida: ganó -papi— (30.0M)" {
 		t.Errorf("perdida: %+v", seg)
 	}
 }

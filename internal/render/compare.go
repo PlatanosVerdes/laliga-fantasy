@@ -200,16 +200,8 @@ func compareChips(p map[string]any) []Seg {
 	return out
 }
 
-// shortMillions is the page's oldest short money: 2.50M, 850K.
-func shortMillions(amount float64) string {
-	switch {
-	case math.Abs(amount) >= 1e6:
-		return fmt.Sprintf("%.2fM", amount/1e6)
-	case math.Abs(amount) >= 1e3:
-		return fmt.Sprintf("%.0fK", amount/1e3)
-	}
-	return fmt.Sprintf("%.0f", amount)
-}
+// shortMillions is the page's money, kept as a name for its callers.
+func shortMillions(amount float64) string { return esMoney(amount) }
 
 // compareVerdict says whether the one being looked at improves on what I have, which is the
 // only reason to be comparing; with no single outsider it names the best on each count.

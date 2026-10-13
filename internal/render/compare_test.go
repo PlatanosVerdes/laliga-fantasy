@@ -27,7 +27,7 @@ func TestCompareTableMarksTheBestAndJudges(t *testing.T) {
 	}
 	verdict := asJSON(table.Verdict)
 	if !strings.Contains(verdict, "mejora a tu mejor DEL") || !strings.Contains(verdict, "+2.00 xPts") ||
-		!strings.Contains(verdict, "20.00M mas") {
+		!strings.Contains(verdict, "20.0M mas") {
 		t.Errorf("verdict: %s", verdict)
 	}
 }

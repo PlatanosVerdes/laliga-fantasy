@@ -117,10 +117,10 @@ func TestBuyBoxesListEveryCandidate(t *testing.T) {
 	if strings.Index(blob, "Barato") > strings.Index(blob, "Caro") {
 		t.Error("the one adding more goes first")
 	}
-	if !strings.Contains(blob, "+1,0M de margen") || !strings.Contains(blob, `"price":2000000`) {
+	if !strings.Contains(blob, "+1.0M de margen") || !strings.Contains(blob, `"price":2000000`) {
 		t.Error("margin to the ceiling and the price the filter reads")
 	}
-	if !strings.Contains(blob, `"wrap":"te faltan 20,0M"`) {
+	if !strings.Contains(blob, `"wrap":"te faltan 20.0M"`) {
 		t.Error("an unreachable bid is disabled and says what is missing")
 	}
 	document.MaxDebtPct = 30
@@ -139,7 +139,7 @@ func TestStoodDownRaidsCanBeCancelledAndOrdersAreLogged(t *testing.T) {
 		"player": "Fofana", "outcome": "pagada", "amount": 15_240_000.0}}
 	blob := asJSON(document.plannedBlock())
 	for _, want := range []string{`"do":"cancel_raid"`, `"t":"cancelada"`,
-		"Historial de tus órdenes", "Fofana", "15,2M"} {
+		"Historial de tus órdenes", "Fofana", "15.2M"} {
 		if !strings.Contains(blob, want) {
 			t.Errorf("missing %q", want)
 		}
@@ -182,7 +182,7 @@ func TestReachListsWhoARivalCanPay(t *testing.T) {
 		t.Error("best first, the top threat marked")
 	}
 	none := reachOf("Pobre", 1_000_000, squad, nil)
-	if none.Empty != "No le llega a ninguno: tu cláusula más barata es 5,0M." {
+	if none.Empty != "No le llega a ninguno: tu cláusula más barata es 5.0M." {
 		t.Errorf("nobody reached: %+v", none)
 	}
 }
@@ -195,7 +195,7 @@ func TestScheduledRaidsAreRowsOfMyBids(t *testing.T) {
 		"clause": 25_000_000.0, "max_pay": 20_000_000.0, "action": "esperando"}}
 	box := document.BuyData().Aside[0]
 	blob := asJSON(box)
-	for _, want := range []string{"≤ 20,0M", "cláusula 25,0M", "pasa tu límite", `"do":"cancel_raid"`} {
+	for _, want := range []string{"≤ 20.0M", "cláusula 25.0M", "pasa tu límite", `"do":"cancel_raid"`} {
 		if !strings.Contains(blob, want) {
 			t.Errorf("missing %q in %s", want, blob)
 		}

@@ -9,7 +9,7 @@ export const dots = (whole) => String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, '.
 export function esMoney(amount) {
   let sign = '';
   if (amount < 0) { sign = '−'; amount = -amount; }
-  if (amount >= 999500) return sign + (amount / 1e6).toFixed(1).replace('.', ',') + 'M';
+  if (amount >= 999500) return sign + (amount / 1e6).toFixed(1) + 'M';
   if (amount >= 1e3) return sign + dots(Math.round(amount / 1e3)) + 'K';
   return sign + Math.round(amount) + ' €';
 }
@@ -34,7 +34,7 @@ export const xClass = (v) => v >= 6 ? 'x-hi' : v >= 3.5 ? 'x-mid' : v >= 2 ? 'x-
 
 // The card's own helpers.
 export const dec = (v, d = 1) => v == null || isNaN(v) ? '—'
-  : Number(v).toFixed(d).replace('.', ',').replace('-', '−');
+  : Number(v).toFixed(d).replace('-', '−');
 export const mny = (v) => v == null || isNaN(v) ? '—'
   : Math.abs(v) >= 1e6 ? dec(v / 1e6) + 'M' : Math.abs(v) >= 1e3 ? Math.round(v / 1e3) + 'K' : String(v);
 export const signed = (v, d = 1) => (v >= 0 ? '+' : '−') + dec(Math.abs(v), d);
@@ -42,7 +42,7 @@ export const exact = (n) => n == null ? '—' : Number(n).toLocaleString('es-ES'
 export const group = (n) => (n == null || isNaN(n)) ? '' : Number(n).toLocaleString('es-ES');
 export const digits = (s) => parseInt(String(s).replace(/[^0-9]/g, ''), 10);
 export const fmt = (n) => n == null ? '—'
-  : (Math.abs(n) >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : Math.abs(n) >= 1e3 ? (n / 1e3).toFixed(0) + 'K' : String(n));
+  : (Math.abs(n) >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : Math.abs(n) >= 1e3 ? (n / 1e3).toFixed(0) + 'K' : String(n));
 
 export function whenShort(stamp) {
   const t = parse(stamp);

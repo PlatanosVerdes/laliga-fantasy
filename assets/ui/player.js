@@ -204,7 +204,7 @@ function AlwaysBlock({a, player, lead}) {
     return () => document.removeEventListener('keydown', fold, true);
   }, [open, saved.min]);
   const price = digits(saved.min) || a.value || 0;
-  const label = (price ? (price / 1e6).toFixed(2).replace('.', ',') + 'M' : '') + (saved.auto ? ' · vende solo' : '');
+  const label = (price ? (price / 1e6).toFixed(1) + 'M' : '') + (saved.auto ? ' · vende solo' : '');
   return html`<div class="aw-line">${lead && lead.length ? html`<div class="drawer-actions pc-acts aw-lead">${lead}</div>` : null}
     <div class="aw">
       <div class="aw-row">
