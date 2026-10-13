@@ -52,10 +52,14 @@ func (d Document) RivalsData() View {
 			continue
 		}
 		var top map[string]any
-		reach := 0
+		reach, reached := 0, 0
 		for _, player := range squad {
 			clause := number(player["clause"])
-			if clause <= 0 || clause > cash || truthy(player["shielded"]) {
+			if clause <= 0 || clause > cash {
+				continue
+			}
+			reached++
+			if truthy(player["shielded"]) {
 				continue
 			}
 			if !truthy(player["clause_locked"]) {
@@ -82,6 +86,12 @@ func (d Document) RivalsData() View {
 				"critical"
 		case reach > 0:
 			label, class = fmt.Sprintf("llega a %d", reach), "warn"
+		case reached > 0:
+			label = "llega a 0"
+		}
+		// The popup lists every clause the cash reaches, locked and shielded ones included.
+		if len(threatens[manager]) == 0 && reached > reach {
+			label += fmt.Sprintf(" (%d con bloqueadas)", reached)
 		}
 		reaches[teamID] = reachOf(manager, cash, squad, threatOf)
 		place := "—"

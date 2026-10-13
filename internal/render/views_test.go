@@ -223,6 +223,27 @@ func TestEquiposIncludesYou(t *testing.T) {
 	}
 }
 
+// The reach chip counts the payable clauses and says how many more the popup it opens lists.
+func TestReachChipAgreesWithItsPopup(t *testing.T) {
+	document := Document{Advice: map[string]any{
+		"rivals": []any{map[string]any{"team_id": "1", "manager": "LILTEAM",
+			"estimated_cash": 10e6}},
+		"squad": []any{
+			map[string]any{"id": "a", "clause": 5e6},
+			map[string]any{"id": "b", "clause": 6e6, "clause_locked": true},
+			map[string]any{"id": "c", "clause": 7e6, "shielded": true},
+			map[string]any{"id": "d", "clause": 20e6},
+		}}}
+	view := document.RivalsData()
+	block := view.Main[0]
+	if chip := block.Rows[0].Chips[0].T; chip != "llega a 1 (3 con bloqueadas)" {
+		t.Errorf("chip = %q", chip)
+	}
+	if popup := block.Data.(map[string]Reach)["1"]; len(popup.Rows) != 3 {
+		t.Errorf("popup rows = %d, want 3", len(popup.Rows))
+	}
+}
+
 // The amount offered is the row's value; saying it again on a button pushed the name out of the
 // narrow aside.
 func TestMyOfferRowSaysTheAmountOnce(t *testing.T) {
