@@ -182,3 +182,41 @@ func TestASuspendedPlayerIsNotSwappedOut(t *testing.T) {
 		}
 	}
 }
+
+// A benched player swapped for one who would also sit on the bench gains the eleven nothing,
+// however much more he scores than the one leaving.
+func TestASwapIsWorthWhatTheElevenGains(t *testing.T) {
+	// 1-4-4-2 of 5.0 each, plus a sixth defender on 1.0 who never plays.
+	squad := []Row{mine("gk", 1, 5)}
+	for _, id := range []string{"d1", "d2", "d3", "d4", "d5"} {
+		squad = append(squad, mine(id, 2, 5))
+	}
+	squad = append(squad, mine("bench", 2, 1))
+	for _, id := range []string{"m1", "m2", "m3", "m4", "s1", "s2"} {
+		position := 3
+		if id[0] == 's' {
+			position = 4
+		}
+		squad = append(squad, mine(id, position, 5))
+	}
+	buckets := Row{"squad": squad, "squad_ppm_benchmark": 0.1,
+		"asks": []Row{forSale("another-defender", 2, 4.5, 1_000_000)}}
+	for _, move := range rowsOf(Swaps(Row{}, buckets, 40_000_000)["moves"]) {
+		if text(mapOf(move["in"])["id"]) == "another-defender" {
+			t.Errorf("a bench-for-bench swap was proposed with gain %v", move["gain"])
+		}
+	}
+}
+
+// With the only keeper injured there is no eleven, and the plan has to sign one.
+func TestAnInjuredOnlyKeeperIsAHole(t *testing.T) {
+	squad := squadOf(1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4)
+	squad[0]["available"] = false
+	buckets := Row{"squad": squad, "squad_ppm_benchmark": 100.0,
+		"asks": []Row{forSale("keeper", 1, 3, 2_000_000)}}
+	moves := rowsOf(Swaps(Row{}, buckets, 40_000_000)["moves"])
+	// Signed to fill the hole, not swapped for the injured one: the eleven is short now.
+	if len(moves) == 0 || text(mapOf(moves[0]["in"])["id"]) != "keeper" || moves[0]["out"] != nil {
+		t.Errorf("the injured only keeper was not treated as a hole: %+v", moves)
+	}
+}

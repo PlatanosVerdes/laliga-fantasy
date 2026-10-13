@@ -53,6 +53,8 @@ type Options struct {
 	// HoldExceptions is what the league agreed as an escape hatch to its own hold rule,
 	// quoted verbatim when an operation is refused because of it.
 	HoldExceptions string
+	// MaxDebtPct is the league's debt cap for market bids, in percent of the squad's value.
+	MaxDebtPct float64
 	// Settle makes the world catch up after a write, and is expected to block.
 	Settle func(cause string)
 	// Adopted runs once a session has just been stored: the world has to be built from

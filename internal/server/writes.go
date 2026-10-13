@@ -548,6 +548,7 @@ func (s *Server) playerFor(id string) writes.Player {
 			who.HoldUntil = *player.HoldUntil
 		}
 		who.HoldExceptions = s.opts.HoldExceptions
+		who.DebtRoom, who.Committed = s.biddingRoom(universe, id)
 		if player.Clause != nil {
 			who.Clause = int64(*player.Clause)
 		}
@@ -620,4 +621,21 @@ func amountOf(value any) (float64, bool) {
 		return amount, true
 	}
 	return 0, false
+}
+
+// biddingRoom is the debt the league lets a bid run into, a share of my squad's value, and what
+// my live bids and offers on other listings already hold. Without the second, two bids that
+// each fit the balance could both win and break the cap together.
+func (s *Server) biddingRoom(universe *model.Universe, playerID string) (int64, int64) {
+	squad, committed := 0.0, 0.0
+	for _, player := range universe.Players {
+		if player.IsMine {
+			squad += player.Value
+		}
+		if listing := player.MarketEntry; listing != nil && player.ID != playerID &&
+			listing.MyBidID != nil && listing.MyBid != nil {
+			committed += *listing.MyBid
+		}
+	}
+	return int64(squad * s.opts.MaxDebtPct / 100), int64(committed)
 }

@@ -102,15 +102,15 @@ func (d Document) feedBlock() Block {
 		if strings.Contains(text(event["kind"]), "alinea") {
 			continue
 		}
-		counted++
+		// Counted only when drawn: the header said 4 over 2 lines.
 		if !feedHidden[int(number(event["type_id"]))] {
+			counted++
 			moves = append(moves, event)
 		}
 	}
 	if len(moves) == 0 {
 		return Block{Title: "Movimientos de la liga", Count: count(counted), Kind: "empty",
-			Empty: "Hay actividad en la liga, pero solo cambios de alineacion: ninguna compra " +
-				"ni venta todavia."}
+			Empty: "Ninguna compra ni venta todavia."}
 	}
 	return Block{Title: "Movimientos de la liga", Count: count(counted), Kind: "feed",
 		Data: feedOf(moves, teams, marks, me)}

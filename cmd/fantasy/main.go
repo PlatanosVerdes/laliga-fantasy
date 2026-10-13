@@ -649,6 +649,7 @@ func cmdServe(args []string) error {
 		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
 		Client: client, Guard: guard, LeagueID: league, MyTeamID: team,
 		HoldExceptions: rules.For(league).HoldExceptions,
+		MaxDebtPct:     rules.For(league).MaxDebtPct,
 		NecroCookie:    necroCfg.Cookie,
 		NecroAction:    necroCfg.ActionID,
 		NecroGameweek:  necroCfg.Gameweek,
@@ -1527,8 +1528,9 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		Plan:     policies.Plan(players, armed, time.Now()),
 		Raids:    policies.RaidPlan(players, armed, cash, clauseWindow(universe.Schedule)),
 		Window:   clauseWindow(universe.Schedule),
-		Money:    advice.Money(generic, cash, time.Now()),
-		Raise:    advice.ClausePlan(generic, cash),
+		// Spendable now: what my live bids hold is not there to spend twice.
+		Money:    advice.Money(generic, cash-number(buckets["committed"]), time.Now()),
+		Raise:    advice.ClausePlan(generic, cash-number(buckets["committed"])),
 		Policies: policyRows,
 	}
 	necro := necroporra.Load()

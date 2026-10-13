@@ -265,6 +265,14 @@ func Plan(players []Row, policies map[string]Policy, now time.Time) []Row {
 		positionID := int(number(player["position_id"]))
 		room := eleven.Room(counts, positionID)
 		bestAmount := number(best["money"])
+		// What the write guard would refuse is not proposed: an offer with no live listing to
+		// answer it against, or a fit player inside the league's hold. Refused every cycle, it
+		// held a slot of the cap and the player was never relisted.
+		available, known := player["available"].(bool)
+		takeable := listing != nil && !(truthy(player["sale_locked"]) && (!known || available))
+		if !takeable {
+			best = nil
+		}
 
 		if threshold != nil && best != nil && bestAmount >= float64(*threshold) && room <= 0 {
 			// Good price, bad idea: after this sale there is no eleven to field. Either he is

@@ -186,3 +186,16 @@ func TestClausePlanRefusesRaisesThatProtectTooLittle(t *testing.T) {
 		}
 	}
 }
+
+// A shielded player's clause cannot be paid while the shield lasts: raising it buys nothing.
+func TestAShieldedClauseIsNotRaised(t *testing.T) {
+	universe := Row{"players": []Row{{"id": "1", "name": "Blindado", "is_mine": true,
+		"position_id": 3.0, "clause": 5_000_000.0, "value": 5_000_000.0, "xpts": 6.0,
+		"shielded": true}}}
+	plan := ClausePlan(universe, 50_000_000)
+	for _, row := range rowsOf(plan["rows"]) {
+		if text(row["id"]) == "1" && text(row["verdict"]) != "tranquilo" {
+			t.Errorf("a shielded clause got verdict %q", text(row["verdict"]))
+		}
+	}
+}

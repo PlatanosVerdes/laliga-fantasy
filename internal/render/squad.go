@@ -103,7 +103,8 @@ func (d Document) MySquadData() View {
 	squad := rows(d.Advice["squad"])
 	shape := mapOf(d.Advice["shape"])
 	lines := []Row{}
-	for _, positionID := range []string{"1", "2", "3", "4"} {
+	// The coach is bought like anybody else and counted in the header, so he gets his line too.
+	for _, positionID := range []string{"1", "2", "3", "4", "5"} {
 		var line []map[string]any
 		for _, player := range squad {
 			if text(player["position_id"]) == positionID {
@@ -125,7 +126,7 @@ func (d Document) MySquadData() View {
 				state = " · sobra uno"
 			}
 		}
-		slug := map[string]string{"1": "por", "2": "def", "3": "med", "4": "del"}[positionID]
+		slug := map[string]string{"1": "por", "2": "def", "3": "med", "4": "del", "5": "ent"}[positionID]
 		lines = append(lines, Row{HeadSegs: []Seg{{T: strings.ToUpper(slug), C: "pos pos-" + slug},
 			{T: counted(len(line), "jugador", "jugadores") + state}}})
 		for _, player := range line {

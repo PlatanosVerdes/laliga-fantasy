@@ -355,6 +355,11 @@ type Player struct {
 	// Exceptions the league agreed, in its own words, so the refusal says where to go next.
 	HoldExceptions string
 	Available      bool
+	// DebtRoom is how far below zero a market bid may take the balance under the league's
+	// rules, and Committed what my other live bids and offers already hold: the same limit the
+	// page offers bids up to.
+	DebtRoom  int64
+	Committed int64
 	// Whether the seller takes direct offers. Absent when the listing does not say, and only
 	// an explicit no is treated as one.
 	DirectOffer *bool
@@ -637,8 +642,9 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 			return nil, fmt.Errorf("ya tienes una oferta de %s por el: retirala primero, que "+
 				"cambiarla no se puede", money(who.MyBid))
 		}
-		if cash != nil && args.Amount > *cash {
-			return nil, fmt.Errorf("no te llega: tienes %s", money(*cash))
+		if cash != nil && args.Amount > *cash-who.Committed {
+			return nil, fmt.Errorf("no te llega: tienes %s y %s en otras pujas", money(*cash),
+				money(who.Committed))
 		}
 		if who.MinBid > 0 && args.Amount < who.MinBid {
 			warnings = append(warnings, fmt.Sprintf("piden %s: por debajo puede que ni la miren",
@@ -696,8 +702,9 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 		if who.MinBid > 0 && args.Amount < who.MinBid {
 			return nil, fmt.Errorf("la puja minima es %s", money(who.MinBid))
 		}
-		if cash != nil && args.Amount > *cash {
-			return nil, fmt.Errorf("no te llega: tienes %s", money(*cash))
+		if cash != nil && args.Amount > *cash+who.DebtRoom-who.Committed {
+			return nil, fmt.Errorf("no te llega: tienes %s, %s de margen de deuda y %s en otras "+
+				"pujas", money(*cash), money(who.DebtRoom), money(who.Committed))
 		}
 		if who.IdealBid > 0 {
 			if args.Amount > who.IdealBid {
