@@ -123,17 +123,22 @@ func unwrap(raw json.RawMessage) (json.RawMessage, error) {
 	return json.RawMessage("[]"), nil
 }
 
-func (c *Client) getList(path string, ttl time.Duration, tag string, store bool,
-	target any) error {
-	var raw json.RawMessage
-	if err := c.get(path, true, ttl, tag, store, &raw); err != nil {
-		return err
-	}
+// listOf decodes a list in either shape inside the one unmarshal, so a cached body of the
+// wrong shape fails where httpx can drop it and fetch again.
+type listOf struct{ target any }
+
+func (l *listOf) UnmarshalJSON(raw []byte) error {
 	list, err := unwrap(raw)
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(list, target)
+	httpx.Reset(l.target)
+	return json.Unmarshal(list, l.target)
+}
+
+func (c *Client) getList(path string, ttl time.Duration, tag string, store bool,
+	target any) error {
+	return c.get(path, true, ttl, tag, store, &listOf{target})
 }
 
 func (c *Client) CurrentWeek(ttl time.Duration) (Week, error) {

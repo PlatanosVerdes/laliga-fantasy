@@ -51,8 +51,14 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 	}
 
 	counts := map[int]int{}
+	// Who can actually take the field: an injured or banned man fills no slot, and counting him
+	// let a squad without a fit keeper pass for one that can line up.
+	fieldable := map[int]int{}
 	for _, player := range squad {
 		counts[int(number(player["position_id"]))]++
+		if playable(player) {
+			fieldable[int(number(player["position_id"]))]++
+		}
 	}
 
 	// Candidates: the free market first (you bid and it is yours if nobody outbids), then
@@ -88,6 +94,8 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 	// What you can field right now, and under which formation. Computed before anything moves,
 	// because it is what every gain below is added to.
 	before, shape, starters := bestEleven(squad)
+	// The squad as the plan leaves it so far: each move is judged against the moves before it.
+	current := append([]Row{}, squad...)
 
 	// A hole no swap can close. Every move below trades one of yours for somebody else's, so a
 	// squad that cannot field eleven -- ten players, or eleven that no formation lines up --
@@ -96,8 +104,8 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 	//
 	// Several positions usually close the same hole, so the pick is whoever is actually for
 	// sale and cheapest per point, not whichever formation happens to be listed first.
-	for attempt := 0; attempt < 4 && !eleven.Any(counts); attempt++ {
-		short := eleven.Missing(counts)
+	for attempt := 0; attempt < 4 && !eleven.Any(fieldable); attempt++ {
+		short := eleven.Missing(fieldable)
 		var pick Row
 		pickPosition, pickScore := 0, 0.0
 		for _, positionID := range positionOrder {
@@ -119,8 +127,11 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 		taken[text(pick["id"])] = true
 		free -= cost
 		counts[pickPosition]++
+		fieldable[pickPosition]++
+		gain := elevenGain(current, nil, pick)
+		current = append(current, pick)
 		moves = append(moves, Row{
-			"in": pick, "cost": cost, "net": cost, "gain": number(pick["xpts"]),
+			"in": pick, "cost": cost, "net": cost, "gain": gain,
 			"position": positionWord[pickPosition],
 			"why": fmt.Sprintf("hueco en el once: con un %s mas ya hay formacion que "+
 				"cubra los once", positionWord[pickPosition]),
@@ -176,7 +187,9 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 			if truthy(in["sale_locked"]) {
 				continue
 			}
-			gain := number(in["xpts"]) - number(out["xpts"])
+			// What the eleven gains, not what he outscores the leaver by: swapping a benched
+			// 1.0 for a 4.5 who also sits on the bench gains nothing.
+			gain := elevenGain(current, out, in)
 			net := number(in["cost"]) - sale
 			// A swap has to buy points. Paying for the same points is a lateral move with a
 			// bill attached.
@@ -210,7 +223,8 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 		}
 		if best != nil {
 			in := best
-			gain := number(in["xpts"]) - number(out["xpts"])
+			gain := elevenGain(current, out, in)
+			current = swapped(current, out, in)
 			net := number(in["cost"]) - sale
 			taken[text(in["id"])] = true
 			free -= net
@@ -229,12 +243,8 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 		}
 	}
 
-	// Every gain lands on the eleven measured before anything moved, and a signing fills a slot
-	// that was scoring nothing, so its whole xPts is the gain.
-	after := before
-	for _, move := range moves {
-		after += number(move["gain"])
-	}
+	// Each gain was measured on the squad the moves before it left, so they add up.
+	after, _, _ := bestEleven(current)
 
 	if committed > 0 {
 		warnings = append(warnings, fmt.Sprintf(
@@ -370,6 +380,9 @@ func bestEleven(squad []Row) (float64, string, int) {
 	byPosition := map[int][]float64{}
 	counts := map[int]int{}
 	for _, player := range squad {
+		if !playable(player) {
+			continue
+		}
 		positionID := int(number(player["position_id"]))
 		byPosition[positionID] = append(byPosition[positionID], number(player["xpts"]))
 		counts[positionID]++
@@ -411,4 +424,29 @@ func pendingBids(universe Row) float64 {
 		}
 	}
 	return total
+}
+
+// playable is whether he can take the field this matchday. A row that does not say is taken to.
+func playable(player Row) bool {
+	available, known := player["available"].(bool)
+	return !known || available
+}
+
+// elevenGain is what the best eleven gains when in replaces out (out nil: a signing on top).
+func elevenGain(squad []Row, out, in Row) float64 {
+	before, _, _ := bestEleven(squad)
+	after, _, _ := bestEleven(swapped(squad, out, in))
+	return math.Round((after-before)*100) / 100
+}
+
+// swapped is the squad with out replaced by in, or with in added when out is nil.
+func swapped(squad []Row, out, in Row) []Row {
+	next := make([]Row, 0, len(squad)+1)
+	for _, player := range squad {
+		if out != nil && text(player["id"]) == text(out["id"]) {
+			continue
+		}
+		next = append(next, player)
+	}
+	return append(next, in)
 }

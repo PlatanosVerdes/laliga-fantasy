@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -709,14 +710,18 @@ func (s *State) RenderKey() string {
 // knows exactly what changed — this offer is gone, that bid is now this much — so it says so
 // immediately and lets the rebuild confirm it afterwards. The apply function returns whether
 // it changed anything, so a patch that matched nothing does not fake an update.
+//
+// apply gets a copy, never the published world: readers hold that pointer without the lock.
 func (s *State) Patch(cause string, apply func(*model.Universe) bool) bool {
 	s.mu.Lock()
 	if s.universe == nil {
 		s.mu.Unlock()
 		return false
 	}
-	changed := apply(s.universe)
+	patched := cloneForPatch(s.universe)
+	changed := apply(patched)
 	if changed {
+		s.universe = patched
 		s.revision++
 		s.version++
 	}
@@ -730,6 +735,32 @@ func (s *State) Patch(cause string, apply func(*model.Universe) bool) bool {
 	s.announce(map[string]any{"type": "state", "version": version,
 		"generated_at": time.Now().UTC().Format(time.RFC3339)})
 	return true
+}
+
+// cloneForPatch copies what a patch may touch: the players with their offers, and the market
+// with each player's listing pointing into the copy.
+func cloneForPatch(universe *model.Universe) *model.Universe {
+	clone := *universe
+	clone.Market = slices.Clone(universe.Market)
+	listingAt := make(map[*model.Listing]int, len(universe.Market))
+	for index := range universe.Market {
+		listingAt[&universe.Market[index]] = index
+	}
+	clone.Players = slices.Clone(universe.Players)
+	for index := range clone.Players {
+		player := &clone.Players[index]
+		player.Offers = slices.Clone(player.Offers)
+		if player.MarketEntry == nil {
+			continue
+		}
+		if at, ok := listingAt[player.MarketEntry]; ok {
+			player.MarketEntry = &clone.Market[at]
+		} else {
+			listing := *player.MarketEntry
+			player.MarketEntry = &listing
+		}
+	}
+	return &clone
 }
 
 // SetWarm hands over the page render. Optional: without it everything still works, only the

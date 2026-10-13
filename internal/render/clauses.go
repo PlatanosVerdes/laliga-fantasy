@@ -286,7 +286,7 @@ func (d Document) calendarBlock() Block {
 	horizon := now.Add(7 * 24 * time.Hour)
 	squad := rows(d.Advice["squad"])
 	_, base := bestElevenOf(squad)
-	cash := number(d.Advice["budget"])
+	cash := d.free()
 	type day struct {
 		label        string
 		mine, theirs []map[string]any

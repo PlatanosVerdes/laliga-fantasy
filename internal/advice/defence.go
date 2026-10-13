@@ -70,6 +70,13 @@ func ClausePlan(universe Row, cash float64) Row {
 			"xi_drop":         drop,
 			"risk":            RaidRisk(player, threats, shortOf),
 		})
+		// Shielded, nobody can pay it while the shield lasts: raising it now buys nothing, and
+		// the plan comes back to him once the shield is gone.
+		if truthy(player["shielded"]) {
+			row["verdict"], row["why"] = "tranquilo", "blindado: nadie puede pagarla ahora"
+			rows = append(rows, row)
+			continue
+		}
 		// Nobody can pay it: there is nothing to defend against and no money to spend.
 		if len(threats) == 0 {
 			row["verdict"], row["why"] = "tranquilo", "nadie tiene caja para pagarla"

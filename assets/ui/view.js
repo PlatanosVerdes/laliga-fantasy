@@ -108,6 +108,24 @@ export function ActView({a}) {
   return a.wrap ? html`<span data-tip=${a.wrap}>${button}</span>` : button;
 }
 
+// Keyed rows: a row animated out by leave must not be reused for the next one when the list redraws.
+const offerOf = (r) => (r.acts || []).map((a) => a.args && (a.args.offer_id || a.args.market_id)).find(Boolean);
+function rowKeys(rows) {
+  const seen = new Map();
+  return rows.map((r, i) => {
+    const id = (r.player && r.player.id) || r.pid || r.team || r.head || r.name;
+    const offer = offerOf(r);
+    const base = id ? String(id) + (offer ? '/' + offer : '') : '#' + i;
+    const n = seen.get(base) || 0;
+    seen.set(base, n + 1);
+    return n ? base + '~' + n : base;
+  });
+}
+export const rowsView = (rows) => {
+  const keys = rowKeys(rows);
+  return rows.map((r, i) => html`<${RowView} key=${keys[i]} r=${r}/>`);
+};
+
 export function RowView({r}) {
   if (r.head || r.head_segs) return html`<li class=${('line-head ' + (r.head_c || '')).trim()}>${r.head_segs ? html`<${Segs} list=${r.head_segs}/>` : r.head}</li>`;
   const p = r.player;
@@ -187,7 +205,7 @@ function FilterBar({view}) {
 export const KINDS = {};
 
 export function list(rows, scroll, extra) {
-  const ul = html`<ul class=${'rows' + (extra ? ' ' + extra : '')}>${rows.map((r) => html`<${RowView} r=${r}/>`)}</ul>`;
+  const ul = html`<ul class=${'rows' + (extra ? ' ' + extra : '')}>${rowsView(rows)}</ul>`;
   return scroll ? html`<div class="scrollbox" style=${'max-height:' + scroll + 'px'}>${ul}</div>` : ul;
 }
 

@@ -643,12 +643,19 @@ func cmdServe(args []string) error {
 	fmt.Printf("Modo: %s\n", mode)
 
 	league, team, _ := currentLeague(&mu, &leagueID, &teamID)
+	knownLeague := func() (string, string) {
+		mu.Lock()
+		defer mu.Unlock()
+		return leagueID, teamID
+	}
 	necroCfg := necroporra.Load()
 	panel := server.New(world, server.Options{
 		Host: *host, Port: *port, AllowWrites: allowWrites, Mode: mode, Rehearse: writes.Rehearsal,
 		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
 		Client: client, Guard: guard, LeagueID: league, MyTeamID: team,
+		Identity:       knownLeague,
 		HoldExceptions: rules.For(league).HoldExceptions,
+		MaxDebtPct:     rules.For(league).MaxDebtPct,
 		NecroCookie:    necroCfg.Cookie,
 		NecroAction:    necroCfg.ActionID,
 		NecroGameweek:  necroCfg.Gameweek,
@@ -685,7 +692,10 @@ func cmdServe(args []string) error {
 	// The side game's safety net: on auto, if the round is about to close and you have not
 	// voted, cast the two weakest for you. Manual and read-only never act on their own.
 	if allowWrites && !*noAuto && necroCfg.CanVote() {
-		go autoNecroVote(necroCfg, world.Universe, team)
+		go autoNecroVote(necroCfg, world.Universe, func() string {
+			_, team := knownLeague()
+			return team
+		})
 	}
 
 	// Nobody is told about a change until the page for it exists: rendering costs about four
@@ -1527,8 +1537,9 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		Plan:     policies.Plan(players, armed, time.Now()),
 		Raids:    policies.RaidPlan(players, armed, cash, clauseWindow(universe.Schedule)),
 		Window:   clauseWindow(universe.Schedule),
-		Money:    advice.Money(generic, cash, time.Now()),
-		Raise:    advice.ClausePlan(generic, cash),
+		// Spendable now: what my live bids hold is not there to spend twice.
+		Money:    advice.Money(generic, cash-number(buckets["committed"]), time.Now()),
+		Raise:    advice.ClausePlan(generic, cash-number(buckets["committed"])),
 		Policies: policyRows,
 	}
 	necro := necroporra.Load()
@@ -1552,11 +1563,17 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 // autoNecroVote is the side game's standing instruction: while the round's last two hours run
 // and no vote has been cast, send the two weakest predicted teams. It checks every few minutes,
 // casts at most once per gameweek, and does nothing until the window opens.
-func autoNecroVote(cfg necroporra.Config, universe func() *model.Universe, myTeamID string) {
+func autoNecroVote(cfg necroporra.Config, universe func() *model.Universe,
+	myTeamID func() string) {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 	done := map[int]bool{}
 	attempt := func() {
+		// Without our own team the prediction cannot leave it out, and could vote for us.
+		team := myTeamID()
+		if team == "" {
+			return
+		}
 		state := necroporra.FetchState(cfg)
 		if !state.Open || state.Voted() || done[state.Gameweek] || state.ClosesAt.IsZero() {
 			return
@@ -1576,7 +1593,7 @@ func autoNecroVote(cfg necroporra.Config, universe func() *model.Universe, myTea
 		if json.Unmarshal(blob, &generic) != nil {
 			return
 		}
-		picks := necroporra.Picks(necroporra.Predict(generic, cfg.Roster, myTeamID))
+		picks := necroporra.Picks(necroporra.Predict(generic, cfg.Roster, team))
 		if len(picks) != 2 {
 			return
 		}

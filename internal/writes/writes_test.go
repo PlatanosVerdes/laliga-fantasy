@@ -408,3 +408,16 @@ func TestABidIsNeverCancelledWithoutItsID(t *testing.T) {
 		}
 	}
 }
+
+// A bid may use the league's debt room, minus what other live bids already hold: the same limit
+// the page offers, so two bids that both win cannot break the cap together.
+func TestABidFitsCashPlusDebtRoomMinusOtherBids(t *testing.T) {
+	cash := int64(10_000_000)
+	who := Player{DebtRoom: 5_000_000, Committed: 9_000_000}
+	if _, err := check("bid", Args{MarketID: "m", Amount: 7_000_000}, who, &cash, nil); err == nil {
+		t.Error("a bid over cash + debt room - committed went through")
+	}
+	if _, err := check("bid", Args{MarketID: "m", Amount: 6_000_000}, who, &cash, nil); err != nil {
+		t.Errorf("a bid within the limit was refused: %v", err)
+	}
+}

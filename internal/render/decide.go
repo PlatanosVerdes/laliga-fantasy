@@ -56,7 +56,7 @@ func (d Document) DecideData() View {
 		data.Empty = "Nada que decidir ahora: ninguna oferta que cobrar, ninguna cláusula que " +
 			"subir y ningún fichaje que mejore tu once a su precio."
 	} else {
-		cash := number(d.Advice["budget"])
+		cash := d.free()
 		for _, card := range cards {
 			data.Cards = append(data.Cards, cardView(card))
 			cash += card.Cash

@@ -172,8 +172,9 @@ func (e *Engine) doWork(decision schedule.Decision) {
 	live := schedule.LiveMatches(payload, now, false)
 	if len(live) > 0 || startsWithAny(decision.Why, "termina", "cierra la jornada") {
 		// Points come from the player master, cached for six hours because it barely
-		// changes — except while a match is on, when it is the only thing that changes.
-		e.deps.Invalidate("players", "lineup", "week")
+		// changes — except while a match is on, when it is the only thing that changes. The
+		// calendar goes too, or the copy holding the live score would outlive the match.
+		e.deps.Invalidate("players", "lineup", "week", "calendar")
 	}
 
 	if decision.Kind == schedule.KindDeadline {

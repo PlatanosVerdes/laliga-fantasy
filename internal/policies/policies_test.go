@@ -1,6 +1,7 @@
 package policies
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -287,5 +288,32 @@ func TestShieldQueue(t *testing.T) {
 	armed, _ = Load()
 	if _, left := armed["1"]; left {
 		t.Errorf("the last one bought leaves nothing behind, got %+v", armed["1"])
+	}
+}
+
+// An offer the guard would refuse is not proposed: unlisted, the player is listed again instead,
+// and within the hold he is left alone.
+func TestPlanNeverProposesAnOfferTheGuardRefuses(t *testing.T) {
+	threshold := 1_000_000.0
+	armed := map[string]Policy{"1": {ID: "1", AlwaysList: true, AutoSell: true,
+		AcceptAbove: &threshold}}
+	player := Row{"id": "1", "name": "Sierra", "is_mine": true, "position_id": 4.0,
+		"value": 10_000_000.0, "available": true,
+		"offers": []any{map[string]any{"id": "o", "money": 20_000_000.0}}}
+	squad := []Row{player}
+	for i := range 12 {
+		squad = append(squad, Row{"id": fmt.Sprint(100 + i), "is_mine": true, "position_id": 4.0})
+	}
+	for _, action := range Plan(squad, armed, time.Now()) {
+		if action["action"] == "aceptar_oferta" {
+			t.Errorf("an offer with no listing was proposed: %+v", action)
+		}
+	}
+	player["market"] = map[string]any{"market_id": "m", "expires": time.Now().Add(time.Hour).Format(time.RFC3339)}
+	player["sale_locked"] = true
+	for _, action := range Plan(squad, armed, time.Now()) {
+		if action["action"] == "aceptar_oferta" {
+			t.Errorf("an offer inside the hold was proposed: %+v", action)
+		}
 	}
 }

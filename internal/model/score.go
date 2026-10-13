@@ -454,7 +454,7 @@ func DeepEnrich(players []*Player, limit int, ttl time.Duration) int {
 		if player.FFName != nil && *player.FFName != "" {
 			name = *player.FFName
 		}
-		page, err := futbolfantasy.PlayerPage(matching.SlugifyFF(name), ttl)
+		page, err := futbolfantasy.PlayerPageFor(matching.SlugifyFF(name), *player.FFID, ttl)
 		if err != nil {
 			slog.Debug("deep enrich skipped", "player", player.Name, "reason", err.Error())
 			continue

@@ -176,7 +176,7 @@ func maxFloat(one, two float64) float64 {
 func (d Document) crackReach() (float64, []string) {
 	// What can really be raised today: the cash, the offers on the table that pay, and the
 	// bench players the hold rule already lets go.
-	reach := number(d.Advice["budget"])
+	reach := d.free()
 	sold := []string{}
 	amounts := map[string]float64{}
 	names := map[string]string{}
@@ -237,7 +237,7 @@ func (d Document) saleSwaps() map[string]advice.Clausulazo {
 				continue
 			}
 			move, ok := advice.SwapForSale(players, id, number(offer["offer_amount"]),
-				number(d.Advice["budget"]), window, time.Now(), taken, advice.RivalBankOf(d.Universe))
+				d.free(), window, time.Now(), taken, advice.RivalBankOf(d.Universe))
 			if ok && (bestID == "" || move.Gain > best.Gain) {
 				bestID, best = id, move
 			}
@@ -278,7 +278,7 @@ func (d Document) saleSwapCards() []Card {
 		in := move.In
 		owner := text(in["owner"])
 		order := "Acepta primero: el dinero de la venta paga la cláusula."
-		if number(d.Advice["budget"]) >= move.Cost {
+		if d.free() >= move.Cost {
 			order = "Paga primero la cláusula y luego acepta: así no te quedas sin él."
 		}
 		if move.Opens != "" {
@@ -310,7 +310,7 @@ func (d Document) saleSwapCards() []Card {
 // upgradeCard is the clausulazo cash alone pays and the plan's bar per million approves.
 func (d Document) upgradeCards(covered map[string]bool) []Card {
 	window, _ := d.clauseWindow()
-	move, ok := advice.ClauseUpgrade(rows(d.Universe["players"]), number(d.Advice["budget"]),
+	move, ok := advice.ClauseUpgrade(rows(d.Universe["players"]), d.free(),
 		number(d.Advice["squad_ppm_benchmark"]), window, time.Now(), advice.RivalBankOf(d.Universe))
 	if !ok || covered["in:"+text(move.In["id"])] {
 		return nil

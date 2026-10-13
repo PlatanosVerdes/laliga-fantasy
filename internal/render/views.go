@@ -133,8 +133,14 @@ func (d Document) worthItsPrice(item map[string]any, route string) bool {
 
 // buyingPower is today's cash, and what a market bid can reach with the debt the league allows
 // over the squad's value.
+// free is the balance minus what my live bids and offers already hold: what can be spent now
+// without two things that both land breaking the bank.
+func (d Document) free() float64 {
+	return number(d.Advice["budget"]) - number(d.Advice["committed"])
+}
+
 func (d Document) buyingPower() (cash, reach float64) {
-	cash = number(d.Advice["budget"])
+	cash = d.free()
 	squad := 0.0
 	for _, player := range rows(d.Advice["squad"]) {
 		squad += number(player["value"])

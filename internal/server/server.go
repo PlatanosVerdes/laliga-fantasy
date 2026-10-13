@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/services"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
@@ -47,12 +48,16 @@ type Options struct {
 	Client *api.Client
 	// Guard is the two-step write path. Nil means the binary was built to only read.
 	Guard *writes.Guard
-	// Which league and team every write belongs to.
+	// Which league and team every write belongs to. Identity, when set, wins: a server
+	// started without a session only learns them once one is adopted.
 	LeagueID string
 	MyTeamID string
+	Identity func() (league, team string)
 	// HoldExceptions is what the league agreed as an escape hatch to its own hold rule,
 	// quoted verbatim when an operation is refused because of it.
 	HoldExceptions string
+	// MaxDebtPct is the league's debt cap for market bids, in percent of the squad's value.
+	MaxDebtPct float64
 	// Settle makes the world catch up after a write, and is expected to block.
 	Settle func(cause string)
 	// Adopted runs once a session has just been stored: the world has to be built from
@@ -121,6 +126,46 @@ func New(world *state.State, opts Options) *Server {
 		opts.Assets = "assets"
 	}
 	return &Server{state: world, opts: opts}
+}
+
+func (s *Server) identity() (string, string) {
+	if s.opts.Identity != nil {
+		if league, team := s.opts.Identity(); league != "" && team != "" {
+			return league, team
+		}
+	}
+	return s.opts.LeagueID, s.opts.MyTeamID
+}
+
+func (s *Server) leagueID() string {
+	league, _ := s.identity()
+	return league
+}
+
+func (s *Server) myTeamID() string {
+	_, team := s.identity()
+	return team
+}
+
+func (s *Server) holdExceptions() string {
+	if s.opts.HoldExceptions != "" {
+		return s.opts.HoldExceptions
+	}
+	if league := s.leagueID(); league != "" {
+		return rules.For(league).HoldExceptions
+	}
+	return ""
+}
+
+// maxDebtPct is the league's debt cap for bids, read from its rules once the league is known.
+func (s *Server) maxDebtPct() float64 {
+	if s.opts.MaxDebtPct != 0 {
+		return s.opts.MaxDebtPct
+	}
+	if league := s.leagueID(); league != "" {
+		return rules.For(league).MaxDebtPct
+	}
+	return 0
 }
 
 func (s *Server) Handler() http.Handler {

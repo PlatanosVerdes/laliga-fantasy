@@ -66,10 +66,27 @@ func (d Document) visibleCards(now time.Time) ([]Card, int) {
 	cards = append(cards, d.signingCards(actions)...)
 	cards = append(cards, d.saleSwapCards()...)
 	covered := map[string]bool{}
+	offerCash := map[string]float64{}
 	for _, card := range cards {
 		covered[card.Key] = true
+		// A rival's player already brought in by a sale-and-clause card is not offered again.
+		if card.In != nil {
+			covered["in:"+text(card.In["id"])] = true
+		}
+		if card.Kind == "offer" {
+			offerCash[text(card.Player["id"])] = card.Cash
+		}
 	}
 	cards = append(cards, d.upgradeCards(covered)...)
+	// A swap that sells through an offer also shown as its own card counted the sale twice in
+	// what is left in the bank: the offer card carries the money in, the swap only the signing.
+	for index, card := range cards {
+		if card.Kind == "swap" && card.In != nil && card.Key == "in:"+text(card.In["id"]) {
+			if in, sold := offerCash[text(card.Player["id"])]; sold {
+				cards[index].Cash -= in
+			}
+		}
+	}
 	kept, hidden := cards[:0], 0
 	for _, card := range cards {
 		if d.Dismissed[DismissKey(card)] {
