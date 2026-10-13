@@ -189,7 +189,13 @@ func bidActs(row map[string]any, class, label string) []Act {
 	if existing := text(listing["my_bid_id"]); existing != "" {
 		amount := asFloat(listing["my_bid"])
 		if operation == "buy_offer" {
+			change := map[string]any{}
+			for key, value := range args {
+				change[key] = value
+			}
+			change["operation"], change["offer"] = "change_offer", existing
 			return []Act{{Label: "Ofreciste " + Money(amount), Class: "mine-bid", Text: true},
+				{Label: "Cambiar", Class: "ghost", Do: "bid", Args: change},
 				{Label: "Retirar", Class: "danger", Do: "op", Args: map[string]any{
 					"op": "cancel_offer", "market_id": marketID, "offer_id": existing,
 					"player_id": text(row["id"]), "name": text(row["name"])}}}

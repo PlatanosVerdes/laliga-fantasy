@@ -479,13 +479,18 @@ func (s *State) logMoves(universe *model.Universe) {
 const WithdrawGrace = 5 * time.Minute
 
 type withdrawal struct {
-	playerID string
-	until    time.Time
+	marketID, playerID string
+	until              time.Time
 }
 
-// Withdrawn records that I cancelled my bid or offer on this listing.
-func (s *State) Withdrawn(marketID, playerID string) {
-	if marketID == "" {
+// Withdrawn records that I cancelled this bid or offer. Keyed by the bid itself, not the
+// listing: a new offer on the same player right after the cancel is real and has to show.
+func (s *State) Withdrawn(marketID, bidID, playerID string) {
+	key := bidID
+	if key == "" {
+		key = "market:" + marketID
+	}
+	if marketID == "" && bidID == "" {
 		return
 	}
 	s.mu.Lock()
@@ -493,21 +498,27 @@ func (s *State) Withdrawn(marketID, playerID string) {
 	if s.withdrawn == nil {
 		s.withdrawn = map[string]withdrawal{}
 	}
-	s.withdrawn[marketID] = withdrawal{playerID: playerID, until: time.Now().Add(WithdrawGrace)}
+	s.withdrawn[key] = withdrawal{marketID: marketID, playerID: playerID,
+		until: time.Now().Add(WithdrawGrace)}
 }
 
 // hideWithdrawn takes my cancelled bids off a freshly built world until the market catches up.
 func (s *State) hideWithdrawn(universe *model.Universe, now time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for marketID, entry := range s.withdrawn {
+	for key, entry := range s.withdrawn {
 		if now.After(entry.until) {
-			delete(s.withdrawn, marketID)
+			delete(s.withdrawn, key)
 		}
 	}
 	for index := range universe.Market {
 		listing := &universe.Market[index]
-		if _, gone := s.withdrawn[listing.MarketID]; gone && listing.MyBidID != nil {
+		if listing.MyBidID == nil {
+			continue
+		}
+		_, gone := s.withdrawn[*listing.MyBidID]
+		_, unknown := s.withdrawn["market:"+listing.MarketID]
+		if gone || unknown {
 			listing.MyBidID, listing.MyBid, listing.MyBidStatus = nil, nil, nil
 		}
 	}

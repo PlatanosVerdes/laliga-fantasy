@@ -1,5 +1,5 @@
 import {html, useState, useEffect, panel} from './lib.js';
-import {Face, ShieldMark, Countdown, Crest, Empty, ApiFace} from './components.js';
+import {Face, ShieldMark, Countdown, Crest, Empty, ApiFace, Modal} from './components.js';
 import {KINDS} from './view.js';
 import {getJSON, useStamp, useView} from './api.js';
 import {dec, esDay, xClass} from './format.js';
@@ -29,16 +29,69 @@ KINDS.matchday = ({b}) => {
   </div>`;
 };
 
-// An agenda: each match on its line with its day and hour, the day written once for the matches
+// An agenda: each match on one line with its day and hour, the day written once for the matches
 // that share it, and how many of mine play in it.
-const Fixture = ({m, day}) => html`<li class="fx">
-  <span class="fx-day">${day ? m.day : ''}</span><span class="fx-hour">${m.hour}</span>
-  <span class="fx-match"><${Crest} id=${m.local_id} known=${m.local_crest}/>${m.local} – ${m.visitor}<${Crest} id=${m.visitor_id} known=${m.visitor_crest}/></span>
-  <span class="fx-mine">${m.count ? m.count + (m.count === 1 ? ' tuyo' : ' tuyos') : ''}</span></li>`;
-KINDS.weeks = ({b}) => html`<div class="agenda">${b.data.map((w) => html`<section class="agenda-week">
-  <h4><b>${w.label}</b>${w.yours ? html`<span class="meta">${w.yours}</span>` : null}</h4>
-  <ul>${w.matches.map((m, i) => html`<${Fixture} key=${m.local_id + '-' + m.visitor_id} m=${m} day=${i === 0 || m.day !== w.matches[i - 1].day}/>`)}</ul>
-</section>`)}</div>`;
+const Fixture = ({m, day}) => html`<li class="ag-row">
+  <span class="ag-day">${day ? m.day : ''}</span><span class="ag-hour">${m.hour}</span>
+  <span class="ag-match"><${Crest} id=${m.local_id} known=${m.local_crest}/>${m.local} – ${m.visitor}<${Crest} id=${m.visitor_id} known=${m.visitor_crest}/></span>
+  <span class="ag-mine">${m.count || ''}</span></li>`;
+KINDS.weeks = ({b}) => {
+  const [open, setOpen] = useState(false);
+  const {weeks, days} = b.data;
+  return html`<div class="agenda">${weeks.map((w) => html`<section class="agenda-week">
+    <h4><b>${w.label}</b>${w.yours ? html`<span class="meta">${w.yours}</span>` : null}</h4>
+    <ul>${w.matches.map((m, i) => html`<${Fixture} key=${m.local_id + '-' + m.visitor_id} m=${m} day=${i === 0 || m.day !== w.matches[i - 1].day}/>`)}</ul>
+  </section>`)}
+  ${days && days.length ? html`<button type="button" class="mb mb-ghost ag-open" onClick=${() => setOpen(true)}>Ver calendario</button>` : null}
+  ${open ? html`<${Modal} label="Calendario de jornadas" onClose=${() => setOpen(false)}><${SeasonCalendar} days=${days} onClose=${() => setOpen(false)}/><//>` : null}
+  </div>`;
+};
+
+const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre',
+  'octubre', 'noviembre', 'diciembre'];
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+// A month at a time, each matchday's days marked in its own shade and labelled with its number,
+// so a matchday spread over four days and a postponed match in midweek read at a glance.
+function SeasonCalendar({days, onClose}) {
+  const byDate = new Map();
+  for (const d of days) byDate.set(d.date, [...(byDate.get(d.date) || []), d]);
+  const today = iso(new Date());
+  const [month, setMonth] = useState(() => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), 1); });
+  const first = days[0].date, last = days[days.length - 1].date;
+  const lead = (month.getDay() + 6) % 7;
+  const count = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+  const cells = [...Array(lead).fill(null), ...Array.from({length: count}, (_, i) => new Date(month.getFullYear(), month.getMonth(), i + 1))];
+  const shift = (by) => setMonth(new Date(month.getFullYear(), month.getMonth() + by, 1));
+  const canBack = iso(month) > first.slice(0, 8) + '01';
+  const canNext = iso(new Date(month.getFullYear(), month.getMonth() + 1, 1)) <= last;
+  // A matchday is the first day of its run that the month shows: its label goes there only.
+  const labelled = new Set();
+  return html`<div class="cal">
+    <div class="cal-head">
+      <button type="button" class="cal-nav" aria-label="Mes anterior" disabled=${!canBack} onClick=${() => shift(-1)}>‹</button>
+      <b>${MONTHS[month.getMonth()]} ${month.getFullYear()}</b>
+      <button type="button" class="cal-nav" aria-label="Mes siguiente" disabled=${!canNext} onClick=${() => shift(1)}>›</button>
+    </div>
+    <div class="cal-grid">${['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d) => html`<span class="cal-dow">${d}</span>`)}
+      ${cells.map((date) => {
+        if (!date) return html`<span></span>`;
+        const key = iso(date), hits = byDate.get(key) || [];
+        const tip = hits.map((h) => `J${h.week} · ${h.matches} ${h.matches === 1 ? 'partido' : 'partidos'}${h.mine ? ` · ${h.mine} ${h.mine === 1 ? 'tuyo' : 'tuyos'}` : ''}`).join('\n');
+        const shade = hits.length ? ' w' + (hits[0].week % 4) : '';
+        const done = hits.length && hits.every((h) => h.played === h.matches) ? ' done' : '';
+        return html`<span class=${'cal-day' + shade + done + (key === today ? ' today' : '')} data-tip=${tip || undefined}>
+          <i>${date.getDate()}</i>
+          ${hits.map((h) => { const show = !labelled.has(h.week); labelled.add(h.week);
+            return show ? html`<em>J${h.week}</em>` : null; })}
+          ${hits.some((h) => h.mine) ? html`<s>${hits.reduce((n, h) => n + h.mine, 0)}</s>` : null}
+        </span>`;
+      })}</div>
+    <p class="cal-key"><span class="cal-day w0 key"></span><span class="cal-day w1 key"></span><span class="cal-day w2 key"></span> un color por jornada ·
+      <s class="key">2</s> tuyos que juegan</p>
+    <div class="cal-foot"><button type="button" class="mb mb-ghost" onClick=${onClose}>Cerrar</button></div>
+  </div>`;
+}
 
 // One fetch per matchday and world state; an answer with a failed half is shown but not kept.
 const seasonCache = new Map();
