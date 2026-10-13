@@ -12,13 +12,16 @@ import (
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/auth"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/files"
 )
 
 // HasSession reports whether there is anything to authenticate with. A stored refresh token
 // is enough: the access token is renewed on first use.
 func HasSession() bool {
 	tokens, err := auth.Load()
-	return err == nil && tokens != nil && (tokens.RefreshToken != "" || tokens.AccessToken != "")
+	// A session given up on is shown as none, so the page asks for the login that restarts it.
+	return err == nil && tokens != nil && !tokens.Stopped() &&
+		(tokens.RefreshToken != "" || tokens.AccessToken != "")
 }
 
 // setup is the page shown when there is no session: the login link and a box to paste the
@@ -53,6 +56,21 @@ func (s *Server) session(writer http.ResponseWriter, request *http.Request) {
 		s.json(writer, http.StatusBadRequest, map[string]any{"error": "no has pegado nada"})
 		return
 	}
+	// A working session is replaced only on purpose: a stray post used to overwrite it, and a
+	// failed check then deleted the file.
+	if HasSession() && !truthy(body["replace"]) {
+		s.json(writer, http.StatusConflict, map[string]any{
+			"error": "ya hay una sesion que funciona; para cambiarla manda replace: true"})
+		return
+	}
+	previous, readErr := os.ReadFile(config.TokenFile)
+	restore := func() {
+		if readErr == nil {
+			_ = files.WriteAtomic(config.TokenFile, previous, 0o600)
+		} else {
+			_ = os.Remove(config.TokenFile)
+		}
+	}
 
 	if strings.HasPrefix(pasted, "{") {
 		tokens, err := auth.Adopt(pasted)
@@ -64,7 +82,7 @@ func (s *Server) session(writer http.ResponseWriter, request *http.Request) {
 		// looks identical to a good one until the first request fails, hours later.
 		if s.opts.Client != nil {
 			if _, err := s.opts.Client.Me(0); err != nil {
-				_ = os.Remove(config.TokenFile)
+				restore()
 				s.json(writer, http.StatusBadRequest,
 					map[string]any{"error": "esa sesion no sirve: " + err.Error()})
 				return

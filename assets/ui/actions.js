@@ -28,7 +28,7 @@ export async function runAction(a, player, {fromCard = false, reopen} = {}) {
     openAmount(a, player);
   } else {
     confirmOp({op: a.op, name: player.name, player_id: a.player_id || player.id,
-      market_id: a.market_id, offer_id: a.offer_id, amount: a.amount || null});
+      market_id: a.market_id, offer_id: a.offer_id, bid_id: a.bid_id, amount: a.amount || null});
   }
 }
 
@@ -56,7 +56,7 @@ export async function runAct(a, origin = null) {
   switch (a.do) {
     case 'op':
       confirmOp({op: x.op, name: x.name, player_id: x.player_id, market_id: x.market_id,
-        offer_id: x.offer_id, amount: x.amount || null, origin});
+        offer_id: x.offer_id, bid_id: x.bid_id, amount: x.amount || null, origin});
       return;
     case 'card': await runCardAction(x.player_id, x.op); return;
     case 'bid': openBid(x); return;

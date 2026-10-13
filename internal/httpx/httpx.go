@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/files"
 )
 
 // Stats counts requests actually put on the wire, so a refresh policy can be measured
@@ -149,7 +150,7 @@ func writeCache(rawURL, tag, body string) {
 	if err := config.EnsureDirs(); err != nil {
 		return
 	}
-	_ = os.WriteFile(cachePath(rawURL, tag), []byte(body), 0o600)
+	_ = files.WriteAtomic(cachePath(rawURL, tag), []byte(body), 0o600)
 }
 
 // Cached is a cache-only read, so callers can throttle just the real requests.
@@ -345,6 +346,9 @@ func PostForm(rawURL string, form map[string]string, target any) error {
 			"User-Agent":   config.APIHeaders()["User-Agent"],
 		},
 		Tag: "raw",
+		// A login code and a refresh token are spent by the first answer; a retry after a
+		// timeout only spends them again and gets invalid_grant.
+		Retries: 1,
 	})
 	if err != nil {
 		return err

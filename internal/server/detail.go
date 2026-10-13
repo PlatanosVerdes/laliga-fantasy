@@ -324,6 +324,22 @@ func (s *Server) actions(player map[string]any, rows []map[string]any,
 				}
 				note += "caduca " + expires[:16]
 			}
+			blocked := render.AcceptBlocked(map[string]any{"market_id": listing["market_id"],
+				"sale_locked": player["sale_locked"], "available": player["available"],
+				"hold_until": player["hold_until"]})
+			if blocked != "" {
+				actions = append(actions, map[string]any{"op": "note", "kind": "note",
+					"group": "oferta", "label": fmt.Sprintf("Oferta %s por %s: %s", from,
+						short(float64(amount)), blocked)})
+				// Declining needs the listing too; within the hold it can still be declined.
+				if text(listing["market_id"]) == "" {
+					continue
+				}
+				actions = append(actions, map[string]any{"op": "decline_offer",
+					"label": "Rechazar la " + from, "kind": "confirm", "danger": true,
+					"offer_id": text(offer["id"]), "market_id": listing["market_id"]})
+				continue
+			}
 			take, why := offerAdvice(rows, id, float64(amount), number(player["value"]), budget,
 				s.state.ClauseWindow(time.Now()), s.rivalBank())
 			actions = append(actions,

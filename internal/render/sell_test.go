@@ -79,3 +79,21 @@ func TestTheHoldRuleNeverStopsAListing(t *testing.T) {
 		t.Errorf("an injured player in his hold was not offered for sale: %+v %+v", sell, chip)
 	}
 }
+
+// An offer can be taken only against a listing, and within the hold only if he is out.
+func TestAcceptBlockedMatchesWhatTheServerRefuses(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		row     map[string]any
+		blocked bool
+	}{
+		{"listed", map[string]any{"market_id": "m"}, false},
+		{"not listed", map[string]any{"market_id": ""}, true},
+		{"in the hold, fit", map[string]any{"market_id": "m", "sale_locked": true, "available": true}, true},
+		{"in the hold, injured", map[string]any{"market_id": "m", "sale_locked": true, "available": false}, false},
+	} {
+		if got := AcceptBlocked(c.row) != ""; got != c.blocked {
+			t.Errorf("%s: blocked = %v, want %v", c.name, got, c.blocked)
+		}
+	}
+}

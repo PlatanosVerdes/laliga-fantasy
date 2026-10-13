@@ -11,9 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/files"
 )
 
 // Keep is how many endings are kept. Enough to answer "what happened this week" without the file
@@ -52,12 +54,35 @@ func Load() []Ending {
 	return out
 }
 
+// appendMu makes each append one read-and-write: a rebuild and a click append at the same time,
+// and two appends that read the same file kept only one of the two.
+var appendMu sync.Mutex
+
+// readable is whether the file is absent or parses: one that does not is left alone rather than
+// overwritten with only the newest lines.
+func readable(path string, into any) error {
+	body, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(body, into)
+}
+
 // Append writes new endings, newest first, keeping the file bounded.
 func Append(fresh ...Ending) error {
 	if len(fresh) == 0 {
 		return nil
 	}
 	if err := config.EnsureDirs(); err != nil {
+		return err
+	}
+	appendMu.Lock()
+	defer appendMu.Unlock()
+	var check []Ending
+	if err := readable(path(), &check); err != nil {
 		return err
 	}
 	all := append(fresh, Load()...)
@@ -68,7 +93,7 @@ func Append(fresh ...Ending) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path(), blob, 0o600)
+	return files.WriteAtomic(path(), blob, 0o600)
 }
 
 // Pending is one of my bids or offers as it stood on the previous pass: what has to be remembered
@@ -167,6 +192,12 @@ func AppendOrders(fresh ...Order) error {
 	if err := config.EnsureDirs(); err != nil {
 		return err
 	}
+	appendMu.Lock()
+	defer appendMu.Unlock()
+	var check []Order
+	if err := readable(ordersPath(), &check); err != nil {
+		return err
+	}
 	now := time.Now().Format(time.RFC3339)
 	for index := range fresh {
 		if fresh[index].At == "" {
@@ -181,5 +212,5 @@ func AppendOrders(fresh ...Order) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(ordersPath(), blob, 0o600)
+	return files.WriteAtomic(ordersPath(), blob, 0o600)
 }

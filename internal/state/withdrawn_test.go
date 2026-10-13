@@ -16,7 +16,8 @@ func worldWithMyOffer() *model.Universe {
 	universe := &model.Universe{
 		Market: []model.Listing{{MarketID: "52857370", PlayerID: "7", Kind: "venta",
 			Seller: &seller, MyBidID: &offerID, MyBid: &amount}},
-		Players: []model.Player{{ID: "7", Name: "Kike Salas"}},
+		Players:         []model.Player{{ID: "7", Name: "Kike Salas"}},
+		OwnershipLoaded: true,
 	}
 	universe.Players[0].MarketEntry = &universe.Market[0]
 	return universe

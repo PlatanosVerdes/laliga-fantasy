@@ -9,9 +9,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/files"
 )
 
 // Keep is how long a dismissal is remembered. Most cards carry a deadline in their key and are
@@ -40,8 +42,12 @@ func Load() map[string]time.Time {
 	return out
 }
 
+var mu sync.Mutex
+
 // Add dismisses one card.
 func Add(key string) error {
+	mu.Lock()
+	defer mu.Unlock()
 	all := Load()
 	all[key] = time.Now()
 	return save(all)
@@ -58,5 +64,5 @@ func save(all map[string]time.Time) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path(), blob, 0o600)
+	return files.WriteAtomic(path(), blob, 0o600)
 }

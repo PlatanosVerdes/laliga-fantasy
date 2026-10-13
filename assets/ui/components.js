@@ -157,7 +157,7 @@ export function ConfirmOp({op}) {
   const token = useRef(null);
   const traced = useDialogTrace(op.op);
   useEffect(() => {
-    prepare({operation: op.op, market_id: op.market_id, offer_id: op.offer_id,
+    prepare({operation: op.op, market_id: op.market_id, offer_id: op.offer_id, bid_id: op.bid_id,
       player_id: op.player_id, amount: op.amount || undefined})
       .then((data) => { token.current = data.token; setStep((s) => ({...s, summary: data})); },
         (error) => setStep((s) => ({...s, error: error.message})));

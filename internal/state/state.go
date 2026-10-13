@@ -567,7 +567,12 @@ func (s *State) forgetSold(universe *model.Universe) {
 	}
 	record(signed, "clausulazo", "ya es tuyo")
 
-	// And the third: a raid whose target changed hands, or has no owner to pay a clause to.
+	// And the third: a raid whose target changed hands, or has no owner to pay a clause to. Not
+	// while a squad is missing: its players have no owner this pass only because it failed to load.
+	if universe.UnreadSquads > 0 {
+		slog.Warn("raids left armed: a squad did not load", "unread", universe.UnreadSquads)
+		return
+	}
 	traded, err := policies.Disarm(policies.Traded(owners, mine, armed)...)
 	if err != nil {
 		slog.Error("could not disarm the raids of traded players", "reason", err.Error())
@@ -599,7 +604,9 @@ func record(dropped []policies.Dropped, kind, why string) {
 }
 
 func (s *State) trackMine(universe *model.Universe) {
-	if universe == nil {
+	// A pass with a squad missing cannot tell an accepted offer from one that lapsed, and the
+	// pending list it would replace is the only memory of either: wait for a full one.
+	if universe == nil || !universe.OwnershipLoaded || universe.UnreadSquads > 0 {
 		return
 	}
 
