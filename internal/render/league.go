@@ -167,7 +167,7 @@ func feedLine(event map[string]any, teams, marks map[string]string, me string) F
 				week = fmt.Sprintf(" por la jornada %.0f", matchday)
 			}
 		}
-		body = []Seg{buyer, {T: "cobra" + week, C: "feed-then"}}
+		body = []Seg{buyer, {T: " cobra" + week, C: "feed-then"}}
 	case name != "" && hasBuyer && hasSeller:
 		body = []Seg{strong, {T: ": "}, seller, {T: " → "}, buyer}
 	case name != "" && hasBuyer:

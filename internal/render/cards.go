@@ -558,7 +558,7 @@ func xptsClass(xpts float64) string {
 	return "x-bad"
 }
 
-// esMoney is money the Spanish way, with a decimal comma: 21,7M, 850K.
+// esMoney is money as the page writes it everywhere: a decimal point and one decimal, 21.7M, 850K.
 func esMoney(amount float64) string {
 	sign := ""
 	if amount < 0 {
@@ -566,7 +566,7 @@ func esMoney(amount float64) string {
 	}
 	switch {
 	case amount >= 999_500:
-		return sign + strings.Replace(fmt.Sprintf("%.1f", amount/1e6), ".", ",", 1) + "M"
+		return sign + fmt.Sprintf("%.1f", amount/1e6) + "M"
 	case amount >= 1e3:
 		return sign + group(fmt.Sprintf("%.0f", amount/1e3)) + "K"
 	}
@@ -576,7 +576,7 @@ func esMoney(amount float64) string {
 func esNum(value float64, digits int) string {
 	scale := math.Pow(10, float64(digits))
 	rounded := math.Round(value*scale) / scale
-	text := strings.Replace(fmt.Sprintf("%.*f", digits, math.Abs(rounded)), ".", ",", 1)
+	text := fmt.Sprintf("%.*f", digits, math.Abs(rounded))
 	if rounded < 0 {
 		return "−" + text
 	}

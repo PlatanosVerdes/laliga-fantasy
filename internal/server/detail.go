@@ -844,7 +844,7 @@ func offerAdvice(rows []map[string]any, id string, amount, value, cash float64,
 		return false, ""
 	}
 	ratio := amount / value
-	words := "×" + strings.Replace(fmt.Sprintf("%.2f", ratio), ".", ",", 1) + " su valor"
+	words := "×" + fmt.Sprintf("%.2f", ratio) + " su valor"
 	without := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
 		if text(row["id"]) != id {
@@ -863,7 +863,7 @@ func offerAdvice(rows []map[string]any, id string, amount, value, cash float64,
 				text(move.In["name"]), signedOne(move.Gain))
 		}
 		return false, fmt.Sprintf("%s pero tu once pierde %s xPts", words,
-			strings.Replace(fmt.Sprintf("%.1f", drop), ".", ",", 1))
+			fmt.Sprintf("%.1f", drop))
 	}
 	return false, words + ": no compensa"
 }
@@ -873,7 +873,7 @@ func signedOne(value float64) string {
 	if value < 0 {
 		sign = "−"
 	}
-	return sign + strings.Replace(fmt.Sprintf("%.1f", math.Abs(value)), ".", ",", 1)
+	return sign + fmt.Sprintf("%.1f", math.Abs(value))
 }
 
 func bestOffer(row map[string]any) any {

@@ -3,7 +3,6 @@ package render
 import (
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
@@ -138,7 +137,7 @@ func ratioWords(ratio float64) (string, string) {
 	case ratio < 1:
 		class = "down"
 	}
-	return "×" + strings.Replace(fmt.Sprintf("%.2f", ratio), ".", ",", 1) + " su valor", class
+	return "×" + fmt.Sprintf("%.2f", ratio) + " su valor", class
 }
 
 // --- the crack -------------------------------------------------------------------------

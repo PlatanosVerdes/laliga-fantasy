@@ -1,6 +1,7 @@
 package advice
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -186,14 +187,22 @@ func TestNoFigureIsNotZeroPoints(t *testing.T) {
 	}
 }
 
-// Only eleven score, so however deep the squad the ceiling stops at eleven, and it takes the best
-// eleven rather than the first eleven the feed happened to list.
-func TestTheCeilingStopsAtEleven(t *testing.T) {
+// Only eleven score, and only in a formation: the ceiling is the best legal eleven, not the
+// eleven highest xPts, which here would be two keepers and six strikers.
+func TestTheCeilingIsALegalEleven(t *testing.T) {
 	now := kickoffs
-	players := make([]Row, 0, 15)
-	for index := 0; index < 15; index++ {
-		players = append(players, owned(string(rune('a'+index)), "20", "a", float64(index+1), true))
+	players := []Row{}
+	add := func(position float64, points ...float64) {
+		for _, xpts := range points {
+			player := owned(fmt.Sprintf("p%d", len(players)), "20", "a", xpts, true)
+			player["position_id"] = position
+			players = append(players, player)
+		}
 	}
+	add(1, 10, 9, 1)
+	add(2, 2, 2, 2, 2, 2)
+	add(3, 3, 3, 3, 3, 3)
+	add(4, 20, 19, 18, 17, 16, 15)
 	universe := board([]Row{manager("a", "Ana", 0.0)}, players,
 		[]Row{match("20", "21", now.Add(time.Hour), 1)})
 
@@ -201,9 +210,9 @@ func TestTheCeilingStopsAtEleven(t *testing.T) {
 	if got := int(number(ana["waiting"])); got != 11 {
 		t.Fatalf("waiting = %d, want 11", got)
 	}
-	// The best eleven of 1..15 is 5..15, which is 110.
-	if got := number(ana["to_come"]); got != 110 {
-		t.Errorf("to_come = %v, want 110: los once mejores", got)
+	// 3-4-3: keeper 10, three defenders 6, four midfielders 12, strikers 20+19+18.
+	if got := number(ana["to_come"]); got != 85 {
+		t.Errorf("to_come = %v, want 85: el mejor once legal", got)
 	}
 }
 

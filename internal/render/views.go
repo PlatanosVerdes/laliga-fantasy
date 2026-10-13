@@ -62,7 +62,7 @@ func ratioClass(ratio float64) string {
 }
 
 func esRatio(ratio float64) string {
-	return strings.Replace(fmt.Sprintf("%.2f", ratio), ".", ",", 1) + "x"
+	return fmt.Sprintf("%.2f", ratio) + "x"
 }
 
 var esShortDays = []string{"dom", "lun", "mar", "mié", "jue", "vie", "sáb"}

@@ -46,7 +46,14 @@ export const usage = (() => {
     if (tab && seen >= 1000) push({kind: 'tab', what: tab, seconds: Math.round(seen / 1000)});
     tab = null; seen = 0;
   };
-  document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); else start(); });
+  // A phone can discard a hidden tab without pagehide, so hiding closes the time and sends it;
+  // showing it again restarts the clock on the same tab.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { start(); return; }
+    const current = tab;
+    close(); tab = current;
+    send(true);
+  });
   addEventListener('pagehide', () => { close(); send(true); });
   return {
     tab(id) { if (id === tab) return; close(); tab = id; seen = 0; start(); },
@@ -56,7 +63,7 @@ export const usage = (() => {
     // Back or forward in the browser, from where to where: going back is the trace of a wrong turn.
     nav(from, to) { push({kind: 'nav', what: to || '#', where: tab || '', label: from || '#'}); },
     // A card or panel closed, and how long it stayed open: three seconds is a misclick.
-    drawer(name, seconds) { push({kind: 'drawer', what: name, where: tab || '', seconds: Math.round(seconds)}); },
+    drawer(name, seconds, label) { push({kind: 'drawer', what: name, where: tab || '', label, seconds: Math.round(seconds)}); },
     // A click on something that does not look clickable: what the page made look like a button.
     dead(what) { push({kind: 'dead', what, where: tab || ''}); },
   };
@@ -188,6 +195,8 @@ export function shutDrawer() { if (nav.drawer) { nav.drawer = null; moved(); } }
 
 // Set while the page steps back on its own (closing a card), so that step is not read as a Back.
 let stepping = false;
+// The hash an in-page link just moved to: current browsers fire popstate for it too.
+let linkedHash = null;
 
 export function closeDrawer() {
   const depth = (history.state && history.state.depth) || 0;
@@ -440,7 +449,8 @@ function Drawer() {
   useEffect(() => {
     if (!d) return undefined;
     const opened = Date.now();
-    return () => usage.drawer(d.name, (Date.now() - opened) / 1000);
+    // Moving on to another drawer is not closing this one.
+    return () => usage.drawer(d.name, (Date.now() - opened) / 1000, nav.drawer ? 'navegado' : undefined);
   }, [d ? d.name + '/' + d.arg : '']);
   const View = d && DRAWER[d.name];
   return html`<div class=${'drawer' + (d && POPUPS.has(d.name) ? ' as-pop' : '')} id="drawer" hidden=${!d} role="dialog" aria-modal="true"
@@ -517,7 +527,8 @@ document.addEventListener('click', (event) => {
   if (!target.closest || target.closest('button, a, input, select, label, summary, [role=button], [data-pid], [data-team]')) return;
   // Not a dead click: selecting text, or something drawn as clickable with a handler of its own.
   if (String(getSelection() || '') || getComputedStyle(target).cursor === 'pointer') return;
-  if (!target.closest('.mk, #drawer')) return;
+  // The drawer's own backdrop closes it.
+  if (target.id === 'drawer' || !target.closest('.mk, #drawer')) return;
   const what = describe(target);
   if (what !== lastDead || Date.now() - lastDeadAt > 2000) usage.dead(what);
   lastDead = what; lastDeadAt = Date.now();
@@ -542,8 +553,17 @@ export function start(appRoot) {
   const drawerHost = document.createElement('div');
   document.body.appendChild(drawerHost);
   render(html`<${Drawer}/>`, drawerHost);
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest && event.target.closest('a[href^="#"]');
+    if (link) linkedHash = new URL(link.href).hash;
+  }, true);
   // Before route, while `routed` still says where the page was.
-  addEventListener('popstate', () => { if (stepping) stepping = false; else usage.nav(routed, location.hash); });
+  addEventListener('popstate', () => {
+    const linked = linkedHash !== null && linkedHash === location.hash;
+    linkedHash = null;
+    if (stepping) stepping = false;
+    else if (!linked) usage.nav(routed, location.hash);
+  });
   addEventListener('popstate', route);
   // A plain <a href="#..."> link moves the hash without popstate in some browsers.
   addEventListener('hashchange', route);

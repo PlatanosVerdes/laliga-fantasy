@@ -64,6 +64,9 @@ type ComingWeek struct {
 }
 
 type ComingMatch struct {
+	// Day and Hour say when it is played, each match on its own: a matchday spans four days.
+	Day        string `json:"day"`
+	Hour       string `json:"hour"`
 	LocalID    string `json:"local_id"`
 	VisitorID  string `json:"visitor_id"`
 	Local      string `json:"local"`
@@ -71,6 +74,7 @@ type ComingMatch struct {
 	LocalCrest bool   `json:"local_crest"`
 	VisitCrest bool   `json:"visitor_crest"`
 	Count      int    `json:"count"`
+	kickoff    string
 }
 
 func crestKnown(teamID string) bool {
@@ -296,9 +300,19 @@ func (d Document) comingBlock(current int) *Block {
 		count := mine[local] + mine[visitor]
 		entry.yours += count
 		if count > 0 || key == 0 {
-			entry.matches = append(entry.matches, ComingMatch{LocalID: local, VisitorID: visitor,
+			match := ComingMatch{LocalID: local, VisitorID: visitor,
 				Local: text(fixture["local"]), Visitor: text(fixture["visitor"]),
-				LocalCrest: crestKnown(local), VisitCrest: crestKnown(visitor), Count: count})
+				LocalCrest: crestKnown(local), VisitCrest: crestKnown(visitor), Count: count,
+				kickoff: text(fixture["kickoff"])}
+			// Put off with no new date, the feed still carries the original, already past. "~"
+			// sorts after any stamp, so they go last.
+			if int(number(fixture["state"])) == PostponedMatch {
+				match.Day, match.kickoff = "sin fecha", "~"
+			} else if when, ok := parseStamp(match.kickoff); ok {
+				match.Day = esDay(match.kickoff)
+				match.Hour = fmt.Sprintf("%02d:%02d", when.Hour(), when.Minute())
+			}
+			entry.matches = append(entry.matches, match)
 		}
 	}
 	sort.Ints(order)
@@ -316,14 +330,19 @@ func (d Document) comingBlock(current int) *Block {
 		if matches == nil {
 			matches = []ComingMatch{}
 		}
-		out = append(out, ComingWeek{Label: entry.label, Day: esDay(entry.kickoff),
+		sort.SliceStable(matches, func(one, two int) bool { return matches[one].kickoff < matches[two].kickoff })
+		day := esDay(entry.kickoff)
+		// The postponed ones are each on their own date, or none: no single day heads them.
+		if key == 0 {
+			day = ""
+		}
+		out = append(out, ComingWeek{Label: entry.label, Day: day,
 			Matches: matches, Yours: counted(entry.yours, "tuyo", "tuyos")})
 	}
 	if len(out) == 0 {
 		return nil
 	}
-	return &Block{Title: "Próximas jornadas", Kind: "weeks", Data: out,
-		Note: "cada partido con cuántos tuyos juegan"}
+	return &Block{Title: "Próximas jornadas", Kind: "weeks", Data: out}
 }
 
 // myFinish is the place my saved eleven would finish the matchday in, or 0.

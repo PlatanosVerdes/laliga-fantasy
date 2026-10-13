@@ -38,22 +38,8 @@ func Money(value *float64) string {
 	if value == nil {
 		return Missing
 	}
-	amount := *value
-	sign := ""
-	if amount < 0 {
-		sign = "-"
-	}
-	amount = math.Abs(amount)
-	switch {
-	// 999,500 upwards is written as millions: rounding it to "1.000K" would be a
-	// thousand-fold lie in the unit.
-	case amount >= 999_500:
-		return sign + millions(amount/1e6) + "M"
-	case amount >= 1e3:
-		return sign + group(fmt.Sprintf("%.0f", amount/1e3)) + "K"
-	default:
-		return sign + group(fmt.Sprintf("%.0f", amount))
-	}
+	// One money format on the page: a table said 21.73M under a row that said 21.7M.
+	return esMoney(*value)
 }
 
 func Num(value *float64, digits int) string {
@@ -323,6 +309,9 @@ var months = []string{"", "ene", "feb", "mar", "abr", "may", "jun",
 // scheduler for one number: this package renders and depends on nothing of ours.
 // See schedule.FinishedMatch, which has to agree.
 const FinishedMatch = 7
+
+// PostponedMatch is a match put off with no new date: the feed keeps the original one.
+const PostponedMatch = 10
 
 // PyFloat writes a float the way Python's str() does.
 //

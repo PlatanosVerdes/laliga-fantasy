@@ -134,13 +134,22 @@ const CASH_SIGN = {accept_offer: 1, pay_clause: -1};
 // A dialog's own trace: opened, and cancelled when it closes without the operation going through.
 // Confirmed is logged where it is sent, so the three read together as how often one is abandoned.
 export function useDialogTrace(name) {
-  const done = useRef(false);
+  const state = useRef({name, done: false});
+  const trace = () => panel().usage || {op() {}};
   useEffect(() => {
-    const trace = panel().usage || {op() {}};
-    trace.op('abrir ' + name);
-    return () => { if (!done.current) trace.op('cancelar ' + name); };
+    trace().op('abrir ' + name);
+    return () => { if (!state.current.done) trace().op('cancelar ' + state.current.name); };
   }, []);
-  return () => { done.current = true; };
+  const done = () => { state.current.done = true; };
+  // A dialog that ends up sending another operation (a bid's "Retirar mi puja") is traced as
+  // that one from then on, so its opened, confirmed and cancelled still add up.
+  done.become = (next) => {
+    if (next === state.current.name) return;
+    trace().op('cancelar ' + state.current.name);
+    trace().op('abrir ' + next);
+    state.current.name = next;
+  };
+  return done;
 }
 
 // The round comparator button's mark, drawn rather than typed: a text "+" sits on the font's
@@ -156,18 +165,17 @@ export function ConfirmOp({op}) {
   const [step, setStep] = useState({summary: null, error: '', sending: false, done: ''});
   const token = useRef(null);
   const traced = useDialogTrace(op.op);
-  useEffect(() => {
-    prepare({operation: op.op, market_id: op.market_id, offer_id: op.offer_id, bid_id: op.bid_id,
-      player_id: op.player_id, amount: op.amount || undefined})
-      .then((data) => { token.current = data.token; setStep((s) => ({...s, summary: data})); },
-        (error) => setStep((s) => ({...s, error: error.message})));
-  }, []);
+  const ready = () => prepare({operation: op.op, market_id: op.market_id, offer_id: op.offer_id, bid_id: op.bid_id,
+    player_id: op.player_id, amount: op.amount || undefined})
+    .then((data) => { token.current = data.token; setStep((s) => ({...s, summary: data})); },
+      (error) => setStep((s) => ({...s, error: s.error || error.message})));
+  useEffect(() => { ready(); }, []);
   const send = async () => {
     setStep((s) => ({...s, sending: true, error: ''}));
-    (panel().usage || {op() {}}).op('confirmar ' + op.op);
     try {
       const data = await confirm(token.current);
       const done = DONE_LABEL[op.op] || 'Hecho';
+      (panel().usage || {op() {}}).op('confirmar ' + op.op);
       traced();
       if (data.dry_run) { setStep((s) => ({...s, sending: false, done: done + ' (simulacro)'})); return; }
       closeDialog();
@@ -179,7 +187,10 @@ export function ConfirmOp({op}) {
       changed();
       putBack(origin, {afterViews: true});
     } catch (error) {
-      setStep((s) => ({...s, sending: false, error: error.message}));
+      // The server spends the token before calling the API, so a retry needs a fresh one.
+      token.current = null;
+      setStep((s) => ({...s, sending: false, error: error.message, summary: null}));
+      ready();
     }
   };
   const s = step.summary;

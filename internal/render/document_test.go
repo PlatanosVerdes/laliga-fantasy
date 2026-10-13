@@ -96,7 +96,7 @@ func TestRivalSectionsSayWhoBeatsMine(t *testing.T) {
 	if !strings.Contains(cristian, "1 mejora a los tuyos") {
 		t.Errorf("la nota tiene que contar los que te mejoran: %.300s", cristian)
 	}
-	if !strings.Contains(cristian, "+1,5") {
+	if !strings.Contains(cristian, "+1.5") {
 		t.Error("falta la diferencia de xPts contra el tuyo de esa posicion")
 	}
 	// Su medio malo tiene la clausula bloqueada y el bueno no.

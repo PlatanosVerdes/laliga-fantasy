@@ -123,7 +123,7 @@ func short(amount float64) string {
 		sign, amount = "−", -amount
 	}
 	if amount >= 999_500 {
-		return sign + strings.Replace(fmt.Sprintf("%.1f", amount/1e6), ".", ",", 1) + "M"
+		return sign + fmt.Sprintf("%.1f", amount/1e6) + "M"
 	}
 	return sign + fmt.Sprintf("%.0fK", amount/1e3)
 }

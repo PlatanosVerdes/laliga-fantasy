@@ -123,6 +123,22 @@ func TestPayingLessThanTheClauseIsRefused(t *testing.T) {
 	}
 }
 
+// The summary can sit open for two minutes; a window that closes meanwhile stops the payment.
+func TestConfirmChecksAgain(t *testing.T) {
+	g := guard(50_000_000)
+	window := &Window{Open: true}
+	g.Clauses = func() *Window { return window }
+	args := Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT", Amount: 10_000_000}
+	summary, err := g.Prepare("pay_clause", args, Player{Name: "X", Clause: 10_000_000}, true)
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	window = &Window{Open: false}
+	if _, err := g.Confirm(summary.Token, true, true); err == nil {
+		t.Fatal("con la ventana cerrada al confirmar deberia rechazarse")
+	}
+}
+
 // The 400 the API answers to playerId "" is unreadable; refusing it here says which field is
 // missing, and a listing priced at zero is not a listing.
 func TestListingWithoutSlotOrPriceIsRefused(t *testing.T) {

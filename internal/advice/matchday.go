@@ -3,6 +3,8 @@ package advice
 import (
 	"sort"
 	"time"
+
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 )
 
 // Matchday is how the matchday in play is going, for the whole league.
@@ -107,8 +109,8 @@ func Matchday(universe Row, now time.Time) Row {
 				"alineacion"))
 			continue
 		}
-		managers = append(managers, standing(team, teamID, teamID == mine, waiting[teamID],
-			"techo"))
+		managers = append(managers, standing(team, teamID, teamID == mine,
+			ceiling(waiting[teamID]), "techo"))
 	}
 
 	rank(managers, "points")
@@ -143,11 +145,6 @@ func standing(team Row, teamID string, isMine bool, waiting []Row, source string
 		}
 		return text(waiting[one]["id"]) < text(waiting[two]["id"])
 	})
-	// Only eleven score, so eleven is as far as the ceiling can reach however deep the squad.
-	if source == "techo" && len(waiting) > 11 {
-		waiting = waiting[:11]
-	}
-
 	toCome := 0.0
 	names := make([]string, 0, len(waiting))
 	for _, player := range waiting {
@@ -180,6 +177,26 @@ func standing(team Row, teamID string, isMine bool, waiting []Row, source string
 		// Nobody left to play: his matchday is over whatever the rest of the league still does.
 		"done": len(waiting) == 0,
 	}
+}
+
+// ceiling is the best legal eleven a manager could still field from the men yet to play: only
+// eleven score, and only in a formation.
+func ceiling(waiting []Row) []Row {
+	players := make([]eleven.Player, 0, len(waiting))
+	byID := map[string]Row{}
+	for _, player := range waiting {
+		id := text(player["id"])
+		byID[id] = player
+		players = append(players, eleven.Player{ID: id, Name: text(player["name"]),
+			Position: int(number(player["position_id"])), XPts: number(player["xpts"]),
+			Available: true})
+	}
+	choice, _ := eleven.Best(players)
+	out := make([]Row, 0, 11)
+	for _, id := range choice.IDs() {
+		out = append(out, byID[id])
+	}
+	return out
 }
 
 // rank writes the position each manager holds by one measure, so the table can show that the

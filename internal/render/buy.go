@@ -135,6 +135,9 @@ func (d Document) buyLine(item map[string]any, route string, gain float64,
 	switch {
 	case cost > reach:
 		line.Tone = "dim"
+		if text(listing["my_bid_id"]) != "" {
+			break
+		}
 		short := "te faltan " + esMoney(cost-reach)
 		line.Acts = []Act{{Label: verb + " " + esMoney(cost), Class: "mb mb-ghost", Off: true,
 			Tip: short, Wrap: short}}

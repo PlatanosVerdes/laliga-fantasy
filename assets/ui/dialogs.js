@@ -87,6 +87,7 @@ function AmountDialog({p}) {
   useEffect(() => { if (p.focus && input.current) input.current.focus(); }, []);
   const traced = useDialogTrace(p.operation || 'bid');
   const amount = digits(text) || 0;
+  const op = p.operation || 'bid';
   let warn = '';
   if (p.raise) {
     if (!amount) {
@@ -98,10 +99,12 @@ function AmountDialog({p}) {
   } else {
     if (!amount) warn = 'Escribe un importe.';
     else if (amount < p.min_bid) warn = 'Por debajo de la puja minima (' + exact(p.min_bid) + ').';
-    if (p.ideal && amount > p.ideal) warn = 'Por encima del techo rentable de futbolfantasy.';
-    else if (!p.ideal) warn = 'futbolfantasy no le ve rentabilidad a este precio.';
+    // The profitable ceiling is a buyer's limit: selling above it is the point.
+    else if (!CASH_IN.has(op)) {
+      if (p.ideal && amount > p.ideal) warn = 'Por encima del techo rentable de futbolfantasy.';
+      else if (!p.ideal) warn = 'futbolfantasy no le ve rentabilidad a este precio.';
+    }
   }
-  const op = p.operation || 'bid';
   const typed = (event) => {
     const el = event.currentTarget, caret = el.selectionStart, before = el.value.length;
     const next = group(digits(el.value));
@@ -120,16 +123,17 @@ function AmountDialog({p}) {
   const drop = async () => {
     try {
       const data = await prepare({operation: 'cancel_bid', market_id: p.market_id, bid_id: p.bid_id, player_id: p.player_id});
+      traced.become('cancel_bid');
       setStep({...step, n: 2, summary: null, token: data.token, drop: true, error: ''});
     } catch (e) { setStep({...step, error: e.message}); }
   };
   const send = async () => {
     const operation = step.drop ? 'cancel_bid' : op;
     setStep({...step, sending: true, error: ''});
-    usage().op('confirmar ' + operation);
     try {
       const data = await confirm(step.token);
       const done = DONE_LABEL[operation] || 'Hecho';
+      usage().op('confirmar ' + operation);
       traced();
       if (data.dry_run) { setStep({...step, sending: false, done: done + ' (simulacro)'}); return; }
       changed();

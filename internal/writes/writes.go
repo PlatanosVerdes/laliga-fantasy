@@ -394,6 +394,7 @@ type pending struct {
 	created time.Time
 	name    string
 	args    Args
+	who     Player
 	summary Summary
 }
 
@@ -466,15 +467,7 @@ func (g *Guard) Prepare(name string, args Args, who Player, allowWrites bool) (S
 		return Summary{}, fmt.Errorf("%w: %s", ErrUnknown, name)
 	}
 
-	var cash *int64
-	if g.Cash != nil && args.TeamID != "" {
-		if balance, err := g.Cash(args.TeamID); err == nil {
-			cash = &balance
-		} else {
-			slog.Warn("cash unreadable before write", "reason", err.Error())
-		}
-	}
-
+	cash := g.balance(args.TeamID)
 	warnings, err := check(name, args, who, cash, g.window())
 	if err != nil {
 		return Summary{}, err
@@ -495,15 +488,33 @@ func (g *Guard) Prepare(name string, args Args, who Player, allowWrites bool) (S
 		summary.Clause = who.Clause
 		summary.NewClause = who.Clause + ClauseFactor*args.Amount
 	}
-	g.tokens[summary.Token] = pending{created: time.Now(), name: name, args: args,
+	g.tokens[summary.Token] = pending{created: time.Now(), name: name, args: args, who: who,
 		summary: summary}
 	slog.Info("write prepared", "operation", name, "amount", args.Amount, "player", who.Name)
 	return summary, nil
 }
 
+// balance is the current cash, or nil when it cannot be read.
+func (g *Guard) balance(teamID string) *int64 {
+	if g.Cash == nil || teamID == "" {
+		return nil
+	}
+	balance, err := g.Cash(teamID)
+	if err != nil {
+		slog.Warn("cash unreadable before write", "reason", err.Error())
+		return nil
+	}
+	return &balance
+}
+
 // Confirm spends the token and performs the call. The token is consumed either way, so a
-// failed attempt cannot be replayed.
+// failed attempt cannot be replayed. The checks run again, since the cash and the clause
+// window may have moved while the person read the summary.
 func (g *Guard) Confirm(token string, allowWrites, dryRun bool) (map[string]any, error) {
+	return g.confirm(token, allowWrites, dryRun, true)
+}
+
+func (g *Guard) confirm(token string, allowWrites, dryRun, recheck bool) (map[string]any, error) {
 	if !allowWrites {
 		return nil, ErrDisabled
 	}
@@ -514,6 +525,12 @@ func (g *Guard) Confirm(token string, allowWrites, dryRun bool) (map[string]any,
 	g.mu.Unlock()
 	if !ok {
 		return nil, errors.New("confirmacion caducada o ya usada: vuelve a empezar")
+	}
+	if recheck {
+		if _, err := check(entry.name, entry.args, entry.who, g.balance(entry.args.TeamID),
+			g.window()); err != nil {
+			return nil, err
+		}
 	}
 
 	call, err := Build(entry.name, entry.args)
@@ -833,7 +850,7 @@ func (g *Guard) Do(name string, args Args, who Player, allowWrites bool) (map[st
 	if err != nil {
 		return nil, err
 	}
-	return g.Confirm(summary.Token, allowWrites, false)
+	return g.confirm(summary.Token, allowWrites, false, false)
 }
 
 // numericID sends a player id the way the app does, as a number.

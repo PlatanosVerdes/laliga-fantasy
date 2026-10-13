@@ -117,10 +117,10 @@ func TestBuyBoxesListEveryCandidate(t *testing.T) {
 	if strings.Index(blob, "Barato") > strings.Index(blob, "Caro") {
 		t.Error("the one adding more goes first")
 	}
-	if !strings.Contains(blob, "+1,0M de margen") || !strings.Contains(blob, `"price":2000000`) {
+	if !strings.Contains(blob, "+1.0M de margen") || !strings.Contains(blob, `"price":2000000`) {
 		t.Error("margin to the ceiling and the price the filter reads")
 	}
-	if !strings.Contains(blob, `"wrap":"te faltan 20,0M"`) {
+	if !strings.Contains(blob, `"wrap":"te faltan 20.0M"`) {
 		t.Error("an unreachable bid is disabled and says what is missing")
 	}
 	document.MaxDebtPct = 30
@@ -139,7 +139,7 @@ func TestStoodDownRaidsCanBeCancelledAndOrdersAreLogged(t *testing.T) {
 		"player": "Fofana", "outcome": "pagada", "amount": 15_240_000.0}}
 	blob := asJSON(document.plannedBlock())
 	for _, want := range []string{`"do":"cancel_raid"`, `"t":"cancelada"`,
-		"Historial de tus órdenes", "Fofana", "15,2M"} {
+		"Historial de tus órdenes", "Fofana", "15.2M"} {
 		if !strings.Contains(blob, want) {
 			t.Errorf("missing %q", want)
 		}
@@ -182,7 +182,7 @@ func TestReachListsWhoARivalCanPay(t *testing.T) {
 		t.Error("best first, the top threat marked")
 	}
 	none := reachOf("Pobre", 1_000_000, squad, nil)
-	if none.Empty != "No le llega a ninguno: tu cláusula más barata es 5,0M." {
+	if none.Empty != "No le llega a ninguno: tu cláusula más barata es 5.0M." {
 		t.Errorf("nobody reached: %+v", none)
 	}
 }
@@ -195,7 +195,7 @@ func TestScheduledRaidsAreRowsOfMyBids(t *testing.T) {
 		"clause": 25_000_000.0, "max_pay": 20_000_000.0, "action": "esperando"}}
 	box := document.BuyData().Aside[0]
 	blob := asJSON(box)
-	for _, want := range []string{"≤ 20,0M", "cláusula 25,0M", "pasa tu límite", `"do":"cancel_raid"`} {
+	for _, want := range []string{"≤ 20.0M", "cláusula 25.0M", "pasa tu límite", `"do":"cancel_raid"`} {
 		if !strings.Contains(blob, want) {
 			t.Errorf("missing %q in %s", want, blob)
 		}
@@ -223,6 +223,27 @@ func TestEquiposIncludesYou(t *testing.T) {
 	}
 }
 
+// The reach chip counts the payable clauses and says how many more the popup it opens lists.
+func TestReachChipAgreesWithItsPopup(t *testing.T) {
+	document := Document{Advice: map[string]any{
+		"rivals": []any{map[string]any{"team_id": "1", "manager": "LILTEAM",
+			"estimated_cash": 10e6}},
+		"squad": []any{
+			map[string]any{"id": "a", "clause": 5e6},
+			map[string]any{"id": "b", "clause": 6e6, "clause_locked": true},
+			map[string]any{"id": "c", "clause": 7e6, "shielded": true},
+			map[string]any{"id": "d", "clause": 20e6},
+		}}}
+	view := document.RivalsData()
+	block := view.Main[0]
+	if chip := block.Rows[0].Chips[0].T; chip != "llega a 1 (3 con bloqueadas)" {
+		t.Errorf("chip = %q", chip)
+	}
+	if popup := block.Data.(map[string]Reach)["1"]; len(popup.Rows) != 3 {
+		t.Errorf("popup rows = %d, want 3", len(popup.Rows))
+	}
+}
+
 // The amount offered is the row's value; saying it again on a button pushed the name out of the
 // narrow aside.
 func TestMyOfferRowSaysTheAmountOnce(t *testing.T) {
@@ -231,5 +252,49 @@ func TestMyOfferRowSaysTheAmountOnce(t *testing.T) {
 			"my_bid": 14_110_001.0}})
 	if len(acts) != 1 || acts[0].Label != "Retirar" {
 		t.Errorf("acts = %+v, want only Retirar", acts)
+	}
+}
+
+// A match put off with no new date keeps its original, past date in the feed: it reads "sin
+// fecha" and goes last, while one already moved shows when it is played now.
+func TestPostponedMatchesSayWhenTheyArePlayed(t *testing.T) {
+	document := decidingDocument()
+	document.Universe["schedule"] = []any{
+		map[string]any{"week": 7.0, "state": 10.0, "kickoff": "2026-10-10T14:00:00+02:00",
+			"local_id": "1", "visitor_id": "2", "local": "RAY", "visitor": "ATH"},
+		map[string]any{"week": 7.0, "state": 1.0, "kickoff": "2026-10-21T20:00:00+02:00",
+			"local_id": "3", "visitor_id": "2", "local": "LEV", "visitor": "ATH"},
+	}
+	block := document.comingBlock(9)
+	if block == nil {
+		t.Fatal("no block")
+	}
+	weeks := block.Data.([]ComingWeek)
+	matches := weeks[0].Matches
+	if weeks[0].Day != "" || len(matches) != 2 {
+		t.Fatalf("postponed week: %+v", weeks[0])
+	}
+	if matches[0].Local != "LEV" || matches[0].Day != "mié 21 oct" || matches[0].Hour != "20:00" {
+		t.Errorf("the rescheduled match should come first with its new date: %+v", matches[0])
+	}
+	if matches[1].Day != "sin fecha" || matches[1].Hour != "" {
+		t.Errorf("the undated one should say so: %+v", matches[1])
+	}
+}
+
+// A bid I already have stays withdrawable even when the price has run past what I can reach.
+func TestBuyLineOutOfReachKeepsMyBid(t *testing.T) {
+	document := Document{Advice: map[string]any{"budget": 1e6}}
+	item := map[string]any{"id": "7", "name": "Kike Salas", "entry_cost": 20e6,
+		"market": map[string]any{"market_id": "m1", "kind": "venta", "my_bid_id": "o1",
+			"my_bid": 14e6}}
+	line := document.buyLine(item, "oferta al dueño", 0, nil)
+	if line.Tone != "dim" || len(line.Acts) != 2 || line.Acts[1].Label != "Retirar" {
+		t.Errorf("acts = %+v, want my offer and Retirar", line.Acts)
+	}
+	delete(mapOf(item["market"]), "my_bid_id")
+	line = document.buyLine(item, "oferta al dueño", 0, nil)
+	if len(line.Acts) != 1 || !line.Acts[0].Off {
+		t.Errorf("acts = %+v, want one disabled button", line.Acts)
 	}
 }
