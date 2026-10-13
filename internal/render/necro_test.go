@@ -154,3 +154,21 @@ func TestNecroBreakfastSkipsTheShielded(t *testing.T) {
 		}
 	}
 }
+
+// A suggestion and a vote cast were marked alike; the tab now says which one it is.
+func TestNecroTellsAVoteCastFromASuggestion(t *testing.T) {
+	document := universeWithRivals()
+	document.NecroGameweek, document.NecroCanVote, document.NecroOpen = 9, true, true
+	document.NecroRoster = map[string]string{"cristian": "1", "tete": "2"}
+	view, _ := document.NecroData()
+	unvoted := view.Main[0].Data.(Necro)
+	if len(unvoted.Voted) != 0 {
+		t.Errorf("unvoted: %+v", unvoted)
+	}
+	document.NecroChosen = []string{"1", "2"}
+	view, _ = document.NecroData()
+	voted := view.Main[0].Data.(Necro)
+	if strings.Join(voted.Voted, ",") != "1,2" {
+		t.Errorf("voted: %+v", voted)
+	}
+}

@@ -24,10 +24,21 @@ function Weeks({weeks}) {
     })}</div>`;
 }
 
+// The ranges the value curve can be cut to, the last one kept between sheets.
+const RANGES = [['7', '7 d'], ['30', '30 d'], ['all', 'todo']];
+const RANGE_KEY = 'fantasy-value-range';
+const savedRange = () => { try { return localStorage.getItem(RANGE_KEY) || 'all'; } catch (e) { return 'all'; } };
+
 // A curve that says, under the cursor, how much and on what day.
 function ValueChart({history}) {
-  const days = (history || []).filter((h) => h.value != null);
+  const known = (history || []).filter((h) => h.value != null);
   const [hover, setHover] = useState(null);
+  const [range, setRange] = useState(savedRange);
+  const pick = (next) => {
+    setRange(next); setHover(null);
+    try { localStorage.setItem(RANGE_KEY, next); } catch (e) { /* a preference only */ }
+  };
+  const days = range === 'all' ? known : known.slice(-Number(range));
   if (days.length < 3) return null;
   const values = days.map((d) => d.value);
   const w = 440, h = 90, lo = Math.min(...values), hi = Math.max(...values), span = (hi - lo) || 1;
@@ -44,7 +55,9 @@ function ValueChart({history}) {
   };
   const at = hover && days[hover.index];
   const change = at && values[0] ? (at.value - values[0]) / values[0] * 100 : 0;
-  return html`<div class="pc-h">Valor · ${days.length} días</div>
+  return html`<div class="chart-head"><div class="pc-h">Valor · ${days.length} días</div>
+      ${known.length > 7 ? html`<div class="range-pick" role="group" aria-label="Rango">${RANGES.map(([id, label]) => html`<button type="button"
+        class=${range === id ? 'on' : undefined} aria-pressed=${range === id ? 'true' : 'false'} onClick=${() => pick(id)}>${label}</button>`)}</div>` : null}</div>
     <div class="chart-wrap">
       <svg class="drawer-chart" width="100%" height=${h} viewBox=${`0 0 ${w} ${h}`} preserveAspectRatio="none"
           aria-label="Historico de valor" onMouseMove=${move} onTouchMove=${move} onMouseLeave=${() => setHover(null)}>

@@ -84,9 +84,17 @@ function SeasonChart() {
   return html`<div class="evo" data-season="1" ref=${box}>${inner}</div>`;
 }
 
+// How many of the last matchdays the chart shows: a season is 38, and its lines get unreadable.
+const SPANS = [[5, 'Últimas 5'], [10, 'Últimas 10'], [0, 'Todas']];
+
 function chart(d, width, state, change, hl, setHl) {
-  const weeks = d.weeks || [];
-  const managers = (d.managers || []).filter((m) => (m.place || []).some((p) => p != null));
+  const every = d.weeks || [];
+  const span = state.span && state.span < every.length ? state.span : 0;
+  const from = span ? every.length - span : 0;
+  const weeks = every.slice(from);
+  const managers = (d.managers || []).map((m) => ({...m, place: (m.place || []).slice(from),
+    points: (m.points || []).slice(from), total: (m.total || []).slice(from)}))
+    .filter((m) => (m.place || []).some((p) => p != null));
   if (weeks.length < 1 || !managers.length) return html`<p class="empty">Aun no hay jornadas terminadas.</p>`;
   const picked = state.picked.filter((id) => managers.some((m) => m.team_id === id));
   // Each manager's colour is fixed, by his place in a stable order, so it never moves.
@@ -99,11 +107,14 @@ function chart(d, width, state, change, hl, setHl) {
   const rows = managers.length, h = narrow ? Math.round(w * 0.75) : Math.max(260, padT + padB + (rows - 1) * 22);
   const step = weeks.length > 1 ? (w - padL - padR) / (weeks.length - 1) : 0;
   const x = (i) => padL + step * i;
-  const top = Math.max(1, ...managers.flatMap((m) => (m.total || []).filter((v) => v != null)));
-  const y = byPoints ? (v) => padT + (h - padT - padB) * (1 - v / top)
+  const totals = managers.flatMap((m) => (m.total || []).filter((v) => v != null));
+  const top = Math.max(1, ...totals);
+  // Cut to the last matchdays, the scale starts where they start, or every line sits at the top.
+  const floor = span ? Math.min(...totals) : 0, range = Math.max(1, top - floor);
+  const y = byPoints ? (v) => padT + (h - padT - padB) * (1 - (v - floor) / range)
     : (p) => padT + (h - padT - padB) * (rows > 1 ? (p - 1) / (rows - 1) : 0);
   const valueOf = (m, i) => byPoints ? m.total[i] : m.place[i];
-  const ticks = byPoints ? [0, Math.round(top / 2), Math.round(top)].map((v) => [v, v + ' pts']) : [[1, '1º'], [rows, rows + 'º']];
+  const ticks = byPoints ? [floor, Math.round((floor + top) / 2), Math.round(top)].map((v) => [Math.round(v), Math.round(v) + ' pts']) : [[1, '1º'], [rows, rows + 'º']];
   const kind = (m) => !shown(m.team_id) ? 'rest' : m.is_me ? 'me' : 'pick';
   const order = {rest: 0, pick: 1, me: 2};
   const painted = [...managers].sort((a, b) => order[kind(a)] - order[kind(b)]);
@@ -136,9 +147,12 @@ function chart(d, width, state, change, hl, setHl) {
     .map((m) => html`<button type="button" class=${'evo-chip ' + (m.is_me ? 'evo-me' : `evo-h${hue.get(m.team_id)}`) + (picked.includes(m.team_id) ? ' on' : '')}
       aria-pressed=${kind(m) !== 'rest' ? 'true' : 'false'} onClick=${() => toggle(m.team_id)}
       onMouseOver=${() => setHl(m.team_id)} onMouseOut=${() => setHl(null)}><i class="evo-sw"></i>${m.manager}</button>`);
-  return html`<div class="evo-controls"><div class="evo-mode" role="group">
+  const spans = SPANS.filter(([n]) => n === 0 || n < every.length);
+  return html`<div class="evo-controls"><div class="evo-bar"><div class="evo-mode" role="group">
       <button type="button" class=${byPoints ? '' : 'on'} onClick=${() => change({...state, mode: 'place'}, 'place')}>Puesto</button>
       <button type="button" class=${byPoints ? 'on' : ''} onClick=${() => change({...state, mode: 'points'}, 'points')}>Puntos</button></div>
+    ${spans.length > 1 ? html`<div class="evo-mode" role="group" aria-label="Jornadas">${spans.map(([n, label]) => html`<button type="button"
+      class=${span === n ? 'on' : ''} aria-pressed=${span === n ? 'true' : 'false'} onClick=${() => change({...state, span: n}, 'span-' + (n || 'todas'))}>${label}</button>`)}</div>` : null}</div>
     <div class="evo-chips">${chips}${picked.length ? html`<button type="button" class="evo-clear" onClick=${() => change({...state, picked: []}, 'limpiar')}>Todos</button>` : null}</div>
     <p class="evo-hint">${picked.length ? 'Toca más managers para añadirlos o quitarlos.' : 'Toca un manager para ver solo su línea.'}</p></div>
   <svg class="evo-svg" width=${w} height=${h} viewBox=${`0 0 ${w} ${h}`} role="img"

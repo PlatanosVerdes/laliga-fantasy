@@ -25,6 +25,9 @@ type Necro struct {
 	Open     bool        `json:"open"`
 	Gameweek int         `json:"gameweek"`
 	Notice   string      `json:"notice,omitempty"`
+	// Voted is the ballot already sent this round: marked like the suggestion, a suggestion read
+	// as a vote cast.
+	Voted []string `json:"voted"`
 }
 
 // NecroData ranks the league from weakest to strongest for the side game: who finishes the round
@@ -50,7 +53,8 @@ func (d Document) NecroData() (View, bool) {
 	selected := d.necroSelected(picks)
 	voting := d.NecroOpen && d.NecroCanVote
 	data := Necro{Facts: d.necroFacts(picks), Teams: []NecroTeam{}, CanVote: d.NecroCanVote,
-		Open: d.NecroOpen, Gameweek: d.NecroGameweek, Notice: d.necroNotice()}
+		Open: d.NecroOpen, Gameweek: d.NecroGameweek, Notice: d.necroNotice(),
+		Voted: append([]string{}, d.NecroChosen...)}
 	for index, team := range ranked {
 		row := Row{Lead: []Seg{{T: fmt.Sprintf("%d", index+1)}}, Name: team.Name,
 			Meta:  []Seg{{T: fmt.Sprintf("%.0f pts temporada", team.SeasonPoints)}},
