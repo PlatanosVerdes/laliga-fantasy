@@ -83,6 +83,8 @@ type State struct {
 	// Bids and offers I cancelled, by market id. The market keeps listing them for a minute or
 	// two after the DELETE answers, and a rebuild in that window brought them back.
 	withdrawn   map[string]withdrawal
+	// Offers for my players that I accepted or declined, by offer id, for the same reason.
+	answered    map[string]time.Time
 	generatedAt time.Time
 	lastFull    time.Time
 	lastError   string
@@ -502,7 +504,21 @@ func (s *State) Withdrawn(marketID, bidID, playerID string) {
 		until: time.Now().Add(WithdrawGrace)}
 }
 
-// hideWithdrawn takes my cancelled bids off a freshly built world until the market catches up.
+// Answered records that I accepted or declined this offer for one of my players.
+func (s *State) Answered(offerID string) {
+	if offerID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.answered == nil {
+		s.answered = map[string]time.Time{}
+	}
+	s.answered[offerID] = time.Now().Add(WithdrawGrace)
+}
+
+// hideWithdrawn takes my cancelled bids and answered offers off a freshly built world until the
+// market catches up.
 func (s *State) hideWithdrawn(universe *model.Universe, now time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -510,6 +526,24 @@ func (s *State) hideWithdrawn(universe *model.Universe, now time.Time) {
 		if now.After(entry.until) {
 			delete(s.withdrawn, key)
 		}
+	}
+	for key, until := range s.answered {
+		if now.After(until) {
+			delete(s.answered, key)
+		}
+	}
+	for index := range universe.Players {
+		player := &universe.Players[index]
+		if len(s.answered) == 0 || len(player.Offers) == 0 {
+			continue
+		}
+		kept := player.Offers[:0]
+		for _, offer := range player.Offers {
+			if _, gone := s.answered[offerID(offer["id"])]; !gone {
+				kept = append(kept, offer)
+			}
+		}
+		player.Offers = kept
 	}
 	for index := range universe.Market {
 		listing := &universe.Market[index]
@@ -522,6 +556,14 @@ func (s *State) hideWithdrawn(universe *model.Universe, now time.Time) {
 			listing.MyBidID, listing.MyBid, listing.MyBidStatus = nil, nil, nil
 		}
 	}
+}
+
+// offerID prints an id the way the page sends it back: a JSON number as digits, never 3.7e+07.
+func offerID(value any) string {
+	if number, ok := value.(float64); ok && number == float64(int64(number)) {
+		return fmt.Sprintf("%d", int64(number))
+	}
+	return fmt.Sprint(value)
 }
 
 func (s *State) withdrewFor(playerID string) bool {
