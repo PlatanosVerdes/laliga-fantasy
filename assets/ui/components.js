@@ -170,7 +170,29 @@ export function ConfirmOp({op}) {
     .then((data) => { token.current = data.token; setStep((s) => ({...s, summary: data})); },
       (error) => setStep((s) => ({...s, error: s.error || error.message})));
   useEffect(() => { ready(); }, []);
+  // Waiting on LaLiga with the dialog open took seconds for something that nearly always works:
+  // the row leaves at once, and comes back with the reason if the API says no.
+  const sendAhead = async () => {
+    const origin = op.origin;
+    (panel().usage || {op() {}}).op('confirmar ' + op.op);
+    traced();
+    closeDialog();
+    const leaving = leave(origin);
+    try {
+      await confirm(token.current);
+      await leaving;
+      flash(DONE_LABEL[op.op] || 'Hecho', op.name);
+      changed();
+      putBack(origin, {afterViews: true});
+    } catch (error) {
+      await leaving;
+      putBack(origin);
+      flash('No ha salido: ' + (OP_LABELS[op.op] || 'Operación') + ' ' + op.name, error.message);
+      changed();
+    }
+  };
   const send = async () => {
+    if (GONE_AFTER.has(op.op) && op.origin) return sendAhead();
     setStep((s) => ({...s, sending: true, error: ''}));
     try {
       const data = await confirm(token.current);
