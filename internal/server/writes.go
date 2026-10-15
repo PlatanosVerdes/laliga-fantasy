@@ -452,6 +452,15 @@ func (s *Server) confirm(writer http.ResponseWriter, request *http.Request) {
 	result, err := s.opts.Guard.Confirm(text(body["token"]), s.opts.AllowWrites,
 		truthy(body["dry_run"]))
 	if err != nil {
+		if args, ok := result["args"].(writes.Args); ok {
+			s.applied(text(result["operation"]), args)
+			// Declining an offer that is already declined got what was asked for.
+			if text(result["operation"]) == "decline_offer" {
+				s.settle("decline_offer")
+				s.json(writer, http.StatusOK, map[string]any{"ok": true, "operation": "decline_offer"})
+				return
+			}
+		}
 		s.writeError(writer, err)
 		return
 	}
@@ -481,6 +490,8 @@ func (s *Server) applied(operation string, args writes.Args) {
 		s.state.Withdrawn(args.MarketID, args.BidID, args.PlayerID)
 	case "cancel_offer", "change_offer":
 		s.state.Withdrawn(args.MarketID, args.OfferID, args.PlayerID)
+	case "accept_offer", "decline_offer":
+		s.state.Answered(args.OfferID)
 	}
 	s.state.Patch(operation, func(universe *model.Universe) bool {
 		return patch(universe, operation, args)

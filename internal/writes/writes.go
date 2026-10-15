@@ -311,6 +311,11 @@ func explain(err error) error {
 		return errors.New("no se pueden pagar clausulas en las 24h antes de que arranque la " +
 			"jornada: reabre con el primer partido")
 	}
+	// A received offer answered twice, from the app and here or by a double click: it is
+	// already off the table, which is what the person wanted.
+	if strings.Contains(message, "already rejected") || strings.Contains(message, "already accepted") {
+		return fmt.Errorf("%w: esa oferta ya estaba contestada", ErrOutdated)
+	}
 	return errors.New(message)
 }
 
@@ -572,6 +577,11 @@ func (g *Guard) confirm(token string, allowWrites, dryRun, recheck bool) (map[st
 			httpx.Invalidate(Operations[entry.name].Effects...)
 			return nil, fmt.Errorf("he retirado tu oferta anterior, pero LaLiga ha rechazado la "+
 				"nueva: ahora no tienes ninguna oferta por %s: %w", entry.summary.PlayerName, err)
+		}
+		// The args travel back with an outdated refusal too, so the page can drop what it was
+		// showing instead of waiting for a market that still lists it.
+		if errors.Is(err, ErrOutdated) {
+			return map[string]any{"operation": entry.name, "args": entry.args}, err
 		}
 		return nil, fmt.Errorf("la API ha rechazado la operacion: %w", err)
 	}

@@ -21,6 +21,12 @@ func TestRefusalIsReadAndNamed(t *testing.T) {
 		t.Errorf("el mensaje no deberia arrastrar la peticion: %v", got)
 	}
 
+	twice := errors.New(`http 400 for https://x/y: {"code":400,` +
+		`"message":"Offer has been already rejected","errorCode":"030.01.50"}`)
+	if got := explain(twice); !errors.Is(got, ErrOutdated) {
+		t.Errorf("una oferta ya rechazada deberia leerse como desfasada: %v", got)
+	}
+
 	// An unknown code keeps the API's own sentence, which is more than the transport error says
 	// and less than the whole body.
 	unknown := errors.New(`http 400 for https://x/y: {"code":400,` +

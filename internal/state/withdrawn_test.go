@@ -68,3 +68,22 @@ func TestANewOfferAfterAWithdrawalShows(t *testing.T) {
 		t.Error("the new offer was hidden as if it were the withdrawn one")
 	}
 }
+
+// The API keeps listing an offer for my player for a while after I declined it, and a rebuild in
+// that window put the row back with its Rechazar button.
+func TestADeclinedOfferStaysGone(t *testing.T) {
+	world := &State{}
+	world.Answered("37547860")
+	universe := &model.Universe{Players: []model.Player{{ID: "7", IsMine: true,
+		Offers: []map[string]any{{"id": 37547860.0}, {"id": "37547861"}}}}}
+	world.hideWithdrawn(universe, time.Now())
+	if offers := universe.Players[0].Offers; len(offers) != 1 || offers[0]["id"] != "37547861" {
+		t.Errorf("offers = %v, want only the one still open", offers)
+	}
+
+	universe.Players[0].Offers = []map[string]any{{"id": 37547860.0}}
+	world.hideWithdrawn(universe, time.Now().Add(WithdrawGrace+time.Second))
+	if len(universe.Players[0].Offers) != 1 {
+		t.Error("past the grace the market should win")
+	}
+}
