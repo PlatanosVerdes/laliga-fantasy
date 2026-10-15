@@ -14,3 +14,7 @@ permissions:
 jobs:
   release:
     uses: PlatanosVerdes/workflows/.github/workflows/release.yml@main
+    with:
+      deploy-repo: PlatanosVerdes/rpi-services
+    secrets:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
