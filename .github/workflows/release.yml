@@ -1,0 +1,16 @@
+name: Release
+
+# Tags every push to main and publishes the arm64 image the Pi pulls. The steps live in
+# PlatanosVerdes/workflows, shared by every app.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    uses: PlatanosVerdes/workflows/.github/workflows/release.yml@main
