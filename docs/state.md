@@ -28,6 +28,17 @@ request; only the profitable ceiling is fetched from futbolfantasy, in parallel 
 prepared, shown with its amount and what it leaves in the bank, and confirmed with a
 single-use token that expires after 120 s. `--read-only` refuses all of them.
 
+**A cold start shows the league as it reads it.** Before the first build, `model.BuildPreview`
+reads my squad (lineup, values, status, balance), then the market, then the rivals' squads,
+and the page shows each as it lands, with "Cargando mercado…", "Cargando rivales…" for what is
+missing; the offers, the activity, futbolfantasy and the advice come with the full panel. The
+preview asks nothing the build does not ask too, with the same lifetimes, so the build reads it
+back from the cache and the world comes out the same. It is a `model.Preview`, never a
+`Universe`: until the first build is over `State.Loading()` is true, the guard and the server
+refuse every operation with "Cargando la liga, espera a que termine" (503), the instructions,
+the daily reward and the necroporra vote see no world, and an open tab reloads into the
+preview. Later rebuilds keep serving the last page.
+
 ## Deploying
 
 1. Branch, PR against `main`, squash merge.
@@ -51,8 +62,9 @@ through a container on the same network (`docker exec vector wget -qO- ...`) or 
 data source.
 
 Where a slow load spent its time is in two lines. `build phases` comes once per start, with
-the milliseconds of each step of the first build (`squads_ms`, `calendar_ms`, … and `page_ms`
-for drawing the page inside it). `page rendered` comes with every render, split the same way
+the milliseconds of each step of the first build (`mine_ms`, `listings_ms` and `rivals_ms` for
+the preview, then `squads_ms`, `calendar_ms`, … and `page_ms` for drawing the page inside it);
+`preview published` marks when each stage of the preview reached the page. `page rendered` comes with every render, split the same way
 (`advice_ms`, `details_ms` for the futbolfantasy pages, `necro_ms`, `document_ms`).
 `page served while redrawing` means a browser got the previous page at once while the new one
 was drawn behind it; `serving the wait page` means it got the progress page instead.

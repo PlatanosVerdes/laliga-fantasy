@@ -60,6 +60,21 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:t
   transition:width .5s ease}
 .load-meta{display:flex;justify-content:space-between;margin-top:8px;font-size:13px;color:var(--muted);
   font-variant-numeric:tabular-nums}
+.auth-wrap:has(.pv){grid-template-columns:minmax(0,min(1040px,100%));justify-content:center}
+.auth.pv{width:100%;min-width:0;box-sizing:border-box}
+.pv-sec{margin-top:26px;overflow-x:auto}
+.pv-sec h2{margin:0 0 10px;font-size:16px}
+.pv-wait{margin:0;padding:14px 16px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:14px}
+.pv-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.pv-chip{display:grid;gap:2px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--plane)}
+.pv-chip i{font-style:normal;font-size:12px;color:var(--muted)}
+.pv-chip b{font-variant-numeric:tabular-nums}
+.pv-table{width:100%;border-collapse:collapse;font-size:13.5px}
+.pv-table th{text-align:left;font-weight:600;color:var(--muted);font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line)}
+.pv-table td{padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.pv-table .num{text-align:right;font-variant-numeric:tabular-nums}
+.pv-tag{font-size:11px;padding:1px 6px;border-radius:999px;background:var(--mid);color:var(--ink-2)}
+.pv-bad{color:var(--critical)}
 .centered{text-align:center}
 .centered .choices button{justify-content:center;gap:10px}
 .centered .btn-row{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
@@ -94,6 +109,7 @@ async function reloadWhenReady(was){
   showProgress(null);
   const poll=setInterval(async()=>{const now=await health();
     if(!now) return;
+    if(now.loading&&now.preview>0){clearInterval(poll);location.href='/';return;}
     if(now.building){showProgress(progressOf(now));return;}
     const restarted=now.started!==was.started&&(now.generated_at||now.last_error);
     const built=now.generated_at&&now.generated_at!==was.generated_at;
@@ -118,6 +134,31 @@ function reloadWhenDrawn(){
   poll=setInterval(check,700);
   check();
   setTimeout(()=>{clearInterval(poll);location.reload();},90000);
+}
+// Follow a cold start: swap in each stage of the preview as it is read, and open the panel once
+// it is drawn. Swapped rather than reloaded, so the page does not jump while it is being read.
+function followPreview(){
+  const box=document.getElementById('preview');
+  let stage=+box.dataset.stage,idle=0,busy=false,poll=null;
+  const done=()=>{clearInterval(poll);location.reload();};
+  const check=async()=>{const now=await health();
+    if(!now||busy) return;
+    showProgress(progressOf(now));
+    if(now.page_ready||now.last_error&&now.loading) return done();
+    idle=now.rendering||now.building?0:idle+1;
+    if(idle>=4) return done();
+    if(now.preview<=stage) return;
+    busy=true;
+    try{
+      const page=await(await fetch('/',{cache:'no-store'})).text();
+      const next=new DOMParser().parseFromString(page,'text/html').getElementById('preview');
+      if(!next) return done();
+      box.replaceChildren(...next.childNodes);
+      stage=+next.dataset.stage;
+      box.dataset.stage=stage;
+    }catch(e){}finally{busy=false;}};
+  poll=setInterval(check,700);
+  check();
 }
 // A switch: note the process before asking for it, so a restart quicker than the first poll
 // still counts as one.

@@ -634,10 +634,14 @@ func graverStatus(bulk, own string) string {
 	}
 }
 
-func allPlayers(client *api.Client) ([]map[string]any, error) {
+func allPlayers(client lister) ([]map[string]any, error) {
 	var players []map[string]any
 	err := client.RawList(config.CMP+"/players", 6*time.Hour, "players", &players)
 	return players, err
+}
+
+type lister interface {
+	RawList(path string, ttl time.Duration, tag string, target any) error
 }
 
 type slot struct {
@@ -948,40 +952,45 @@ func loadMarket(client *api.Client, leagueID, myTeamID string,
 	}
 	out := make([]Listing, 0, len(entries))
 	for _, entry := range entries {
-		sellerTeamID := text(nested(entry, "sellerTeam", "id"))
-		kind := "venta"
-		if text(entry["discr"]) == "marketPlayerLeague" {
-			kind = "libre"
-		}
-		listing := Listing{
-			MarketID:    text(entry["id"]),
-			PlayerID:    text(nested(entry, "playerMaster", "id")),
-			Kind:        kind,
-			MinBid:      number(entry["salePrice"]),
-			MarketValue: number(nested(entry, "playerMaster", "marketValue")),
-			Bids:        intOrNil(entry["numberOfBids"]),
-			Offers:      intOrNil(entry["numberOfOffers"]),
-			IsMine:      myTeamID != "" && sellerTeamID == myTeamID,
-			DirectOffer: boolOrNil(entry["directOffer"]),
-			MyBidID:     findBidID(entry),
-			MyBid:       findBidAmount(entry),
-			MyBidStatus: findBidStatus(entry),
-		}
-		if expires := text(entry["expirationDate"]); expires != "" {
-			listing.Expires = &expires
-		}
+		listing := listingOf(entry, myTeamID)
 		if face := text(nested(entry, "playerMaster", "images", "transparent", "256x256")); face != "" {
 			faces[listing.PlayerID] = face
-		}
-		if seller := text(nested(entry, "sellerTeam", "manager", "managerName")); seller != "" {
-			listing.Seller = &seller
-		}
-		if sellerTeamID != "" {
-			listing.SellerTeamID = &sellerTeamID
 		}
 		out = append(out, listing)
 	}
 	return out, nil
+}
+
+func listingOf(entry map[string]any, myTeamID string) Listing {
+	sellerTeamID := text(nested(entry, "sellerTeam", "id"))
+	kind := "venta"
+	if text(entry["discr"]) == "marketPlayerLeague" {
+		kind = "libre"
+	}
+	listing := Listing{
+		MarketID:    text(entry["id"]),
+		PlayerID:    text(nested(entry, "playerMaster", "id")),
+		Kind:        kind,
+		MinBid:      number(entry["salePrice"]),
+		MarketValue: number(nested(entry, "playerMaster", "marketValue")),
+		Bids:        intOrNil(entry["numberOfBids"]),
+		Offers:      intOrNil(entry["numberOfOffers"]),
+		IsMine:      myTeamID != "" && sellerTeamID == myTeamID,
+		DirectOffer: boolOrNil(entry["directOffer"]),
+		MyBidID:     findBidID(entry),
+		MyBid:       findBidAmount(entry),
+		MyBidStatus: findBidStatus(entry),
+	}
+	if expires := text(entry["expirationDate"]); expires != "" {
+		listing.Expires = &expires
+	}
+	if seller := text(nested(entry, "sellerTeam", "manager", "managerName")); seller != "" {
+		listing.Seller = &seller
+	}
+	if sellerTeamID != "" {
+		listing.SellerTeamID = &sellerTeamID
+	}
+	return listing
 }
 
 // UpcomingWeeks is how far ahead the fixture calendar looks. Ten matchdays is about two and

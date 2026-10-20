@@ -91,6 +91,10 @@ type State struct {
 	runs        int
 	fingerprint string
 	lastEffect  *Effect
+	// preview is what a cold start has read so far, shown until the first page is drawn. Kept
+	// apart from universe on purpose: every write path and the instructions read universe, and
+	// none of them may act on half a league.
+	preview *model.Preview
 
 	subs   map[chan []byte]bool
 	nudged func(string)
@@ -113,6 +117,44 @@ func (s *State) Universe() *model.Universe {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.universe
+}
+
+// Loading is whether the first build is still on its way. Nothing may act until it is over:
+// a squad missing reads as players nobody owns, and a market missing as nothing to bid on.
+func (s *State) Loading() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.universe == nil
+}
+
+// ShowPreview publishes a stage of the cold start for the page that waits on it. Ignored once
+// the world is built: a late preview must not stand in for it.
+func (s *State) ShowPreview(preview model.Preview) {
+	s.mu.Lock()
+	if s.universe != nil {
+		s.mu.Unlock()
+		return
+	}
+	s.preview = &preview
+	s.mu.Unlock()
+	slog.Info("preview published", "stage", preview.Stage, "mine", len(preview.Mine.Players),
+		"market", len(preview.Market), "rivals", len(preview.Rivals))
+	s.publish(map[string]any{"type": "preview", "stage": preview.Stage})
+}
+
+// Preview is the cold start's preview, at PreviewComplete once the world is built, or nil when
+// this start never published one.
+func (s *State) Preview() *model.Preview {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.preview == nil {
+		return nil
+	}
+	preview := *s.preview
+	if s.universe != nil {
+		preview.Stage = model.PreviewComplete
+	}
+	return &preview
 }
 
 // Payload is the JSON the page and the API read. Keys match the Python server's so the
@@ -908,6 +950,10 @@ type Health struct {
 	Building *model.Progress `json:"building,omitempty"`
 	// Started tells a page waiting on a restart that the process answering is the new one.
 	Started string `json:"started"`
+	// Loading is true until the first build is over, and every write is refused while it is.
+	Loading bool `json:"loading"`
+	// Preview is the stage of the cold start a page waiting on it can show, 0 without one.
+	Preview int `json:"preview"`
 }
 
 var started = time.Now().UTC().Format(time.RFC3339Nano)
@@ -918,7 +964,14 @@ func (s *State) Health() Health {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	health := Health{Version: s.version, Runs: s.runs, Subscribers: len(s.subs),
-		LastEffect: s.lastEffect, Status: "degraded", Frozen: httpx.Frozen, Started: started}
+		LastEffect: s.lastEffect, Status: "degraded", Frozen: httpx.Frozen, Started: started,
+		Loading: s.universe == nil}
+	if s.preview != nil {
+		health.Preview = s.preview.Stage
+		if s.universe != nil {
+			health.Preview = model.PreviewComplete
+		}
+	}
 	if !s.generatedAt.IsZero() {
 		stamp := s.generatedAt.UTC().Format(time.RFC3339)
 		age := time.Since(s.generatedAt)

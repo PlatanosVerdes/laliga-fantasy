@@ -305,12 +305,13 @@ func cmdServe(args []string) error {
 		window := world.ClauseWindow(time.Now())
 		return &writes.Window{Open: window.Open, OpensAt: window.OpensAt}
 	}
+	guard.Loading = world.Loading
 
 	// The daily reward: 100.000 that no rival is competing for, and the only way to lose it is
 	// to forget. It does not go through the standing instructions because it authorises nothing
 	// and spends nothing — there is no amount and no limit to agree on, only a day.
 	claimReward := func() {
-		if !allowWrites || *noAuto {
+		if !allowWrites || *noAuto || world.Loading() {
 			return
 		}
 		league, team, err := ensureLeague()
@@ -616,6 +617,13 @@ func cmdServe(args []string) error {
 			// The bar covers drawing the page too: a page waiting on the build reloads into a
 			// panel already drawn, not into seconds of a blank one.
 			model.StartProgress()
+			// My squad, then the market, then the rivals, each shown as soon as it is read. The
+			// build after it finds those answers in the cache and produces the same world.
+			if league, team, err := ensureLeague(); err == nil {
+				if err := model.BuildPreview(client, league, team, world.ShowPreview); err != nil {
+					slog.Warn("preview stopped", "reason", err.Error())
+				}
+			}
 			if err := world.Refresh("arranque"); err != nil {
 				slog.Error("first build failed", "reason", err.Error())
 			} else {

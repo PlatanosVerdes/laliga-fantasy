@@ -33,6 +33,8 @@ const PrepareTTL = 120 * time.Second
 var (
 	ErrDisabled = errors.New("este servidor corre en modo solo lectura")
 	ErrUnknown  = errors.New("operacion desconocida")
+	// ErrLoading is a write asked for before the first build is over.
+	ErrLoading = errors.New("Cargando la liga, espera a que termine")
 	// ErrOutdated is the API saying the page is behind: what is being acted on is already gone,
 	// so the caller rebuilds instead of only reporting it.
 	ErrOutdated = errors.New("esa jugada ya no esta viva")
@@ -432,7 +434,12 @@ type Guard struct {
 	// Clauses is the clause window, read at the moment of the write rather than kept, because
 	// it changes with the clock. Optional: without it the API's refusal is the only warning.
 	Clauses func() *Window
+	// Loading says the world is still being read for the first time. While it is, every
+	// operation is refused, the unattended ones too: half a league is no ground to act on.
+	Loading func() bool
 }
+
+func (g *Guard) loading() bool { return g.Loading != nil && g.Loading() }
 
 func NewGuard(client *api.Client) *Guard {
 	guard := &Guard{tokens: map[string]pending{}, client: client}
@@ -477,6 +484,9 @@ func (g *Guard) purge() {
 func (g *Guard) Prepare(name string, args Args, who Player, allowWrites bool) (Summary, error) {
 	if !allowWrites {
 		return Summary{}, ErrDisabled
+	}
+	if g.loading() {
+		return Summary{}, ErrLoading
 	}
 	spec, ok := Operations[name]
 	if !ok {
@@ -533,6 +543,9 @@ func (g *Guard) Confirm(token string, allowWrites, dryRun bool) (map[string]any,
 func (g *Guard) confirm(token string, allowWrites, dryRun, recheck bool) (map[string]any, error) {
 	if !allowWrites {
 		return nil, ErrDisabled
+	}
+	if g.loading() {
+		return nil, ErrLoading
 	}
 	g.mu.Lock()
 	g.purge()
@@ -861,6 +874,9 @@ func newToken() string {
 func (g *Guard) Automatic(name string, args Args, who Player, allowWrites bool) (any, error) {
 	if !allowWrites {
 		return nil, ErrDisabled
+	}
+	if g.loading() {
+		return nil, ErrLoading
 	}
 	spec, ok := Operations[name]
 	if !ok {

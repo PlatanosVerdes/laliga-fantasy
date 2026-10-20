@@ -222,6 +222,12 @@ func (s *Server) pageReady() bool {
 	return page.HTML != "" && drawnFor == version
 }
 
+// drawnOnce is whether any page is in the cache, of whatever version.
+func (s *Server) drawnOnce() bool {
+	page, _, _ := s.cached()
+	return page.HTML != ""
+}
+
 // Warm builds the page into the cache. Called before a change is announced, so the refresh
 // the browser does next reads a page that is already there.
 func (s *Server) Warm() { s.render() }
@@ -311,7 +317,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/accounts/logout", s.logout)
 	mux.HandleFunc("/api/accounts/avatar", s.avatar)
 	mux.HandleFunc("/", s.index)
-	return logging(sameSiteOnly(mux))
+	return logging(sameSiteOnly(s.whileLoading(mux)))
 }
 
 // AccessHandler is Handler behind the Access check, for the tunnel's door.
@@ -493,7 +499,7 @@ func (s *Server) events(writer http.ResponseWriter, request *http.Request) {
 	// Say hello with the current version, so a browser that reconnected knows at once
 	// whether it missed something.
 	hello, _ := json.Marshal(map[string]any{"type": "hello",
-		"version": s.state.Health().Version})
+		"version": s.state.Health().Version, "loading": s.state.Loading()})
 	fmt.Fprintf(writer, "data: %s\n\n", hello)
 	flusher.Flush()
 
@@ -589,9 +595,14 @@ func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 			s.leagueFailed(writer, *health.LastError)
 			return
 		}
-		// The first build reads the whole league: a page that says so rather than a blank one.
+		// The first build reads the whole league: a page that says so rather than a blank one,
+		// and that shows what is already read once there is something.
 		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 		writer.Header().Set("Cache-Control", "no-store")
+		if preview := s.state.Preview(); preview != nil {
+			fmt.Fprint(writer, previewPage(preview))
+			return
+		}
 		fmt.Fprint(writer, authPage("Preparando", `<h1>Preparando la liga…</h1>
 <p class="lead">La primera vez se lee la liga entera: plantillas, mercado, calendario y movimientos.</p>
 `+loadBar+`<script>reloadWhenReady();</script>`))
@@ -604,6 +615,12 @@ func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	page, ready := s.current()
+	// The first page of a cold start: the preview stays up while the panel is drawn.
+	if preview := s.state.Preview(); !ready && preview != nil && !s.drawnOnce() {
+		slog.Info("page still rendering: serving the preview")
+		fmt.Fprint(writer, previewPage(preview))
+		return
+	}
 	if !ready {
 		slog.Info("page still rendering: serving the wait page")
 		fmt.Fprint(writer, drawingPage)

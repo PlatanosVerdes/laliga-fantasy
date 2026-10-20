@@ -590,6 +590,9 @@ function connect() {
   source.onopen = () => { live.on = true; live.state = 'En vivo'; liveMoved(); };
   source.onmessage = (event) => {
     const message = JSON.parse(event.data);
+    // A restart under an open panel: its buttons point at a world that is not there yet, so the
+    // tab goes to the loading page until it is.
+    if (message.loading || message.type === 'preview') { location.reload(); return; }
     if (message.type === 'effect') showEffect(message);
     if (['effect', 'state', 'hello'].includes(message.type)) moveTo(message.version);
   };

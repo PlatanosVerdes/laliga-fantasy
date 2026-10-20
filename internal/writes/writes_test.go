@@ -484,3 +484,42 @@ func TestChangingAnOfferToTheSameAmountIsRefused(t *testing.T) {
 		t.Error("the same amount went through")
 	}
 }
+
+// While the first build is on its way nothing acts: not a click, not a token prepared before it,
+// not an instruction firing unattended. And the refusal says why, in the words the page shows.
+func TestNothingActsWhileTheLeagueLoads(t *testing.T) {
+	g := guard(50_000_000)
+	summary, err := g.Prepare("bid", bidArgs(1_000_000), Player{Name: "X", IdealBid: 2_000_000}, true)
+	if err != nil {
+		t.Fatalf("prepare before loading: %v", err)
+	}
+	loading := true
+	g.Loading = func() bool { return loading }
+
+	if _, err := g.Prepare("bid", bidArgs(1_000_000), Player{Name: "X", IdealBid: 2_000_000},
+		true); !errors.Is(err, ErrLoading) {
+		t.Errorf("prepare while loading: %v", err)
+	}
+	if _, err := g.Confirm(summary.Token, true, true); !errors.Is(err, ErrLoading) {
+		t.Errorf("confirm while loading: %v", err)
+	}
+	if _, err := g.Do("favourite", Args{TeamID: "T", PlayerID: "1", Favourite: true},
+		Player{Name: "X"}, true); !errors.Is(err, ErrLoading) {
+		t.Errorf("a one-step write while loading: %v", err)
+	}
+	for _, operation := range []string{"pay_clause", "shield_player", "accept_offer",
+		"claim_daily_reward", "save_lineup"} {
+		if _, err := g.Automatic(operation, Args{LeagueID: "1", TeamID: "2", PlayerTeamID: "3",
+			Amount: 1_000_000}, Player{Name: "X", Clause: 1_000_000}, true); !errors.Is(err, ErrLoading) {
+			t.Errorf("unattended %s while loading: %v", operation, err)
+		}
+	}
+	if ErrLoading.Error() != "Cargando la liga, espera a que termine" {
+		t.Errorf("the refusal the page shows: %q", ErrLoading.Error())
+	}
+
+	loading = false
+	if _, err := g.Confirm(summary.Token, true, true); err != nil {
+		t.Errorf("the token is still good once the league is loaded: %v", err)
+	}
+}
