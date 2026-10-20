@@ -752,12 +752,14 @@ func moveKey(event model.Event) string {
 	return fmt.Sprintf("%s|%d|%s|%s|%s", event.Date, event.TypeID, event.User1, player, amount)
 }
 
-// RenderKey identifies the current contents of the world. Two calls with the same key must
-// render the same page, which is what makes caching it safe.
-func (s *State) RenderKey() string {
+// RenderStamp identifies the current contents of the world, with the version it was taken at.
+// Two calls with the same key must render the same page, which is what makes caching it safe;
+// a page drawn for the same version differs from the current one only in what no rebuild
+// announces.
+func (s *State) RenderStamp() (string, int) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return fmt.Sprintf("%d.%d", s.version, s.revision)
+	return fmt.Sprintf("%d.%d", s.version, s.revision), s.version
 }
 
 // Patch changes the world in place and tells everybody at once.

@@ -724,6 +724,7 @@ func cmdServe(args []string) error {
 					HTML: "<title>Error</title><p>No he podido construir la pagina.</p>"}
 			}
 			page, views := document.Render()
+			server.Rendering.Reached("Dibujando la página", 1, 1)
 			return server.Rendered{HTML: page, Views: views}
 		},
 	})
@@ -1019,51 +1020,56 @@ var validationTable = []struct {
 	Label string
 	Case  writes.ValidationCase
 }{
-	{"puja normal", writes.ValidationCase{"bid",
+	{"puja normal", validationCase("bid",
 		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 1_000_000},
-		writes.Player{Name: "X", MinBid: 900_000, IdealBid: 2_000_000}, 50_000_000}},
-	{"puja por debajo del minimo", writes.ValidationCase{"bid",
+		writes.Player{Name: "X", MinBid: 900_000, IdealBid: 2_000_000}, 50_000_000)},
+	{"puja por debajo del minimo", validationCase("bid",
 		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 800_000},
-		writes.Player{Name: "X", MinBid: 900_000, IdealBid: 2_000_000}, 50_000_000}},
-	{"puja de cero", writes.ValidationCase{"bid",
+		writes.Player{Name: "X", MinBid: 900_000, IdealBid: 2_000_000}, 50_000_000)},
+	{"puja de cero", validationCase("bid",
 		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 0},
-		writes.Player{Name: "X"}, 50_000_000}},
-	{"puja mayor que el saldo", writes.ValidationCase{"bid",
+		writes.Player{Name: "X"}, 50_000_000)},
+	{"puja mayor que el saldo", validationCase("bid",
 		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 2_000_000},
-		writes.Player{Name: "X", IdealBid: 9_000_000}, 1_000_000}},
-	{"puja sobre el techo rentable", writes.ValidationCase{"bid",
+		writes.Player{Name: "X", IdealBid: 9_000_000}, 1_000_000)},
+	{"puja sobre el techo rentable", validationCase("bid",
 		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 3_000_000},
-		writes.Player{Name: "X", IdealBid: 2_000_000}, 50_000_000}},
-	{"puja sin rentabilidad conocida", writes.ValidationCase{"bid",
+		writes.Player{Name: "X", IdealBid: 2_000_000}, 50_000_000)},
+	{"puja sin rentabilidad conocida", validationCase("bid",
 		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 1_000_000},
-		writes.Player{Name: "X"}, 50_000_000}},
-	{"puja que se come medio saldo", writes.ValidationCase{"bid",
+		writes.Player{Name: "X"}, 50_000_000)},
+	{"puja que se come medio saldo", validationCase("bid",
 		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 600_000},
-		writes.Player{Name: "X", IdealBid: 900_000}, 1_000_000}},
-	{"puja con rivales", writes.ValidationCase{"bid",
+		writes.Player{Name: "X", IdealBid: 900_000}, 1_000_000)},
+	{"puja con rivales", validationCase("bid",
 		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 1_000_000},
-		writes.Player{Name: "X", IdealBid: 2_000_000, Bids: 3}, 50_000_000}},
-	{"clausula pagada de menos", writes.ValidationCase{"pay_clause",
+		writes.Player{Name: "X", IdealBid: 2_000_000, Bids: 3}, 50_000_000)},
+	{"clausula pagada de menos", validationCase("pay_clause",
 		writes.Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT", Amount: 9_000_000},
-		writes.Player{Name: "X", Clause: 10_000_000}, 50_000_000}},
-	{"clausula exacta", writes.ValidationCase{"pay_clause",
+		writes.Player{Name: "X", Clause: 10_000_000}, 50_000_000)},
+	{"clausula exacta", validationCase("pay_clause",
 		writes.Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT", Amount: 10_000_000},
-		writes.Player{Name: "X", Clause: 10_000_000}, 50_000_000}},
-	{"clausula sin saldo", writes.ValidationCase{"pay_clause",
+		writes.Player{Name: "X", Clause: 10_000_000}, 50_000_000)},
+	{"clausula sin saldo", validationCase("pay_clause",
 		writes.Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT", Amount: 10_000_000},
-		writes.Player{Name: "X", Clause: 10_000_000}, 5_000_000}},
-	{"oferta directa negativa", writes.ValidationCase{"direct_offer",
+		writes.Player{Name: "X", Clause: 10_000_000}, 5_000_000)},
+	{"oferta directa negativa", validationCase("direct_offer",
 		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: -1},
-		writes.Player{Name: "X"}, 50_000_000}},
-	{"aceptar por debajo del valor", writes.ValidationCase{"accept_offer",
+		writes.Player{Name: "X"}, 50_000_000)},
+	{"aceptar por debajo del valor", validationCase("accept_offer",
 		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", OfferID: "O", Amount: 8_000_000},
-		writes.Player{Name: "X", Value: 10_000_000}, 0}},
-	{"aceptar por encima del techo", writes.ValidationCase{"accept_offer",
+		writes.Player{Name: "X", Value: 10_000_000}, 0)},
+	{"aceptar por encima del techo", validationCase("accept_offer",
 		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", OfferID: "O", Amount: 12_000_000},
-		writes.Player{Name: "X", Value: 10_000_000, IdealBid: 11_000_000}, 0}},
-	{"retirar del mercado", writes.ValidationCase{"withdraw",
+		writes.Player{Name: "X", Value: 10_000_000, IdealBid: 11_000_000}, 0)},
+	{"retirar del mercado", validationCase("withdraw",
 		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M"},
-		writes.Player{Name: "X"}, 50_000_000}},
+		writes.Player{Name: "X"}, 50_000_000)},
+}
+
+func validationCase(name string, args writes.Args, player writes.Player,
+	cash int64) writes.ValidationCase {
+	return writes.ValidationCase{Name: name, Args: args, Player: player, Cash: cash}
 }
 
 
@@ -1513,6 +1519,7 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 	} else if money, err := client.Money(teamID, time.Minute); err == nil {
 		cash = money.TeamMoney
 	}
+	server.Rendering.Reached("Saldo", 1, 1)
 
 	// The advice layer and the page read the same generic rows, so the universe goes through
 	// JSON once. One conversion, in one place, rather than two shapes of the world.
@@ -1525,9 +1532,12 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		return render.Document{}, err
 	}
 	buckets := advice.Recommend(generic, cash, 0, 15)
+	server.Rendering.Reached("Calculando consejos", 1, 1)
 	// The per-player pages, once each: this is what fills the profitable ceiling and the
 	// value history the page draws.
-	advice.EnrichBuckets(buckets, 15, futbolfantasy.DetailTTL)
+	advice.EnrichBucketsReporting(buckets, 15, futbolfantasy.DetailTTL, func(done, total int) {
+		server.Rendering.Reached("Fichas de futbolfantasy", done, total)
+	})
 
 	armed, err := policies.Load()
 	if err != nil {
@@ -1606,8 +1616,10 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		Raise:    advice.ClausePlan(generic, cash-number(buckets["committed"])),
 		Policies: policyRows,
 	}
+	server.Rendering.Reached("Plan y cláusulas", 1, 1)
 	necro := necroporra.Load()
 	necroState := necroporra.FetchState(necro)
+	server.Rendering.Reached("Necroporra", 1, 1)
 	document.NecroGameweek = necroState.Gameweek
 	document.NecroDeadline = necroState.Deadline
 	document.NecroClosesAt = necroState.ClosesAt

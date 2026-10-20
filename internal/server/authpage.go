@@ -11,6 +11,11 @@ func authPage(title, body string) string {
 	return strings.NewReplacer("{{title}}", html.EscapeString(title), "{{body}}", body).Replace(authFrame)
 }
 
+// loadBar is the progress bar of the pages waiting on a build or a render; the script fills it.
+const loadBar = `<div class="load"><div class="load-track"><i></i></div>
+<div class="load-meta" role="status" aria-live="polite"><span class="load-step">Empezando…</span><span class="load-pct"></span></div></div>
+`
+
 const authFrame = `<!doctype html><html lang="es"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fantasy · {{title}}</title>
@@ -75,6 +80,13 @@ function showProgress(p){
   document.querySelector('.load-step').textContent=p.step+(p.total>1?' · '+p.done+' de '+p.total:'');
   document.querySelector('.load-pct').textContent=p.percent+' %';
 }
+// The step to show: the page being drawn, inside the build when it is the first build's last step.
+function progressOf(h){
+  const b=h.building,r=h.rendering;
+  if(!r) return b||null;
+  const base=b?b.percent:0;
+  return {step:r.step,done:r.done,total:r.total,percent:Math.round(base+(100-base)*r.percent/100)};
+}
 // Reload once the build is over: a new world, a new failure, or a new process that has finished
 // either way, since a league that fails again fails with the same error as before.
 async function reloadWhenReady(was){
@@ -82,7 +94,7 @@ async function reloadWhenReady(was){
   showProgress(null);
   const poll=setInterval(async()=>{const now=await health();
     if(!now) return;
-    if(now.building){showProgress(now.building);return;}
+    if(now.building){showProgress(progressOf(now));return;}
     const restarted=now.started!==was.started&&(now.generated_at||now.last_error);
     const built=now.generated_at&&now.generated_at!==was.generated_at;
     const failed=now.last_error&&now.last_error!==was.last_error;
@@ -90,6 +102,22 @@ async function reloadWhenReady(was){
       showProgress({step:now.last_error?'No ha cargado':'Listo',done:0,total:0,percent:100});
       setTimeout(()=>{location.href='/';},450);}},700);
   setTimeout(()=>{clearInterval(poll);location.href='/';},60000);
+}
+// Reload once the panel is drawn; reload rather than going to /, so the tab in the address stays.
+function reloadWhenDrawn(){
+  showProgress(null);
+  let idle=0,poll=null;
+  const check=async()=>{const now=await health();
+    if(!now) return;
+    // Nothing drawing and nothing ready: the world moved under the render, and asking again starts one.
+    idle=now.rendering||now.building?0:idle+1;
+    if(!now.page_ready&&idle<4){showProgress(progressOf(now));return;}
+    clearInterval(poll);
+    showProgress({step:'Listo',done:0,total:0,percent:100});
+    setTimeout(()=>{location.reload();},300);};
+  poll=setInterval(check,700);
+  check();
+  setTimeout(()=>{clearInterval(poll);location.reload();},90000);
 }
 // A switch: note the process before asking for it, so a restart quicker than the first poll
 // still counts as one.

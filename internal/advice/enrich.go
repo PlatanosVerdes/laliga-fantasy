@@ -17,6 +17,13 @@ import (
 // enriching them one at a time meant tens of duplicated requests per refresh, which is how
 // futbolfantasy came to answer 429.
 func EnrichBuckets(buckets Row, limit int, ttl time.Duration) int {
+	return EnrichBucketsReporting(buckets, limit, ttl, nil)
+}
+
+// EnrichBucketsReporting is EnrichBuckets telling report how many players of how many it has
+// been through, for a page waiting on it: an expired batch is a fetch per player, paced.
+func EnrichBucketsReporting(buckets Row, limit int, ttl time.Duration,
+	report func(done, total int)) int {
 	// The squad is in here because the profitable ceiling of a player you *own* is what tells
 	// you whether an offer is a good sale. Without it, "is this offer good?" can only be
 	// answered from price, which is half the question.
@@ -43,7 +50,10 @@ func EnrichBuckets(buckets Row, limit int, ttl time.Duration) int {
 	}
 
 	fetched := 0
-	for _, ffID := range order {
+	for index, ffID := range order {
+		if report != nil {
+			report(index, len(order))
+		}
 		detail, err := futbolfantasy.PlayerDetail(ffID, ttl)
 		if err != nil {
 			var limited *httpx.RateLimited
@@ -60,6 +70,9 @@ func EnrichBuckets(buckets Row, limit int, ttl time.Duration) int {
 		for _, row := range byPlayer[ffID] {
 			ApplyDetail(row, detail)
 		}
+	}
+	if report != nil {
+		report(len(order), len(order))
 	}
 	slog.Debug("detail enrichment", "unique_players", len(order), "fetched", fetched)
 	return fetched
