@@ -18,6 +18,7 @@ import (
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/services"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
@@ -96,34 +97,129 @@ type Server struct {
 	// advice layer, the futbolfantasy details, the whole document — and every repaint was
 	// paying that again for a page that had not changed. One entry: the only page worth
 	// keeping is the current one.
-	pageMu  sync.Mutex
-	pageKey string
-	page    Rendered
+	pageMu      sync.Mutex
+	pageKey     string
+	pageVersion int
+	page        Rendered
+	// drawing is the render on its way for each key, so a request arriving during one waits for
+	// it instead of queueing another. drawMu keeps it to one render at a time.
+	drawing map[string]chan struct{}
+	drawMu  sync.Mutex
 	season  season
 }
 
+// Rendering is how far the page being drawn has got. Options.Page reports its steps here; a
+// page waiting on it reads them from /healthz.
+var Rendering = model.NewTracker(
+	model.Stage{Name: "Saldo", Key: "cash", Weight: 3},
+	model.Stage{Name: "Calculando consejos", Key: "advice", Weight: 12},
+	model.Stage{Name: "Fichas de futbolfantasy", Key: "details", Weight: 50},
+	model.Stage{Name: "Plan y cláusulas", Key: "plan", Weight: 10},
+	model.Stage{Name: "Necroporra", Key: "necro", Weight: 5},
+	model.Stage{Name: "Dibujando la página", Key: "document", Weight: 20},
+)
+
+// patience is how long the page request waits for a render before answering with a page that
+// shows its progress. Most misses take a second or three; an expired batch of futbolfantasy
+// details takes forty, and a blank tab for forty seconds reads as a panel that is down.
+var patience = 1500 * time.Millisecond
+
+// cached is the page in the cache with the key and world version it was drawn for.
+func (s *Server) cached() (Rendered, string, int) {
+	s.pageMu.Lock()
+	defer s.pageMu.Unlock()
+	return s.page, s.pageKey, s.pageVersion
+}
+
+// draw starts a render of the world at key and version unless one for the same key is on its
+// way, and returns what is closed once it is over.
+func (s *Server) draw(key string, version int) <-chan struct{} {
+	s.pageMu.Lock()
+	if done, ok := s.drawing[key]; ok {
+		s.pageMu.Unlock()
+		return done
+	}
+	if s.drawing == nil {
+		s.drawing = map[string]chan struct{}{}
+	}
+	done := make(chan struct{})
+	s.drawing[key] = done
+	s.pageMu.Unlock()
+	go func() {
+		defer close(done)
+		s.drawMu.Lock()
+		defer s.drawMu.Unlock()
+		if page, at, _ := s.cached(); at != key || page.HTML == "" {
+			s.paint(key, version)
+		}
+		s.pageMu.Lock()
+		delete(s.drawing, key)
+		s.pageMu.Unlock()
+	}()
+	return done
+}
+
+// paint renders the world into the cache under key. Only ever run by draw, one at a time.
+func (s *Server) paint(key string, version int) {
+	started := time.Now()
+	Rendering.Start()
+	page := s.opts.Page()
+	phases := Rendering.End()
+	if page.HTML == "" {
+		return
+	}
+	s.pageMu.Lock()
+	s.pageKey, s.pageVersion, s.page = key, version, page
+	s.pageMu.Unlock()
+	slog.Info("page rendered", append([]any{"key", key, "bytes", len(page.HTML),
+		"ms", time.Since(started).Milliseconds()}, phases...)...)
+}
+
 // render returns the current page, rendering it only when the world has moved since the last
-// time. Guarded rather than sharded: two requests arriving together should wait for one render,
-// not run two.
+// time. Two requests arriving together wait for one render, not run two.
 func (s *Server) render() Rendered {
 	if s.opts.Page == nil {
 		return Rendered{}
 	}
-	key := s.state.RenderKey()
-	s.pageMu.Lock()
-	defer s.pageMu.Unlock()
-	if key == s.pageKey && s.page.HTML != "" {
-		return s.page
+	key, version := s.state.RenderStamp()
+	if page, at, _ := s.cached(); at == key && page.HTML != "" {
+		return page
 	}
-	started := time.Now()
-	page := s.opts.Page()
-	if page.HTML == "" {
-		return Rendered{}
-	}
-	s.pageKey, s.page = key, page
-	slog.Info("page rendered", "key", key, "bytes", len(page.HTML),
-		"ms", time.Since(started).Milliseconds())
+	<-s.draw(key, version)
+	page, _, _ := s.cached()
 	return page
+}
+
+// current is the page for a browser opening the panel, without making it wait for a render it
+// does not need. A page drawn for the same version of the world is served at once while the
+// new one is drawn behind it: the version only stays put when no rebuild found anything worth
+// telling an open browser about, and the views the page asks for as soon as it connects are
+// the fresh ones. Otherwise it waits up to patience, and false means the render is still on.
+func (s *Server) current() (Rendered, bool) {
+	key, version := s.state.RenderStamp()
+	page, at, drawnFor := s.cached()
+	if at == key && page.HTML != "" {
+		return page, true
+	}
+	done := s.draw(key, version)
+	if page.HTML != "" && drawnFor == version {
+		slog.Info("page served while redrawing", "drawn", at, "key", key)
+		return page, true
+	}
+	select {
+	case <-done:
+		page, _, _ = s.cached()
+		return page, page.HTML != ""
+	case <-time.After(patience):
+		return Rendered{}, false
+	}
+}
+
+// pageReady says whether opening the panel now would be served at once.
+func (s *Server) pageReady() bool {
+	_, version := s.state.RenderStamp()
+	page, _, drawnFor := s.cached()
+	return page.HTML != "" && drawnFor == version
 }
 
 // Warm builds the page into the cache. Called before a change is announced, so the refresh
@@ -325,13 +421,24 @@ func (s *Server) json(writer http.ResponseWriter, status int, body any) {
 	_, _ = writer.Write(blob)
 }
 
+// health is the world's health plus the page's: a page waiting on a render polls it to show the
+// step the render is on and to know when the panel is ready.
+type health struct {
+	state.Health
+	Rendering *model.Progress `json:"rendering,omitempty"`
+	PageReady bool            `json:"page_ready"`
+}
+
 func (s *Server) health(writer http.ResponseWriter, _ *http.Request) {
-	health := s.state.Health()
+	answer := health{Health: s.state.Health(), PageReady: s.pageReady()}
+	if current, running := Rendering.Current(); running {
+		answer.Rendering = &current
+	}
 	status := http.StatusOK
-	if health.Status == "degraded" {
+	if answer.Status == "degraded" {
 		status = http.StatusServiceUnavailable
 	}
-	s.json(writer, status, health)
+	s.json(writer, status, answer)
 }
 
 func (s *Server) payload(writer http.ResponseWriter, _ *http.Request) {
@@ -487,9 +594,7 @@ func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Cache-Control", "no-store")
 		fmt.Fprint(writer, authPage("Preparando", `<h1>Preparando la liga…</h1>
 <p class="lead">La primera vez se lee la liga entera: plantillas, mercado, calendario y movimientos.</p>
-<div class="load"><div class="load-track"><i></i></div>
-<div class="load-meta"><span class="load-step">Empezando…</span><span class="load-pct"></span></div></div>
-<script>reloadWhenReady();</script>`))
+`+loadBar+`<script>reloadWhenReady();</script>`))
 		return
 	}
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -498,8 +603,20 @@ func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 		fmt.Fprint(writer, "<title>Generando</title><p>Generando el primer informe…</p>")
 		return
 	}
-	fmt.Fprint(writer, s.render().HTML)
+	page, ready := s.current()
+	if !ready {
+		slog.Info("page still rendering: serving the wait page")
+		fmt.Fprint(writer, drawingPage)
+		return
+	}
+	fmt.Fprint(writer, page.HTML)
 }
+
+// drawingPage is what a browser gets while the panel is drawn: the league is already read, so
+// it says that, and shows the step the render is on until the panel is ready.
+var drawingPage = authPage("Generando", `<h1>Generando la página…</h1>
+<p class="lead">La liga ya está leída. Falta dibujar el panel: consejos, fichas de futbolfantasy y el plan.</p>
+`+loadBar+`<script>reloadWhenDrawn();</script>`)
 
 // views is every tab the browser draws, in one answer: a live refresh asks once, not per tab.
 func (s *Server) views(writer http.ResponseWriter, _ *http.Request) {

@@ -50,6 +50,13 @@ source ships every container to VictoriaLogs with no per-service configuration. 
 through a container on the same network (`docker exec vector wget -qO- ...`) or the Grafana
 data source.
 
+Where a slow load spent its time is in two lines. `build phases` comes once per start, with
+the milliseconds of each step of the first build (`squads_ms`, `calendar_ms`, … and `page_ms`
+for drawing the page inside it). `page rendered` comes with every render, split the same way
+(`advice_ms`, `details_ms` for the futbolfantasy pages, `necro_ms`, `document_ms`).
+`page served while redrawing` means a browser got the previous page at once while the new one
+was drawn behind it; `serving the wait page` means it got the progress page instead.
+
 ## Things only learnt by breaking them
 
 * The API **refuses a second bid** on the same listing with a bare 400. Your own bid travels
