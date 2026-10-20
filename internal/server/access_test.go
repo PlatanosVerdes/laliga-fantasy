@@ -169,18 +169,38 @@ func TestRotatedKeysAreFetched(t *testing.T) {
 	}
 }
 
-func TestAccessNeedsBothSettings(t *testing.T) {
+func TestAccessDoorNeedsEverySetting(t *testing.T) {
 	for _, c := range []struct {
 		access Access
 		valid  bool
 	}{
 		{Access{}, true},
-		{Access{TeamDomain: testTeam, Audience: testAudience}, true},
-		{Access{TeamDomain: testTeam}, false},
-		{Access{Audience: testAudience}, false},
+		{Access{Port: 8001, TeamDomain: testTeam, Audience: testAudience}, true},
+		{Access{TeamDomain: testTeam, Audience: testAudience}, false},
+		{Access{Port: 8001, TeamDomain: testTeam}, false},
+		{Access{Port: 8001, Audience: testAudience}, false},
 	} {
 		if err := c.access.Validate(); (err == nil) != c.valid {
 			t.Errorf("%+v: valid %v, want %v", c.access, err == nil, c.valid)
+		}
+	}
+}
+
+// The private door stays open to whoever reaches it; only the tunnel's door asks for a token.
+func TestOnlyTheTunnelDoorAsksForAToken(t *testing.T) {
+	panel := New(nil, Options{Access: Access{Port: 8001, TeamDomain: testTeam, Audience: testAudience}})
+	for _, c := range []struct {
+		door http.Handler
+		name string
+		want int
+	}{
+		{panel.Handler(), "private", http.StatusNotFound},
+		{panel.AccessHandler(), "tunnel", http.StatusForbidden},
+	} {
+		recorder := httptest.NewRecorder()
+		c.door.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/no-such-page", nil))
+		if recorder.Code != c.want {
+			t.Errorf("%s door answered %d, want %d", c.name, recorder.Code, c.want)
 		}
 	}
 }

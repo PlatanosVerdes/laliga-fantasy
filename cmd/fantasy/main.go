@@ -199,6 +199,8 @@ func cmdServe(args []string) error {
 	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
 	host := flags.String("host", "0.0.0.0", "interfaz")
 	port := flags.Int("port", 8000, "puerto")
+	accessPort := flags.Int("access-port", 0,
+		"puerto para el tunel de Cloudflare: exige el token de Access (FANTASY_ACCESS_TEAM_DOMAIN y FANTASY_ACCESS_AUD)")
 	// Accepts "90s", "2m" and a bare number of seconds, because the deployed command line
 	// has always been written the second way.
 	interval := flags.String("interval", services.Format(defaultPoll),
@@ -217,8 +219,8 @@ func cmdServe(args []string) error {
 	if err != nil {
 		return err
 	}
-	access := server.Access{TeamDomain: os.Getenv("FANTASY_ACCESS_TEAM_DOMAIN"),
-		Audience: os.Getenv("FANTASY_ACCESS_AUD")}
+	access := server.Access{Port: *accessPort,
+		TeamDomain: os.Getenv("FANTASY_ACCESS_TEAM_DOMAIN"), Audience: os.Getenv("FANTASY_ACCESS_AUD")}
 	if err := access.Validate(); err != nil {
 		return err
 	}

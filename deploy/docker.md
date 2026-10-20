@@ -31,8 +31,9 @@ services:
       # Optional: push the same JSON straight into VictoriaLogs / Loki / anything
       # that accepts JSON lines over HTTP.
       # FANTASY_LOG_URL: "http://logs:9428/insert/jsonline?_stream_fields=service"
-      # Behind Cloudflare Access: refuse any request without a valid Access token
-      # (health endpoints excepted). Both or neither; the AUD tag is on the app's page.
+      # With `serve --access-port 8001`, a second door for a Cloudflare tunnel where every
+      # request needs a valid Access token (health endpoints excepted); --port stays the
+      # private door. All three or none; the AUD tag is on the Access app's page.
       # FANTASY_ACCESS_TEAM_DOMAIN: "<team>.cloudflareaccess.com"
       # FANTASY_ACCESS_AUD: "<application audience tag>"
     volumes:

@@ -76,7 +76,9 @@ type Options struct {
 	// Services is the registry of job clocks behind /api/services. Nil leaves the heartbeat
 	// at its default and the endpoint answering 501.
 	Services *services.Registry
-	// Access, when set, refuses every request that did not come through Cloudflare Access.
+	// Access, when enabled, opens a second door for the Cloudflare tunnel. Port stays the
+	// private one (tailnet, Caddy), so the panel is still reachable when Cloudflare is
+	// blocked or the proxy is down.
 	Access Access
 }
 
@@ -211,15 +213,26 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/accounts/logout", s.logout)
 	mux.HandleFunc("/api/accounts/avatar", s.avatar)
 	mux.HandleFunc("/", s.index)
-	return logging(requireAccess(s.opts.Access, sameSiteOnly(mux)))
+	return logging(sameSiteOnly(mux))
+}
+
+// AccessHandler is Handler behind the Access check, for the tunnel's door.
+func (s *Server) AccessHandler() http.Handler {
+	return requireAccess(s.opts.Access, s.Handler())
 }
 
 func (s *Server) ListenAndServe() error {
+	failed := make(chan error, 2)
 	address := fmt.Sprintf("%s:%d", s.opts.Host, s.opts.Port)
-	server := &http.Server{Addr: address, Handler: s.Handler()}
+	go func() { failed <- (&http.Server{Addr: address, Handler: s.Handler()}).ListenAndServe() }()
 	slog.Info("serving", "address", address, "writes", s.opts.AllowWrites)
 	fmt.Printf("Sirviendo en http://%s\n", address)
-	return server.ListenAndServe()
+	if s.opts.Access.Enabled() {
+		access := fmt.Sprintf("%s:%d", s.opts.Host, s.opts.Access.Port)
+		go func() { failed <- (&http.Server{Addr: access, Handler: s.AccessHandler()}).ListenAndServe() }()
+		slog.Info("serving behind Cloudflare Access", "address", access)
+	}
+	return <-failed
 }
 
 // counted remembers the status a handler wrote, which is the only part of an answer worth

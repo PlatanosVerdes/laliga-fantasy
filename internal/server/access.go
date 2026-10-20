@@ -20,18 +20,27 @@ import (
 // AccessHeader carries the token Cloudflare Access signs for every request it lets through.
 const AccessHeader = "Cf-Access-Jwt-Assertion"
 
-// Access is the Cloudflare Access application in front of the panel. Behind it, a request
-// without a valid token did not come through Access, and the panel can place real bids.
+// Access is the door the Cloudflare tunnel uses: a port of its own where a request without a
+// valid token is refused, because it did not come through Access and the panel can place
+// real bids.
 type Access struct {
+	Port       int
 	TeamDomain string
 	Audience   string
 }
 
-func (a Access) Enabled() bool { return a.TeamDomain != "" || a.Audience != "" }
+func (a Access) Enabled() bool { return a.Port != 0 }
 
+// Validate refuses a half-configured door rather than opening it without the check.
 func (a Access) Validate() error {
-	if (a.TeamDomain == "") != (a.Audience == "") {
-		return errors.New("Cloudflare Access needs both the team domain and the audience tag")
+	set := 0
+	for _, given := range []bool{a.Port != 0, a.TeamDomain != "", a.Audience != ""} {
+		if given {
+			set++
+		}
+	}
+	if set != 0 && set != 3 {
+		return errors.New("Cloudflare Access needs the port, the team domain and the audience tag")
 	}
 	return nil
 }
@@ -62,9 +71,6 @@ func newAccessKeys(access Access) *accessKeys {
 // requireAccess lets through only requests carrying a valid Access token. The health
 // endpoints are exempt: the probes reach them over the Docker network, never through Access.
 func requireAccess(access Access, next http.Handler) http.Handler {
-	if !access.Enabled() {
-		return next
-	}
 	return newAccessKeys(access).middleware(next)
 }
 
