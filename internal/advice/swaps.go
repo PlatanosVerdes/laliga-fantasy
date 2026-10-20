@@ -183,7 +183,7 @@ func Swaps(universe Row, buckets Row, cash float64) Row {
 			if taken[text(in["id"])] || int(number(in["position_id"])) != positionID {
 				continue
 			}
-			// Un rival recien fichado tampoco puede salir: solo se llega a el por clausula.
+			// A player a rival has just signed cannot leave either: only his clause gets him.
 			if truthy(in["sale_locked"]) {
 				continue
 			}
