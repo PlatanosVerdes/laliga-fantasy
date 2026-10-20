@@ -217,6 +217,11 @@ func cmdServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	access := server.Access{TeamDomain: os.Getenv("FANTASY_ACCESS_TEAM_DOMAIN"),
+		Audience: os.Getenv("FANTASY_ACCESS_AUD")}
+	if err := access.Validate(); err != nil {
+		return err
+	}
 	tickFromFlag := false
 	flags.Visit(func(given *flag.Flag) { tickFromFlag = tickFromFlag || given.Name == "interval" })
 	clocks := services.New(config.ServicesFile, serviceJobs(tick, tickFromFlag)...)
@@ -698,6 +703,7 @@ func cmdServe(args []string) error {
 		Restart:  restart,
 		Leagues:  func() ([]server.LeagueChoice, error) { return listLeagues(client) },
 		Services: clocks,
+		Access:   access,
 		// The page is rendered on demand from whatever the last rebuild left, so a slow
 		// refresh never blocks a request and a failed one still serves the last good world.
 		Page: func() server.Rendered {

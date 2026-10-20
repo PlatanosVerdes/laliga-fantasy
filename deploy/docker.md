@@ -31,6 +31,10 @@ services:
       # Optional: push the same JSON straight into VictoriaLogs / Loki / anything
       # that accepts JSON lines over HTTP.
       # FANTASY_LOG_URL: "http://logs:9428/insert/jsonline?_stream_fields=service"
+      # Behind Cloudflare Access: refuse any request without a valid Access token
+      # (health endpoints excepted). Both or neither; the AUD tag is on the app's page.
+      # FANTASY_ACCESS_TEAM_DOMAIN: "<team>.cloudflareaccess.com"
+      # FANTASY_ACCESS_AUD: "<application audience tag>"
     volumes:
       # Session, cache, favourites, standing instructions and the report all live
       # here. The session is the only thing that cannot be regenerated.

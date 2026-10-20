@@ -76,6 +76,8 @@ type Options struct {
 	// Services is the registry of job clocks behind /api/services. Nil leaves the heartbeat
 	// at its default and the endpoint answering 501.
 	Services *services.Registry
+	// Access, when set, refuses every request that did not come through Cloudflare Access.
+	Access Access
 }
 
 // Rendered is one build of the world: the page, and the views the client draws from JSON.
@@ -209,7 +211,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/accounts/logout", s.logout)
 	mux.HandleFunc("/api/accounts/avatar", s.avatar)
 	mux.HandleFunc("/", s.index)
-	return logging(sameSiteOnly(mux))
+	return logging(requireAccess(s.opts.Access, sameSiteOnly(mux)))
 }
 
 func (s *Server) ListenAndServe() error {
