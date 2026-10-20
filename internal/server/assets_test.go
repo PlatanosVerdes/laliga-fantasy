@@ -36,3 +36,17 @@ func TestAssetsServeFoldersAndNothingAbove(t *testing.T) {
 		}
 	}
 }
+
+// Browsers ask these paths themselves; without them a phone shows the domain's initial.
+func TestIconsAnswerTheDefaultPaths(t *testing.T) {
+	assets := t.TempDir()
+	_ = os.WriteFile(filepath.Join(assets, "favicon.png"), []byte("\x89PNG"), 0o644)
+	handler := (&Server{opts: Options{Assets: assets}}).Handler()
+	for _, path := range []string{"/favicon.ico", "/apple-touch-icon.png"} {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, path, nil))
+		if recorder.Code != http.StatusOK || recorder.Header().Get("Content-Type") != "image/png" {
+			t.Errorf("%s: %d %s", path, recorder.Code, recorder.Header().Get("Content-Type"))
+		}
+	}
+}

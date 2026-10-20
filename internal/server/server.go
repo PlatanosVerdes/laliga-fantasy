@@ -208,6 +208,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/necroporra/vote", s.necroVote)
 	mux.HandleFunc("/refresh", s.refresh)
 	mux.HandleFunc("/assets/", s.asset)
+	mux.HandleFunc("/favicon.ico", s.icon)
+	mux.HandleFunc("/apple-touch-icon.png", s.icon)
 	mux.HandleFunc("/api/accounts", s.accounts)
 	mux.HandleFunc("/api/accounts/use", s.useAccount)
 	mux.HandleFunc("/api/accounts/logout", s.logout)
@@ -447,6 +449,13 @@ func (s *Server) asset(writer http.ResponseWriter, request *http.Request) {
 	// asks again; Last-Modified keeps that a 304.
 	writer.Header().Set("Cache-Control", "no-cache")
 	http.ServeContent(writer, request, name, info.ModTime(), file)
+}
+
+// icon answers the paths browsers ask on their own, which never read the page's embedded icon.
+func (s *Server) icon(writer http.ResponseWriter, request *http.Request) {
+	writer.Header().Set("Content-Type", "image/png")
+	writer.Header().Set("Cache-Control", "max-age=86400")
+	http.ServeFile(writer, request, filepath.Join(s.opts.Assets, "favicon.png"))
 }
 
 // index serves the page.
