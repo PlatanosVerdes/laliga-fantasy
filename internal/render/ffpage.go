@@ -166,7 +166,8 @@ func secondOpinion(player map[string]any, named bool, now time.Time) *Seg {
 	return &Seg{T: label, C: "ff-tag ff-2nd", Tip: tip}
 }
 
-// pitchOpinion is secondOpinion short enough for a shirt on the eleven.
+// pitchOpinion is secondOpinion short enough for a shirt on the eleven or a squad row, where the
+// long label was cut; the tooltip keeps the whole story.
 func pitchOpinion(player map[string]any) *Seg {
 	seg := secondOpinion(player, false, time.Now())
 	if seg != nil {
