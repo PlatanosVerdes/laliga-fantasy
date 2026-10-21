@@ -66,7 +66,7 @@ func prepareBid(handler http.Handler) (int, map[string]any) {
 }
 
 // A bid is checked against his ceiling read there and then, whether or not the page has got to
-// him yet; when it cannot be read the bid is refused, not warned as unprofitable.
+// him yet; when it cannot be read the bid goes through saying so, not warned as unprofitable.
 func TestABidIsCheckedAgainstACeilingReadThereAndThen(t *testing.T) {
 	read := 0
 	handler := biddingServer(t, func(ffID string) (map[string]any, error) {
@@ -88,12 +88,13 @@ func TestABidIsCheckedAgainstACeilingReadThereAndThen(t *testing.T) {
 		return nil, errors.New("rate limited")
 	})
 	status, body = prepareBid(handler)
-	message, _ := body["error"].(string)
-	if status != http.StatusBadRequest || !strings.Contains(message, "ficha de futbolfantasy de Barato") {
-		t.Errorf("refused with the reason: %d %v", status, body)
+	warnings := strings.Join(asStrings(body["warnings"]), " | ")
+	if status != http.StatusOK || body["token"] == "" {
+		t.Fatalf("an unreadable page never blocks a bid: %d %v", status, body)
 	}
-	if strings.Contains(message, "no le ve rentabilidad") {
-		t.Errorf("a page that could not be read is not futbolfantasy saying no: %s", message)
+	if !strings.Contains(warnings, "no he podido leer la ficha de futbolfantasy de Barato: sin techo rentable, decide tú") ||
+		strings.Contains(warnings, "no le ve rentabilidad") {
+		t.Errorf("the ceiling is said to be unknown, not missing: %s", warnings)
 	}
 }
 

@@ -50,7 +50,9 @@ for an armed sale) is held until those pages are in, with "Esperando N fichas de
 futbolfantasy…", because a missing ceiling reads as futbolfantasy saying no; once they land the
 page equals the one that waited. A 429 stops the pass, and what was left is drawn as a failed
 fetch for five minutes. A bid, an offer or an acceptance reads the player's page synchronously
-in `playerFor`, and is refused when it cannot be read (`writes.Player.CeilingUnread`).
+in `playerFor`; when it cannot be read the operation is never refused, it carries "no he podido
+leer la ficha de futbolfantasy de X: sin techo rentable, decide tú" and nothing is checked
+against the unknown ceiling (`writes.Player.CeilingUnread`).
 
 ## Deploying
 

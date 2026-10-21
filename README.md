@@ -460,8 +460,9 @@ market's ceilings (the plan, the buy verdicts on *Decidir*, the stand-in for a s
 offer to take) is held with "Esperando N fichas de futbolfantasy…" until every candidate's
 page is in, so nothing is proposed from half; once they are, the page is the one that waited.
 A 429 stops the pass and leaves the rest alone for five minutes, drawn as a failed page always
-was. A bid or an offer reads the player's page there and then, and is refused when it cannot be
-read rather than warned as unprofitable.
+was. A bid or an offer reads the player's page there and then; when it cannot be read it still goes
+through, warned that the ceiling is unknown ("sin techo rentable, decide tú"), never as
+unprofitable.
 
 **Paying a clause re-reads it first.** The plan can be built from data half an hour old,
 and this is the one operation where that gap is expensive: the owner can raise the clause

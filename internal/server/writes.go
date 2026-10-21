@@ -596,7 +596,7 @@ func (s *Server) playerFor(id string) writes.Player {
 		// The profitable ceiling is futbolfantasy's, and it lives on their player page rather
 		// than in the model, so it is read here, at once, whether or not the page drawn behind
 		// it has got to him yet. Without it every bid was warned as unprofitable, which is
-		// worse than saying nothing, so a page that cannot be read refuses what it judges.
+		// worse than saying nothing, so a page that cannot be read is said to be unknown.
 		if player.FFID != nil && *player.FFID != "" {
 			if detail, err := playerDetail(*player.FFID); err == nil {
 				who.IdealBid = int64(number(detail["ideal_bid"]))

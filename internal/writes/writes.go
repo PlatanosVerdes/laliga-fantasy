@@ -386,7 +386,7 @@ type Player struct {
 	Shielded      bool
 	ShieldedUntil string
 	// CeilingUnread is a player whose futbolfantasy page could not be read: his IdealBid is
-	// unknown, not zero, and no operation judged by it is checked as if it were.
+	// unknown, not zero, and nothing is checked against it as if it were.
 	CeilingUnread bool
 }
 
@@ -621,15 +621,16 @@ func (g *Guard) confirm(token string, allowWrites, dryRun, recheck bool) (map[st
 func check(name string, args Args, who Player, cash *int64, window *Window) ([]string, error) {
 	var warnings []string
 
-	// Read as zero, a missing ceiling says "futbolfantasy sees no margin" about a player it was
-	// never asked about.
+	// Unknown is not zero: read as zero, a missing ceiling says "futbolfantasy sees no margin"
+	// about a player it was never asked about. Nor is it a reason to refuse: the call is yours.
 	if who.CeilingUnread && JudgedByCeiling[name] {
 		player := who.Name
 		if player == "" {
 			player = "este jugador"
 		}
-		return nil, fmt.Errorf("no he podido leer la ficha de futbolfantasy de %s y sin su "+
-			"techo rentable no se puede comprobar: prueba otra vez en un momento", player)
+		warnings = append(warnings, fmt.Sprintf("no he podido leer la ficha de futbolfantasy "+
+			"de %s: sin techo rentable, decide tú", player))
+		who.IdealBid = 0
 	}
 
 	// The answer goes through .../market/{id}/offer/{id}: an offer for somebody I never listed
@@ -825,7 +826,7 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 					fmt.Sprintf("por encima de la puja maxima rentable de futbolfantasy (%s)",
 						money(who.IdealBid)))
 			}
-		} else {
+		} else if !who.CeilingUnread {
 			warnings = append(warnings, "futbolfantasy no le ve rentabilidad a este precio")
 		}
 		if cash != nil && float64(args.Amount) > 0.5*float64(*cash) {

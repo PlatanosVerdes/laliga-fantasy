@@ -524,20 +524,26 @@ func TestNothingActsWhileTheLeagueLoads(t *testing.T) {
 	}
 }
 
-// A ceiling that could not be read is unknown, not zero: whatever is judged by it is refused
-// rather than warned as unprofitable, and nothing else is held up by it.
-func TestAnUnreadCeilingRefusesWhatItJudges(t *testing.T) {
+// A ceiling that could not be read is unknown, not zero: whatever is judged by it goes through
+// with that said, never refused and never warned as unprofitable.
+func TestAnUnreadCeilingIsSaidAndNeverBlocks(t *testing.T) {
 	unread := Player{Name: "Barato", Available: true, CeilingUnread: true}
 	args := Args{MarketID: "m", OfferID: "o", BidID: "b", PlayerTeamID: "slot", Amount: 1}
 	for name := range JudgedByCeiling {
-		_, err := check(name, args, unread, nil, nil)
-		if err == nil || !strings.Contains(err.Error(), "ficha de futbolfantasy de Barato") {
-			t.Errorf("%s: %v", name, err)
+		warnings, err := check(name, args, unread, nil, nil)
+		joined := strings.Join(warnings, " | ")
+		if err != nil {
+			t.Errorf("%s refused: %v", name, err)
+		}
+		if !strings.Contains(joined, "no he podido leer la ficha de futbolfantasy de Barato: sin techo rentable, decide tú") {
+			t.Errorf("%s does not say the ceiling is unknown: %s", name, joined)
+		}
+		if strings.Contains(joined, "rentabilidad") || strings.Contains(joined, "puja maxima rentable") {
+			t.Errorf("%s judged an unknown ceiling: %s", name, joined)
 		}
 	}
-	for _, name := range []string{"sell_to_market", "decline_offer", "cancel_bid", "pay_clause"} {
-		if _, err := check(name, args, unread, nil, nil); err != nil {
-			t.Errorf("%s does not read the ceiling and was refused: %v", name, err)
-		}
+	warnings, err := check("sell_to_market", args, unread, nil, nil)
+	if err != nil || strings.Contains(strings.Join(warnings, " "), "futbolfantasy") {
+		t.Errorf("a listing does not read the ceiling: %v %v", warnings, err)
 	}
 }
