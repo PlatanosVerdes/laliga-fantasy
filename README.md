@@ -336,7 +336,7 @@ cannot be regenerated:
 |---|---|---|
 | config | `~/.config/laliga-fantasy/` | `active.json`, each account's `tokens.json` (`0600`), each league's `settings.json` and `policies.json` |
 | state | `~/.local/state/laliga-fantasy/` | each league's `report.html` and history, the shared `fantasy.log` |
-| cache | `~/.cache/laliga-fantasy/` | scraped futbolfantasy pages, 24 h TTL, and `ff_ceilings.json`, every profitable ceiling read with when; safe to delete |
+| cache | `~/.cache/laliga-fantasy/` | scraped futbolfantasy pages, 24 h TTL, and `ff_ceilings.json`, every player page read with when (ceiling, season high and low, open injury); safe to delete |
 
 ### Accounts and leagues
 
@@ -468,6 +468,11 @@ waited. A 429 stops the pass and leaves the rest alone for five minutes. A bid o
 the player's page there and then; when it cannot be read it still goes through, with the stored
 ceiling and its age, or warned that the ceiling is unknown ("sin techo rentable, decide tú"),
 never as unprofitable.
+
+The same record keeps the player's season high and low and the injury futbolfantasy still has
+open. They are only drawn: a line on the player card, a "cerca de su máximo" / "cerca de su
+mínimo" tag on *Decidir*'s sales and signings (within 10 %), and a "futbolfantasy: …" badge where
+futbolfantasy disagrees with the panel's status. Nothing decides on them (see `docs/state.md`).
 
 **Paying a clause re-reads it first.** The plan can be built from data half an hour old,
 and this is the one operation where that gap is expensive: the owner can raise the clause

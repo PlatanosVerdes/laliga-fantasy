@@ -745,12 +745,12 @@ func cmdServe(args []string) error {
 		})
 	}
 
-	stored, fresh := futbolfantasy.LoadCeilings()
-	slog.Info("ceilings loaded", "file", futbolfantasy.CeilingFile(), "stored", stored,
+	stored, fresh := futbolfantasy.LoadDetails()
+	slog.Info("ceilings loaded", "file", futbolfantasy.StoreFile(), "stored", stored,
 		"fresh", fresh, "ttl", futbolfantasy.CeilingTTL.String())
 	detailFill = &advice.Filler{
-		Stored: futbolfantasy.StoredCeiling,
-		Fetch:  futbolfantasy.FetchCeiling,
+		Stored: futbolfantasy.StoredDetail,
+		Fetch:  futbolfantasy.FetchDetail,
 		Landed: func(batch advice.Batch) {
 			world.Redraw(map[string]any{"type": "details", "players": batch.Players,
 				"done": batch.Done, "total": batch.Total, "over": batch.Over})
@@ -1619,6 +1619,7 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		return string(body)
 	}
 	render.Build = buildVersion
+	render.FFPages = futbolfantasy.StoredDetail
 	var crests map[string]string
 	if body, err := os.ReadFile(filepath.Join(config.CacheRoot, "crests.json")); err == nil {
 		if json.Unmarshal(body, &crests) == nil {

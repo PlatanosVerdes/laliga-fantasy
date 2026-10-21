@@ -39,26 +39,26 @@ type pages struct {
 	asked  []string
 	delay  time.Duration
 	fail   map[string]error
-	stored map[string]futbolfantasy.Ceiling
+	stored map[string]futbolfantasy.Detail
 }
 
-func (p *pages) fetch(ffID string) (futbolfantasy.Ceiling, error) {
+func (p *pages) fetch(ffID string) (futbolfantasy.Detail, error) {
 	time.Sleep(p.delay)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.asked = append(p.asked, ffID)
 	if err := p.fail[ffID]; err != nil {
-		return futbolfantasy.Ceiling{}, err
+		return futbolfantasy.Detail{}, err
 	}
-	ceiling := futbolfantasy.Ceiling{IdealBid: 20_000_000, FetchedAt: time.Now()}
+	ceiling := futbolfantasy.Detail{IdealBid: 20_000_000, FetchedAt: time.Now()}
 	if p.stored == nil {
-		p.stored = map[string]futbolfantasy.Ceiling{}
+		p.stored = map[string]futbolfantasy.Detail{}
 	}
 	p.stored[ffID] = ceiling
 	return ceiling, nil
 }
 
-func (p *pages) keep(ffID string) (futbolfantasy.Ceiling, bool) {
+func (p *pages) keep(ffID string) (futbolfantasy.Detail, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	ceiling, ok := p.stored[ffID]
@@ -117,7 +117,7 @@ func filled(t *testing.T, filler *Filler, buckets Row) []Batch {
 // The page is drawn with what is stored: a fresh ceiling as it is, an old one with its age and
 // read again, a player never read marked as waiting. Nobody is fetched before Enrich returns.
 func TestEnrichAppliesWhatIsStoredAndQueuesTheRest(t *testing.T) {
-	source := &pages{delay: 50 * time.Millisecond, stored: map[string]futbolfantasy.Ceiling{
+	source := &pages{delay: 50 * time.Millisecond, stored: map[string]futbolfantasy.Detail{
 		"ff1": {IdealBid: 15_000_000, FetchedAt: time.Now()},
 		"ff2": {IdealBid: 11_000_000, FetchedAt: time.Now().Add(-50 * time.Hour)},
 	}}
@@ -249,9 +249,9 @@ func TestAFailedPageDoesNotStopTheOthers(t *testing.T) {
 // An old ceiling that cannot be read again is kept, with its age, and not asked for again until
 // the pause is over; one read again loses its age.
 func TestAnOldCeilingStaysWhenItCannotBeReadAgain(t *testing.T) {
-	old := futbolfantasy.Ceiling{IdealBid: 11_000_000, FetchedAt: time.Now().Add(-30 * time.Hour)}
+	old := futbolfantasy.Detail{IdealBid: 11_000_000, FetchedAt: time.Now().Add(-30 * time.Hour)}
 	source := &pages{fail: map[string]error{"ff2": errors.New("timeout")},
-		stored: map[string]futbolfantasy.Ceiling{"ff1": old, "ff2": old}}
+		stored: map[string]futbolfantasy.Detail{"ff1": old, "ff2": old}}
 	filler := source.filler()
 	filled(t, filler, shortlists())
 	again := shortlists()

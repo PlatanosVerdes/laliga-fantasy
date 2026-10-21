@@ -40,8 +40,9 @@ the daily reward and the necroporra vote see no world, and an open tab reloads i
 preview. Later rebuilds keep serving the last page.
 
 **The panel does not wait for the futbolfantasy player pages, and reads them far less.** Only
-the profitable ceiling is read from them, and it is kept in `ff_ceilings.json` under the cache
-root (`futbolfantasy.Ceiling`: `ideal_bid`, `url`, `fetched_at`), loaded at start ("ceilings
+the profitable ceiling is judged by, and it is kept in `ff_ceilings.json` under the cache root
+(`futbolfantasy.Detail`: `ideal_bid`, `url`, `fetched_at`, plus the informative extras below),
+loaded at start ("ceilings
 loaded" logs the file, how many are stored and fresh, and the TTL). A ceiling is fresh until the
 night's price adjustment (00:30 Madrid) and for at most `FANTASY_CEILING_TTL` (12 h). The page is
 drawn with every stored ceiling (`advice.Filler`): a stale one is used and marked with its age
@@ -59,6 +60,22 @@ in `playerFor`; when it cannot be read the stored ceiling is used and its age sa
 none the operation still goes through with "no he podido leer la ficha de futbolfantasy de X:
 sin techo rentable, decide tú" and nothing is checked against it (`writes.Player.CeilingUnread`,
 `CeilingAge`). The player card and the comparator read the same store.
+
+**The same page's extras are drawn, never judged.** Each record also keeps the season's high
+and low with their days (`max_value`, `max_date`, `min_value`, `min_date`, worked out the way the
+page's own script does) and the injury futbolfantasy still has open on its value chart (`mark`:
+`state`, `reason`, `since`; an empty `mark` is "nothing open", a missing one is unknown). They
+share the record's TTL and refresh; a record stored before them simply lacks them and shows
+nothing. The page reads them through `render.FFPages`: the player card adds "Máx 21.0M (11 oct)
+· Mín 5.8M (11 ago) · ahora al 82 % de su máximo"; *Decidir* tags a sale within `NearBand` (10 %)
+of the season high "cerca de su máximo" and a signing within 10 % of the low "cerca de su mínimo"
+(only when the two bands do not overlap); and the eleven, the squad and the cards carry
+"futbolfantasy: lesionado / duda / sancionado / disponible" only when that differs from the
+status the panel goes by. The chart only marks injuries, so its "available" never contradicts a
+sanction; an image it does not know says nothing. Stale records say their age. No advice, plan,
+card order, score, policy or automatic action reads any of it, and
+`TestTheExtrasChangeNoDecision` holds that. futbolfantasy's value history is not read: LaLiga's
+own is.
 
 futbolfantasy has no bulk source for the ceiling: the market list (`/analytics/laliga-fantasy/
 mercado`, ~670 players) carries value, trend and acceleration but no ceiling, the site's own

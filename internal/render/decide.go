@@ -28,6 +28,7 @@ type CardView struct {
 	BigNote   string         `json:"big_note,omitempty"`
 	NoteClass string         `json:"note_class,omitempty"`
 	Chips     []Chip         `json:"chips,omitempty"`
+	Tags      []Seg          `json:"tags,omitempty"`
 	Why       []string       `json:"why"`
 	Buttons   []Act          `json:"buttons"`
 	Impact    string         `json:"impact"`
@@ -101,6 +102,7 @@ func cardView(card Card) CardView {
 	}
 	view.Chips = append(clockChip(card.Deadline, card.DeadlineLabel),
 		clockChip(card.Deadline2, card.DeadlineLabel2)...)
+	view.Tags = cardTags(card, time.Now())
 	if view.Why == nil {
 		view.Why = []string{}
 	}
@@ -118,6 +120,8 @@ type ElevenChip struct {
 	Class  string         `json:"class"`
 	// Pending is the xPts of a man still to play, shown small beside his empty score.
 	Pending string `json:"pending,omitempty"`
+	// FF is futbolfantasy's word on his fitness where it differs from the panel's.
+	FF *Seg `json:"ff,omitempty"`
 }
 
 type ElevenLine struct {
@@ -175,7 +179,8 @@ func (d Document) elevenBlock() *Block {
 				class += " is-new"
 			}
 			out.Players = append(out.Players, ElevenChip{Player: RowPlayer(player),
-				XPts: esNum(number(player["xpts"]), 1), Class: class})
+				XPts: esNum(number(player["xpts"]), 1), Class: class,
+				FF: pitchOpinion(player)})
 		}
 		data.Lines = append(data.Lines, out)
 	}
@@ -231,7 +236,7 @@ func (d Document) liveEleven() *Block {
 		if player == nil {
 			player = shirt
 		}
-		chip := ElevenChip{Player: RowPlayer(player)}
+		chip := ElevenChip{Player: RowPlayer(player), FF: pitchOpinion(player)}
 		if points, scored := shirt["points"]; scored && points != nil {
 			chip.XPts, chip.Class = esNum(number(points), 0), pointsClass(number(points))
 		} else {

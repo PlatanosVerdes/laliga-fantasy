@@ -26,7 +26,7 @@ func EnrichBuckets(buckets Row, limit int, ttl time.Duration) int {
 func EnrichBucketsReporting(buckets Row, limit int, _ time.Duration,
 	report func(done, total int)) int {
 	return EnrichBucketsWith(buckets, limit, func(ffID string) (Row, error) {
-		ceiling, err := futbolfantasy.CeilingFor(ffID)
+		ceiling, err := futbolfantasy.DetailFor(ffID)
 		if ceiling.FetchedAt.IsZero() {
 			return nil, err
 		}
@@ -127,9 +127,9 @@ func Waiting(buckets Row, names ...string) int {
 	return waiting
 }
 
-// ApplyCeiling writes the profitable ceiling onto a row. It is the only thing read from the
-// page: the value history, the season's high and low and the injury marks it also carries were
-// written onto every row and read by nothing.
+// ApplyCeiling writes the profitable ceiling onto a row. It is the only thing advice reads from
+// the page: the season's high and low and the open injury stay in the store, where only the
+// drawing reads them.
 func ApplyCeiling(row Row, ideal float64) {
 	delete(row, PendingKey)
 	delete(row, AgeKey)

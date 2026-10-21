@@ -17,9 +17,9 @@ import (
 // every batch that lands is reported so the page can be drawn again with it.
 type Filler struct {
 	// Stored is the last ceiling read for a player, fresh or not.
-	Stored func(ffID string) (futbolfantasy.Ceiling, bool)
+	Stored func(ffID string) (futbolfantasy.Detail, bool)
 	// Fetch reads one player's page now, and stores it.
-	Fetch func(ffID string) (futbolfantasy.Ceiling, error)
+	Fetch func(ffID string) (futbolfantasy.Detail, error)
 	// Landed is told about every batch, from the filler's own goroutine.
 	Landed func(Batch)
 	// Gap is the least time between two batches, and Retry how long a page that could not be
