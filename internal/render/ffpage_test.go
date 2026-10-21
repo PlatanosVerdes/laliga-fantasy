@@ -265,7 +265,7 @@ func TestTheExtrasChangeNoDecision(t *testing.T) {
 			t.Errorf("Decidir should carry %q: %s", want, decide)
 		}
 	}
-	if squad := viewJSON(t, with.views["squad"]); !strings.Contains(squad, "futbolfantasy: lesionado") {
+	if squad := viewJSON(t, with.views["squad"]); !strings.Contains(squad, "ff: lesionado") {
 		t.Errorf("the squad should carry the badge: %s", squad)
 	}
 	for name := range without.views {

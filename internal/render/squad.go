@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 )
 
 // --- Plantilla -------------------------------------------------------------------------
@@ -160,7 +159,7 @@ func squadLine(player map[string]any) Row {
 	case number(player["clause"]) > 0:
 		line.Chips = []Chip{{T: "pagable " + esMoney(number(player["clause"])), C: "warn"}}
 	}
-	if opinion := secondOpinion(player, false, time.Now()); opinion != nil {
+	if opinion := pitchOpinion(player); opinion != nil {
 		line.Tags = append(line.Tags, *opinion)
 	}
 	line.Acts = []Act{starAct(player), cmpAct(player, "cmp-add small")}
