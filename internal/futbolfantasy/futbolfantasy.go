@@ -349,6 +349,19 @@ func PlayerDetail(ffID string, ttl time.Duration) (map[string]any, error) {
 	return maps.Clone(detail), nil
 }
 
+// KnownDetail is a player's page only when it is already parsed and fresh: no disk, no network,
+// so a page can be drawn with it at once and the rest asked for behind it.
+func KnownDetail(ffID string, ttl time.Duration) (map[string]any, bool) {
+	url := strings.ReplaceAll(config.FFDetailURL, "{ff_id}", ffID)
+	detailMu.Lock()
+	kept, ok := detailSeen[url]
+	detailMu.Unlock()
+	if !ok || (!httpx.Frozen && time.Since(kept.written) > ttl) {
+		return nil, false
+	}
+	return maps.Clone(kept.detail), true
+}
+
 // --- the per-player page ----------------------------------------------------------------
 
 const GameKey = "laliga-fantasy"

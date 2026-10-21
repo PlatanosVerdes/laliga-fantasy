@@ -543,6 +543,11 @@ func patch(universe *model.Universe, operation string, args writes.Args) bool {
 	return changed
 }
 
+// playerDetail reads a player's futbolfantasy page for an operation about to be checked.
+var playerDetail = func(ffID string) (map[string]any, error) {
+	return futbolfantasy.PlayerDetail(ffID, futbolfantasy.DetailTTL)
+}
+
 // playerFor is the context the confirmation dialog quotes: what he is worth, what the listing
 // asks, how long it has left. Read from the last built world, not from the API, so a
 // confirmation never waits on the network.
@@ -589,11 +594,16 @@ func (s *Server) playerFor(id string) writes.Player {
 			who.Owner = *player.Owner
 		}
 		// The profitable ceiling is futbolfantasy's, and it lives on their player page rather
-		// than in the model, so it is read here. Cached for a day: without it every bid was
-		// warned as unprofitable, which is worse than saying nothing.
+		// than in the model, so it is read here, at once, whether or not the page drawn behind
+		// it has got to him yet. Without it every bid was warned as unprofitable, which is
+		// worse than saying nothing, so a page that cannot be read refuses what it judges.
 		if player.FFID != nil && *player.FFID != "" {
-			if detail, err := futbolfantasy.PlayerDetail(*player.FFID, futbolfantasy.DetailTTL); err == nil {
+			if detail, err := playerDetail(*player.FFID); err == nil {
 				who.IdealBid = int64(number(detail["ideal_bid"]))
+			} else {
+				who.CeilingUnread = true
+				slog.Warn("futbolfantasy page unread for a write", "player", player.Name,
+					"reason", err.Error())
 			}
 		}
 		return who

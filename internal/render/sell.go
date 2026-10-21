@@ -37,6 +37,7 @@ func (d Document) offersBlock() Block {
 	}
 	squad := rows(d.Advice["squad"])
 	_, xiNow := bestElevenOf(squad)
+	held := d.held() > 0
 	lines := []Row{}
 	for _, offer := range offers {
 		amount, value := number(offer["offer_amount"]), number(offer["value"])
@@ -76,6 +77,13 @@ func (d Document) offersBlock() Block {
 			accept = act("Aceptar", "primary", "op", "op", opArgs("accept_offer"))
 			accept.Tip = "recomendado: " + why
 			decline = act("Rechazar", "ghost", "op", "op", opArgs("decline_offer"))
+		}
+		// Whether the plan counts on this sale waits for the market's ceilings.
+		if held {
+			tone = ""
+			accept = act("Aceptar", "ghost", "op", "op", opArgs("accept_offer"))
+			decline = act("Rechazar", "ghost", "op", "op", opArgs("decline_offer"))
+			facts = append(facts, "el consejo espera a las fichas de futbolfantasy")
 		}
 		if blocked != "" {
 			accept = Act{Label: "Aceptar", Class: "mb mb-ghost", Off: true, Tip: blocked, Wrap: blocked}
@@ -252,6 +260,10 @@ func (d Document) alwaysBlock() Block {
 		line.Note = []Seg{{T: terms}}
 		line.Why = strings.ReplaceAll(text(rule["action"]), "_", " ") + " · " +
 			strings.SplitN(text(rule["why"]), ";", 2)[0]
+		// Which offer is good enough counts futbolfantasy's ceiling among its references.
+		if waiting(player) {
+			line.Value, line.Why = "", "espera a su ficha de futbolfantasy"
+		}
 		lines = append(lines, line)
 	}
 	return Block{Title: "Siempre en mercado", Count: count(len(d.Plan)), Rows: lines,
@@ -297,6 +309,9 @@ func RowPlayer(player map[string]any) map[string]any {
 	}
 	if starts := asFloat(player["start_probability"]); starts != nil {
 		out["start_probability"] = math.Round(*starts)
+	}
+	if waiting(player) {
+		out["pending"] = true
 	}
 	if truthy(player["is_mine"]) && truthy(player["sale_locked"]) {
 		out["locked_until"] = text(player["hold_until"])

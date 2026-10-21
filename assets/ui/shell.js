@@ -1,7 +1,7 @@
 import {html, render, useState, useEffect, useRef} from './lib.js';
 import {ViewScreen} from './view.js';
 import {ApiFace, Icon, Countdown} from './components.js';
-import {getJSON, postJSON, useView, useCash, changed, getViews} from './api.js';
+import {getJSON, postJSON, useView, useCash, changed, getViews, reloadViews} from './api.js';
 import {fmt, esMoney, exact, countdownText} from './format.js';
 import {flash} from './dialogs.js';
 import {compare} from './compare.js';
@@ -594,6 +594,7 @@ function connect() {
     // tab goes to the loading page until it is.
     if (message.loading || message.type === 'preview') { location.reload(); return; }
     if (message.type === 'effect') showEffect(message);
+    if (message.type === 'details') reloadViews();
     if (['effect', 'state', 'hello'].includes(message.type)) moveTo(message.version);
   };
   source.onerror = () => {

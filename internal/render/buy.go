@@ -91,7 +91,7 @@ func (d Document) buyLine(item map[string]any, route string, gain float64,
 	}
 	if route == "clausula" {
 		note = append(note, clauseOverValue(cost, number(item["value"]))...)
-	} else {
+	} else if !waiting(item) {
 		if ceiling := number(item["ideal_bid"]); ceiling > 0 {
 			class, mark := "up", "+"
 			if ceiling < cost {

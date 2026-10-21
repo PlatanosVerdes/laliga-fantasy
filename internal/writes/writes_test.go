@@ -523,3 +523,21 @@ func TestNothingActsWhileTheLeagueLoads(t *testing.T) {
 		t.Errorf("the token is still good once the league is loaded: %v", err)
 	}
 }
+
+// A ceiling that could not be read is unknown, not zero: whatever is judged by it is refused
+// rather than warned as unprofitable, and nothing else is held up by it.
+func TestAnUnreadCeilingRefusesWhatItJudges(t *testing.T) {
+	unread := Player{Name: "Barato", Available: true, CeilingUnread: true}
+	args := Args{MarketID: "m", OfferID: "o", BidID: "b", PlayerTeamID: "slot", Amount: 1}
+	for name := range JudgedByCeiling {
+		_, err := check(name, args, unread, nil, nil)
+		if err == nil || !strings.Contains(err.Error(), "ficha de futbolfantasy de Barato") {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	for _, name := range []string{"sell_to_market", "decline_offer", "cancel_bid", "pay_clause"} {
+		if _, err := check(name, args, unread, nil, nil); err != nil {
+			t.Errorf("%s does not read the ceiling and was refused: %v", name, err)
+		}
+	}
+}

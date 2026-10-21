@@ -450,3 +450,12 @@ func swapped(squad []Row, out, in Row) []Row {
 	}
 	return append(next, in)
 }
+
+// ReadySwaps is the plan once every candidate's ceiling is in, and no plan before: proposed from
+// half, it reads a ceiling still on its way as futbolfantasy saying no.
+func ReadySwaps(universe, buckets Row, cash float64) Row {
+	if Waiting(buckets, CandidateBuckets...) > 0 {
+		return Row{}
+	}
+	return Swaps(universe, buckets, cash)
+}

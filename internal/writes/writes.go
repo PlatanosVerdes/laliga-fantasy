@@ -385,6 +385,14 @@ type Player struct {
 	// Shielded, and until when: a second shield over a live one spends the advert for nothing.
 	Shielded      bool
 	ShieldedUntil string
+	// CeilingUnread is a player whose futbolfantasy page could not be read: his IdealBid is
+	// unknown, not zero, and no operation judged by it is checked as if it were.
+	CeilingUnread bool
+}
+
+// JudgedByCeiling are the operations whose check reads futbolfantasy's profitable ceiling.
+var JudgedByCeiling = map[string]bool{
+	"bid": true, "modify_bid": true, "buy_offer": true, "change_offer": true, "accept_offer": true,
 }
 
 // Summary is what a person is asked to confirm.
@@ -612,6 +620,17 @@ func (g *Guard) confirm(token string, allowWrites, dryRun, recheck bool) (map[st
 // are errors; everything a person should know but may still choose is a warning.
 func check(name string, args Args, who Player, cash *int64, window *Window) ([]string, error) {
 	var warnings []string
+
+	// Read as zero, a missing ceiling says "futbolfantasy sees no margin" about a player it was
+	// never asked about.
+	if who.CeilingUnread && JudgedByCeiling[name] {
+		player := who.Name
+		if player == "" {
+			player = "este jugador"
+		}
+		return nil, fmt.Errorf("no he podido leer la ficha de futbolfantasy de %s y sin su "+
+			"techo rentable no se puede comprobar: prueba otra vez en un momento", player)
+	}
 
 	// The answer goes through .../market/{id}/offer/{id}: an offer for somebody I never listed
 	// has no market id, and no route for it has been seen yet.

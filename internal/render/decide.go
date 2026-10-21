@@ -47,12 +47,18 @@ type Cards struct {
 // DecideData is "Qué hacer ahora": the cards to act on, and beside them the eleven they are
 // about, the crack worth aiming at and the way to every other list.
 func (d Document) DecideData() View {
-	cards, hidden := d.visibleCards(time.Now())
+	var cards []Card
+	hidden, missing := 0, d.held()
+	if missing == 0 {
+		cards, hidden = d.visibleCards(time.Now())
+	}
 	if len(cards) > MaxCards {
 		cards = cards[:MaxCards]
 	}
 	data := Cards{Cards: []CardView{}, Remind: d.necroReminder(), Hidden: hidden}
-	if len(cards) == 0 {
+	if missing > 0 {
+		data.Empty = heldNote(missing)
+	} else if len(cards) == 0 {
 		data.Empty = "Nada que decidir ahora: ninguna oferta que cobrar, ninguna cláusula que " +
 			"subir y ningún fichaje que mejore tu once a su precio."
 	} else {
@@ -156,6 +162,9 @@ func (d Document) elevenBlock() *Block {
 	if len(arriving) > 0 {
 		shape += " si haces el plan"
 		data.From, data.Gain, data.Fresh = esNum(now, 1), esSigned(total-now), true
+	}
+	if d.held() > 0 {
+		shape += " · el plan espera a las fichas"
 	}
 	lines := byLines(byID, choice.Attack, choice.Middle, choice.Defence, choice.Keeper)
 	for index, line := range lines {

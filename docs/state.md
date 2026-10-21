@@ -39,6 +39,19 @@ refuse every operation with "Cargando la liga, espera a que termine" (503), the 
 the daily reward and the necroporra vote see no world, and an open tab reloads into the
 preview. Later rebuilds keep serving the last page.
 
+**The panel does not wait for the futbolfantasy player pages.** It is drawn with the pages
+already parsed (`advice.Filler`); the rows still waiting carry `detail_pending` and show
+"cargando ficha…", and the missing pages are fetched behind it in the order the page shows them:
+my squad, the market, the rivals' players, the rest. Each batch that lands redraws the page
+(`State.Redraw`: the cache key moves, the version does not) and pushes a `details` event, and an
+open tab refetches `/api/views`. Everything that compares the market's ceilings (the swap plan,
+the buy verdicts and stand-ins on *Decidir*, which offer to take on *Vender*, the plan's floor
+for an armed sale) is held until those pages are in, with "Esperando N fichas de
+futbolfantasy…", because a missing ceiling reads as futbolfantasy saying no; once they land the
+page equals the one that waited. A 429 stops the pass, and what was left is drawn as a failed
+fetch for five minutes. A bid, an offer or an acceptance reads the player's page synchronously
+in `playerFor`, and is refused when it cannot be read (`writes.Player.CeilingUnread`).
+
 ## Deploying
 
 1. Branch, PR against `main`, squash merge.
@@ -65,7 +78,10 @@ Where a slow load spent its time is in two lines. `build phases` comes once per 
 the milliseconds of each step of the first build (`mine_ms`, `listings_ms` and `rivals_ms` for
 the preview, then `squads_ms`, `calendar_ms`, … and `page_ms` for drawing the page inside it);
 `preview published` marks when each stage of the preview reached the page. `page rendered` comes with every render, split the same way
-(`advice_ms`, `details_ms` for the futbolfantasy pages, `necro_ms`, `document_ms`).
+(`advice_ms`, `details_ms` for the futbolfantasy pages already in hand, `necro_ms`,
+`document_ms`). `details filled` closes each background pass over the missing pages: `players`,
+`read`, `failed`, `limited` for a 429, `ms`, and `first_ms`/`last_ms` for when the first and the
+last page landed.
 `page served while redrawing` means a browser got the previous page at once while the new one
 was drawn behind it; `serving the wait page` means it got the progress page instead.
 

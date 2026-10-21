@@ -449,6 +449,20 @@ Instructions that fire unattended get the same treatment: the page built during 
 cycle that accepted an offer describes the world from before its own action, so it is
 rebuilt again.
 
+**The page does not wait for futbolfantasy's player pages.** The profitable ceiling lives on
+one page per player, and when the four-hour batch expires that is about a hundred requests
+behind a 400 ms throttle. The panel is drawn with the pages already in hand; every row still
+waiting says `cargando ficha…`, and the rest are fetched behind it, my squad first, then the
+market, then the rivals' players, then the watchlist. Each batch that lands (the first at once,
+then at most one every two seconds) redraws the page and pushes a `details` event, and an open
+tab asks for the views again and patches what changed, without a reload. What compares the
+market's ceilings (the plan, the buy verdicts on *Decidir*, the stand-in for a sale, which
+offer to take) is held with "Esperando N fichas de futbolfantasy…" until every candidate's
+page is in, so nothing is proposed from half; once they are, the page is the one that waited.
+A 429 stops the pass and leaves the rest alone for five minutes, drawn as a failed page always
+was. A bid or an offer reads the player's page there and then, and is refused when it cannot be
+read rather than warned as unprofitable.
+
 **Paying a clause re-reads it first.** The plan can be built from data half an hour old,
 and this is the one operation where that gap is expensive: the owner can raise the clause
 or shield the player at any moment, and paying is irreversible. So before the write, one

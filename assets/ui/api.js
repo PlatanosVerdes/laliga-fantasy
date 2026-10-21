@@ -48,6 +48,8 @@ export function useCash() {
   return cash;
 }
 export const getViews = () => views;
+// The views again without the world having moved: futbolfantasy pages filled in behind them.
+export const reloadViews = () => refreshViews();
 
 // The next views to arrive, for whoever has to wait until the page shows a change.
 export const nextViews = () => new Promise((done) => {

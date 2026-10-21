@@ -109,19 +109,20 @@ type Server struct {
 }
 
 // Rendering is how far the page being drawn has got. Options.Page reports its steps here; a
-// page waiting on it reads them from /healthz.
+// page waiting on it reads them from /healthz. The futbolfantasy pages are only the ones in
+// hand: the rest fill in after the page is up.
 var Rendering = model.NewTracker(
-	model.Stage{Name: "Saldo", Key: "cash", Weight: 3},
-	model.Stage{Name: "Calculando consejos", Key: "advice", Weight: 12},
-	model.Stage{Name: "Fichas de futbolfantasy", Key: "details", Weight: 50},
-	model.Stage{Name: "Plan y cláusulas", Key: "plan", Weight: 10},
-	model.Stage{Name: "Necroporra", Key: "necro", Weight: 5},
-	model.Stage{Name: "Dibujando la página", Key: "document", Weight: 20},
+	model.Stage{Name: "Saldo", Key: "cash", Weight: 5},
+	model.Stage{Name: "Calculando consejos", Key: "advice", Weight: 25},
+	model.Stage{Name: "Fichas de futbolfantasy", Key: "details", Weight: 2},
+	model.Stage{Name: "Plan y cláusulas", Key: "plan", Weight: 20},
+	model.Stage{Name: "Necroporra", Key: "necro", Weight: 8},
+	model.Stage{Name: "Dibujando la página", Key: "document", Weight: 40},
 )
 
 // patience is how long the page request waits for a render before answering with a page that
-// shows its progress. Most misses take a second or three; an expired batch of futbolfantasy
-// details takes forty, and a blank tab for forty seconds reads as a panel that is down.
+// shows its progress. Most misses take a second or three, and a blank tab for longer reads as a
+// panel that is down.
 var patience = 1500 * time.Millisecond
 
 // cached is the page in the cache with the key and world version it was drawn for.
@@ -632,7 +633,7 @@ func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 // drawingPage is what a browser gets while the panel is drawn: the league is already read, so
 // it says that, and shows the step the render is on until the panel is ready.
 var drawingPage = authPage("Generando", `<h1>Generando la página…</h1>
-<p class="lead">La liga ya está leída. Falta dibujar el panel: consejos, fichas de futbolfantasy y el plan.</p>
+<p class="lead">La liga ya está leída. Falta dibujar el panel: consejos, plan y cláusulas.</p>
 `+loadBar+`<script>reloadWhenDrawn();</script>`)
 
 // views is every tab the browser draws, in one answer: a live refresh asks once, not per tab.
