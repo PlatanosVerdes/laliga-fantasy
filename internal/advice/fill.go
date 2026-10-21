@@ -7,24 +7,23 @@ import (
 	"sync"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 )
 
-// Filler lets the page be drawn without waiting for the per-player pages: what is in hand is
-// applied, the rest is marked as waiting and fetched behind the page, one at a time and in the
-// order the page shows them, and every batch that lands is reported so the page can be drawn
-// again with it. An expired batch is about a hundred pages behind a 400 ms throttle, forty
-// seconds the panel used to spend blank.
+// Filler lets the page be drawn without waiting for the per-player pages. Every ceiling stored
+// is applied, the old ones marked with their age; the players never read are marked as waiting.
+// Both are read again behind the page, one at a time and in the order the page shows them, and
+// every batch that lands is reported so the page can be drawn again with it.
 type Filler struct {
-	// Fetch reads one player's page, from the network when it has to.
-	Fetch func(ffID string) (Row, error)
-	// Known is a page already in hand, without asking anybody. Optional.
-	Known func(ffID string) (Row, bool)
+	// Stored is the last ceiling read for a player, fresh or not.
+	Stored func(ffID string) (futbolfantasy.Ceiling, bool)
+	// Fetch reads one player's page now, and stores it.
+	Fetch func(ffID string) (futbolfantasy.Ceiling, error)
 	// Landed is told about every batch, from the filler's own goroutine.
 	Landed func(Batch)
-	// TTL is how long a page fetched here is trusted, Gap the least time between two batches,
-	// and Retry how long a page that could not be read is left alone.
-	TTL   time.Duration
+	// Gap is the least time between two batches, and Retry how long a page that could not be
+	// read is left alone.
 	Gap   time.Duration
 	Retry time.Duration
 
@@ -34,13 +33,7 @@ type Filler struct {
 	running  bool
 	done     int
 	players  map[string][]string
-	got      map[string]landed
 	failed   map[string]time.Time
-}
-
-type landed struct {
-	detail Row
-	at     time.Time
 }
 
 // Batch is what landed since the last one: the players whose page arrived or could not be
@@ -58,58 +51,58 @@ const (
 	DefaultRetry = 5 * time.Minute
 )
 
-// Enrich applies every page in hand to the shortlists, marks the rows still waiting for one with
-// PendingKey and queues those players, in the order of DetailBuckets. A page that could not be
-// read lately is neither applied nor waited for, the way a failed fetch always left its row. It
-// returns how many players are waiting.
+// Enrich applies every stored ceiling to the shortlists, marks the rows of a stale one with
+// AgeKey and those of a player never read with PendingKey, and queues both, in the order of
+// DetailBuckets. A page that could not be read lately is not queued again: a stale ceiling stays,
+// with its age, and a missing one is drawn the way a failed fetch always left its row. It returns
+// how many players are queued.
 func (f *Filler) Enrich(buckets Row, limit int) int {
 	order, byPlayer := detailRows(buckets, limit)
 	now := time.Now()
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.players == nil {
-		f.players, f.got, f.failed = map[string][]string{}, map[string]landed{}, map[string]time.Time{}
+		f.players, f.failed = map[string][]string{}, map[string]time.Time{}
 	}
-	var waiting []string
+	var queued []string
 	for _, ffID := range order {
 		rows := byPlayer[ffID]
-		if detail, ok := f.known(ffID, now); ok {
+		stored, known := f.Stored(ffID)
+		if known {
+			fresh := stored.Fresh(now)
 			for _, row := range rows {
-				ApplyDetail(row, detail)
+				ApplyCeiling(row, stored.IdealBid)
+				if !fresh {
+					row[AgeKey] = stored.Age(now)
+				}
 			}
-			continue
+			if fresh {
+				continue
+			}
 		}
 		if when, failed := f.failed[ffID]; failed && now.Sub(when) < f.retry() {
 			continue
 		}
 		ids := make([]string, 0, len(rows))
 		for _, row := range rows {
-			row[PendingKey] = true
+			if !known {
+				row[PendingKey] = true
+			}
 			if id := text(row["id"]); id != "" && !slices.Contains(ids, id) {
 				ids = append(ids, id)
 			}
 		}
 		f.players[ffID] = ids
 		if ffID != f.inFlight {
-			waiting = append(waiting, ffID)
+			queued = append(queued, ffID)
 		}
 	}
-	f.queue = waiting
-	if len(waiting) > 0 && !f.running {
+	f.queue = queued
+	if len(queued) > 0 && !f.running {
 		f.running, f.done = true, 0
 		go f.run()
 	}
-	return len(waiting)
-}
-
-func (f *Filler) known(ffID string, now time.Time) (Row, bool) {
-	if kept, ok := f.got[ffID]; ok && now.Sub(kept.at) <= f.TTL {
-		return kept.detail, true
-	}
-	if f.Known != nil {
-		return f.Known(ffID)
-	}
-	return nil, false
+	return len(queued)
 }
 
 func (f *Filler) retry() time.Duration {
@@ -151,7 +144,7 @@ func (f *Filler) run() {
 		f.inFlight = ffID
 		f.mu.Unlock()
 
-		detail, err := f.Fetch(ffID)
+		_, err := f.Fetch(ffID)
 		now := time.Now()
 
 		f.mu.Lock()
@@ -159,7 +152,6 @@ func (f *Filler) run() {
 		f.done++
 		batch = append(batch, f.players[ffID]...)
 		if err == nil {
-			f.got[ffID] = landed{detail: detail, at: now}
 			read++
 			if first == 0 {
 				first = now.Sub(started)

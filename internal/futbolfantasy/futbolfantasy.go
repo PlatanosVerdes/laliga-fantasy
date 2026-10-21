@@ -301,7 +301,8 @@ func ParseDetail(page string) map[string]any {
 	}
 }
 
-// DetailTTL is how long a player's futbolfantasy page is trusted.
+// DetailTTL is how long a player's futbolfantasy page is trusted. The profitable ceiling itself
+// is kept apart, in the ceiling store, whose freshness follows the nightly price adjustment.
 //
 // It used to be a day, which was fine while the profitable ceiling was one more column. It is
 // not fine now that the ceiling decides who the plan proposes and what the guard warns about:
@@ -347,19 +348,6 @@ func PlayerDetail(ffID string, ttl time.Duration) (map[string]any, error) {
 		detailMu.Unlock()
 	}
 	return maps.Clone(detail), nil
-}
-
-// KnownDetail is a player's page only when it is already parsed and fresh: no disk, no network,
-// so a page can be drawn with it at once and the rest asked for behind it.
-func KnownDetail(ffID string, ttl time.Duration) (map[string]any, bool) {
-	url := strings.ReplaceAll(config.FFDetailURL, "{ff_id}", ffID)
-	detailMu.Lock()
-	kept, ok := detailSeen[url]
-	detailMu.Unlock()
-	if !ok || (!httpx.Frozen && time.Since(kept.written) > ttl) {
-		return nil, false
-	}
-	return maps.Clone(kept.detail), true
 }
 
 // --- the per-player page ----------------------------------------------------------------

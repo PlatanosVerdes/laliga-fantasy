@@ -543,10 +543,12 @@ func patch(universe *model.Universe, operation string, args writes.Args) bool {
 	return changed
 }
 
-// playerDetail reads a player's futbolfantasy page for an operation about to be checked.
-var playerDetail = func(ffID string) (map[string]any, error) {
-	return futbolfantasy.PlayerDetail(ffID, futbolfantasy.DetailTTL)
-}
+// readCeiling reads a player's futbolfantasy page for an operation about to be checked, and
+// storedCeiling is the last one read, for when it cannot be.
+var (
+	readCeiling   = futbolfantasy.FetchCeiling
+	storedCeiling = futbolfantasy.StoredCeiling
+)
 
 // playerFor is the context the confirmation dialog quotes: what he is worth, what the listing
 // asks, how long it has left. Read from the last built world, not from the API, so a
@@ -594,17 +596,24 @@ func (s *Server) playerFor(id string) writes.Player {
 			who.Owner = *player.Owner
 		}
 		// The profitable ceiling is futbolfantasy's, and it lives on their player page rather
-		// than in the model, so it is read here, at once, whether or not the page drawn behind
-		// it has got to him yet. Without it every bid was warned as unprofitable, which is
-		// worse than saying nothing, so a page that cannot be read is said to be unknown.
+		// than in the model, so it is read again here, whatever the page drawn behind it holds.
+		// A page that cannot be read falls back on the stored ceiling with its age, and without
+		// one the ceiling is said to be unknown: read as zero, every bid was warned as
+		// unprofitable, which is worse than saying nothing.
 		if player.FFID != nil && *player.FFID != "" {
-			if detail, err := playerDetail(*player.FFID); err == nil {
-				who.IdealBid = int64(number(detail["ideal_bid"]))
-			} else {
-				who.CeilingUnread = true
+			ceiling, err := readCeiling(*player.FFID)
+			if err != nil {
 				slog.Warn("futbolfantasy page unread for a write", "player", player.Name,
 					"reason", err.Error())
+				stored, ok := storedCeiling(*player.FFID)
+				ceiling = stored
+				if ok {
+					who.CeilingAge = stored.Age(time.Now())
+				} else {
+					who.CeilingUnread = true
+				}
 			}
+			who.IdealBid = int64(ceiling.IdealBid)
 		}
 		return who
 	}

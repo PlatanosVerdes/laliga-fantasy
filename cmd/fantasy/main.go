@@ -745,14 +745,12 @@ func cmdServe(args []string) error {
 		})
 	}
 
+	stored, fresh := futbolfantasy.LoadCeilings()
+	slog.Info("ceilings loaded", "file", futbolfantasy.CeilingFile(), "stored", stored,
+		"fresh", fresh, "ttl", futbolfantasy.CeilingTTL.String())
 	detailFill = &advice.Filler{
-		Fetch: func(ffID string) (advice.Row, error) {
-			return futbolfantasy.PlayerDetail(ffID, futbolfantasy.DetailTTL)
-		},
-		Known: func(ffID string) (advice.Row, bool) {
-			return futbolfantasy.KnownDetail(ffID, futbolfantasy.DetailTTL)
-		},
-		TTL: futbolfantasy.DetailTTL,
+		Stored: futbolfantasy.StoredCeiling,
+		Fetch:  futbolfantasy.FetchCeiling,
 		Landed: func(batch advice.Batch) {
 			world.Redraw(map[string]any{"type": "details", "players": batch.Players,
 				"done": batch.Done, "total": batch.Total, "over": batch.Over})

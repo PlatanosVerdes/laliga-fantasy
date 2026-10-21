@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 )
 
 // fillWorld is a league small enough to read and big enough for every judgement the ceilings
@@ -48,16 +49,17 @@ func fillWorld() map[string]any {
 
 // ceilings is futbolfantasy for fillWorld: every page, slowly, recording the order asked.
 type ceilings struct {
-	mu    sync.Mutex
-	asked []string
-	delay time.Duration
+	mu     sync.Mutex
+	asked  []string
+	delay  time.Duration
+	stored map[string]futbolfantasy.Ceiling
 }
 
-func (c *ceilings) page(ffID string) (map[string]any, error) {
+func (c *ceilings) fetch(ffID string) (futbolfantasy.Ceiling, error) {
 	time.Sleep(c.delay)
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.asked = append(c.asked, ffID)
-	c.mu.Unlock()
 	ideal := 0.0
 	switch ffID {
 	case "ff-good":
@@ -71,8 +73,24 @@ func (c *ceilings) page(ffID string) (map[string]any, error) {
 	case "ff-sk":
 		ideal = 5_000_000
 	}
-	return map[string]any{"ideal_bid": ideal, "max_value": 1.0, "min_value": 1.0,
-		"max_date": "", "injury_marks": []string{}, "history": []any{}}, nil
+	ceiling := futbolfantasy.Ceiling{IdealBid: ideal, FetchedAt: time.Now()}
+	if c.stored == nil {
+		c.stored = map[string]futbolfantasy.Ceiling{}
+	}
+	c.stored[ffID] = ceiling
+	return ceiling, nil
+}
+
+func (c *ceilings) keep(ffID string) (futbolfantasy.Ceiling, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ceiling, ok := c.stored[ffID]
+	return ceiling, ok
+}
+
+func (c *ceilings) page(ffID string) (map[string]any, error) {
+	ceiling, err := c.fetch(ffID)
+	return map[string]any{"ideal_bid": ceiling.IdealBid}, err
 }
 
 // drawn is the page's views the way the server draws them, the details applied by enrich.
@@ -99,7 +117,7 @@ func viewJSON(t *testing.T, view any) string {
 // nothing judged from a ceiling it does not have.
 func TestThePanelIsDrawnBeforeThePagesLand(t *testing.T) {
 	source := &ceilings{delay: time.Hour}
-	filler := &advice.Filler{Fetch: source.page, TTL: time.Hour}
+	filler := &advice.Filler{Fetch: source.fetch, Stored: source.keep}
 	views := drawn(t, func(buckets map[string]any) { filler.Enrich(buckets, 15) })
 
 	decide := viewJSON(t, views["decidir"])
@@ -132,7 +150,8 @@ func TestTheFilledPanelEqualsThePanelThatWaited(t *testing.T) {
 	})
 
 	over := make(chan struct{})
-	filler := &advice.Filler{Fetch: source.page, TTL: time.Hour, Landed: func(batch advice.Batch) {
+	source = &ceilings{}
+	filler := &advice.Filler{Fetch: source.fetch, Stored: source.keep, Landed: func(batch advice.Batch) {
 		if batch.Over {
 			close(over)
 		}
@@ -155,5 +174,29 @@ func TestTheFilledPanelEqualsThePanelThatWaited(t *testing.T) {
 	}
 	if len(filled) != len(waited) {
 		t.Errorf("%d views, want %d", len(filled), len(waited))
+	}
+}
+
+// Drawn with ceilings stored a day ago, the panel judges with them at once, each row saying how
+// old its ceiling is, and nothing is held: the plan and the cards are there from the start.
+func TestStoredCeilingsAreUsedWithTheirAge(t *testing.T) {
+	source := &ceilings{delay: time.Hour}
+	for _, id := range []string{"ff-good", "ff-mid", "ff-dear", "ff-rv"} {
+		ceiling, _ := (&ceilings{}).fetch(id)
+		ceiling.FetchedAt = time.Now().Add(-26 * time.Hour)
+		if source.stored == nil {
+			source.stored = map[string]futbolfantasy.Ceiling{}
+		}
+		source.stored[id] = ceiling
+	}
+	filler := &advice.Filler{Fetch: source.fetch, Stored: source.keep}
+	views := drawn(t, func(buckets map[string]any) { filler.Enrich(buckets, 15) })
+	decide, buy := viewJSON(t, views["decidir"]), viewJSON(t, views["comprar"])
+	if strings.Contains(decide, "Esperando") || !strings.Contains(decide, `"kind":"swap"`) {
+		t.Errorf("stored ceilings are judged with: %s", decide)
+	}
+	if !strings.Contains(buy, `"ceiling_age":"hace 26 h"`) || !strings.Contains(buy, `"ideal_age":"hace 26 h"`) ||
+		!strings.Contains(buy, "de margen") {
+		t.Errorf("each row and its bid say how old the ceiling is: %s", buy)
 	}
 }

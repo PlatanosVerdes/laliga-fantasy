@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 )
 
@@ -31,27 +32,49 @@ func shortlists() Row {
 	}
 }
 
-// pages is a futbolfantasy that answers every player, slowly, and remembers who it was asked
-// for and in which order.
+// pages is a futbolfantasy that answers every player, slowly, remembers who it was asked for and
+// in which order, and keeps what it answered the way the ceiling store does.
 type pages struct {
-	mu    sync.Mutex
-	asked []string
-	delay time.Duration
-	fail  map[string]error
+	mu     sync.Mutex
+	asked  []string
+	delay  time.Duration
+	fail   map[string]error
+	stored map[string]futbolfantasy.Ceiling
 }
 
-func (p *pages) fetch(ffID string) (Row, error) {
+func (p *pages) fetch(ffID string) (futbolfantasy.Ceiling, error) {
 	time.Sleep(p.delay)
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.asked = append(p.asked, ffID)
 	if err := p.fail[ffID]; err != nil {
+		return futbolfantasy.Ceiling{}, err
+	}
+	ceiling := futbolfantasy.Ceiling{IdealBid: 20_000_000, FetchedAt: time.Now()}
+	if p.stored == nil {
+		p.stored = map[string]futbolfantasy.Ceiling{}
+	}
+	p.stored[ffID] = ceiling
+	return ceiling, nil
+}
+
+func (p *pages) keep(ffID string) (futbolfantasy.Ceiling, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	ceiling, ok := p.stored[ffID]
+	return ceiling, ok
+}
+
+// row is fetch the way the synchronous enrichment reads it.
+func (p *pages) row(ffID string) (Row, error) {
+	ceiling, err := p.fetch(ffID)
+	if err != nil {
 		return nil, err
 	}
-	return Row{"ideal_bid": 20_000_000.0, "max_value": 30_000_000.0, "min_value": 1.0,
-		"max_date": "2026-10-01", "injury_marks": []string{},
-		"history": []any{Row{"value": 9.0}, Row{"value": 10.0}}}, nil
+	return Row{"ideal_bid": ceiling.IdealBid}, nil
 }
+
+func (p *pages) filler() *Filler { return &Filler{Fetch: p.fetch, Stored: p.keep} }
 
 func (p *pages) order() []string {
 	p.mu.Lock()
@@ -91,27 +114,32 @@ func filled(t *testing.T, filler *Filler, buckets Row) []Batch {
 	return batches
 }
 
-// The page is drawn with what is in hand: the rest is marked and waits, nobody is fetched
-// before Enrich returns.
-func TestEnrichAppliesWhatIsInHandAndMarksTheRest(t *testing.T) {
-	source := &pages{delay: 50 * time.Millisecond}
-	inHand := Row{"ideal_bid": 15_000_000.0}
-	filler := &Filler{Fetch: source.fetch, TTL: time.Hour,
-		Known: func(ffID string) (Row, bool) { return inHand, ffID == "ff1" }}
+// The page is drawn with what is stored: a fresh ceiling as it is, an old one with its age and
+// read again, a player never read marked as waiting. Nobody is fetched before Enrich returns.
+func TestEnrichAppliesWhatIsStoredAndQueuesTheRest(t *testing.T) {
+	source := &pages{delay: 50 * time.Millisecond, stored: map[string]futbolfantasy.Ceiling{
+		"ff1": {IdealBid: 15_000_000, FetchedAt: time.Now()},
+		"ff2": {IdealBid: 11_000_000, FetchedAt: time.Now().Add(-50 * time.Hour)},
+	}}
+	filler := source.filler()
 	buckets := shortlists()
 	started := time.Now()
-	if waiting := filler.Enrich(buckets, 15); waiting != 6 {
-		t.Errorf("%d waiting, want 6", waiting)
+	if queued := filler.Enrich(buckets, 15); queued != 6 {
+		t.Errorf("%d queued, want 6: every one but the fresh one", queued)
 	}
 	if spent := time.Since(started); spent > 30*time.Millisecond {
 		t.Errorf("Enrich waited for a page: %v", spent)
 	}
 	squad := rowsOf(buckets["squad"])
-	if squad[0]["ideal_bid"] != 15_000_000.0 || truthy(squad[0][PendingKey]) {
-		t.Errorf("the page in hand is applied: %v", squad[0])
+	if squad[0]["ideal_bid"] != 15_000_000.0 || squad[0][PendingKey] != nil || squad[0][AgeKey] != nil {
+		t.Errorf("the fresh ceiling is applied as it is: %v", squad[0])
 	}
-	if !truthy(squad[1][PendingKey]) || squad[1]["ideal_bid"] != nil {
-		t.Errorf("the missing one waits, with no ceiling at all: %v", squad[1])
+	if squad[1]["ideal_bid"] != 11_000_000.0 || squad[1][AgeKey] != "hace 2 días" || squad[1][PendingKey] != nil {
+		t.Errorf("the old one is shown with its age while it is read again: %v", squad[1])
+	}
+	market := rowsOf(buckets["bids_now"])[0]
+	if !truthy(market[PendingKey]) || market["ideal_bid"] != nil {
+		t.Errorf("a player never read waits, with no ceiling at all: %v", market)
 	}
 	if Waiting(buckets, CandidateBuckets...) != 2 {
 		t.Errorf("both market candidates wait")
@@ -122,7 +150,8 @@ func TestEnrichAppliesWhatIsInHandAndMarksTheRest(t *testing.T) {
 // players, then the rest. Every batch names its players and the last one says it is over.
 func TestTheFillFollowsThePageAndReportsEachBatch(t *testing.T) {
 	source := &pages{delay: 5 * time.Millisecond}
-	filler := &Filler{Fetch: source.fetch, TTL: time.Hour, Gap: time.Nanosecond}
+	filler := source.filler()
+	filler.Gap = time.Nanosecond
 	buckets := shortlists()
 	batches := filled(t, filler, buckets)
 	want := []string{"ff1", "ff2", "ff5", "ff6", "ff7", "ff8", "ff9"}
@@ -153,7 +182,8 @@ func TestTheFillFollowsThePageAndReportsEachBatch(t *testing.T) {
 // from drawing the page once per player.
 func TestBatchesAreSpacedByTheGap(t *testing.T) {
 	source := &pages{delay: time.Millisecond}
-	filler := &Filler{Fetch: source.fetch, TTL: time.Hour, Gap: time.Hour}
+	filler := source.filler()
+	filler.Gap = time.Hour
 	batches := filled(t, filler, shortlists())
 	if len(batches) != 2 || len(batches[0].Players) != 1 || len(batches[1].Players) != 6 {
 		t.Errorf("the first page, then the rest at the end: %+v", batches)
@@ -163,11 +193,11 @@ func TestBatchesAreSpacedByTheGap(t *testing.T) {
 // Once everything has landed the rows are exactly what the synchronous enrichment writes, so
 // the page drawn last is the page the panel always drew.
 func TestAFilledPageEqualsTheOneThatWaited(t *testing.T) {
-	source := &pages{}
 	waited := shortlists()
-	EnrichBucketsWith(waited, 15, source.fetch, nil)
+	EnrichBucketsWith(waited, 15, (&pages{}).row, nil)
 
-	filler := &Filler{Fetch: source.fetch, TTL: time.Hour}
+	source := &pages{}
+	filler := source.filler()
 	filled(t, filler, shortlists())
 	drawn := shortlists()
 	filler.Enrich(drawn, 15)
@@ -180,7 +210,7 @@ func TestAFilledPageEqualsTheOneThatWaited(t *testing.T) {
 // and drawn the way a failed fetch always was, with no ceiling and nothing waiting.
 func TestARateLimitStopsTheFillAndLeavesTheRestAlone(t *testing.T) {
 	source := &pages{fail: map[string]error{"ff5": &httpx.RateLimited{}}}
-	filler := &Filler{Fetch: source.fetch, TTL: time.Hour}
+	filler := source.filler()
 	batches := filled(t, filler, shortlists())
 	if got := source.order(); !reflect.DeepEqual(got, []string{"ff1", "ff2", "ff5"}) {
 		t.Errorf("asked %v after the 429", got)
@@ -209,9 +239,39 @@ func TestARateLimitStopsTheFillAndLeavesTheRestAlone(t *testing.T) {
 // Any other failure leaves that one player alone and goes on with the next.
 func TestAFailedPageDoesNotStopTheOthers(t *testing.T) {
 	source := &pages{fail: map[string]error{"ff2": errors.New("404")}}
-	filler := &Filler{Fetch: source.fetch, TTL: time.Hour}
+	filler := source.filler()
 	filled(t, filler, shortlists())
 	if got := len(source.order()); got != 7 {
 		t.Errorf("asked %d pages, want all 7", got)
+	}
+}
+
+// An old ceiling that cannot be read again is kept, with its age, and not asked for again until
+// the pause is over; one read again loses its age.
+func TestAnOldCeilingStaysWhenItCannotBeReadAgain(t *testing.T) {
+	old := futbolfantasy.Ceiling{IdealBid: 11_000_000, FetchedAt: time.Now().Add(-30 * time.Hour)}
+	source := &pages{fail: map[string]error{"ff2": errors.New("timeout")},
+		stored: map[string]futbolfantasy.Ceiling{"ff1": old, "ff2": old}}
+	filler := source.filler()
+	filled(t, filler, shortlists())
+	again := shortlists()
+	filler.Enrich(again, 15)
+	squad := rowsOf(again["squad"])
+	if squad[0][AgeKey] != nil || squad[0]["ideal_bid"] != 20_000_000.0 {
+		t.Errorf("read again, it is drawn as new: %v", squad[0])
+	}
+	if squad[1][AgeKey] != "hace 30 h" || squad[1]["ideal_bid"] != 11_000_000.0 {
+		t.Errorf("unreadable, the stored one stays with its age: %v", squad[1])
+	}
+}
+
+// The synchronous enrichment applies the stored ceiling a failed read hands back.
+func TestTheWaitingEnrichmentKeepsTheStoredCeiling(t *testing.T) {
+	buckets := shortlists()
+	EnrichBucketsWith(buckets, 15, func(ffID string) (Row, error) {
+		return Row{"ideal_bid": 9.0}, errors.New("timeout")
+	}, nil)
+	if got := rowsOf(buckets["asks"])[0]["ideal_bid"]; got != 9.0 {
+		t.Errorf("the stored ceiling is not applied: %v", got)
 	}
 }

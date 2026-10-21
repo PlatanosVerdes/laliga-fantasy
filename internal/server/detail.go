@@ -58,12 +58,12 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	// The link is the page the ceiling was read from, so it comes with it rather than from a
 	// slug of his name, which a short or shared name gets wrong.
 	if ffID := text(player["ff_id"]); ffID != "" {
-		if detail, err := futbolfantasy.PlayerDetail(ffID, futbolfantasy.DetailTTL); err == nil {
+		if ceiling, _ := futbolfantasy.CeilingFor(ffID); !ceiling.FetchedAt.IsZero() {
 			if _, present := player["ideal_bid"]; !present {
-				player["ideal_bid"] = number(detail["ideal_bid"])
+				player["ideal_bid"] = ceiling.IdealBid
 			}
-			if url, ok := detail["ff_url"].(*string); ok && url != nil {
-				player["ff_url"] = *url
+			if ceiling.URL != "" {
+				player["ff_url"] = ceiling.URL
 			}
 		}
 	}

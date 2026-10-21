@@ -39,20 +39,35 @@ refuse every operation with "Cargando la liga, espera a que termine" (503), the 
 the daily reward and the necroporra vote see no world, and an open tab reloads into the
 preview. Later rebuilds keep serving the last page.
 
-**The panel does not wait for the futbolfantasy player pages.** It is drawn with the pages
-already parsed (`advice.Filler`); the rows still waiting carry `detail_pending` and show
-"cargando ficha…", and the missing pages are fetched behind it in the order the page shows them:
-my squad, the market, the rivals' players, the rest. Each batch that lands redraws the page
-(`State.Redraw`: the cache key moves, the version does not) and pushes a `details` event, and an
-open tab refetches `/api/views`. Everything that compares the market's ceilings (the swap plan,
-the buy verdicts and stand-ins on *Decidir*, which offer to take on *Vender*, the plan's floor
-for an armed sale) is held until those pages are in, with "Esperando N fichas de
-futbolfantasy…", because a missing ceiling reads as futbolfantasy saying no; once they land the
-page equals the one that waited. A 429 stops the pass, and what was left is drawn as a failed
-fetch for five minutes. A bid, an offer or an acceptance reads the player's page synchronously
-in `playerFor`; when it cannot be read the operation is never refused, it carries "no he podido
-leer la ficha de futbolfantasy de X: sin techo rentable, decide tú" and nothing is checked
-against the unknown ceiling (`writes.Player.CeilingUnread`).
+**The panel does not wait for the futbolfantasy player pages, and reads them far less.** Only
+the profitable ceiling is read from them, and it is kept in `ff_ceilings.json` under the cache
+root (`futbolfantasy.Ceiling`: `ideal_bid`, `url`, `fetched_at`), loaded at start ("ceilings
+loaded" logs the file, how many are stored and fresh, and the TTL). A ceiling is fresh until the
+night's price adjustment (00:30 Madrid) and for at most `FANTASY_CEILING_TTL` (12 h). The page is
+drawn with every stored ceiling (`advice.Filler`): a stale one is used and marked with its age
+(`detail_age`, "ficha de hace 9 h"), a player never read carries `detail_pending` ("cargando
+ficha…"), and both are read again behind it in the order the page shows them: my squad, the
+market, the rivals' players, the rest. Each batch that lands redraws the page (`State.Redraw`: the
+cache key moves, the version does not) and pushes a `details` event, and an open tab refetches
+`/api/views`. Everything that compares the market's ceilings (the swap plan, the buy verdicts and
+stand-ins on *Decidir*, which offer to take on *Vender*, the plan's floor for an armed sale) is
+held only while a candidate has never been read, with "Esperando N fichas de futbolfantasy…",
+because a missing ceiling reads as futbolfantasy saying no; once they land the page equals the
+one that waited. A 429 stops the pass, and what was left keeps its stored ceiling, or is drawn as
+a failed fetch, for five minutes. A bid, an offer or an acceptance reads the player's page again
+in `playerFor`; when it cannot be read the stored ceiling is used and its age said, and with
+none the operation still goes through with "no he podido leer la ficha de futbolfantasy de X:
+sin techo rentable, decide tú" and nothing is checked against it (`writes.Player.CeilingUnread`,
+`CeilingAge`). The player card and the comparator read the same store.
+
+futbolfantasy has no bulk source for the ceiling: the market list (`/analytics/laliga-fantasy/
+mercado`, ~670 players) carries value, trend and acceleration but no ceiling, the site's own
+`app.min.js` loads `/analytics/{game}/mercado/detalle/{id}` one player at a time, and its `/api`
+routes are lineups, polygons and seasons. The detail page also carries the value history and
+the season's high and low; they are still parsed (it costs no request) but no longer written
+onto the rows, which nothing read. Before, about 80 tracked players were read every 4 h, up to
+~480 requests a day; now each is read at most twice a day (~160), once with a 24 h TTL, and a
+restart reads none.
 
 ## Deploying
 
@@ -81,9 +96,11 @@ the milliseconds of each step of the first build (`mine_ms`, `listings_ms` and `
 the preview, then `squads_ms`, `calendar_ms`, … and `page_ms` for drawing the page inside it);
 `preview published` marks when each stage of the preview reached the page. `page rendered` comes with every render, split the same way
 (`advice_ms`, `details_ms` for the futbolfantasy pages already in hand, `necro_ms`,
-`document_ms`). `details filled` closes each background pass over the missing pages: `players`,
-`read`, `failed`, `limited` for a 429, `ms`, and `first_ms`/`last_ms` for when the first and the
-last page landed.
+`document_ms`). `details filled` closes each background pass over the missing and stale pages:
+`players` (the requests it made), `read`, `failed`, `limited` for a 429, `ms`, and
+`first_ms`/`last_ms` for when the first and the last page landed. `ceilings loaded` at start
+says how many ceilings came back from disk and how many of them are fresh, which is the
+requests a restart no longer makes.
 `page served while redrawing` means a browser got the previous page at once while the new one
 was drawn behind it; `serving the wait page` means it got the progress page instead.
 

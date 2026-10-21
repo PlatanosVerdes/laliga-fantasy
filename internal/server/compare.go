@@ -68,8 +68,8 @@ func (s *Server) compare(writer http.ResponseWriter, request *http.Request) {
 		wait.Add(1)
 		go func(target map[string]any, ffID string) {
 			defer wait.Done()
-			if detail, err := futbolfantasy.PlayerDetail(ffID, futbolfantasy.DetailTTL); err == nil {
-				target["ideal_bid"] = number(detail["ideal_bid"])
+			if ceiling, _ := futbolfantasy.CeilingFor(ffID); !ceiling.FetchedAt.IsZero() {
+				target["ideal_bid"] = ceiling.IdealBid
 			}
 		}(player, ffID)
 	}

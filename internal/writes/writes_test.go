@@ -547,3 +547,14 @@ func TestAnUnreadCeilingIsSaidAndNeverBlocks(t *testing.T) {
 		t.Errorf("a listing does not read the ceiling: %v %v", warnings, err)
 	}
 }
+
+// The stored ceiling standing in for a page that could not be read is judged by, and its age said.
+func TestAStoredCeilingSaysHowOldItIs(t *testing.T) {
+	who := Player{Name: "Barato", Available: true, MinBid: 1, IdealBid: 5, CeilingAge: "hace 9 h"}
+	warnings, err := check("bid", Args{MarketID: "m", Amount: 6}, who, nil, nil)
+	joined := strings.Join(warnings, " | ")
+	if err != nil || !strings.Contains(joined, "su techo rentable es el guardado hace 9 h") ||
+		!strings.Contains(joined, "por encima de la puja maxima rentable") {
+		t.Errorf("%v: %s", err, joined)
+	}
+}

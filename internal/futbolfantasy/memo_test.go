@@ -70,26 +70,3 @@ func TestAStalePageIsParsedAgain(t *testing.T) {
 	}
 }
 
-// A page counts as in hand only once parsed and while fresh; a page on disk is not read for it.
-func TestKnownDetailIsOnlyAFreshParsedPage(t *testing.T) {
-	config.CacheDir = t.TempDir()
-	url := strings.ReplaceAll(config.FFDetailURL, "{ff_id}", "known")
-	cachedPage(t, url, `var max_valor = 333;`)
-	if _, ok := KnownDetail("known", time.Hour); ok {
-		t.Fatal("a page only on disk is not in hand")
-	}
-	if _, err := PlayerDetail("known", time.Hour); err != nil {
-		t.Fatal(err)
-	}
-	if detail, ok := KnownDetail("known", time.Hour); !ok || maxValue(detail) != 333 {
-		t.Errorf("parsed and fresh: %v %v", detail, ok)
-	}
-	detailMu.Lock()
-	kept := detailSeen[url]
-	kept.written = time.Now().Add(-2 * time.Hour)
-	detailSeen[url] = kept
-	detailMu.Unlock()
-	if _, ok := KnownDetail("known", time.Hour); ok {
-		t.Error("a stale page is not in hand")
-	}
-}

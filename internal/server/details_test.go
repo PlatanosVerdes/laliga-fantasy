@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
@@ -30,13 +32,18 @@ func TestAPageLandingIsDrawnBehindTheOpenPage(t *testing.T) {
 	}
 }
 
-func biddingServer(t *testing.T, read func(string) (map[string]any, error)) http.Handler {
+func biddingServer(t *testing.T, read func(string) (futbolfantasy.Ceiling, error),
+	stored map[string]futbolfantasy.Ceiling) http.Handler {
 	t.Helper()
 	config.StateDir = t.TempDir()
 	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
-	was := playerDetail
-	t.Cleanup(func() { playerDetail = was })
-	playerDetail = read
+	wasRead, wasStored := readCeiling, storedCeiling
+	t.Cleanup(func() { readCeiling, storedCeiling = wasRead, wasStored })
+	readCeiling = read
+	storedCeiling = func(ffID string) (futbolfantasy.Ceiling, bool) {
+		ceiling, ok := stored[ffID]
+		return ceiling, ok
+	}
 	ffID, bids := "ff-20", 0
 	world := state.New(func() (*model.Universe, error) {
 		universe := &model.Universe{
@@ -69,13 +76,15 @@ func prepareBid(handler http.Handler) (int, map[string]any) {
 // him yet; when it cannot be read the bid goes through saying so, not warned as unprofitable.
 func TestABidIsCheckedAgainstACeilingReadThereAndThen(t *testing.T) {
 	read := 0
-	handler := biddingServer(t, func(ffID string) (map[string]any, error) {
+	old := map[string]futbolfantasy.Ceiling{"ff-20": {IdealBid: 9_000_000,
+		FetchedAt: time.Now().Add(-9 * time.Hour)}}
+	handler := biddingServer(t, func(ffID string) (futbolfantasy.Ceiling, error) {
 		read++
 		if ffID != "ff-20" {
 			t.Errorf("read the page of %s", ffID)
 		}
-		return map[string]any{"ideal_bid": 2_500_000.0}, nil
-	})
+		return futbolfantasy.Ceiling{IdealBid: 2_500_000, FetchedAt: time.Now()}, nil
+	}, old)
 	status, body := prepareBid(handler)
 	if status != http.StatusOK || body["ideal_bid"] != 2_500_000.0 || read != 1 {
 		t.Fatalf("prepared with the ceiling read: %d %v (%d reads)", status, body, read)
@@ -84,11 +93,20 @@ func TestABidIsCheckedAgainstACeilingReadThereAndThen(t *testing.T) {
 		t.Errorf("judged by the ceiling: %v", body["warnings"])
 	}
 
-	handler = biddingServer(t, func(string) (map[string]any, error) {
-		return nil, errors.New("rate limited")
-	})
-	status, body = prepareBid(handler)
+	unreadable := func(string) (futbolfantasy.Ceiling, error) {
+		return futbolfantasy.Ceiling{}, errors.New("rate limited")
+	}
+	// The stored one stands in, with its age, and is judged by.
+	status, body = prepareBid(biddingServer(t, unreadable, old))
 	warnings := strings.Join(asStrings(body["warnings"]), " | ")
+	if status != http.StatusOK || body["ideal_bid"] != 9_000_000.0 ||
+		!strings.Contains(warnings, "su techo rentable es el guardado hace 9 h") {
+		t.Errorf("the stored ceiling with its age: %d %v", status, body)
+	}
+
+	handler = biddingServer(t, unreadable, nil)
+	status, body = prepareBid(handler)
+	warnings = strings.Join(asStrings(body["warnings"]), " | ")
 	if status != http.StatusOK || body["token"] == "" {
 		t.Fatalf("an unreadable page never blocks a bid: %d %v", status, body)
 	}

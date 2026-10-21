@@ -313,6 +313,9 @@ func RowPlayer(player map[string]any) map[string]any {
 	if waiting(player) {
 		out["pending"] = true
 	}
+	if age := ceilingAge(player); age != "" {
+		out["ceiling_age"] = age
+	}
 	if truthy(player["is_mine"]) && truthy(player["sale_locked"]) {
 		out["locked_until"] = text(player["hold_until"])
 		out["locked_when"] = esWhen(text(player["hold_until"]))

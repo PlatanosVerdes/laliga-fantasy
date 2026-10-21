@@ -388,6 +388,9 @@ type Player struct {
 	// CeilingUnread is a player whose futbolfantasy page could not be read: his IdealBid is
 	// unknown, not zero, and nothing is checked against it as if it were.
 	CeilingUnread bool
+	// CeilingAge is how old IdealBid is when the page could not be read again and the stored
+	// ceiling stands in for it: "hace 9 h".
+	CeilingAge string
 }
 
 // JudgedByCeiling are the operations whose check reads futbolfantasy's profitable ceiling.
@@ -624,13 +627,13 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 	// Unknown is not zero: read as zero, a missing ceiling says "futbolfantasy sees no margin"
 	// about a player it was never asked about. Nor is it a reason to refuse: the call is yours.
 	if who.CeilingUnread && JudgedByCeiling[name] {
-		player := who.Name
-		if player == "" {
-			player = "este jugador"
-		}
+		player := fallbackName(who.Name)
 		warnings = append(warnings, fmt.Sprintf("no he podido leer la ficha de futbolfantasy "+
 			"de %s: sin techo rentable, decide tú", player))
 		who.IdealBid = 0
+	} else if who.CeilingAge != "" && JudgedByCeiling[name] {
+		warnings = append(warnings, fmt.Sprintf("no he podido leer la ficha de futbolfantasy "+
+			"de %s: su techo rentable es el guardado %s", fallbackName(who.Name), who.CeilingAge))
 	}
 
 	// The answer goes through .../market/{id}/offer/{id}: an offer for somebody I never listed
@@ -959,4 +962,11 @@ func numericID(id string) any {
 		return number
 	}
 	return id
+}
+
+func fallbackName(name string) string {
+	if name == "" {
+		return "este jugador"
+	}
+	return name
 }

@@ -189,6 +189,9 @@ func bidActs(row map[string]any, class, label string) []Act {
 	if waiting(row) {
 		args["pending"] = true
 	}
+	if age := ceilingAge(row); age != "" {
+		args["ideal_age"] = age
+	}
 	if existing := text(listing["my_bid_id"]); existing != "" {
 		amount := asFloat(listing["my_bid"])
 		// Like a bid: one button that changes it, with the withdrawal inside the dialog.
