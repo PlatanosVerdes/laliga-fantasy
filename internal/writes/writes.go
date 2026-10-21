@@ -385,6 +385,17 @@ type Player struct {
 	// Shielded, and until when: a second shield over a live one spends the advert for nothing.
 	Shielded      bool
 	ShieldedUntil string
+	// CeilingUnread is a player whose futbolfantasy page could not be read: his IdealBid is
+	// unknown, not zero, and nothing is checked against it as if it were.
+	CeilingUnread bool
+	// CeilingAge is how old IdealBid is when the page could not be read again and the stored
+	// ceiling stands in for it: "hace 9 h".
+	CeilingAge string
+}
+
+// JudgedByCeiling are the operations whose check reads futbolfantasy's profitable ceiling.
+var JudgedByCeiling = map[string]bool{
+	"bid": true, "modify_bid": true, "buy_offer": true, "change_offer": true, "accept_offer": true,
 }
 
 // Summary is what a person is asked to confirm.
@@ -613,6 +624,18 @@ func (g *Guard) confirm(token string, allowWrites, dryRun, recheck bool) (map[st
 func check(name string, args Args, who Player, cash *int64, window *Window) ([]string, error) {
 	var warnings []string
 
+	// Unknown is not zero: read as zero, a missing ceiling says "futbolfantasy sees no margin"
+	// about a player it was never asked about. Nor is it a reason to refuse: the call is yours.
+	if who.CeilingUnread && JudgedByCeiling[name] {
+		player := fallbackName(who.Name)
+		warnings = append(warnings, fmt.Sprintf("no he podido leer la ficha de futbolfantasy "+
+			"de %s: sin techo rentable, decide tú", player))
+		who.IdealBid = 0
+	} else if who.CeilingAge != "" && JudgedByCeiling[name] {
+		warnings = append(warnings, fmt.Sprintf("no he podido leer la ficha de futbolfantasy "+
+			"de %s: su techo rentable es el guardado %s", fallbackName(who.Name), who.CeilingAge))
+	}
+
 	// The answer goes through .../market/{id}/offer/{id}: an offer for somebody I never listed
 	// has no market id, and no route for it has been seen yet.
 	// Without the bid's id the path ends in .../bid//cancel and the bid stays live.
@@ -806,7 +829,7 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 					fmt.Sprintf("por encima de la puja maxima rentable de futbolfantasy (%s)",
 						money(who.IdealBid)))
 			}
-		} else {
+		} else if !who.CeilingUnread {
 			warnings = append(warnings, "futbolfantasy no le ve rentabilidad a este precio")
 		}
 		if cash != nil && float64(args.Amount) > 0.5*float64(*cash) {
@@ -939,4 +962,11 @@ func numericID(id string) any {
 		return number
 	}
 	return id
+}
+
+func fallbackName(name string) string {
+	if name == "" {
+		return "este jugador"
+	}
+	return name
 }

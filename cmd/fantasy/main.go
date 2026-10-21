@@ -745,6 +745,18 @@ func cmdServe(args []string) error {
 		})
 	}
 
+	stored, fresh := futbolfantasy.LoadCeilings()
+	slog.Info("ceilings loaded", "file", futbolfantasy.CeilingFile(), "stored", stored,
+		"fresh", fresh, "ttl", futbolfantasy.CeilingTTL.String())
+	detailFill = &advice.Filler{
+		Stored: futbolfantasy.StoredCeiling,
+		Fetch:  futbolfantasy.FetchCeiling,
+		Landed: func(batch advice.Batch) {
+			world.Redraw(map[string]any{"type": "details", "players": batch.Players,
+				"done": batch.Done, "total": batch.Total, "over": batch.Over})
+		},
+	}
+
 	// Nobody is told about a change until the page for it exists: rendering costs about four
 	// seconds here, and the browser was the one paying for it after every write.
 	world.SetWarm(panel.Warm)
@@ -1288,6 +1300,10 @@ func cmdReport(args []string) error {
 // cashOverride lets `report --budget` skip reading /money, which the frozen comparison needs.
 var cashOverride *float64
 
+// detailFill is set by serve only: a page served is drawn at once and filled in as the
+// futbolfantasy pages land, while everything else that draws one waits for them all.
+var detailFill *advice.Filler
+
 // renderPage is the whole document from a built universe: the advice layer, the per-player
 // enrichment, the standing instructions and the renderer. Shared by `report` and the server,
 // so the page cannot differ between them.
@@ -1541,11 +1557,17 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 	}
 	buckets := advice.Recommend(generic, cash, 0, 15)
 	server.Rendering.Reached("Calculando consejos", 1, 1)
-	// The per-player pages, once each: this is what fills the profitable ceiling and the
-	// value history the page draws.
-	advice.EnrichBucketsReporting(buckets, 15, futbolfantasy.DetailTTL, func(done, total int) {
-		server.Rendering.Reached("Fichas de futbolfantasy", done, total)
-	})
+	// The per-player pages, once each: this is what fills the profitable ceiling the page
+	// judges a price by. Served, the page is drawn with the ones in hand and the rest fill in
+	// behind it; anywhere else it waits for all of them.
+	if detailFill != nil {
+		detailFill.Enrich(buckets, 15)
+		server.Rendering.Reached("Fichas de futbolfantasy", 1, 1)
+	} else {
+		advice.EnrichBucketsReporting(buckets, 15, futbolfantasy.DetailTTL, func(done, total int) {
+			server.Rendering.Reached("Fichas de futbolfantasy", done, total)
+		})
+	}
 
 	armed, err := policies.Load()
 	if err != nil {
@@ -1610,7 +1632,7 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		Orders: orderRows(), Dismissed: dismissedKeys(),
 		// The plan reads the same buckets the tables do, so what it proposes and what they
 		// list can never disagree.
-		Swaps:          advice.Swaps(generic, buckets, cash),
+		Swaps:          advice.ReadySwaps(generic, buckets, cash),
 		HoldDays:       house.HoldDays,
 		HoldExceptions: house.HoldExceptions,
 		MaxDebtPct:     house.MaxDebtPct,

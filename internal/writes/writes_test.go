@@ -523,3 +523,38 @@ func TestNothingActsWhileTheLeagueLoads(t *testing.T) {
 		t.Errorf("the token is still good once the league is loaded: %v", err)
 	}
 }
+
+// A ceiling that could not be read is unknown, not zero: whatever is judged by it goes through
+// with that said, never refused and never warned as unprofitable.
+func TestAnUnreadCeilingIsSaidAndNeverBlocks(t *testing.T) {
+	unread := Player{Name: "Barato", Available: true, CeilingUnread: true}
+	args := Args{MarketID: "m", OfferID: "o", BidID: "b", PlayerTeamID: "slot", Amount: 1}
+	for name := range JudgedByCeiling {
+		warnings, err := check(name, args, unread, nil, nil)
+		joined := strings.Join(warnings, " | ")
+		if err != nil {
+			t.Errorf("%s refused: %v", name, err)
+		}
+		if !strings.Contains(joined, "no he podido leer la ficha de futbolfantasy de Barato: sin techo rentable, decide tú") {
+			t.Errorf("%s does not say the ceiling is unknown: %s", name, joined)
+		}
+		if strings.Contains(joined, "rentabilidad") || strings.Contains(joined, "puja maxima rentable") {
+			t.Errorf("%s judged an unknown ceiling: %s", name, joined)
+		}
+	}
+	warnings, err := check("sell_to_market", args, unread, nil, nil)
+	if err != nil || strings.Contains(strings.Join(warnings, " "), "futbolfantasy") {
+		t.Errorf("a listing does not read the ceiling: %v %v", warnings, err)
+	}
+}
+
+// The stored ceiling standing in for a page that could not be read is judged by, and its age said.
+func TestAStoredCeilingSaysHowOldItIs(t *testing.T) {
+	who := Player{Name: "Barato", Available: true, MinBid: 1, IdealBid: 5, CeilingAge: "hace 9 h"}
+	warnings, err := check("bid", Args{MarketID: "m", Amount: 6}, who, nil, nil)
+	joined := strings.Join(warnings, " | ")
+	if err != nil || !strings.Contains(joined, "su techo rentable es el guardado hace 9 h") ||
+		!strings.Contains(joined, "por encima de la puja maxima rentable") {
+		t.Errorf("%v: %s", err, joined)
+	}
+}

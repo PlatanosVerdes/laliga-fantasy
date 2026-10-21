@@ -38,7 +38,7 @@ export function openBid(data) {
   const operation = existing ? 'modify_bid' : (data.operation || 'bid');
   const min = +data.min || 0, ideal = +data.ideal || 0;
   show('amount', {p: {operation, market_id: data.market, player_id: data.player, name: data.name,
-    min_bid: min, ideal, value: +data.value, bid_id: existing, offer_id: data.offer, bids: +data.bids || 0, expires: data.expires,
+    min_bid: min, ideal, pending: !!data.pending, ideal_age: data.ideal_age || '', value: +data.value, bid_id: existing, offer_id: data.offer, bids: +data.bids || 0, expires: data.expires,
     title: existing ? 'Cambiar tu puja por' : changing ? 'Cambiar tu oferta por' : (operation === 'buy_offer' ? 'Ofertar por' : 'Pujar por'),
     label: changing ? 'Importe de la oferta' : 'Importe de la puja', suggested: ideal && ideal >= min ? ideal : min, focus: true}});
 }
@@ -101,7 +101,8 @@ function AmountDialog({p}) {
     if (!amount) warn = 'Escribe un importe.';
     else if (amount < p.min_bid) warn = 'Por debajo de la puja minima (' + exact(p.min_bid) + ').';
     // The profitable ceiling is a buyer's limit: selling above it is the point.
-    else if (!CASH_IN.has(op)) {
+    // A ceiling still on its way is not a missing one: the server reads it before it answers.
+    else if (!CASH_IN.has(op) && !p.pending) {
       if (p.ideal && amount > p.ideal) warn = 'Por encima del techo rentable de futbolfantasy.';
       else if (!p.ideal) warn = 'futbolfantasy no le ve rentabilidad a este precio.';
     }
@@ -155,7 +156,8 @@ function AmountDialog({p}) {
           ref=${input} value=${text} onInput=${typed} onKeyDown=${(e) => { if (e.key === 'Enter') next(); }}/></div>
       ${p.raise ? html`<${ClauseSums} p=${p} amount=${amount}/>` : html`<p class="bid-refs">
         <span>Puja minima <b class="bid-min">${p.min_bid ? exact(p.min_bid) : 'sin minimo'}</b></span>
-        <span>Techo rentable <b class="bid-ideal">${p.ideal ? exact(p.ideal) : 'sin margen'}</b></span>
+        <span>Techo rentable <b class="bid-ideal">${p.pending ? 'cargando ficha…' : p.ideal ? exact(p.ideal) : 'sin margen'}</b>${
+          p.ideal_age ? html` <span class="muted">(${p.ideal_age})</span>` : null}</span>
         <span>Valor <b class="bid-value">${exact(p.value)}</b></span>
         <${Rivals} p=${p}/></p>`}
       ${cash != null && amount ? html`<p class="bid-balance">Saldo <b>${exact(cash)}</b> → <b class=${after < 0 ? 'balance-bad' : 'balance-after'}>${exact(after)}</b>${

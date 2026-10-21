@@ -838,6 +838,22 @@ func (s *State) Patch(cause string, apply func(*model.Universe) bool) bool {
 	return true
 }
 
+// Redraw moves the page without moving the world: something the page reads from outside it has
+// landed, the futbolfantasy pages filled in behind a page already drawn. The page cache is drawn
+// again before an open tab is told, while the version stays put, so a tab opened meanwhile is
+// served the page there is at once.
+func (s *State) Redraw(message map[string]any) {
+	s.mu.Lock()
+	if s.universe == nil {
+		s.mu.Unlock()
+		return
+	}
+	s.revision++
+	message["version"] = s.version
+	s.mu.Unlock()
+	s.announce(message)
+}
+
 // cloneForPatch copies what a patch may touch: the players with their offers, and the market
 // with each player's listing pointing into the copy.
 func cloneForPatch(universe *model.Universe) *model.Universe {

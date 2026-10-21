@@ -139,7 +139,8 @@ export function RowView({r}) {
   return html`<li class=${('r ' + (r.tone || '')).trim()} data-pid=${(p && p.id) || r.pid || undefined}
       data-team=${r.team || undefined}>
     ${lead}
-    <span class="rwho"><span class="rname">${name}</span><${Meta} list=${r.meta}/><${Meta} list=${r.sub}/></span>
+    <span class="rwho"><span class="rname">${name}${p && p.pending ? html`<span class="ff-wait">cargando ficha…</span>`
+      : p && p.ceiling_age ? html`<span class="ff-wait" title="Techo rentable guardado: se está leyendo de nuevo">ficha de ${p.ceiling_age}</span>` : null}</span><${Meta} list=${r.meta}/><${Meta} list=${r.sub}/></span>
     ${tags}
     ${r.value || note ? html`<span class="rval" data-tip=${r.why || undefined}>${r.value ? html`<b>${r.value}</b>` : null}${
       note ? html`<span class="rnote"><${Segs} list=${r.note}/></span>` : null}</span>` : null}

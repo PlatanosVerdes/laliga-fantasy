@@ -301,7 +301,8 @@ func ParseDetail(page string) map[string]any {
 	}
 }
 
-// DetailTTL is how long a player's futbolfantasy page is trusted.
+// DetailTTL is how long a player's futbolfantasy page is trusted. The profitable ceiling itself
+// is kept apart, in the ceiling store, whose freshness follows the nightly price adjustment.
 //
 // It used to be a day, which was fine while the profitable ceiling was one more column. It is
 // not fine now that the ceiling decides who the plan proposes and what the guard warns about:

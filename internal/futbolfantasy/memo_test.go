@@ -69,3 +69,4 @@ func TestAStalePageIsParsedAgain(t *testing.T) {
 		t.Errorf("a stale parse was served: %v", maxValue(again))
 	}
 }
+
