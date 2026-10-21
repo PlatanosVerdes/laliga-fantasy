@@ -32,15 +32,15 @@ func TestAPageLandingIsDrawnBehindTheOpenPage(t *testing.T) {
 	}
 }
 
-func biddingServer(t *testing.T, read func(string) (futbolfantasy.Ceiling, error),
-	stored map[string]futbolfantasy.Ceiling) http.Handler {
+func biddingServer(t *testing.T, read func(string) (futbolfantasy.Detail, error),
+	stored map[string]futbolfantasy.Detail) http.Handler {
 	t.Helper()
 	config.StateDir = t.TempDir()
 	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
 	wasRead, wasStored := readCeiling, storedCeiling
 	t.Cleanup(func() { readCeiling, storedCeiling = wasRead, wasStored })
 	readCeiling = read
-	storedCeiling = func(ffID string) (futbolfantasy.Ceiling, bool) {
+	storedCeiling = func(ffID string) (futbolfantasy.Detail, bool) {
 		ceiling, ok := stored[ffID]
 		return ceiling, ok
 	}
@@ -76,14 +76,14 @@ func prepareBid(handler http.Handler) (int, map[string]any) {
 // him yet; when it cannot be read the bid goes through saying so, not warned as unprofitable.
 func TestABidIsCheckedAgainstACeilingReadThereAndThen(t *testing.T) {
 	read := 0
-	old := map[string]futbolfantasy.Ceiling{"ff-20": {IdealBid: 9_000_000,
+	old := map[string]futbolfantasy.Detail{"ff-20": {IdealBid: 9_000_000,
 		FetchedAt: time.Now().Add(-9 * time.Hour)}}
-	handler := biddingServer(t, func(ffID string) (futbolfantasy.Ceiling, error) {
+	handler := biddingServer(t, func(ffID string) (futbolfantasy.Detail, error) {
 		read++
 		if ffID != "ff-20" {
 			t.Errorf("read the page of %s", ffID)
 		}
-		return futbolfantasy.Ceiling{IdealBid: 2_500_000, FetchedAt: time.Now()}, nil
+		return futbolfantasy.Detail{IdealBid: 2_500_000, FetchedAt: time.Now()}, nil
 	}, old)
 	status, body := prepareBid(handler)
 	if status != http.StatusOK || body["ideal_bid"] != 2_500_000.0 || read != 1 {
@@ -93,8 +93,8 @@ func TestABidIsCheckedAgainstACeilingReadThereAndThen(t *testing.T) {
 		t.Errorf("judged by the ceiling: %v", body["warnings"])
 	}
 
-	unreadable := func(string) (futbolfantasy.Ceiling, error) {
-		return futbolfantasy.Ceiling{}, errors.New("rate limited")
+	unreadable := func(string) (futbolfantasy.Detail, error) {
+		return futbolfantasy.Detail{}, errors.New("rate limited")
 	}
 	// The stored one stands in, with its age, and is judged by.
 	status, body = prepareBid(biddingServer(t, unreadable, old))

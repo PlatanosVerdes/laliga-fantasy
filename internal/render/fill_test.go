@@ -52,10 +52,10 @@ type ceilings struct {
 	mu     sync.Mutex
 	asked  []string
 	delay  time.Duration
-	stored map[string]futbolfantasy.Ceiling
+	stored map[string]futbolfantasy.Detail
 }
 
-func (c *ceilings) fetch(ffID string) (futbolfantasy.Ceiling, error) {
+func (c *ceilings) fetch(ffID string) (futbolfantasy.Detail, error) {
 	time.Sleep(c.delay)
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -73,15 +73,15 @@ func (c *ceilings) fetch(ffID string) (futbolfantasy.Ceiling, error) {
 	case "ff-sk":
 		ideal = 5_000_000
 	}
-	ceiling := futbolfantasy.Ceiling{IdealBid: ideal, FetchedAt: time.Now()}
+	ceiling := futbolfantasy.Detail{IdealBid: ideal, FetchedAt: time.Now()}
 	if c.stored == nil {
-		c.stored = map[string]futbolfantasy.Ceiling{}
+		c.stored = map[string]futbolfantasy.Detail{}
 	}
 	c.stored[ffID] = ceiling
 	return ceiling, nil
 }
 
-func (c *ceilings) keep(ffID string) (futbolfantasy.Ceiling, bool) {
+func (c *ceilings) keep(ffID string) (futbolfantasy.Detail, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ceiling, ok := c.stored[ffID]
@@ -185,7 +185,7 @@ func TestStoredCeilingsAreUsedWithTheirAge(t *testing.T) {
 		ceiling, _ := (&ceilings{}).fetch(id)
 		ceiling.FetchedAt = time.Now().Add(-26 * time.Hour)
 		if source.stored == nil {
-			source.stored = map[string]futbolfantasy.Ceiling{}
+			source.stored = map[string]futbolfantasy.Detail{}
 		}
 		source.stored[id] = ceiling
 	}

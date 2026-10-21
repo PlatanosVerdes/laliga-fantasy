@@ -29,7 +29,8 @@ function Card({card, rank}) {
     : html`<${Face} p=${p} size="lg"/>`;
   return html`<article class=${'card tone-' + card.tone} data-kind=${card.kind}><div class="rank">${rank}</div>
     <div class="card-top">${faces}<div class="who" data-pid=${p.id}><b>${p.name}<${ShieldMark} p=${p}/></b>
-      <span class="meta"><${PosTag} p=${p}/>${card.meta}</span></div>${(card.chips || []).map((c) => html`<${ChipView} c=${c}/>`)}${
+      <span class="meta"><${PosTag} p=${p}/>${card.meta}</span>${
+      card.tags ? html`<span class="ff-tags"><${Segs} list=${card.tags}/></span>` : null}</div>${(card.chips || []).map((c) => html`<${ChipView} c=${c}/>`)}${
       card.dismiss ? html`<button type="button" class="dismiss" aria-label="Descartar" data-tip="Descartar"
         onClick=${(event) => dismissCard(event, card.dismiss)}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg></button>` : null}</div>
     <div class="verb">${card.verb}</div><div class="big">${card.big}${card.big_note ? html`<span class=${'big-note ' + (card.note_class || '')}>${card.big_note}</span>` : null}</div>
@@ -83,7 +84,7 @@ KINDS.eleven = ({b}) => {
       <div class="total">${e.from ? html`<span class="from">${e.from}</span>` : null}<span class="to">${e.to}</span>${e.gain ? html`<span class="gain">${e.gain}</span>` : null}</div>
       ${e.lines.map((line) => html`<div class="line"><span class=${'pos pos-' + line.pos}>${line.pos.toUpperCase()}</span><div class="chips">${
         line.players.map((c) => html`<span class=${'tchip ' + c.class} data-pid=${c.player.id}><${Face} p=${c.player} size="xs"/>
-          <span class="tname">${c.player.name}<${ShieldMark} p=${c.player}/></span><span class="tx">${c.xpts}</span>${
+          <span class="tname">${c.player.name}<${ShieldMark} p=${c.player}/></span>${c.ff ? html`<${Seg} s=${c.ff}/>` : null}<span class="tx">${c.xpts}</span>${
             c.pending ? html`<span class="fcs">${c.pending}</span>` : null}</span>`)}</div></div>`)}
       ${e.live ? html`<div class="mk-legend">puntos de la jornada: <span class="leg-pts pts-g">≥8</span> <span class="leg-pts pts-bl">4–7</span> <span class="leg-pts pts-br">0–3</span> <span class="leg-pts pts-rd">${'<0'}</span> · en gris, por jugar (sus xPts)</div>` : html`<div class="mk-legend">${e.fresh ? html`<span class="leg-new"></span>fichaje nuevo · ` : ''}xPts por jornada: <span class="x-hi-t">≥6</span> · <span class="x-lo-t">2–3,5</span> · <span class="x-bad-t">${'<2'}</span></div>`}
     </div>

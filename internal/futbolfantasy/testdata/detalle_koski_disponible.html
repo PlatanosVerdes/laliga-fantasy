@@ -1,0 +1,3465 @@
+<div class="modal-content ">
+<div class="modal-header">
+	<h5 class="modal-title" id="exampleModalLabel"><img src="https://static.futbolfantasy.com/uploads/images/cabecera/laliga.png" height="20" class="mr-2" alt=""> <span class="d-none d-lg-inline-block">Ville Koski</span><span class="d-lg-none">Koski</span> en  LaLiga Fantasy Oficial </h5>
+	<button type="button" class="close d-only-lightbox" data-dismiss="modal" aria-label="Close" onclick="$('.analytics-slider').removeClass('d-none');">
+	<span class="d-only-lightbox" aria-hidden="true">&times;</span>
+	</button>
+</div>
+<div class="modal-body pt-0 px-0 ">
+	<div class="container">
+		<div class="row mb-2 elemento jugador">
+			<div class="col-12">
+				<select class="select_radius mx-auto" onchange="app.Analytics.changeGame($(this).val())">
+					     													<option  selected  value="https://www.futbolfantasy.com/analytics/laliga-fantasy/mercado/detalle/17284?perfil=1">LaLiga Fantasy Oficial</option>
+											    													<option  value="https://www.futbolfantasy.com/analytics/comunio/mercado/detalle/17284?perfil=1">Comunio</option>
+											  																					<option  value="https://www.futbolfantasy.com/analytics/biwenger/mercado/detalle/17284/biwenger?perfil=1">Biwenger</option>
+															<option  value="https://www.futbolfantasy.com/analytics/biwenger/mercado/detalle/17284/biwenger-fantasy?perfil=1">Biwenger Clásico</option>
+																		  																					<option  value="https://www.futbolfantasy.com/analytics/futmondo/mercado/detalle/17284/social?perfil=1">Futmondo Social</option>
+															<option  value="https://www.futbolfantasy.com/analytics/futmondo/mercado/detalle/17284/futmondo?perfil=1">Futmondo Clásico</option>
+																		  													<option  value="https://www.futbolfantasy.com/analytics/fantasy-marca/mercado/detalle/17284?perfil=1">Fantasy Marca</option>
+											  													<option  value="https://www.futbolfantasy.com/analytics/mister/mercado/detalle/17284?perfil=1">Mister Fantasy</option>
+											     				</select>
+			</div>
+		</div>
+		<div class="row px-2 noticia-wrapper mt-2">
+			<div class="col-12 d-flex analytics-nombre mb-2">
+				<a href="https://www.futbolfantasy.com/jugadores/ville-koski" class="jugador mb-0 d-flex d-only-lightbox mx-auto">
+											<img class="escudo ml-0 mr-1 my-auto" height="18" width="18" src="https://static.futbolfantasy.com/uploads/images/cabecera/hd/28.png" alt="Alavés" />
+										<span class="d-none d-lg-block">Ville Koski</span><span class="d-lg-none">Koski</span>
+				</a>
+			</div>
+			<div class="offset-md-1 col-3 col-md-2 d-flex pl-3 imagen-c  d-only-lightbox">
+								<div class="fotocontainer laliga w-auto mt-0">
+					<a href="https://www.futbolfantasy.com/jugadores/ville-koski" class="icon icon-DEF ml-2">
+						<img class="img  lazyload fotozoom " src="https://static.futbolfantasy.com/uploads/images/camisetas/2027_28_local_campo.png"  data-src="https://media.futbolfantasy.com/thumb/150x150/v202610091950/uploads/images/jugadores/ficha/17284.png"  />
+					</a>
+				</div>
+							</div>
+			<div class="col-7 px-0 col-max-min">
+				<div class="equipo d-flex">
+										<span class="w-100 mx-auto valor-actual font-weight-bold">Valor act: 41.329.279 (<span class="analytics-up">+1.589.109</span>) <i class="fas fa-minus text-success hideQtip" data-tooltip="Estable"></i> <a href="#" class="fas fa-info-circle" data-toggle="modal" data-target="#leyendaAceleracion"></a></span>
+				</div>
+				<div class="equipo d-flex flex-column mb-auto">
+					<span class="w-100 max-valor text-left"></span>
+					<span class="w-100 min-valor text-left"></span>
+					<span class="w-100 puja-ideal text-left "></span>
+				</div>
+			</div>
+			<div class="col-2 block-new d-flex px-0 pt-2">
+								<div class="links m-auto d-only-lightbox">
+					<a href="https://www.futbolfantasy.com/jugadores/ville-koski" class="link">
+						<span class="fas fa-user"></span>
+						<span class="label">Perfil</span>
+					</a>
+				</div>
+							</div>
+		</div>
+	</div>
+			<div class="container mt-4 nav-pills period">
+		<div class="row px-1 px-md-3">
+			<div class="col-2 d-none-lightbox"></div>
+			<div class="col d-flex px-1">
+				<a href="#" class="nav-link text-center btn btn-black my-auto ml-auto mr-0 nav-link w-100 active px-1" onclick="days=30; $('.period .active').removeClass('active'); $(this).addClass('active'); drawChart(); return false;">30 días</a>
+			</div>
+			<div class="col d-flex px-1">
+				<a href="#" class="nav-link text-center btn btn-black my-auto ml-0 mr-auto nav-link w-100 px-1" onclick="days=0; $('.period .active').removeClass('active'); $(this).addClass('active'); drawChart(); return false;">Temporada</a>
+			</div>
+						<div class="col d-flex px-1">
+				<a href="#" class="nav-link text-center btn btn-black my-auto ml-0 mr-auto nav-link w-100 px-1" onclick="days=-1; $('.period .active').removeClass('active'); $(this).addClass('active'); drawChart(); return false;">25/26</a>
+			</div>
+									<div class="col d-flex px-1 d-only-lightbox">
+				<a href="#" class="nav-link text-center btn btn-black my-auto ml-0 mr-auto nav-link w-100 px-1" onclick="app.Analytics.showPlayerDetailStats(17284, 'puntuacion', 'Ville Koski', 'Koski', getPuntosModo('laliga-fantasy')); return false;"><img src="https://www.futbolfantasy.com/images/stats.png" width="20"> Puntos</a>
+			</div>
+					</div>
+	</div>
+
+	<div id="chart" class="analytics-chart mx-auto mt-2"></div>
+
+	<div class="container mb-3 lesion-legend-container d-none">
+		<div class="row px-3">
+			<div class="col-12 d-flex lesion-label" style="">
+				<img src="https://static.futbolfantasy.com/images/lesion-legend.jpg" height="18" width="18" class="mr-2" alt=""> Tiempos de lesión
+			</div>
+		</div>
+	</div>
+
+	<div class="container nav-pills show-data d-none-lightbox">
+		<div class="row px-3">
+			<div class="col-12 d-flex">
+				<a href="#" class="nav-link text-center btn btn-black ml-auto mr-0 nav-link w-100 mb-3" onclick="$('.show-data .nav-link').toggleClass('d-none'); $('#dataTable').toggleClass('d-only-lightbox'); return false;">Mostrar histórico <i class="fa fa-sort-down ml-2" style="position:relative; top:-1px; font-size:19px;"></i></a>
+				<a href="#" class="nav-link text-center btn btn-black ml-auto mr-0 nav-link w-100 mb-3 d-none" onclick="$('.show-data .nav-link').toggleClass('d-none'); $('#dataTable').toggleClass('d-only-lightbox'); return false;">Ocultar histórico <i class="fa fa-sort-up ml-2" style="position:relative; top:6px; font-size:19px;"></i></a>
+			</div>
+		</div>
+	</div>
+
+	<div id="dataTable" class="container my-2 d-only-lightbox" style="max-height:300px; overflow-y:scroll;">
+		<script type="text/javascript">
+			player_chartjs = [];
+			player_chartjs_not_available = [];
+			max_valor = 41329279;
+			min_valor = 41329279;
+			max_date = "21 oct.";
+			min_date = "21 oct.";
+		</script>
+		<div class="row font-weight-bold">
+			<div class="col-3 text-center">Fecha</div>
+			<div class="col-5 text-center">Subida/Bajada</div>
+			<div class="col-4 text-center">Valor</div>
+		</div>
+		<div class="row data-season">
+			<div class="col-3 text-center">21/10</div>
+						<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.589.109</span>  (4,00%)</div>
+			<div class="col-4 text-center">41.329.279</div>
+		</div>
+		<script>
+		player_chartjs.push({date: "21/10",value: 41329279})
+				player_chartjs_not_available.push({date: "21/10",value: null})
+				</script>
+																			<div class="row data-season">
+
+				<div class="col-3 text-center">20/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.508.054</span> (3,94%)</div>
+				<div class="col-4 text-center">39.740.170</div>
+				<script>
+				if(39740170 > max_valor){
+					max_valor = 39740170;
+					max_date = "20 oct.";
+				}
+				if(39740170 < min_valor && 39740170 > 10){
+					min_valor = 39740170;
+					min_date = "20 oct.";
+				}
+				player_chartjs.push({date:"20/10",value:39740170})
+								player_chartjs_not_available.push({date:"20/10",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">19/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.715.214</span> (4,70%)</div>
+				<div class="col-4 text-center">38.232.116</div>
+				<script>
+				if(38232116 > max_valor){
+					max_valor = 38232116;
+					max_date = "19 oct.";
+				}
+				if(38232116 < min_valor && 38232116 > 10){
+					min_valor = 38232116;
+					min_date = "19 oct.";
+				}
+				player_chartjs.push({date:"19/10",value:38232116})
+								player_chartjs_not_available.push({date:"19/10",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">18/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.823.813</span> (5,26%)</div>
+				<div class="col-4 text-center">36.516.902</div>
+				<script>
+				if(36516902 > max_valor){
+					max_valor = 36516902;
+					max_date = "18 oct.";
+				}
+				if(36516902 < min_valor && 36516902 > 10){
+					min_valor = 36516902;
+					min_date = "18 oct.";
+				}
+				player_chartjs.push({date:"18/10",value:36516902})
+								player_chartjs_not_available.push({date:"18/10",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">17/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.516.070</span> (4,57%)</div>
+				<div class="col-4 text-center">34.693.089</div>
+				<script>
+				if(34693089 > max_valor){
+					max_valor = 34693089;
+					max_date = "17 oct.";
+				}
+				if(34693089 < min_valor && 34693089 > 10){
+					min_valor = 34693089;
+					min_date = "17 oct.";
+				}
+				player_chartjs.push({date:"17/10",value:34693089})
+								player_chartjs_not_available.push({date:"17/10",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">16/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.628.863</span> (5,16%)</div>
+				<div class="col-4 text-center">33.177.019</div>
+				<script>
+				if(33177019 > max_valor){
+					max_valor = 33177019;
+					max_date = "16 oct.";
+				}
+				if(33177019 < min_valor && 33177019 > 10){
+					min_valor = 33177019;
+					min_date = "16 oct.";
+				}
+				player_chartjs.push({date:"16/10",value:33177019})
+								player_chartjs_not_available.push({date:"16/10",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">15/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.636.786</span> (5,47%)</div>
+				<div class="col-4 text-center">31.548.156</div>
+				<script>
+				if(31548156 > max_valor){
+					max_valor = 31548156;
+					max_date = "15 oct.";
+				}
+				if(31548156 < min_valor && 31548156 > 10){
+					min_valor = 31548156;
+					min_date = "15 oct.";
+				}
+				player_chartjs.push({date:"15/10",value:31548156})
+								player_chartjs_not_available.push({date:"15/10",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">14/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.596.771</span> (5,64%)</div>
+				<div class="col-4 text-center">29.911.370</div>
+				<script>
+				if(29911370 > max_valor){
+					max_valor = 29911370;
+					max_date = "14 oct.";
+				}
+				if(29911370 < min_valor && 29911370 > 10){
+					min_valor = 29911370;
+					min_date = "14 oct.";
+				}
+				player_chartjs.push({date:"14/10",value:29911370})
+								player_chartjs_not_available.push({date:"14/10",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">13/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.548.555</span> (5,79%)</div>
+				<div class="col-4 text-center">28.314.599</div>
+				<script>
+				if(28314599 > max_valor){
+					max_valor = 28314599;
+					max_date = "13 oct.";
+				}
+				if(28314599 < min_valor && 28314599 > 10){
+					min_valor = 28314599;
+					min_date = "13 oct.";
+				}
+				player_chartjs.push({date:"13/10",value:28314599})
+								player_chartjs_not_available.push({date:"13/10",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">12/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.132.762</span> (4,42%)</div>
+				<div class="col-4 text-center">26.766.044</div>
+				<script>
+				if(26766044 > max_valor){
+					max_valor = 26766044;
+					max_date = "12 oct.";
+				}
+				if(26766044 < min_valor && 26766044 > 10){
+					min_valor = 26766044;
+					min_date = "12 oct.";
+				}
+				player_chartjs.push({date:"12/10",value:26766044})
+								player_chartjs_not_available.push({date:"12/10",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">11/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+51.337</span> (0,20%)</div>
+				<div class="col-4 text-center">25.633.282</div>
+				<script>
+				if(25633282 > max_valor){
+					max_valor = 25633282;
+					max_date = "11 oct.";
+				}
+				if(25633282 < min_valor && 25633282 > 10){
+					min_valor = 25633282;
+					min_date = "11 oct.";
+				}
+				player_chartjs.push({date:"11/10",value:25633282})
+								player_chartjs_not_available.push({date:"11/10",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">10/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-583.878</span> (-2,23%)</div>
+				<div class="col-4 text-center">25.581.945</div>
+				<script>
+				if(25581945 > max_valor){
+					max_valor = 25581945;
+					max_date = "10 oct.";
+				}
+				if(25581945 < min_valor && 25581945 > 10){
+					min_valor = 25581945;
+					min_date = "10 oct.";
+				}
+				player_chartjs.push({date:"10/10",value:25581945})
+								player_chartjs_not_available.push({date:"10/10",value:25581945})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">09/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-665.016</span> (-2,48%)</div>
+				<div class="col-4 text-center">26.165.823</div>
+				<script>
+				if(26165823 > max_valor){
+					max_valor = 26165823;
+					max_date = "09 oct.";
+				}
+				if(26165823 < min_valor && 26165823 > 10){
+					min_valor = 26165823;
+					min_date = "09 oct.";
+				}
+				player_chartjs.push({date:"09/10",value:26165823})
+								player_chartjs_not_available.push({date:"09/10",value:26165823})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">08/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-658.921</span> (-2,40%)</div>
+				<div class="col-4 text-center">26.830.839</div>
+				<script>
+				if(26830839 > max_valor){
+					max_valor = 26830839;
+					max_date = "08 oct.";
+				}
+				if(26830839 < min_valor && 26830839 > 10){
+					min_valor = 26830839;
+					min_date = "08 oct.";
+				}
+				player_chartjs.push({date:"08/10",value:26830839})
+								player_chartjs_not_available.push({date:"08/10",value:26830839})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">07/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-662.896</span> (-2,35%)</div>
+				<div class="col-4 text-center">27.489.760</div>
+				<script>
+				if(27489760 > max_valor){
+					max_valor = 27489760;
+					max_date = "07 oct.";
+				}
+				if(27489760 < min_valor && 27489760 > 10){
+					min_valor = 27489760;
+					min_date = "07 oct.";
+				}
+				player_chartjs.push({date:"07/10",value:27489760})
+								player_chartjs_not_available.push({date:"07/10",value:27489760})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">06/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-529.116</span> (-1,84%)</div>
+				<div class="col-4 text-center">28.152.656</div>
+				<script>
+				if(28152656 > max_valor){
+					max_valor = 28152656;
+					max_date = "06 oct.";
+				}
+				if(28152656 < min_valor && 28152656 > 10){
+					min_valor = 28152656;
+					min_date = "06 oct.";
+				}
+				player_chartjs.push({date:"06/10",value:28152656})
+								player_chartjs_not_available.push({date:"06/10",value:28152656})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">05/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+367.650</span> (1,30%)</div>
+				<div class="col-4 text-center">28.681.772</div>
+				<script>
+				if(28681772 > max_valor){
+					max_valor = 28681772;
+					max_date = "05 oct.";
+				}
+				if(28681772 < min_valor && 28681772 > 10){
+					min_valor = 28681772;
+					min_date = "05 oct.";
+				}
+				player_chartjs.push({date:"05/10",value:28681772})
+								player_chartjs_not_available.push({date:"05/10",value:28681772})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">04/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+824.092</span> (3,00%)</div>
+				<div class="col-4 text-center">28.314.122</div>
+				<script>
+				if(28314122 > max_valor){
+					max_valor = 28314122;
+					max_date = "04 oct.";
+				}
+				if(28314122 < min_valor && 28314122 > 10){
+					min_valor = 28314122;
+					min_date = "04 oct.";
+				}
+				player_chartjs.push({date:"04/10",value:28314122})
+								player_chartjs_not_available.push({date:"04/10",value:28314122})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">03/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+843.159</span> (3,16%)</div>
+				<div class="col-4 text-center">27.490.030</div>
+				<script>
+				if(27490030 > max_valor){
+					max_valor = 27490030;
+					max_date = "03 oct.";
+				}
+				if(27490030 < min_valor && 27490030 > 10){
+					min_valor = 27490030;
+					min_date = "03 oct.";
+				}
+				player_chartjs.push({date:"03/10",value:27490030})
+								player_chartjs_not_available.push({date:"03/10",value:27490030})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">02/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+926.536</span> (3,60%)</div>
+				<div class="col-4 text-center">26.646.871</div>
+				<script>
+				if(26646871 > max_valor){
+					max_valor = 26646871;
+					max_date = "02 oct.";
+				}
+				if(26646871 < min_valor && 26646871 > 10){
+					min_valor = 26646871;
+					min_date = "02 oct.";
+				}
+				player_chartjs.push({date:"02/10",value:26646871})
+								player_chartjs_not_available.push({date:"02/10",value:26646871})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">01/10</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+947.406</span> (3,82%)</div>
+				<div class="col-4 text-center">25.720.335</div>
+				<script>
+				if(25720335 > max_valor){
+					max_valor = 25720335;
+					max_date = "01 oct.";
+				}
+				if(25720335 < min_valor && 25720335 > 10){
+					min_valor = 25720335;
+					min_date = "01 oct.";
+				}
+				player_chartjs.push({date:"01/10",value:25720335})
+								player_chartjs_not_available.push({date:"01/10",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">30/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+973.613</span> (4,09%)</div>
+				<div class="col-4 text-center">24.772.929</div>
+				<script>
+				if(24772929 > max_valor){
+					max_valor = 24772929;
+					max_date = "30 sept.";
+				}
+				if(24772929 < min_valor && 24772929 > 10){
+					min_valor = 24772929;
+					min_date = "30 sept.";
+				}
+				player_chartjs.push({date:"30/09",value:24772929})
+								player_chartjs_not_available.push({date:"30/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">29/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+897.452</span> (3,92%)</div>
+				<div class="col-4 text-center">23.799.316</div>
+				<script>
+				if(23799316 > max_valor){
+					max_valor = 23799316;
+					max_date = "29 sept.";
+				}
+				if(23799316 < min_valor && 23799316 > 10){
+					min_valor = 23799316;
+					min_date = "29 sept.";
+				}
+				player_chartjs.push({date:"29/09",value:23799316})
+								player_chartjs_not_available.push({date:"29/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">28/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+974.298</span> (4,44%)</div>
+				<div class="col-4 text-center">22.901.864</div>
+				<script>
+				if(22901864 > max_valor){
+					max_valor = 22901864;
+					max_date = "28 sept.";
+				}
+				if(22901864 < min_valor && 22901864 > 10){
+					min_valor = 22901864;
+					min_date = "28 sept.";
+				}
+				player_chartjs.push({date:"28/09",value:22901864})
+								player_chartjs_not_available.push({date:"28/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">27/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.053.916</span> (5,05%)</div>
+				<div class="col-4 text-center">21.927.566</div>
+				<script>
+				if(21927566 > max_valor){
+					max_valor = 21927566;
+					max_date = "27 sept.";
+				}
+				if(21927566 < min_valor && 21927566 > 10){
+					min_valor = 21927566;
+					min_date = "27 sept.";
+				}
+				player_chartjs.push({date:"27/09",value:21927566})
+								player_chartjs_not_available.push({date:"27/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">26/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.077.124</span> (5,44%)</div>
+				<div class="col-4 text-center">20.873.650</div>
+				<script>
+				if(20873650 > max_valor){
+					max_valor = 20873650;
+					max_date = "26 sept.";
+				}
+				if(20873650 < min_valor && 20873650 > 10){
+					min_valor = 20873650;
+					min_date = "26 sept.";
+				}
+				player_chartjs.push({date:"26/09",value:20873650})
+								player_chartjs_not_available.push({date:"26/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">25/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.027.150</span> (5,47%)</div>
+				<div class="col-4 text-center">19.796.526</div>
+				<script>
+				if(19796526 > max_valor){
+					max_valor = 19796526;
+					max_date = "25 sept.";
+				}
+				if(19796526 < min_valor && 19796526 > 10){
+					min_valor = 19796526;
+					min_date = "25 sept.";
+				}
+				player_chartjs.push({date:"25/09",value:19796526})
+								player_chartjs_not_available.push({date:"25/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">24/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+996.815</span> (5,61%)</div>
+				<div class="col-4 text-center">18.769.376</div>
+				<script>
+				if(18769376 > max_valor){
+					max_valor = 18769376;
+					max_date = "24 sept.";
+				}
+				if(18769376 < min_valor && 18769376 > 10){
+					min_valor = 18769376;
+					min_date = "24 sept.";
+				}
+				player_chartjs.push({date:"24/09",value:18769376})
+								player_chartjs_not_available.push({date:"24/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">23/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.071.881</span> (6,42%)</div>
+				<div class="col-4 text-center">17.772.561</div>
+				<script>
+				if(17772561 > max_valor){
+					max_valor = 17772561;
+					max_date = "23 sept.";
+				}
+				if(17772561 < min_valor && 17772561 > 10){
+					min_valor = 17772561;
+					min_date = "23 sept.";
+				}
+				player_chartjs.push({date:"23/09",value:17772561})
+								player_chartjs_not_available.push({date:"23/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">22/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.097.428</span> (7,03%)</div>
+				<div class="col-4 text-center">16.700.680</div>
+				<script>
+				if(16700680 > max_valor){
+					max_valor = 16700680;
+					max_date = "22 sept.";
+				}
+				if(16700680 < min_valor && 16700680 > 10){
+					min_valor = 16700680;
+					min_date = "22 sept.";
+				}
+				player_chartjs.push({date:"22/09",value:16700680})
+								player_chartjs_not_available.push({date:"22/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">21/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+996.244</span> (6,82%)</div>
+				<div class="col-4 text-center">15.603.252</div>
+				<script>
+				if(15603252 > max_valor){
+					max_valor = 15603252;
+					max_date = "21 sept.";
+				}
+				if(15603252 < min_valor && 15603252 > 10){
+					min_valor = 15603252;
+					min_date = "21 sept.";
+				}
+				player_chartjs.push({date:"21/09",value:15603252})
+								player_chartjs_not_available.push({date:"21/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">20/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+841.084</span> (6,11%)</div>
+				<div class="col-4 text-center">14.607.008</div>
+				<script>
+				if(14607008 > max_valor){
+					max_valor = 14607008;
+					max_date = "20 sept.";
+				}
+				if(14607008 < min_valor && 14607008 > 10){
+					min_valor = 14607008;
+					min_date = "20 sept.";
+				}
+				player_chartjs.push({date:"20/09",value:14607008})
+								player_chartjs_not_available.push({date:"20/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">19/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+640.170</span> (4,88%)</div>
+				<div class="col-4 text-center">13.765.924</div>
+				<script>
+				if(13765924 > max_valor){
+					max_valor = 13765924;
+					max_date = "19 sept.";
+				}
+				if(13765924 < min_valor && 13765924 > 10){
+					min_valor = 13765924;
+					min_date = "19 sept.";
+				}
+				player_chartjs.push({date:"19/09",value:13765924})
+								player_chartjs_not_available.push({date:"19/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">18/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+804.512</span> (6,53%)</div>
+				<div class="col-4 text-center">13.125.754</div>
+				<script>
+				if(13125754 > max_valor){
+					max_valor = 13125754;
+					max_date = "18 sept.";
+				}
+				if(13125754 < min_valor && 13125754 > 10){
+					min_valor = 13125754;
+					min_date = "18 sept.";
+				}
+				player_chartjs.push({date:"18/09",value:13125754})
+								player_chartjs_not_available.push({date:"18/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">17/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+836.268</span> (7,28%)</div>
+				<div class="col-4 text-center">12.321.242</div>
+				<script>
+				if(12321242 > max_valor){
+					max_valor = 12321242;
+					max_date = "17 sept.";
+				}
+				if(12321242 < min_valor && 12321242 > 10){
+					min_valor = 12321242;
+					min_date = "17 sept.";
+				}
+				player_chartjs.push({date:"17/09",value:12321242})
+								player_chartjs_not_available.push({date:"17/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">16/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+726.659</span> (6,75%)</div>
+				<div class="col-4 text-center">11.484.974</div>
+				<script>
+				if(11484974 > max_valor){
+					max_valor = 11484974;
+					max_date = "16 sept.";
+				}
+				if(11484974 < min_valor && 11484974 > 10){
+					min_valor = 11484974;
+					min_date = "16 sept.";
+				}
+				player_chartjs.push({date:"16/09",value:11484974})
+								player_chartjs_not_available.push({date:"16/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">15/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+781.521</span> (7,83%)</div>
+				<div class="col-4 text-center">10.758.315</div>
+				<script>
+				if(10758315 > max_valor){
+					max_valor = 10758315;
+					max_date = "15 sept.";
+				}
+				if(10758315 < min_valor && 10758315 > 10){
+					min_valor = 10758315;
+					min_date = "15 sept.";
+				}
+				player_chartjs.push({date:"15/09",value:10758315})
+								player_chartjs_not_available.push({date:"15/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">14/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+818.410</span> (8,94%)</div>
+				<div class="col-4 text-center">9.976.794</div>
+				<script>
+				if(9976794 > max_valor){
+					max_valor = 9976794;
+					max_date = "14 sept.";
+				}
+				if(9976794 < min_valor && 9976794 > 10){
+					min_valor = 9976794;
+					min_date = "14 sept.";
+				}
+				player_chartjs.push({date:"14/09",value:9976794})
+								player_chartjs_not_available.push({date:"14/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">13/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+585.058</span> (6,82%)</div>
+				<div class="col-4 text-center">9.158.384</div>
+				<script>
+				if(9158384 > max_valor){
+					max_valor = 9158384;
+					max_date = "13 sept.";
+				}
+				if(9158384 < min_valor && 9158384 > 10){
+					min_valor = 9158384;
+					min_date = "13 sept.";
+				}
+				player_chartjs.push({date:"13/09",value:9158384})
+								player_chartjs_not_available.push({date:"13/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">12/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+479.582</span> (5,93%)</div>
+				<div class="col-4 text-center">8.573.326</div>
+				<script>
+				if(8573326 > max_valor){
+					max_valor = 8573326;
+					max_date = "12 sept.";
+				}
+				if(8573326 < min_valor && 8573326 > 10){
+					min_valor = 8573326;
+					min_date = "12 sept.";
+				}
+				player_chartjs.push({date:"12/09",value:8573326})
+								player_chartjs_not_available.push({date:"12/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">11/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+436.962</span> (5,71%)</div>
+				<div class="col-4 text-center">8.093.744</div>
+				<script>
+				if(8093744 > max_valor){
+					max_valor = 8093744;
+					max_date = "11 sept.";
+				}
+				if(8093744 < min_valor && 8093744 > 10){
+					min_valor = 8093744;
+					min_date = "11 sept.";
+				}
+				player_chartjs.push({date:"11/09",value:8093744})
+								player_chartjs_not_available.push({date:"11/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">10/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+491.206</span> (6,86%)</div>
+				<div class="col-4 text-center">7.656.782</div>
+				<script>
+				if(7656782 > max_valor){
+					max_valor = 7656782;
+					max_date = "10 sept.";
+				}
+				if(7656782 < min_valor && 7656782 > 10){
+					min_valor = 7656782;
+					min_date = "10 sept.";
+				}
+				player_chartjs.push({date:"10/09",value:7656782})
+								player_chartjs_not_available.push({date:"10/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">09/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+459.945</span> (6,86%)</div>
+				<div class="col-4 text-center">7.165.576</div>
+				<script>
+				if(7165576 > max_valor){
+					max_valor = 7165576;
+					max_date = "09 sept.";
+				}
+				if(7165576 < min_valor && 7165576 > 10){
+					min_valor = 7165576;
+					min_date = "09 sept.";
+				}
+				player_chartjs.push({date:"09/09",value:7165576})
+								player_chartjs_not_available.push({date:"09/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">08/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+498.532</span> (8,03%)</div>
+				<div class="col-4 text-center">6.705.631</div>
+				<script>
+				if(6705631 > max_valor){
+					max_valor = 6705631;
+					max_date = "08 sept.";
+				}
+				if(6705631 < min_valor && 6705631 > 10){
+					min_valor = 6705631;
+					min_date = "08 sept.";
+				}
+				player_chartjs.push({date:"08/09",value:6705631})
+								player_chartjs_not_available.push({date:"08/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">07/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+498.124</span> (8,73%)</div>
+				<div class="col-4 text-center">6.207.099</div>
+				<script>
+				if(6207099 > max_valor){
+					max_valor = 6207099;
+					max_date = "07 sept.";
+				}
+				if(6207099 < min_valor && 6207099 > 10){
+					min_valor = 6207099;
+					min_date = "07 sept.";
+				}
+				player_chartjs.push({date:"07/09",value:6207099})
+								player_chartjs_not_available.push({date:"07/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">06/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+515.319</span> (9,92%)</div>
+				<div class="col-4 text-center">5.708.975</div>
+				<script>
+				if(5708975 > max_valor){
+					max_valor = 5708975;
+					max_date = "06 sept.";
+				}
+				if(5708975 < min_valor && 5708975 > 10){
+					min_valor = 5708975;
+					min_date = "06 sept.";
+				}
+				player_chartjs.push({date:"06/09",value:5708975})
+								player_chartjs_not_available.push({date:"06/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">05/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+457.779</span> (9,67%)</div>
+				<div class="col-4 text-center">5.193.656</div>
+				<script>
+				if(5193656 > max_valor){
+					max_valor = 5193656;
+					max_date = "05 sept.";
+				}
+				if(5193656 < min_valor && 5193656 > 10){
+					min_valor = 5193656;
+					min_date = "05 sept.";
+				}
+				player_chartjs.push({date:"05/09",value:5193656})
+								player_chartjs_not_available.push({date:"05/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">04/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+445.242</span> (10,38%)</div>
+				<div class="col-4 text-center">4.735.877</div>
+				<script>
+				if(4735877 > max_valor){
+					max_valor = 4735877;
+					max_date = "04 sept.";
+				}
+				if(4735877 < min_valor && 4735877 > 10){
+					min_valor = 4735877;
+					min_date = "04 sept.";
+				}
+				player_chartjs.push({date:"04/09",value:4735877})
+								player_chartjs_not_available.push({date:"04/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">03/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+484.753</span> (12,74%)</div>
+				<div class="col-4 text-center">4.290.635</div>
+				<script>
+				if(4290635 > max_valor){
+					max_valor = 4290635;
+					max_date = "03 sept.";
+				}
+				if(4290635 < min_valor && 4290635 > 10){
+					min_valor = 4290635;
+					min_date = "03 sept.";
+				}
+				player_chartjs.push({date:"03/09",value:4290635})
+								player_chartjs_not_available.push({date:"03/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">02/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+433.513</span> (12,85%)</div>
+				<div class="col-4 text-center">3.805.882</div>
+				<script>
+				if(3805882 > max_valor){
+					max_valor = 3805882;
+					max_date = "02 sept.";
+				}
+				if(3805882 < min_valor && 3805882 > 10){
+					min_valor = 3805882;
+					min_date = "02 sept.";
+				}
+				player_chartjs.push({date:"02/09",value:3805882})
+								player_chartjs_not_available.push({date:"02/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">01/09</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+423.863</span> (14,38%)</div>
+				<div class="col-4 text-center">3.372.369</div>
+				<script>
+				if(3372369 > max_valor){
+					max_valor = 3372369;
+					max_date = "01 sept.";
+				}
+				if(3372369 < min_valor && 3372369 > 10){
+					min_valor = 3372369;
+					min_date = "01 sept.";
+				}
+				player_chartjs.push({date:"01/09",value:3372369})
+								player_chartjs_not_available.push({date:"01/09",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">31/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+293.138</span> (11,04%)</div>
+				<div class="col-4 text-center">2.948.506</div>
+				<script>
+				if(2948506 > max_valor){
+					max_valor = 2948506;
+					max_date = "31 ago.";
+				}
+				if(2948506 < min_valor && 2948506 > 10){
+					min_valor = 2948506;
+					min_date = "31 ago.";
+				}
+				player_chartjs.push({date:"31/08",value:2948506})
+								player_chartjs_not_available.push({date:"31/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">30/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+227.780</span> (9,38%)</div>
+				<div class="col-4 text-center">2.655.368</div>
+				<script>
+				if(2655368 > max_valor){
+					max_valor = 2655368;
+					max_date = "30 ago.";
+				}
+				if(2655368 < min_valor && 2655368 > 10){
+					min_valor = 2655368;
+					min_date = "30 ago.";
+				}
+				player_chartjs.push({date:"30/08",value:2655368})
+								player_chartjs_not_available.push({date:"30/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">29/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+167.740</span> (7,42%)</div>
+				<div class="col-4 text-center">2.427.588</div>
+				<script>
+				if(2427588 > max_valor){
+					max_valor = 2427588;
+					max_date = "29 ago.";
+				}
+				if(2427588 < min_valor && 2427588 > 10){
+					min_valor = 2427588;
+					min_date = "29 ago.";
+				}
+				player_chartjs.push({date:"29/08",value:2427588})
+								player_chartjs_not_available.push({date:"29/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">28/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+137.876</span> (6,50%)</div>
+				<div class="col-4 text-center">2.259.848</div>
+				<script>
+				if(2259848 > max_valor){
+					max_valor = 2259848;
+					max_date = "28 ago.";
+				}
+				if(2259848 < min_valor && 2259848 > 10){
+					min_valor = 2259848;
+					min_date = "28 ago.";
+				}
+				player_chartjs.push({date:"28/08",value:2259848})
+								player_chartjs_not_available.push({date:"28/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">27/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+132.024</span> (6,63%)</div>
+				<div class="col-4 text-center">2.121.972</div>
+				<script>
+				if(2121972 > max_valor){
+					max_valor = 2121972;
+					max_date = "27 ago.";
+				}
+				if(2121972 < min_valor && 2121972 > 10){
+					min_valor = 2121972;
+					min_date = "27 ago.";
+				}
+				player_chartjs.push({date:"27/08",value:2121972})
+								player_chartjs_not_available.push({date:"27/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">26/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+143.436</span> (7,77%)</div>
+				<div class="col-4 text-center">1.989.948</div>
+				<script>
+				if(1989948 > max_valor){
+					max_valor = 1989948;
+					max_date = "26 ago.";
+				}
+				if(1989948 < min_valor && 1989948 > 10){
+					min_valor = 1989948;
+					min_date = "26 ago.";
+				}
+				player_chartjs.push({date:"26/08",value:1989948})
+								player_chartjs_not_available.push({date:"26/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">25/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+155.525</span> (9,20%)</div>
+				<div class="col-4 text-center">1.846.512</div>
+				<script>
+				if(1846512 > max_valor){
+					max_valor = 1846512;
+					max_date = "25 ago.";
+				}
+				if(1846512 < min_valor && 1846512 > 10){
+					min_valor = 1846512;
+					min_date = "25 ago.";
+				}
+				player_chartjs.push({date:"25/08",value:1846512})
+								player_chartjs_not_available.push({date:"25/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">24/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+131.471</span> (8,43%)</div>
+				<div class="col-4 text-center">1.690.987</div>
+				<script>
+				if(1690987 > max_valor){
+					max_valor = 1690987;
+					max_date = "24 ago.";
+				}
+				if(1690987 < min_valor && 1690987 > 10){
+					min_valor = 1690987;
+					min_date = "24 ago.";
+				}
+				player_chartjs.push({date:"24/08",value:1690987})
+								player_chartjs_not_available.push({date:"24/08",value:1690987})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">23/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+132.474</span> (9,28%)</div>
+				<div class="col-4 text-center">1.559.516</div>
+				<script>
+				if(1559516 > max_valor){
+					max_valor = 1559516;
+					max_date = "23 ago.";
+				}
+				if(1559516 < min_valor && 1559516 > 10){
+					min_valor = 1559516;
+					min_date = "23 ago.";
+				}
+				player_chartjs.push({date:"23/08",value:1559516})
+								player_chartjs_not_available.push({date:"23/08",value:1559516})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">22/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+156.206</span> (12,29%)</div>
+				<div class="col-4 text-center">1.427.042</div>
+				<script>
+				if(1427042 > max_valor){
+					max_valor = 1427042;
+					max_date = "22 ago.";
+				}
+				if(1427042 < min_valor && 1427042 > 10){
+					min_valor = 1427042;
+					min_date = "22 ago.";
+				}
+				player_chartjs.push({date:"22/08",value:1427042})
+								player_chartjs_not_available.push({date:"22/08",value:1427042})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">21/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+117.858</span> (10,22%)</div>
+				<div class="col-4 text-center">1.270.836</div>
+				<script>
+				if(1270836 > max_valor){
+					max_valor = 1270836;
+					max_date = "21 ago.";
+				}
+				if(1270836 < min_valor && 1270836 > 10){
+					min_valor = 1270836;
+					min_date = "21 ago.";
+				}
+				player_chartjs.push({date:"21/08",value:1270836})
+								player_chartjs_not_available.push({date:"21/08",value:1270836})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">20/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+115.333</span> (11,11%)</div>
+				<div class="col-4 text-center">1.152.978</div>
+				<script>
+				if(1152978 > max_valor){
+					max_valor = 1152978;
+					max_date = "20 ago.";
+				}
+				if(1152978 < min_valor && 1152978 > 10){
+					min_valor = 1152978;
+					min_date = "20 ago.";
+				}
+				player_chartjs.push({date:"20/08",value:1152978})
+								player_chartjs_not_available.push({date:"20/08",value:1152978})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">19/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+122.625</span> (13,40%)</div>
+				<div class="col-4 text-center">1.037.645</div>
+				<script>
+				if(1037645 > max_valor){
+					max_valor = 1037645;
+					max_date = "19 ago.";
+				}
+				if(1037645 < min_valor && 1037645 > 10){
+					min_valor = 1037645;
+					min_date = "19 ago.";
+				}
+				player_chartjs.push({date:"19/08",value:1037645})
+								player_chartjs_not_available.push({date:"19/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">18/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+72.055</span> (8,55%)</div>
+				<div class="col-4 text-center">915.020</div>
+				<script>
+				if(915020 > max_valor){
+					max_valor = 915020;
+					max_date = "18 ago.";
+				}
+				if(915020 < min_valor && 915020 > 10){
+					min_valor = 915020;
+					min_date = "18 ago.";
+				}
+				player_chartjs.push({date:"18/08",value:915020})
+								player_chartjs_not_available.push({date:"18/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">17/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+46.629</span> (5,86%)</div>
+				<div class="col-4 text-center">842.965</div>
+				<script>
+				if(842965 > max_valor){
+					max_valor = 842965;
+					max_date = "17 ago.";
+				}
+				if(842965 < min_valor && 842965 > 10){
+					min_valor = 842965;
+					min_date = "17 ago.";
+				}
+				player_chartjs.push({date:"17/08",value:842965})
+								player_chartjs_not_available.push({date:"17/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">16/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+15.634</span> (2,00%)</div>
+				<div class="col-4 text-center">796.336</div>
+				<script>
+				if(796336 > max_valor){
+					max_valor = 796336;
+					max_date = "16 ago.";
+				}
+				if(796336 < min_valor && 796336 > 10){
+					min_valor = 796336;
+					min_date = "16 ago.";
+				}
+				player_chartjs.push({date:"16/08",value:796336})
+								player_chartjs_not_available.push({date:"16/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">15/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+16.721</span> (2,19%)</div>
+				<div class="col-4 text-center">780.702</div>
+				<script>
+				if(780702 > max_valor){
+					max_valor = 780702;
+					max_date = "15 ago.";
+				}
+				if(780702 < min_valor && 780702 > 10){
+					min_valor = 780702;
+					min_date = "15 ago.";
+				}
+				player_chartjs.push({date:"15/08",value:780702})
+								player_chartjs_not_available.push({date:"15/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">14/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-19.524</span> (-2,49%)</div>
+				<div class="col-4 text-center">763.981</div>
+				<script>
+				if(763981 > max_valor){
+					max_valor = 763981;
+					max_date = "14 ago.";
+				}
+				if(763981 < min_valor && 763981 > 10){
+					min_valor = 763981;
+					min_date = "14 ago.";
+				}
+				player_chartjs.push({date:"14/08",value:763981})
+								player_chartjs_not_available.push({date:"14/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">13/08</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-19.584</span> (-2,44%)</div>
+				<div class="col-4 text-center">783.505</div>
+				<script>
+				if(783505 > max_valor){
+					max_valor = 783505;
+					max_date = "13 ago.";
+				}
+				if(783505 < min_valor && 783505 > 10){
+					min_valor = 783505;
+					min_date = "13 ago.";
+				}
+				player_chartjs.push({date:"13/08",value:783505})
+								player_chartjs_not_available.push({date:"13/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">12/08</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "12 ago.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "12 ago.";
+				}
+				player_chartjs.push({date:"12/08",value:803089})
+								player_chartjs_not_available.push({date:"12/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">11/08</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "11 ago.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "11 ago.";
+				}
+				player_chartjs.push({date:"11/08",value:803089})
+								player_chartjs_not_available.push({date:"11/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">10/08</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "10 ago.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "10 ago.";
+				}
+				player_chartjs.push({date:"10/08",value:803089})
+								player_chartjs_not_available.push({date:"10/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">09/08</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "09 ago.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "09 ago.";
+				}
+				player_chartjs.push({date:"09/08",value:803089})
+								player_chartjs_not_available.push({date:"09/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">08/08</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "08 ago.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "08 ago.";
+				}
+				player_chartjs.push({date:"08/08",value:803089})
+								player_chartjs_not_available.push({date:"08/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">07/08</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "07 ago.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "07 ago.";
+				}
+				player_chartjs.push({date:"07/08",value:803089})
+								player_chartjs_not_available.push({date:"07/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">06/08</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "06 ago.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "06 ago.";
+				}
+				player_chartjs.push({date:"06/08",value:803089})
+								player_chartjs_not_available.push({date:"06/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">05/08</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "05 ago.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "05 ago.";
+				}
+				player_chartjs.push({date:"05/08",value:803089})
+								player_chartjs_not_available.push({date:"05/08",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">04/08</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "04 ago.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "04 ago.";
+				}
+				player_chartjs.push({date:"04/08",value:803089})
+								player_chartjs_not_available.push({date:"04/08",value:803089})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">03/08</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "03 ago.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "03 ago.";
+				}
+				player_chartjs.push({date:"03/08",value:803089})
+								player_chartjs_not_available.push({date:"03/08",value:803089})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">02/08</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "02 ago.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "02 ago.";
+				}
+				player_chartjs.push({date:"02/08",value:803089})
+								player_chartjs_not_available.push({date:"02/08",value:803089})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">01/08</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "01 ago.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "01 ago.";
+				}
+				player_chartjs.push({date:"01/08",value:803089})
+								player_chartjs_not_available.push({date:"01/08",value:803089})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">31/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "31 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "31 jul.";
+				}
+				player_chartjs.push({date:"31/07",value:803089})
+								player_chartjs_not_available.push({date:"31/07",value:803089})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">30/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "30 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "30 jul.";
+				}
+				player_chartjs.push({date:"30/07",value:803089})
+								player_chartjs_not_available.push({date:"30/07",value:803089})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">29/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "29 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "29 jul.";
+				}
+				player_chartjs.push({date:"29/07",value:803089})
+								player_chartjs_not_available.push({date:"29/07",value:803089})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">28/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "28 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "28 jul.";
+				}
+				player_chartjs.push({date:"28/07",value:803089})
+								player_chartjs_not_available.push({date:"28/07",value:803089})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">27/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "27 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "27 jul.";
+				}
+				player_chartjs.push({date:"27/07",value:803089})
+								player_chartjs_not_available.push({date:"27/07",value:803089})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">26/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "26 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "26 jul.";
+				}
+				player_chartjs.push({date:"26/07",value:803089})
+								player_chartjs_not_available.push({date:"26/07",value:803089})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">25/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "25 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "25 jul.";
+				}
+				player_chartjs.push({date:"25/07",value:803089})
+								player_chartjs_not_available.push({date:"25/07",value:803089})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">24/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "24 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "24 jul.";
+				}
+				player_chartjs.push({date:"24/07",value:803089})
+								player_chartjs_not_available.push({date:"24/07",value:803089})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">23/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "23 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "23 jul.";
+				}
+				player_chartjs.push({date:"23/07",value:803089})
+								player_chartjs_not_available.push({date:"23/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">22/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "22 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "22 jul.";
+				}
+				player_chartjs.push({date:"22/07",value:803089})
+								player_chartjs_not_available.push({date:"22/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">21/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "21 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "21 jul.";
+				}
+				player_chartjs.push({date:"21/07",value:803089})
+								player_chartjs_not_available.push({date:"21/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">20/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "20 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "20 jul.";
+				}
+				player_chartjs.push({date:"20/07",value:803089})
+								player_chartjs_not_available.push({date:"20/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">19/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "19 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "19 jul.";
+				}
+				player_chartjs.push({date:"19/07",value:803089})
+								player_chartjs_not_available.push({date:"19/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">18/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "18 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "18 jul.";
+				}
+				player_chartjs.push({date:"18/07",value:803089})
+								player_chartjs_not_available.push({date:"18/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">17/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "17 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "17 jul.";
+				}
+				player_chartjs.push({date:"17/07",value:803089})
+								player_chartjs_not_available.push({date:"17/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">16/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "16 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "16 jul.";
+				}
+				player_chartjs.push({date:"16/07",value:803089})
+								player_chartjs_not_available.push({date:"16/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">15/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "15 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "15 jul.";
+				}
+				player_chartjs.push({date:"15/07",value:803089})
+								player_chartjs_not_available.push({date:"15/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">14/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "14 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "14 jul.";
+				}
+				player_chartjs.push({date:"14/07",value:803089})
+								player_chartjs_not_available.push({date:"14/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">13/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "13 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "13 jul.";
+				}
+				player_chartjs.push({date:"13/07",value:803089})
+								player_chartjs_not_available.push({date:"13/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">12/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "12 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "12 jul.";
+				}
+				player_chartjs.push({date:"12/07",value:803089})
+								player_chartjs_not_available.push({date:"12/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">11/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "11 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "11 jul.";
+				}
+				player_chartjs.push({date:"11/07",value:803089})
+								player_chartjs_not_available.push({date:"11/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">10/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "10 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "10 jul.";
+				}
+				player_chartjs.push({date:"10/07",value:803089})
+								player_chartjs_not_available.push({date:"10/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">09/07</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-868.667</span> (-51,96%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "09 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "09 jul.";
+				}
+				player_chartjs.push({date:"09/07",value:803089})
+								player_chartjs_not_available.push({date:"09/07",value:null})
+								</script>
+			</div>
+																											<div class="row data-season">
+
+				<div class="col-3 text-center">08/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">1.671.756</div>
+				<script>
+				if(1671756 > max_valor){
+					max_valor = 1671756;
+					max_date = "08 jul.";
+				}
+				if(1671756 < min_valor && 1671756 > 10){
+					min_valor = 1671756;
+					min_date = "08 jul.";
+				}
+				player_chartjs.push({date:"08/07",value:1671756})
+								player_chartjs_not_available.push({date:"08/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">07/07</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+868.667</span> (108%)</div>
+				<div class="col-4 text-center">1.671.756</div>
+				<script>
+				if(1671756 > max_valor){
+					max_valor = 1671756;
+					max_date = "07 jul.";
+				}
+				if(1671756 < min_valor && 1671756 > 10){
+					min_valor = 1671756;
+					min_date = "07 jul.";
+				}
+				player_chartjs.push({date:"07/07",value:1671756})
+								player_chartjs_not_available.push({date:"07/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">06/07</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+990</span> (0,12%)</div>
+				<div class="col-4 text-center">803.089</div>
+				<script>
+				if(803089 > max_valor){
+					max_valor = 803089;
+					max_date = "06 jul.";
+				}
+				if(803089 < min_valor && 803089 > 10){
+					min_valor = 803089;
+					min_date = "06 jul.";
+				}
+				player_chartjs.push({date:"06/07",value:803089})
+								player_chartjs_not_available.push({date:"06/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">05/07</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+791</span> (0,10%)</div>
+				<div class="col-4 text-center">802.099</div>
+				<script>
+				if(802099 > max_valor){
+					max_valor = 802099;
+					max_date = "05 jul.";
+				}
+				if(802099 < min_valor && 802099 > 10){
+					min_valor = 802099;
+					min_date = "05 jul.";
+				}
+				player_chartjs.push({date:"05/07",value:802099})
+								player_chartjs_not_available.push({date:"05/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">04/07</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+928</span> (0,12%)</div>
+				<div class="col-4 text-center">801.308</div>
+				<script>
+				if(801308 > max_valor){
+					max_valor = 801308;
+					max_date = "04 jul.";
+				}
+				if(801308 < min_valor && 801308 > 10){
+					min_valor = 801308;
+					min_date = "04 jul.";
+				}
+				player_chartjs.push({date:"04/07",value:801308})
+								player_chartjs_not_available.push({date:"04/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">03/07</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+380</span> (0,05%)</div>
+				<div class="col-4 text-center">800.380</div>
+				<script>
+				if(800380 > max_valor){
+					max_valor = 800380;
+					max_date = "03 jul.";
+				}
+				if(800380 < min_valor && 800380 > 10){
+					min_valor = 800380;
+					min_date = "03 jul.";
+				}
+				player_chartjs.push({date:"03/07",value:800380})
+								player_chartjs_not_available.push({date:"03/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">02/07</div>
+								<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">800.000</div>
+				<script>
+				if(800000 > max_valor){
+					max_valor = 800000;
+					max_date = "02 jul.";
+				}
+				if(800000 < min_valor && 800000 > 10){
+					min_valor = 800000;
+					min_date = "02 jul.";
+				}
+				player_chartjs.push({date:"02/07",value:800000})
+								player_chartjs_not_available.push({date:"02/07",value:null})
+								</script>
+			</div>
+																				<div class="row data-season">
+
+				<div class="col-3 text-center">01/07</div>
+								<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+800.000</span> (0%)</div>
+				<div class="col-4 text-center">800.000</div>
+				<script>
+				if(800000 > max_valor){
+					max_valor = 800000;
+					max_date = "01 jul.";
+				}
+				if(800000 < min_valor && 800000 > 10){
+					min_valor = 800000;
+					min_date = "01 jul.";
+				}
+				player_chartjs.push({date:"01/07",value:800000})
+								player_chartjs_not_available.push({date:"01/07",value:null})
+								</script>
+			</div>
+							
+										<div class="row data-w30 d-none">
+				<div class="col-3 text-center">21/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.589.109</span> (4,00%)</div>
+				<div class="col-4 text-center">41.329.279</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">20/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.508.054</span> (3,94%)</div>
+				<div class="col-4 text-center">39.740.170</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">19/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.715.214</span> (4,70%)</div>
+				<div class="col-4 text-center">38.232.116</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">18/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.823.813</span> (5,26%)</div>
+				<div class="col-4 text-center">36.516.902</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">17/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.516.070</span> (4,57%)</div>
+				<div class="col-4 text-center">34.693.089</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">16/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.628.863</span> (5,16%)</div>
+				<div class="col-4 text-center">33.177.019</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">15/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.636.786</span> (5,47%)</div>
+				<div class="col-4 text-center">31.548.156</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">14/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.596.771</span> (5,64%)</div>
+				<div class="col-4 text-center">29.911.370</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">13/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.548.555</span> (5,79%)</div>
+				<div class="col-4 text-center">28.314.599</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">12/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.132.762</span> (4,42%)</div>
+				<div class="col-4 text-center">26.766.044</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">11/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+51.337</span> (0,20%)</div>
+				<div class="col-4 text-center">25.633.282</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">10/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-583.878</span> (-2,23%)</div>
+				<div class="col-4 text-center">25.581.945</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">09/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-665.016</span> (-2,48%)</div>
+				<div class="col-4 text-center">26.165.823</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">08/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-658.921</span> (-2,40%)</div>
+				<div class="col-4 text-center">26.830.839</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">07/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-662.896</span> (-2,35%)</div>
+				<div class="col-4 text-center">27.489.760</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">06/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-529.116</span> (-1,84%)</div>
+				<div class="col-4 text-center">28.152.656</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">05/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+367.650</span> (1,30%)</div>
+				<div class="col-4 text-center">28.681.772</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">04/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+824.092</span> (3,00%)</div>
+				<div class="col-4 text-center">28.314.122</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">03/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+843.159</span> (3,16%)</div>
+				<div class="col-4 text-center">27.490.030</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">02/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+926.536</span> (3,60%)</div>
+				<div class="col-4 text-center">26.646.871</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">01/10</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+947.406</span> (3,82%)</div>
+				<div class="col-4 text-center">25.720.335</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">30/09</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+973.613</span> (4,09%)</div>
+				<div class="col-4 text-center">24.772.929</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">29/09</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+897.452</span> (3,92%)</div>
+				<div class="col-4 text-center">23.799.316</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">28/09</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+974.298</span> (4,44%)</div>
+				<div class="col-4 text-center">22.901.864</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">27/09</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.053.916</span> (5,05%)</div>
+				<div class="col-4 text-center">21.927.566</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">26/09</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.077.124</span> (5,44%)</div>
+				<div class="col-4 text-center">20.873.650</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">25/09</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.027.150</span> (5,47%)</div>
+				<div class="col-4 text-center">19.796.526</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">24/09</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+996.815</span> (5,61%)</div>
+				<div class="col-4 text-center">18.769.376</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">23/09</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.071.881</span> (6,42%)</div>
+				<div class="col-4 text-center">17.772.561</div>
+			</div>
+								<div class="row data-w30 d-none">
+				<div class="col-3 text-center">22/09</div>
+				<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">16.700.680</div>
+			</div>
+				
+												<div class="row data-prev d-none">
+				<div class="col-3 text-center">24/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+63.348</span> (7,14%)</div>
+				<div class="col-4 text-center">950.038</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">23/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+10.847</span> (1,24%)</div>
+				<div class="col-4 text-center">886.690</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">22/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+3.547</span> (0,41%)</div>
+				<div class="col-4 text-center">875.843</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">21/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+3.925</span> (0,45%)</div>
+				<div class="col-4 text-center">872.296</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">20/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+4.128</span> (0,48%)</div>
+				<div class="col-4 text-center">868.371</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">19/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+4.435</span> (0,52%)</div>
+				<div class="col-4 text-center">864.243</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">18/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.655</span> (0,31%)</div>
+				<div class="col-4 text-center">859.808</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">17/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.798</span> (0,21%)</div>
+				<div class="col-4 text-center">857.153</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">16/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.123</span> (0,13%)</div>
+				<div class="col-4 text-center">855.355</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">15/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+4.341</span> (0,51%)</div>
+				<div class="col-4 text-center">854.232</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">14/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+4.066</span> (0,48%)</div>
+				<div class="col-4 text-center">849.891</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">13/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+323</span> (0,04%)</div>
+				<div class="col-4 text-center">845.825</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">12/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.150</span> (0,25%)</div>
+				<div class="col-4 text-center">845.502</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">11/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+3.813</span> (0,45%)</div>
+				<div class="col-4 text-center">843.352</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">10/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+4.437</span> (0,53%)</div>
+				<div class="col-4 text-center">839.539</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">09/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+190</span> (0,02%)</div>
+				<div class="col-4 text-center">835.102</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">08/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+665</span> (0,08%)</div>
+				<div class="col-4 text-center">834.912</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">07/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+872</span> (0,10%)</div>
+				<div class="col-4 text-center">834.247</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">06/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+95</span> (0,01%)</div>
+				<div class="col-4 text-center">833.375</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">05/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-420</span> (-0,05%)</div>
+				<div class="col-4 text-center">833.280</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">04/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.421</span> (0,17%)</div>
+				<div class="col-4 text-center">833.700</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">03/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.617</span> (0,19%)</div>
+				<div class="col-4 text-center">832.279</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">02/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-1.770</span> (-0,21%)</div>
+				<div class="col-4 text-center">830.662</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">01/05</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-2.406</span> (-0,29%)</div>
+				<div class="col-4 text-center">832.432</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">30/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-2.130</span> (-0,25%)</div>
+				<div class="col-4 text-center">834.838</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">29/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-2.279</span> (-0,27%)</div>
+				<div class="col-4 text-center">836.968</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">28/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-1.705</span> (-0,20%)</div>
+				<div class="col-4 text-center">839.247</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">27/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-474</span> (-0,06%)</div>
+				<div class="col-4 text-center">840.952</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">26/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-278</span> (-0,03%)</div>
+				<div class="col-4 text-center">841.426</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">25/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-2.737</span> (-0,32%)</div>
+				<div class="col-4 text-center">841.704</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">24/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.129</span> (0,25%)</div>
+				<div class="col-4 text-center">844.441</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">23/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+5.549</span> (0,66%)</div>
+				<div class="col-4 text-center">842.312</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">22/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+3.909</span> (0,47%)</div>
+				<div class="col-4 text-center">836.763</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">21/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+4.493</span> (0,54%)</div>
+				<div class="col-4 text-center">832.854</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">20/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+6.344</span> (0,77%)</div>
+				<div class="col-4 text-center">828.361</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">19/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+5.749</span> (0,70%)</div>
+				<div class="col-4 text-center">822.017</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">18/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+3.701</span> (0,46%)</div>
+				<div class="col-4 text-center">816.268</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">17/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+3.706</span> (0,46%)</div>
+				<div class="col-4 text-center">812.567</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">16/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+3.363</span> (0,42%)</div>
+				<div class="col-4 text-center">808.861</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">15/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.623</span> (0,33%)</div>
+				<div class="col-4 text-center">805.498</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">14/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+3.447</span> (0,43%)</div>
+				<div class="col-4 text-center">802.875</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">13/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+4.498</span> (0,57%)</div>
+				<div class="col-4 text-center">799.428</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">12/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+4.742</span> (0,60%)</div>
+				<div class="col-4 text-center">794.930</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">11/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.309</span> (0,17%)</div>
+				<div class="col-4 text-center">790.188</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">10/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.206</span> (0,28%)</div>
+				<div class="col-4 text-center">788.879</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">09/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.705</span> (0,35%)</div>
+				<div class="col-4 text-center">786.673</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">08/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.343</span> (0,30%)</div>
+				<div class="col-4 text-center">783.968</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">07/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.353</span> (0,30%)</div>
+				<div class="col-4 text-center">781.625</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">06/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+4.409</span> (0,57%)</div>
+				<div class="col-4 text-center">779.272</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">05/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+4.969</span> (0,65%)</div>
+				<div class="col-4 text-center">774.863</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">04/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.970</span> (0,39%)</div>
+				<div class="col-4 text-center">769.894</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">03/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+3.240</span> (0,42%)</div>
+				<div class="col-4 text-center">766.924</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">02/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.962</span> (0,39%)</div>
+				<div class="col-4 text-center">763.684</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">01/04</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.048</span> (0,27%)</div>
+				<div class="col-4 text-center">760.722</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">31/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.509</span> (0,33%)</div>
+				<div class="col-4 text-center">758.674</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">30/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+3.349</span> (0,44%)</div>
+				<div class="col-4 text-center">756.165</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">29/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.529</span> (0,34%)</div>
+				<div class="col-4 text-center">752.816</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">28/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.738</span> (0,23%)</div>
+				<div class="col-4 text-center">750.287</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">27/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+624</span> (0,08%)</div>
+				<div class="col-4 text-center">748.549</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">26/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+152</span> (0,02%)</div>
+				<div class="col-4 text-center">747.925</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">25/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-127</span> (-0,02%)</div>
+				<div class="col-4 text-center">747.773</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">24/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-1.050</span> (-0,14%)</div>
+				<div class="col-4 text-center">747.900</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">23/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.667</span> (0,22%)</div>
+				<div class="col-4 text-center">748.950</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">22/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.537</span> (0,34%)</div>
+				<div class="col-4 text-center">747.283</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">21/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+307</span> (0,04%)</div>
+				<div class="col-4 text-center">744.746</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">20/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+935</span> (0,13%)</div>
+				<div class="col-4 text-center">744.439</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">19/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.305</span> (0,18%)</div>
+				<div class="col-4 text-center">743.504</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">18/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+644</span> (0,09%)</div>
+				<div class="col-4 text-center">742.199</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">17/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+1.108</span> (0,15%)</div>
+				<div class="col-4 text-center">741.555</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">16/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.324</span> (0,31%)</div>
+				<div class="col-4 text-center">740.447</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">15/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+2.954</span> (0,40%)</div>
+				<div class="col-4 text-center">738.123</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">14/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-154</span> (-0,02%)</div>
+				<div class="col-4 text-center">735.169</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">13/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-310</span> (-0,04%)</div>
+				<div class="col-4 text-center">735.323</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">12/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-819</span> (-0,11%)</div>
+				<div class="col-4 text-center">735.633</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">11/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-1.132</span> (-0,15%)</div>
+				<div class="col-4 text-center">736.452</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">10/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-788</span> (-0,11%)</div>
+				<div class="col-4 text-center">737.584</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">09/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-805</span> (-0,11%)</div>
+				<div class="col-4 text-center">738.372</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">08/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-368</span> (-0,05%)</div>
+				<div class="col-4 text-center">739.177</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">07/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-3.053</span> (-0,41%)</div>
+				<div class="col-4 text-center">739.545</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">06/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-3.247</span> (-0,44%)</div>
+				<div class="col-4 text-center">742.598</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">05/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-2.340</span> (-0,31%)</div>
+				<div class="col-4 text-center">745.845</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">04/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-1.910</span> (-0,25%)</div>
+				<div class="col-4 text-center">748.185</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">03/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-921</span> (-0,12%)</div>
+				<div class="col-4 text-center">750.095</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">02/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-376</span> (-0,05%)</div>
+				<div class="col-4 text-center">751.016</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">01/03</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-up">+232</span> (0,03%)</div>
+				<div class="col-4 text-center">751.392</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">28/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-2.446</span> (-0,32%)</div>
+				<div class="col-4 text-center">751.160</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">27/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-2.700</span> (-0,36%)</div>
+				<div class="col-4 text-center">753.606</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">26/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-2.377</span> (-0,31%)</div>
+				<div class="col-4 text-center">756.306</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">25/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-3.935</span> (-0,52%)</div>
+				<div class="col-4 text-center">758.683</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">24/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-2.789</span> (-0,36%)</div>
+				<div class="col-4 text-center">762.618</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">23/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-1.615</span> (-0,21%)</div>
+				<div class="col-4 text-center">765.407</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">22/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-809</span> (-0,11%)</div>
+				<div class="col-4 text-center">767.022</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">21/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-3.829</span> (-0,50%)</div>
+				<div class="col-4 text-center">767.831</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">20/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-4.397</span> (-0,57%)</div>
+				<div class="col-4 text-center">771.660</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">19/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-4.168</span> (-0,53%)</div>
+				<div class="col-4 text-center">776.057</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">18/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-4.643</span> (-0,59%)</div>
+				<div class="col-4 text-center">780.225</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">17/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-4.066</span> (-0,52%)</div>
+				<div class="col-4 text-center">784.868</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">16/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-3.226</span> (-0,41%)</div>
+				<div class="col-4 text-center">788.934</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">15/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-3.498</span> (-0,44%)</div>
+				<div class="col-4 text-center">792.160</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">14/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-6.547</span> (-0,82%)</div>
+				<div class="col-4 text-center">795.658</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">13/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-7.561</span> (-0,93%)</div>
+				<div class="col-4 text-center">802.205</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">12/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-8.048</span> (-0,98%)</div>
+				<div class="col-4 text-center">809.766</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">11/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-8.666</span> (-1,05%)</div>
+				<div class="col-4 text-center">817.814</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">10/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-8.521</span> (-1,02%)</div>
+				<div class="col-4 text-center">826.480</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">09/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-7.667</span> (-0,91%)</div>
+				<div class="col-4 text-center">835.001</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">08/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-7.727</span> (-0,91%)</div>
+				<div class="col-4 text-center">842.668</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">07/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-11.548</span> (-1,34%)</div>
+				<div class="col-4 text-center">850.395</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">06/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-12.218</span> (-1,40%)</div>
+				<div class="col-4 text-center">861.943</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">05/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-13.046</span> (-1,47%)</div>
+				<div class="col-4 text-center">874.161</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">04/02</div>
+				<div class="col-5 text-center p-0" style="color:gray"><span class="analytics-down">-14.724</span> (-1,63%)</div>
+				<div class="col-4 text-center">887.207</div>
+			</div>
+								<div class="row data-prev d-none">
+				<div class="col-3 text-center">03/02</div>
+				<div class="col-5 text-center p-0" style="color:gray">0 (0%)</div>
+				<div class="col-4 text-center">901.931</div>
+			</div>
+								<script>
+		player_chartjs.reverse();
+		player_chartjs_not_available.reverse();
+
+		/*max_valor = max_valor/1000000;
+		min_valor = min_valor/1000000;
+
+		max_valor = Math.round(max_valor*Math.pow(10, 2))/Math.pow(10, 2);
+		min_valor = Math.round(min_valor*Math.pow(10, 2))/Math.pow(10, 2);*/
+
+		function addCommas(nStr)
+		{
+			nStr += '';
+			x = nStr.split('.');
+			x1 = x[0];
+			x2 = x.length > 1 ? ',' + x[1] : '';
+			var rgx = /(\d+)(\d{3})/;
+			while (rgx.test(x1)) {
+				x1 = x1.replace(rgx, '$1' + '.' + '$2');
+			}
+			return x1 + x2;
+		}
+
+		function parsePujaIdeal(valor){
+			if(valor<41329279) return "<span style='color:red; font-weight:bold;'>Sin rentabilidad</span>";
+			return '<span style="color:#278b3c; font-weight:bold">' + addCommas(valor) + '</span>';
+		}
+		max_valor = addCommas(max_valor);
+		min_valor = addCommas(min_valor);
+		puja_ideal = parsePujaIdeal(45164074
+		);
+
+		max_valor = 'Valor máx: ' + max_valor +' (' + max_date + ')';
+		min_valor = 'Valor mín: ' + min_valor +' (' + min_date + ')';
+		puja_ideal = 'Puja máxima rentable: ' + puja_ideal + '<a href="#" class="fas fa-info-circle" data-toggle="modal" data-target="#pujaMaxima"></a>';
+
+		$('.max-valor').html(max_valor);
+		$('.min-valor').html(min_valor);
+		$('.puja-ideal').html(puja_ideal);
+		$('body').append('<div class="modal fade" id="pujaMaxima" tabindex="-1" role="dialog"><div style="position: absolute; width:100%; height:100%; background:black; opacity:0.5; top:0; left:0;" data-toggle="modal" data-target="#confirmationModal" onclick="$(\'#pujaMaxima button.close\').click(); return false;"></div><div id="playerDetailInfo" class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content "><div class="modal-header"><h5 class="modal-title" id="exampleModalLabel"><span>Info</span></h5><button type="button" class="close d-only-lightbox" data-dismiss="modal" aria-label="Close" onclick="$(\'.analytics-slider\').removeClass(\'d-none\');"><span class="d-only-lightbox" aria-hidden="true">×</span></button></div><div class="modal-body pt-0 p-4 "><p>La sección de FútbolFantasy reservada para estudiar los mercados, <a href="https://www.futbolfantasy.com/analytics"><strong>Fantasy Analytics</strong></a>, al igual que los <strong>perfiles de los jugadores</strong>, incorporarán desde esta temporada un nuevo dato orientativo que servirá para aconsejar a los usuarios fantasy, de todas las plataformas y juegos, la <span style="color:#27ae60;">puja máxima rentable</span>&nbsp;para comprar a cada jugador del mercado en cada momento de la temporada sin miedo a sobrepujar.&nbsp;La puja máxima rentable estará disponible en FutbolFantasy para<strong>&nbsp;LaLiga Fantasy Oficial, Biwenger, Comunio, Futmondo Social, Mister Fantasy y Fantasy Marca.</strong></p><p>Con la colaboración de <a href="https://www.futbolfantasy.com/usuarios/mrexcelfantasy"><strong>MrExcelFantasy</strong></a>, uno de nuestros creadores de contenido asociados y creador de un primer algoritmo de Puja Ideal hace varias temporadas, hemos trabajado para perfeccionar la fórmula en base a varios datos nuevos que combinan las variaciones de precio de los últimos días, los porcentajes de titularidad para la siguiente jornada y algunas variables más, con el objetivo de poder ofrecer una <strong>cifra ideal por la que pujar por el jugador sin miedo a perder economía con el paso de los días.</strong></p><p>Evidentemente, este algoritmo no puede ver algunos acontecimientos del futuro, solo los eventos recientes y, si finalmente el futbolista se lesiona, pierde la titularidad por un mal partido, es expulsado o se va de la Liga por una oferta de última hora, la puja rentable podría dejar de serlo de forma fulminante. El algoritmo siempre intentará mostrar una cifra acorde a un escenario conservador y sin este tipo de agentes incontrolables.</p><p>Además, en muchas ocasiones, el jugador podría estar en un momento de mercado que sería aconsejable no ficharlo si se está priorizando la economía, ya que existe el riesgo de que se desvalorice. En ese caso, en lugar de mostrar una puja máxima rentable, se mostrará el texto: <span style="color:#c0392b;"><strong>Sin rentabilidad</strong></span>. Si hay necesidad de plantilla y el jugador es recomendable y titular, se puede apostar por él aunque baje de precio, pero teniendo en cuenta que no está en ese momento justo para ganar dinero con él.</p><p style="text-align: center;"><a href="https://www.futbolfantasy.com/analytics"><strong>Consulta la puja máxima rentable haciendo click en las lupas del Fantasy Analytics</strong></a></p><p style="text-align: center;"><strong>Disponible también en los perfiles de los jugadores</strong></p></div></div></div></div>');
+		$('body').append('<div class="modal fade" id="leyendaAceleracion" tabindex="-1" role="dialog"><div style="position: absolute; width:100%; height:100%; background:black; opacity:0.5; top:0; left:0;" onclick="$(\'#leyendaAceleracion button.close\').click(); return false;"></div><div class="modal-dialog modal-dialog-centered" role="document"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"><span>Leyenda de aceleración</span></h5><button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></button></div><div class="modal-body pt-0 p-4"><div class="row"><div class="col-md-6"><p class="mb-0"><i class="fas fa-exclamation-triangle text-success mr-2"></i> <strong>Inflexión positiva</strong></p><p class="text-muted small mb-3">El jugador pasó de bajar a subir de valor</p><p class="mb-0"><i class="fas fa-angle-double-up text-success mr-2"></i> <strong>Acelera mucho (subida)</strong></p><p class="text-muted small mb-3">La subida de valor se está acelerando significativamente</p><p class="mb-0"><i class="fas fa-angle-up text-success mr-2"></i> <strong>Acelera (subida)</strong></p><p class="text-muted small mb-3">La subida de valor se está acelerando ligeramente</p><p class="mb-0"><i class="fas fa-minus text-success mr-2"></i> <strong>Estable (subida)</strong></p><p class="text-muted small mb-3">Mantiene el ritmo de subida constante</p><p class="mb-0"><i class="fas fa-angle-down text-success mr-2"></i> <strong>Desacelera (subida)</strong></p><p class="text-muted small mb-3">La subida de valor se está desacelerando</p><p class="mb-0"><i class="fas fa-angle-double-down text-success mr-2"></i> <strong>Desacelera mucho (subida)</strong></p><p class="text-muted small mb-3">La subida de valor se está desacelerando significativamente</p></div><div class="col-md-6"><p class="mb-0"><i class="fas fa-exclamation-triangle text-danger mr-2"></i> <strong>Inflexión negativa</strong></p><p class="text-muted small mb-3">El jugador pasó de subir a bajar de valor</p><p class="mb-0"><i class="fas fa-angle-double-up text-danger mr-2"></i> <strong>Desacelera mucho (bajada)</strong></p><p class="text-muted small mb-3">La bajada de valor se está desacelerando significativamente</p><p class="mb-0"><i class="fas fa-angle-up text-danger mr-2"></i> <strong>Desacelera (bajada)</strong></p><p class="text-muted small mb-3">La bajada de valor se está desacelerando</p><p class="mb-0"><i class="fas fa-minus text-danger mr-2"></i> <strong>Estable (bajada)</strong></p><p class="text-muted small mb-3">Mantiene el ritmo de bajada constante</p><p class="mb-0"><i class="fas fa-angle-down text-danger mr-2"></i> <strong>Acelera (bajada)</strong></p><p class="text-muted small mb-3">La bajada de valor se está acelerando ligeramente</p><p class="mb-0"><i class="fas fa-angle-double-down text-danger mr-2"></i> <strong>Acelera mucho (bajada)</strong></p><p class="text-muted small mb-3">La bajada de valor se está acelerando significativamente</p></div></div></div></div></div></div>');
+		</script>
+	</div>
+	</div>
+</div>
+<script>
+
+	function getPuntosModo(val){
+		if(val=='mister') return 'mister-mixto';
+		else if(val=='biwenger') return 'modo-picas';
+		else if(val=='futmondo') return 'futmondo-prensa';
+		else if(val=='fantasy-marca') return 'cronistas-marca';
+		return val;
+	}
+
+	$(document).on('mousemove', function(e){
+		$('.lesion-text').css('top', e.pageY);
+		$('.lesion-text').css('left', e.pageX);
+	});
+
+		days = 30;
+	// Ventana movil de 30 dias naturales: cruza el limite de temporada para no quedar vacio tras el cambio de temporada
+	player_chartjs_30 = [];
+	player_chartjs_not_available_30 = [];
+				player_chartjs_30.push({date: "22/09", value: 16700680});
+				player_chartjs_not_available_30.push({date: "22/09", value: null});
+									player_chartjs_30.push({date: "23/09", value: 17772561});
+				player_chartjs_not_available_30.push({date: "23/09", value: null});
+									player_chartjs_30.push({date: "24/09", value: 18769376});
+				player_chartjs_not_available_30.push({date: "24/09", value: null});
+									player_chartjs_30.push({date: "25/09", value: 19796526});
+				player_chartjs_not_available_30.push({date: "25/09", value: null});
+									player_chartjs_30.push({date: "26/09", value: 20873650});
+				player_chartjs_not_available_30.push({date: "26/09", value: null});
+									player_chartjs_30.push({date: "27/09", value: 21927566});
+				player_chartjs_not_available_30.push({date: "27/09", value: null});
+									player_chartjs_30.push({date: "28/09", value: 22901864});
+				player_chartjs_not_available_30.push({date: "28/09", value: null});
+									player_chartjs_30.push({date: "29/09", value: 23799316});
+				player_chartjs_not_available_30.push({date: "29/09", value: null});
+									player_chartjs_30.push({date: "30/09", value: 24772929});
+				player_chartjs_not_available_30.push({date: "30/09", value: null});
+									player_chartjs_30.push({date: "01/10", value: 25720335});
+				player_chartjs_not_available_30.push({date: "01/10", value: null});
+									player_chartjs_30.push({date: "02/10", value: 26646871});
+				player_chartjs_not_available_30.push({date: "02/10", value: 26646871});
+									player_chartjs_30.push({date: "03/10", value: 27490030});
+				player_chartjs_not_available_30.push({date: "03/10", value: 27490030});
+									player_chartjs_30.push({date: "04/10", value: 28314122});
+				player_chartjs_not_available_30.push({date: "04/10", value: 28314122});
+									player_chartjs_30.push({date: "05/10", value: 28681772});
+				player_chartjs_not_available_30.push({date: "05/10", value: 28681772});
+									player_chartjs_30.push({date: "06/10", value: 28152656});
+				player_chartjs_not_available_30.push({date: "06/10", value: 28152656});
+									player_chartjs_30.push({date: "07/10", value: 27489760});
+				player_chartjs_not_available_30.push({date: "07/10", value: 27489760});
+									player_chartjs_30.push({date: "08/10", value: 26830839});
+				player_chartjs_not_available_30.push({date: "08/10", value: 26830839});
+									player_chartjs_30.push({date: "09/10", value: 26165823});
+				player_chartjs_not_available_30.push({date: "09/10", value: 26165823});
+									player_chartjs_30.push({date: "10/10", value: 25581945});
+				player_chartjs_not_available_30.push({date: "10/10", value: 25581945});
+									player_chartjs_30.push({date: "11/10", value: 25633282});
+				player_chartjs_not_available_30.push({date: "11/10", value: null});
+									player_chartjs_30.push({date: "12/10", value: 26766044});
+				player_chartjs_not_available_30.push({date: "12/10", value: null});
+									player_chartjs_30.push({date: "13/10", value: 28314599});
+				player_chartjs_not_available_30.push({date: "13/10", value: null});
+									player_chartjs_30.push({date: "14/10", value: 29911370});
+				player_chartjs_not_available_30.push({date: "14/10", value: null});
+									player_chartjs_30.push({date: "15/10", value: 31548156});
+				player_chartjs_not_available_30.push({date: "15/10", value: null});
+									player_chartjs_30.push({date: "16/10", value: 33177019});
+				player_chartjs_not_available_30.push({date: "16/10", value: null});
+									player_chartjs_30.push({date: "17/10", value: 34693089});
+				player_chartjs_not_available_30.push({date: "17/10", value: null});
+									player_chartjs_30.push({date: "18/10", value: 36516902});
+				player_chartjs_not_available_30.push({date: "18/10", value: null});
+									player_chartjs_30.push({date: "19/10", value: 38232116});
+				player_chartjs_not_available_30.push({date: "19/10", value: null});
+									player_chartjs_30.push({date: "20/10", value: 39740170});
+				player_chartjs_not_available_30.push({date: "20/10", value: null});
+									player_chartjs_30.push({date: "21/10", value: 41329279});
+				player_chartjs_not_available_30.push({date: "21/10", value: null});
+						
+		// Temporada anterior completa (boton "Temp. anterior")
+	player_chartjs_prev = [{"date":"03\/02","value":901931},{"date":"04\/02","value":887207},{"date":"05\/02","value":874161},{"date":"06\/02","value":861943},{"date":"07\/02","value":850395},{"date":"08\/02","value":842668},{"date":"09\/02","value":835001},{"date":"10\/02","value":826480},{"date":"11\/02","value":817814},{"date":"12\/02","value":809766},{"date":"13\/02","value":802205},{"date":"14\/02","value":795658},{"date":"15\/02","value":792160},{"date":"16\/02","value":788934},{"date":"17\/02","value":784868},{"date":"18\/02","value":780225},{"date":"19\/02","value":776057},{"date":"20\/02","value":771660},{"date":"21\/02","value":767831},{"date":"22\/02","value":767022},{"date":"23\/02","value":765407},{"date":"24\/02","value":762618},{"date":"25\/02","value":758683},{"date":"26\/02","value":756306},{"date":"27\/02","value":753606},{"date":"28\/02","value":751160},{"date":"01\/03","value":751392},{"date":"02\/03","value":751016},{"date":"03\/03","value":750095},{"date":"04\/03","value":748185},{"date":"05\/03","value":745845},{"date":"06\/03","value":742598},{"date":"07\/03","value":739545},{"date":"08\/03","value":739177},{"date":"09\/03","value":738372},{"date":"10\/03","value":737584},{"date":"11\/03","value":736452},{"date":"12\/03","value":735633},{"date":"13\/03","value":735323},{"date":"14\/03","value":735169},{"date":"15\/03","value":738123},{"date":"16\/03","value":740447},{"date":"17\/03","value":741555},{"date":"18\/03","value":742199},{"date":"19\/03","value":743504},{"date":"20\/03","value":744439},{"date":"21\/03","value":744746},{"date":"22\/03","value":747283},{"date":"23\/03","value":748950},{"date":"24\/03","value":747900},{"date":"25\/03","value":747773},{"date":"26\/03","value":747925},{"date":"27\/03","value":748549},{"date":"28\/03","value":750287},{"date":"29\/03","value":752816},{"date":"30\/03","value":756165},{"date":"31\/03","value":758674},{"date":"01\/04","value":760722},{"date":"02\/04","value":763684},{"date":"03\/04","value":766924},{"date":"04\/04","value":769894},{"date":"05\/04","value":774863},{"date":"06\/04","value":779272},{"date":"07\/04","value":781625},{"date":"08\/04","value":783968},{"date":"09\/04","value":786673},{"date":"10\/04","value":788879},{"date":"11\/04","value":790188},{"date":"12\/04","value":794930},{"date":"13\/04","value":799428},{"date":"14\/04","value":802875},{"date":"15\/04","value":805498},{"date":"16\/04","value":808861},{"date":"17\/04","value":812567},{"date":"18\/04","value":816268},{"date":"19\/04","value":822017},{"date":"20\/04","value":828361},{"date":"21\/04","value":832854},{"date":"22\/04","value":836763},{"date":"23\/04","value":842312},{"date":"24\/04","value":844441},{"date":"25\/04","value":841704},{"date":"26\/04","value":841426},{"date":"27\/04","value":840952},{"date":"28\/04","value":839247},{"date":"29\/04","value":836968},{"date":"30\/04","value":834838},{"date":"01\/05","value":832432},{"date":"02\/05","value":830662},{"date":"03\/05","value":832279},{"date":"04\/05","value":833700},{"date":"05\/05","value":833280},{"date":"06\/05","value":833375},{"date":"07\/05","value":834247},{"date":"08\/05","value":834912},{"date":"09\/05","value":835102},{"date":"10\/05","value":839539},{"date":"11\/05","value":843352},{"date":"12\/05","value":845502},{"date":"13\/05","value":845825},{"date":"14\/05","value":849891},{"date":"15\/05","value":854232},{"date":"16\/05","value":855355},{"date":"17\/05","value":857153},{"date":"18\/05","value":859808},{"date":"19\/05","value":864243},{"date":"20\/05","value":868371},{"date":"21\/05","value":872296},{"date":"22\/05","value":875843},{"date":"23\/05","value":886690},{"date":"24\/05","value":950038}];
+	player_chartjs_prev_not_available = [{"date":"03\/02","value":null},{"date":"04\/02","value":null},{"date":"05\/02","value":null},{"date":"06\/02","value":null},{"date":"07\/02","value":null},{"date":"08\/02","value":null},{"date":"09\/02","value":null},{"date":"10\/02","value":null},{"date":"11\/02","value":null},{"date":"12\/02","value":null},{"date":"13\/02","value":null},{"date":"14\/02","value":null},{"date":"15\/02","value":null},{"date":"16\/02","value":null},{"date":"17\/02","value":null},{"date":"18\/02","value":null},{"date":"19\/02","value":null},{"date":"20\/02","value":null},{"date":"21\/02","value":null},{"date":"22\/02","value":null},{"date":"23\/02","value":null},{"date":"24\/02","value":null},{"date":"25\/02","value":null},{"date":"26\/02","value":null},{"date":"27\/02","value":null},{"date":"28\/02","value":null},{"date":"01\/03","value":null},{"date":"02\/03","value":null},{"date":"03\/03","value":null},{"date":"04\/03","value":null},{"date":"05\/03","value":null},{"date":"06\/03","value":null},{"date":"07\/03","value":null},{"date":"08\/03","value":null},{"date":"09\/03","value":null},{"date":"10\/03","value":null},{"date":"11\/03","value":null},{"date":"12\/03","value":null},{"date":"13\/03","value":null},{"date":"14\/03","value":null},{"date":"15\/03","value":null},{"date":"16\/03","value":null},{"date":"17\/03","value":null},{"date":"18\/03","value":null},{"date":"19\/03","value":null},{"date":"20\/03","value":null},{"date":"21\/03","value":null},{"date":"22\/03","value":null},{"date":"23\/03","value":null},{"date":"24\/03","value":null},{"date":"25\/03","value":null},{"date":"26\/03","value":null},{"date":"27\/03","value":null},{"date":"28\/03","value":null},{"date":"29\/03","value":null},{"date":"30\/03","value":null},{"date":"31\/03","value":null},{"date":"01\/04","value":null},{"date":"02\/04","value":null},{"date":"03\/04","value":null},{"date":"04\/04","value":null},{"date":"05\/04","value":null},{"date":"06\/04","value":null},{"date":"07\/04","value":null},{"date":"08\/04","value":null},{"date":"09\/04","value":null},{"date":"10\/04","value":null},{"date":"11\/04","value":null},{"date":"12\/04","value":null},{"date":"13\/04","value":null},{"date":"14\/04","value":null},{"date":"15\/04","value":null},{"date":"16\/04","value":null},{"date":"17\/04","value":null},{"date":"18\/04","value":null},{"date":"19\/04","value":null},{"date":"20\/04","value":null},{"date":"21\/04","value":null},{"date":"22\/04","value":null},{"date":"23\/04","value":null},{"date":"24\/04","value":null},{"date":"25\/04","value":null},{"date":"26\/04","value":null},{"date":"27\/04","value":null},{"date":"28\/04","value":null},{"date":"29\/04","value":null},{"date":"30\/04","value":null},{"date":"01\/05","value":null},{"date":"02\/05","value":null},{"date":"03\/05","value":null},{"date":"04\/05","value":null},{"date":"05\/05","value":null},{"date":"06\/05","value":null},{"date":"07\/05","value":null},{"date":"08\/05","value":null},{"date":"09\/05","value":null},{"date":"10\/05","value":null},{"date":"11\/05","value":null},{"date":"12\/05","value":null},{"date":"13\/05","value":null},{"date":"14\/05","value":null},{"date":"15\/05","value":null},{"date":"16\/05","value":null},{"date":"17\/05","value":null},{"date":"18\/05","value":null},{"date":"19\/05","value":null},{"date":"20\/05","value":null},{"date":"21\/05","value":null},{"date":"22\/05","value":null},{"date":"23\/05","value":null},{"date":"24\/05","value":null}];
+	
+	function loadCanvas(id) {
+		$('#CursorLayer').remove();
+		var canvas = document.createElement('canvas');
+		div = document.getElementById(id);
+		canvas.id     = "CursorLayer";
+		//canvas.width  = 1224;
+		//canvas.height = 768;
+		canvas.style.zIndex   = 8;
+		canvas.style.position = "absolute";
+		div.appendChild(canvas)
+		return canvas;
+	}
+
+	var lesionadoImage = new Image(15, 15);
+	lesionadoImage.src = "https://static.futbolfantasy.com/uploads/images/lesionado_box_min.png";
+	var disponibleImage = new Image(15, 15);
+	disponibleImage.src = "https://static.futbolfantasy.com/uploads/images/disponible_box_min.png";
+
+	var chart;
+
+	function drawChart(){
+		chart_annotations = [];
+		 $('.lesion-legend-container').removeClass('d-none'); 						if((days > 0 && true && 19 < days) || (days == 0 && true) || (days == -1 && false))
+		chart_annotations.push(
+			{
+				type: 'line',
+				xMin: '02/10',
+				xMax: '02/10',
+				borderColor: 'rgb(255, 99, 132)',
+				borderWidth: 2,
+				label: {
+					display: true,
+					content: lesionadoImage,
+					position: 'center',
+					color: '#c01212',
+					backgroundColor: '#FFFFFF',
+					borderColor: '#c01212',
+					borderWidth: 0,
+					borderRadius: 0,
+					yAdjust: 7,
+					padding: 1,
+					width: 15,
+					height: 15,
+					font: {
+						size: 13,
+						family: "Nunito, sans-serif",
+					}
+				},
+				click: (context) => {
+					const id = context.element.options.id;
+					alert("Inicio Lesión 02/10 : Lesión en el cuádriceps");
+					context.chart.update();
+				},
+				enter: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'pointer';
+					context.chart.update();
+				},
+				leave: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'default';
+					context.chart.update();
+				}
+			}
+		);
+
+				if((days > 0 && true && 11 < days) || (days == 0 && true) || (days == -1 && false))
+		chart_annotations.push(
+			{
+				type: 'line',
+				xMin: '10/10',
+				xMax: '10/10',
+				borderColor: 'rgb(255, 99, 132)',
+				borderWidth: 2,
+				label: {
+					display: true,
+					content: disponibleImage,
+					position: 'center',
+					color: 'green',
+					backgroundColor: '#FFFFFF',
+					borderColor: 'green',
+					borderWidth: 0,
+					borderRadius: 0,
+					yAdjust: -7,
+					padding: 1,
+					width: 15,
+					height: 15,
+					font: {
+						size: 13,
+						family: "Nunito, sans-serif",
+					}
+				},
+				click: (context) => {
+					const id = context.element.options.id;
+					alert("Fin Lesión 10/10 : Lesión en el cuádriceps");
+					context.chart.update();
+				},
+				enter: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'pointer';
+					context.chart.update();
+				},
+				leave: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'default';
+					context.chart.update();
+				}
+			}
+		);
+						if((days > 0 && true && 62 < days) || (days == 0 && true) || (days == -1 && false))
+		chart_annotations.push(
+			{
+				type: 'line',
+				xMin: '20/08',
+				xMax: '20/08',
+				borderColor: 'rgb(255, 99, 132)',
+				borderWidth: 2,
+				label: {
+					display: true,
+					content: lesionadoImage,
+					position: 'center',
+					color: '#c01212',
+					backgroundColor: '#FFFFFF',
+					borderColor: '#c01212',
+					borderWidth: 0,
+					borderRadius: 0,
+					yAdjust: 7,
+					padding: 1,
+					width: 15,
+					height: 15,
+					font: {
+						size: 13,
+						family: "Nunito, sans-serif",
+					}
+				},
+				click: (context) => {
+					const id = context.element.options.id;
+					alert("Inicio Lesión 20/08 : Calambres en los isquiotibiales");
+					context.chart.update();
+				},
+				enter: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'pointer';
+					context.chart.update();
+				},
+				leave: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'default';
+					context.chart.update();
+				}
+			}
+		);
+
+				if((days > 0 && true && 58 < days) || (days == 0 && true) || (days == -1 && false))
+		chart_annotations.push(
+			{
+				type: 'line',
+				xMin: '24/08',
+				xMax: '24/08',
+				borderColor: 'rgb(255, 99, 132)',
+				borderWidth: 2,
+				label: {
+					display: true,
+					content: disponibleImage,
+					position: 'center',
+					color: 'green',
+					backgroundColor: '#FFFFFF',
+					borderColor: 'green',
+					borderWidth: 0,
+					borderRadius: 0,
+					yAdjust: -7,
+					padding: 1,
+					width: 15,
+					height: 15,
+					font: {
+						size: 13,
+						family: "Nunito, sans-serif",
+					}
+				},
+				click: (context) => {
+					const id = context.element.options.id;
+					alert("Fin Lesión 24/08 : Calambres en los isquiotibiales");
+					context.chart.update();
+				},
+				enter: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'pointer';
+					context.chart.update();
+				},
+				leave: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'default';
+					context.chart.update();
+				}
+			}
+		);
+						if((days > 0 && true && 89 < days) || (days == 0 && true) || (days == -1 && false))
+		chart_annotations.push(
+			{
+				type: 'line',
+				xMin: '24/07',
+				xMax: '24/07',
+				borderColor: 'rgb(255, 99, 132)',
+				borderWidth: 2,
+				label: {
+					display: true,
+					content: lesionadoImage,
+					position: 'center',
+					color: '#c01212',
+					backgroundColor: '#FFFFFF',
+					borderColor: '#c01212',
+					borderWidth: 0,
+					borderRadius: 0,
+					yAdjust: 7,
+					padding: 1,
+					width: 15,
+					height: 15,
+					font: {
+						size: 13,
+						family: "Nunito, sans-serif",
+					}
+				},
+				click: (context) => {
+					const id = context.element.options.id;
+					alert("Inicio Lesión 24/07 : Traumatismo craneoencefálico");
+					context.chart.update();
+				},
+				enter: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'pointer';
+					context.chart.update();
+				},
+				leave: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'default';
+					context.chart.update();
+				}
+			}
+		);
+
+				if((days > 0 && true && 78 < days) || (days == 0 && true) || (days == -1 && false))
+		chart_annotations.push(
+			{
+				type: 'line',
+				xMin: '04/08',
+				xMax: '04/08',
+				borderColor: 'rgb(255, 99, 132)',
+				borderWidth: 2,
+				label: {
+					display: true,
+					content: disponibleImage,
+					position: 'center',
+					color: 'green',
+					backgroundColor: '#FFFFFF',
+					borderColor: 'green',
+					borderWidth: 0,
+					borderRadius: 0,
+					yAdjust: -7,
+					padding: 1,
+					width: 15,
+					height: 15,
+					font: {
+						size: 13,
+						family: "Nunito, sans-serif",
+					}
+				},
+				click: (context) => {
+					const id = context.element.options.id;
+					alert("Fin Lesión 04/08 : Traumatismo craneoencefálico");
+					context.chart.update();
+				},
+				enter: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'pointer';
+					context.chart.update();
+				},
+				leave: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'default';
+					context.chart.update();
+				}
+			}
+		);
+						if((days > 0 && false && 304 < days) || (days == 0 && false) || (days == -1 && false))
+		chart_annotations.push(
+			{
+				type: 'line',
+				xMin: '20/12',
+				xMax: '20/12',
+				borderColor: 'rgb(255, 99, 132)',
+				borderWidth: 2,
+				label: {
+					display: true,
+					content: lesionadoImage,
+					position: 'center',
+					color: '#c01212',
+					backgroundColor: '#FFFFFF',
+					borderColor: '#c01212',
+					borderWidth: 0,
+					borderRadius: 0,
+					yAdjust: 7,
+					padding: 1,
+					width: 15,
+					height: 15,
+					font: {
+						size: 13,
+						family: "Nunito, sans-serif",
+					}
+				},
+				click: (context) => {
+					const id = context.element.options.id;
+					alert("Inicio Lesión 20/12 : Operado del menisco");
+					context.chart.update();
+				},
+				enter: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'pointer';
+					context.chart.update();
+				},
+				leave: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'default';
+					context.chart.update();
+				}
+			}
+		);
+
+				if((days > 0 && false && 228 < days) || (days == 0 && false) || (days == -1 && true))
+		chart_annotations.push(
+			{
+				type: 'line',
+				xMin: '06/03',
+				xMax: '06/03',
+				borderColor: 'rgb(255, 99, 132)',
+				borderWidth: 2,
+				label: {
+					display: true,
+					content: disponibleImage,
+					position: 'center',
+					color: 'green',
+					backgroundColor: '#FFFFFF',
+					borderColor: 'green',
+					borderWidth: 0,
+					borderRadius: 0,
+					yAdjust: -7,
+					padding: 1,
+					width: 15,
+					height: 15,
+					font: {
+						size: 13,
+						family: "Nunito, sans-serif",
+					}
+				},
+				click: (context) => {
+					const id = context.element.options.id;
+					alert("Fin Lesión 06/03 : Operado del menisco");
+					context.chart.update();
+				},
+				enter: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'pointer';
+					context.chart.update();
+				},
+				leave: (context) => {
+					const id = context.element.options.id;
+					context.chart.canvas.style.cursor = 'default';
+					context.chart.update();
+				}
+			}
+		);
+		
+		var e_var = loadCanvas("chart");
+
+		if(days>0){
+			$('#dataTable .data-season, #dataTable .data-prev').addClass('d-none');
+			$('#dataTable .data-w30').removeClass('d-none');
+			var filtered_data = (typeof player_chartjs_30 !== 'undefined' && player_chartjs_30.length > 0) ? player_chartjs_30.slice(Math.max(player_chartjs_30.length - days, 0)) : player_chartjs.slice(Math.max(player_chartjs.length - days, 0));
+			var filtered_data_not_available = (typeof player_chartjs_not_available_30 !== 'undefined' && player_chartjs_not_available_30.length > 0) ? player_chartjs_not_available_30.slice(Math.max(player_chartjs_not_available_30.length - days, 0)) : player_chartjs_not_available.slice(Math.max(player_chartjs.length - days, 0));
+			//var filtered_annotations = chart_annotations.slice(Math.max(player_chartjs.length - days, 1));
+		}else if(days==-1){
+			$('#dataTable .data-season, #dataTable .data-w30').addClass('d-none');
+			$('#dataTable .data-prev').removeClass('d-none');
+			var filtered_data = player_chartjs_prev;
+			var filtered_data_not_available = player_chartjs_prev_not_available;
+		}else{
+			$('#dataTable .data-w30, #dataTable .data-prev').addClass('d-none');
+			$('#dataTable .data-season').removeClass('d-none');
+			var filtered_data = player_chartjs;
+			var filtered_data_not_available = player_chartjs_not_available;
+		}
+		var filtered_dates = new Set(filtered_data.map(row => row.date));
+		// Chart.js desplaza al final las anotaciones cuya fecha no existe en el eje categorico.
+		var filtered_annotations = chart_annotations.filter(annotation => filtered_dates.has(annotation.xMin));
+
+		chart = new Chart(
+			e_var,
+			{
+				type: 'line',
+				options: {
+					responsive: true,
+					animation: true,
+					plugins: {
+						tooltip: {
+								filter: function (tooltipItem) {
+									return [0].includes(tooltipItem.datasetIndex);
+								},
+								callbacks: {
+									label: function(context) {
+										let label = context.dataset.label || '';
+										if (label) {
+											label = '  ' + label;
+										}
+										if (context.parsed.y !== null) {
+											label += ': ' + addCommas(context.parsed.y);
+										}
+										return label;
+									}
+							}
+						},
+						legend: {
+							display: false
+						},
+						annotation: {
+							annotations:  filtered_annotations
+						},
+						elements:{
+							point:{
+								borderWidth: 0,
+								radius: 10,
+								backgroundColor: 'rgba(0,0,0,0)'
+							}
+						}
+
+					},
+					scales: {
+						y: {
+							ticks: {
+								callback: function(label, index, labels) {
+									return label/1000000+'M';
+								}
+							},
+							scaleLabel: {
+								display: false,
+								labelString: '1M = 1000000'
+							}
+						}
+					}
+				},
+				data: {
+					labels: filtered_data.map(row => row.date),
+					datasets: [
+						{
+							label: 'Valor',
+							data: filtered_data.map(row => row.value),
+							backgroundColor: '#2d77cc',
+							borderColor: '#2d77cc',
+							pointRadius: 0,
+							pointHitRadius: 20,
+							pointStyle: false
+						},
+						{
+							data: filtered_data_not_available.map(row => row.value),
+							backgroundColor: '#FF000050',
+							fill: true,
+							tooltip: false,
+							pointRadius: 0,
+							pointHitRadius: 0,
+							pointStyle: false
+						},
+						{
+							data: filtered_data_not_available.map(row => row.label),
+							backgroundColor: '#FF000050',
+							fill: false,
+							tooltip: false,
+							pointRadius: 0,
+							pointHitRadius: 0,
+							pointStyle: false
+						},
+						/*{
+							type: 'bar',
+							data: [
+								{x: "02/10", y: 1, value: "FIN LESION"}
+							],
+							maxBarThickness: 2,
+							min: 0,
+							max: 1
+						}*/
+					]
+				}
+			}
+		);
+	}
+
+	drawChart();
+	
+</script>

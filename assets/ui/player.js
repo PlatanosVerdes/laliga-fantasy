@@ -313,6 +313,7 @@ export function PlayerPopup({id, from}) {
         <${CompareButton} id=${p.id} name=${p.name} pos=${p.position}/></div></div></div>
     ${h ? html`<div class=${'pc-status ' + h.ring}>${h.glyph === 'card' ? '' : '✚ '}${[h.label, a.reason, a.since, a.until].filter(Boolean).join(' · ')}</div>` : null}
     <${Tiles} data=${data}/>
+    ${p.ff_range ? html`<p class="drawer-note ff-range" data-tip="Su temporada según futbolfantasy">${p.ff_range}</p>` : null}
     <${Weeks} weeks=${data.weeks}/>
     <${ValueChart} history=${data.history}/>
     <${Actions} data=${data} reopen=${reopen}/>

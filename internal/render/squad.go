@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 // --- Plantilla -------------------------------------------------------------------------
@@ -158,6 +159,9 @@ func squadLine(player map[string]any) Row {
 		line.Chips = clockChip(text(player["clause_locked_until"]), "se libera su cláusula")
 	case number(player["clause"]) > 0:
 		line.Chips = []Chip{{T: "pagable " + esMoney(number(player["clause"])), C: "warn"}}
+	}
+	if opinion := secondOpinion(player, false, time.Now()); opinion != nil {
+		line.Tags = append(line.Tags, *opinion)
 	}
 	line.Acts = []Act{starAct(player), cmpAct(player, "cmp-add small")}
 	return line

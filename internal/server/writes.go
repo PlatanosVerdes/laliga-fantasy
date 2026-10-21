@@ -546,8 +546,8 @@ func patch(universe *model.Universe, operation string, args writes.Args) bool {
 // readCeiling reads a player's futbolfantasy page for an operation about to be checked, and
 // storedCeiling is the last one read, for when it cannot be.
 var (
-	readCeiling   = futbolfantasy.FetchCeiling
-	storedCeiling = futbolfantasy.StoredCeiling
+	readCeiling   = futbolfantasy.FetchDetail
+	storedCeiling = futbolfantasy.StoredDetail
 )
 
 // playerFor is the context the confirmation dialog quotes: what he is worth, what the listing

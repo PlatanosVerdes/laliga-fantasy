@@ -18,7 +18,6 @@ import (
 	"html"
 	"maps"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -213,9 +212,91 @@ func Market(ttl time.Duration) ([]map[string]any, error) {
 
 var (
 	idealBidCall = regexp.MustCompile(`parsePujaIdeal\(\s*(\d+)\s*\)`)
-	injuryMark   = regexp.MustCompile(`xMin:\s*'([^']+)'`)
 	seriesPair   = regexp.MustCompile(`\{"date":"([^"]+)","value":(\d+)\}`)
+	higherDay    = regexp.MustCompile(`if\((\d+) > max_valor\)\{\s*max_valor = \d+;\s*max_date = "([^"]*)"`)
+	lowerDay     = regexp.MustCompile(`if\((\d+) < min_valor && \d+ > (\d+)\)\{\s*min_valor = \d+;\s*min_date = "([^"]*)"`)
+	drawnWhen    = regexp.MustCompile(`if\(\(days > 0 && (true|false) && (-?\d+) < days\) \|\| \(days == 0 && (true|false)\) \|\| \(days == -1 && (true|false)\)\)`)
+	markImage    = regexp.MustCompile(`content:\s*(\w+)Image`)
+	markDay      = regexp.MustCompile(`xMin:\s*'([^']+)'`)
+	markNote     = regexp.MustCompile(`alert\("([^"]*)"\)`)
 )
+
+// seasonRange is the season's highest and lowest value and their days, worked out the way the
+// page's own script does: today's value first, then one "if higher" and one "if lower" per
+// earlier day. Taking the first or the last assignment in the text gives today's value or the
+// first of July.
+func seasonRange(page string, number func(string) *float64, word func(string) *string) (
+	high *float64, highDay *string, low *float64, lowDay *string) {
+	high, highDay = number("max_valor"), word("max_date")
+	low, lowDay = number("min_valor"), word("min_date")
+	if high != nil {
+		for _, found := range higherDay.FindAllStringSubmatch(page, -1) {
+			if value, _ := strconv.ParseFloat(found[1], 64); value > *high {
+				high, highDay = &value, &found[2]
+			}
+		}
+	}
+	if low != nil {
+		for _, found := range lowerDay.FindAllStringSubmatch(page, -1) {
+			value, _ := strconv.ParseFloat(found[1], 64)
+			floor, _ := strconv.ParseFloat(found[2], 64)
+			if value < *low && value > floor {
+				low, lowDay = &value, &found[3]
+			}
+		}
+	}
+	return high, highDay, low, lowDay
+}
+
+// Mark is the injury futbolfantasy still has open on the player's value chart when the page was
+// read. State is "" when none is open: as far as the page knows, he is available.
+type Mark struct {
+	State  string `json:"state,omitempty"`
+	Reason string `json:"reason,omitempty"`
+	Since  string `json:"since,omitempty"`
+}
+
+// markStates are the chart's images that open a period. Its end is drawn with "disponible";
+// any other image is a state this code does not know, and says nothing.
+var markStates = map[string]string{"lesionado": "lesionado", "duda": "duda",
+	"sancionado": "sancionado"}
+
+// parseMark reads the chart's injury periods: each one is an "Inicio" annotation and a "Fin"
+// one, and a period still open has its "Fin" put on today and drawn in no range at all. Nil
+// when the page has no chart to read or the open period is of a kind not in markStates.
+func parseMark(page string) *Mark {
+	if !strings.Contains(page, "chart_annotations = [];") {
+		return nil
+	}
+	chunks := strings.Split(page, "chart_annotations.push(")
+	var open *Mark
+	for index := 1; index < len(chunks); index++ {
+		conditions := drawnWhen.FindAllStringSubmatch(chunks[index-1], -1)
+		image := group(markImage, chunks[index], 1)
+		if len(conditions) == 0 || image == "" {
+			continue
+		}
+		when := conditions[len(conditions)-1]
+		if image != "disponible" {
+			_, reason, _ := strings.Cut(html.UnescapeString(group(markNote, chunks[index], 1)), " : ")
+			open = &Mark{State: markStates[image], Reason: strings.TrimSpace(reason),
+				Since: group(markDay, chunks[index], 1)}
+			continue
+		}
+		drawn := when[1] == "true" || when[3] == "true" || when[4] == "true"
+		if open != nil && !drawn && when[2] == "0" {
+			break
+		}
+		open = nil
+	}
+	switch {
+	case open == nil:
+		return &Mark{}
+	case open.State == "":
+		return nil
+	}
+	return open
+}
 
 // ParseDetail reads the numbers the page leaves in its own JavaScript.
 // playerLink is the player's own page as the market detail links it: the page the profitable
@@ -269,19 +350,7 @@ func ParseDetail(page string) map[string]any {
 		ideal, _ = strconv.Atoi(found[1])
 	}
 
-	seen := map[string]bool{}
-	var injuries []string
-	for _, found := range injuryMark.FindAllStringSubmatch(page, -1) {
-		if !seen[found[1]] {
-			seen[found[1]] = true
-			injuries = append(injuries, found[1])
-		}
-	}
-	sort.Strings(injuries)
-	if injuries == nil {
-		injuries = []string{}
-	}
-
+	high, highDay, low, lowDay := seasonRange(page, jsNumber, jsString)
 	history := jsSeries("player_chartjs")
 	if len(history) == 0 {
 		// A player recreated this season has no current curve, only last season's.
@@ -291,13 +360,13 @@ func ParseDetail(page string) map[string]any {
 	return map[string]any{
 		"ideal_bid":           ideal,
 		"ff_url":              url,
-		"max_value":           jsNumber("max_valor"),
-		"min_value":           jsNumber("min_valor"),
-		"max_date":            jsString("max_date"),
-		"min_date":            jsString("min_date"),
+		"max_value":           high,
+		"min_value":           low,
+		"max_date":            highDay,
+		"min_date":            lowDay,
 		"history":             history,
 		"prev_season_history": jsSeries("player_chartjs_prev"),
-		"injury_marks":        injuries,
+		"mark":                parseMark(page),
 	}
 }
 
