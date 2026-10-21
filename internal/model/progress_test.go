@@ -16,7 +16,7 @@ func TestProgressAddsUpTheStages(t *testing.T) {
 	defer buildEnded()
 	reached("Plantillas de la liga", 6, 12)
 	got, _ := CurrentProgress()
-	if got.Percent != 12+6+9+10 || got.Step != "Plantillas de la liga" || got.Done != 6 {
+	if got.Percent != 4+2+8+12+6+9+3 || got.Step != "Plantillas de la liga" || got.Done != 6 {
 		t.Errorf("halfway through the squads: %+v", got)
 	}
 	reached("Calendario", 18, 18)

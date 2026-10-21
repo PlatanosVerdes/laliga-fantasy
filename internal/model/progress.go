@@ -109,11 +109,14 @@ func (t *Tracker) End() []any {
 	return append(attrs, "total_ms", now.Sub(t.started).Milliseconds())
 }
 
-// The build's steps in the order it takes them. The page is drawn inside the first build, and
-// on the Pi that is about a quarter of a cold start.
+// The build's steps in the order it takes them. The first three are the preview a cold start
+// reads before the build, which leaves the build's own squads to the cache. The page is drawn
+// inside the first build, and on the Pi that is about a quarter of a cold start.
 var build = NewTracker(
+	Stage{"Tu equipo", "mine", 4}, Stage{"Mercado abierto", "listings", 2},
+	Stage{"Plantillas rivales", "rivals", 8},
 	Stage{"Datos de futbolfantasy", "futbolfantasy", 12}, Stage{"Jugadores de LaLiga", "players", 6},
-	Stage{"Calendario", "calendar", 9}, Stage{"Plantillas de la liga", "squads", 20},
+	Stage{"Calendario", "calendar", 9}, Stage{"Plantillas de la liga", "squads", 6},
 	Stage{"Mercado", "market", 4}, Stage{"Estado de tus jugadores", "status", 5},
 	Stage{"Ofertas recibidas", "offers", 5}, Stage{"Movimientos de la liga", "activity", 7},
 	Stage{"Detalle de candidatos", "deep", 7}, Stage{"Preparando la página", "page", 25},

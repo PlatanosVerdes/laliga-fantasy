@@ -41,8 +41,11 @@ func (s *Server) body(request *http.Request) map[string]any {
 // the operation itself is wrong.
 func (s *Server) writeError(writer http.ResponseWriter, err error) {
 	status := http.StatusBadRequest
-	if errors.Is(err, writes.ErrDisabled) {
+	switch {
+	case errors.Is(err, writes.ErrDisabled):
 		status = http.StatusForbidden
+	case errors.Is(err, writes.ErrLoading):
+		status = http.StatusServiceUnavailable
 	}
 	// A refusal is the most informative thing the write path produces: it is the tool saying
 	// no to a person, and if it is wrong nobody finds out unless it is written down.
