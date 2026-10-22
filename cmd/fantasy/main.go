@@ -666,7 +666,7 @@ func cmdServe(args []string) error {
 			fmt.Println("Varias ligas: elige una en la pagina.")
 		}
 	default:
-		if _, err := auth.Load(); err != nil {
+		if _, err := auth.For(config.Default().Account).Load(); err != nil {
 			slog.Error("session unreadable", "reason", err.Error())
 		}
 		fmt.Println("Sin sesion: abre la pagina y pega el login.")
@@ -1919,7 +1919,7 @@ func cmdAuth(args []string) error {
 		return nil
 
 	case "export":
-		tokens, err := auth.Load()
+		tokens, err := auth.For(config.Default().Account).Load()
 		if err != nil {
 			return err
 		}
@@ -1938,7 +1938,7 @@ func cmdAuth(args []string) error {
 		return fmt.Errorf("no se que es `auth %s`: usa browser, code, status o export", action)
 	}
 
-	tokens, err := auth.Load()
+	tokens, err := auth.For(config.Default().Account).Load()
 	if err != nil {
 		return err
 	}

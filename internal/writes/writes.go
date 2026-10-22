@@ -259,7 +259,7 @@ func Send(call Call) (any, error) {
 		return nil, nil
 	}
 	headers := config.APIHeaders()
-	bearer, err := auth.Bearer()
+	bearer, err := auth.For(config.Default().Account).Bearer()
 	if err != nil {
 		return nil, err
 	}

@@ -108,7 +108,7 @@ func (c *Client) get(path string, authenticated bool, ttl time.Duration, tag str
 
 	headers := config.APIHeaders()
 	if authenticated {
-		bearer, err := auth.Bearer()
+		bearer, err := auth.For(config.Default().Account).Bearer()
 		if err != nil {
 			return err
 		}

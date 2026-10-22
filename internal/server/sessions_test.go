@@ -32,10 +32,8 @@ func TestMain(m *testing.M) {
 
 func freshRoot(t *testing.T) {
 	t.Helper()
-	root, account, league, tokens := config.ConfigRoot, config.Account, config.League, config.TokenFile
-	t.Cleanup(func() {
-		config.ConfigRoot, config.Account, config.League, config.TokenFile = root, account, league, tokens
-	})
+	root, account, league := config.ConfigRoot, config.Account, config.League
+	t.Cleanup(func() { config.ConfigRoot, config.Account, config.League = root, account, league })
 	config.ConfigRoot = t.TempDir()
 	config.Account, config.League = "", ""
 }
@@ -63,7 +61,6 @@ func ownerSession(t *testing.T, server *Server) *http.Cookie {
 	t.Helper()
 	freshRoot(t)
 	config.Account = saveAccount(t, "me@x.com", "user-me")
-	config.TokenFile = config.AccountTokenFile(config.Account)
 	return sessionFor(t, server, "user-me")
 }
 
@@ -344,7 +341,6 @@ func TestASessionCannotSeeOrActOnAnotherUsersAccount(t *testing.T) {
 	mine := saveAccount(t, "a@x.com", "user-a")
 	theirs := saveAccount(t, "b@x.com", "user-b")
 	config.Account, config.League = theirs, "L"
-	config.TokenFile = config.AccountTokenFile(theirs)
 	server := New(nil, Options{AllowWrites: true, Guard: writes.NewGuard(nil)})
 	handler := server.Handler()
 	a := sessionFor(t, server, "user-a")

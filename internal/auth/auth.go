@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -75,29 +76,59 @@ func (t *Tokens) SecondsLeft() int64 {
 	return t.ExpiresOn - time.Now().Unix()
 }
 
-var mu sync.Mutex
+// Source is one account's session, shared by everything acting for that account so that
+// refresh-token rotation stays serial.
+type Source struct {
+	path string
+	// bearer makes check, renew and save one step: two requests near the expiry each renewed the
+	// same refresh token.
+	bearer sync.Mutex
+	file   sync.Mutex
+}
+
+var (
+	sourcesMu sync.Mutex
+	sources   = map[string]*Source{}
+)
+
+// For is the account's session, one per tokens.json.
+func For(account string) *Source {
+	path := config.ProfileFor(account, "").TokenFile
+	sourcesMu.Lock()
+	defer sourcesMu.Unlock()
+	if source := sources[path]; source != nil {
+		return source
+	}
+	source := &Source{path: path}
+	sources[path] = source
+	return source
+}
 
 // Load reads the stored session, seeding it from the environment on first run.
-func Load() (*Tokens, error) {
-	tokens, err := read(config.TokenFile)
+func (s *Source) Load() (*Tokens, error) {
+	tokens, err := s.read()
 	if errors.Is(err, os.ErrNotExist) {
-		return seedFromEnv()
+		return s.seedFromEnv()
 	}
 	return tokens, err
 }
 
 func LoadAccount(account string) (*Tokens, error) {
-	return read(config.AccountTokenFile(account))
+	return For(account).read()
 }
 
-func Save(tokens *Tokens) error {
+func (s *Source) Save(tokens *Tokens) error {
 	if err := config.EnsureDirs(); err != nil {
 		return err
 	}
-	return write(config.TokenFile, tokens)
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
+		return err
+	}
+	return s.write(tokens)
 }
 
-func read(path string) (*Tokens, error) {
+func (s *Source) read() (*Tokens, error) {
+	path := s.path
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -114,30 +145,30 @@ func read(path string) (*Tokens, error) {
 		return nil, fmt.Errorf("tokens.json no es un JSON valido: %w", err)
 	}
 	if !sealed {
-		sealInPlace(path, raw)
+		s.sealInPlace(raw)
 	}
 	return &tokens, nil
 }
 
-func sealInPlace(path string, plain []byte) {
-	mu.Lock()
-	defer mu.Unlock()
+func (s *Source) sealInPlace(plain []byte) {
+	s.file.Lock()
+	defer s.file.Unlock()
 	// A renewal saved since it was read is newer: sealing the old bytes would roll it back.
-	if current, err := os.ReadFile(path); err != nil || !bytes.Equal(current, plain) {
+	if current, err := os.ReadFile(s.path); err != nil || !bytes.Equal(current, plain) {
 		return
 	}
 	sealed, err := secret.Seal(plain)
 	if err == nil {
-		err = files.WriteAtomic(path, sealed, 0o600)
+		err = files.WriteAtomic(s.path, sealed, 0o600)
 	}
 	if err != nil {
-		slog.Warn("session file left unencrypted", "file", path, "reason", err.Error())
+		slog.Warn("session file left unencrypted", "file", s.path, "reason", err.Error())
 		return
 	}
-	slog.Info("session file encrypted", "file", path)
+	slog.Info("session file encrypted", "file", s.path)
 }
 
-func write(path string, tokens *Tokens) error {
+func (s *Source) write(tokens *Tokens) error {
 	blob, err := json.MarshalIndent(tokens, "", "  ")
 	if err != nil {
 		return err
@@ -146,12 +177,12 @@ func write(path string, tokens *Tokens) error {
 	if err != nil {
 		return err
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	return files.WriteAtomic(path, sealed, 0o600)
+	s.file.Lock()
+	defer s.file.Unlock()
+	return files.WriteAtomic(s.path, sealed, 0o600)
 }
 
-func seedFromEnv() (*Tokens, error) {
+func (s *Source) seedFromEnv() (*Tokens, error) {
 	if blob := os.Getenv("FANTASY_TOKENS"); blob != "" {
 		var raw map[string]any
 		if err := json.Unmarshal([]byte(blob), &raw); err != nil {
@@ -165,7 +196,7 @@ func seedFromEnv() (*Tokens, error) {
 		return tokens, nil
 	}
 	if token := os.Getenv("FANTASY_REFRESH_TOKEN"); token != "" {
-		tokens, err := Refresh(&Tokens{RefreshToken: token})
+		tokens, err := s.Refresh(&Tokens{RefreshToken: token})
 		if err != nil {
 			return nil, fmt.Errorf("no se ha podido usar FANTASY_REFRESH_TOKEN: %w", err)
 		}
@@ -238,7 +269,7 @@ func Normalize(raw map[string]any) *Tokens {
 // Refresh renews the session, trying the client ids in the same order as Python: the
 // stored one first, then the web app's, then the mobile app's. Which one works has
 // changed before, and the answer is not worth a round of guessing at 3am.
-func Refresh(tokens *Tokens) (*Tokens, error) {
+func (s *Source) Refresh(tokens *Tokens) (*Tokens, error) {
 	if tokens == nil || tokens.RefreshToken == "" {
 		return nil, errors.New("no hay refresh_token guardado: vuelve a ejecutar `auth browser`")
 	}
@@ -270,7 +301,7 @@ func Refresh(tokens *Tokens) (*Tokens, error) {
 		}
 		fresh := Normalize(answer)
 		fresh.RefreshedAt = float64(time.Now().Unix())
-		if err := Save(fresh); err != nil {
+		if err := s.Save(fresh); err != nil {
 			return nil, err
 		}
 		slog.Info("token refreshed", "client_id", clientID,
@@ -285,18 +316,14 @@ func Refresh(tokens *Tokens) (*Tokens, error) {
 }
 
 // renew is Refresh, swapped out in tests so a failing provider needs no network.
-var renew = Refresh
-
-// bearerMu makes check, renew and save one step: two requests near the expiry each renewed the
-// same refresh token.
-var bearerMu sync.Mutex
+var renew = (*Source).Refresh
 
 // Bearer is the current access token, refreshing only when it is genuinely about to
 // die.
-func Bearer() (string, error) {
-	bearerMu.Lock()
-	defer bearerMu.Unlock()
-	tokens, err := Load()
+func (s *Source) Bearer() (string, error) {
+	s.bearer.Lock()
+	defer s.bearer.Unlock()
+	tokens, err := s.Load()
 	if err != nil {
 		return "", err
 	}
@@ -317,14 +344,14 @@ func Bearer() (string, error) {
 	if left := tokens.SecondsLeft(); left < int64(RefreshMargin.Seconds()) && tokens.RefreshToken != "" {
 		since := time.Since(time.Unix(int64(max(tokens.RefreshedAt, tokens.LastAttempt)), 0))
 		if since >= RefreshCooldown {
-			if fresh, err := renew(tokens); err == nil {
+			if fresh, err := renew(s, tokens); err == nil {
 				tokens = fresh
 			} else {
 				if errors.Is(err, ErrRejected) {
 					tokens.FailedRefreshes++
 				}
 				tokens.LastAttempt = float64(time.Now().Unix())
-				if saveErr := Save(tokens); saveErr != nil {
+				if saveErr := s.Save(tokens); saveErr != nil {
 					slog.Error("could not record a failed refresh", "reason", saveErr.Error())
 				}
 				if tokens.Stopped() {
