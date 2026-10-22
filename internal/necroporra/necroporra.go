@@ -10,6 +10,7 @@ package necroporra
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,7 +21,9 @@ import (
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/files"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/secret"
 )
 
 type Config struct {
@@ -80,13 +83,85 @@ func Load() Config {
 	if fake, ok := loadFake(); ok {
 		return fake.Config
 	}
-	var cfg Config
-	body, err := os.ReadFile(file())
+	path := file()
+	body, err := os.ReadFile(path)
 	if err != nil {
+		return Config{}
+	}
+	cfg, plaintext, err := decode(body)
+	if err != nil {
+		slog.Warn("necroporra config unreadable", "file", path, "reason", err.Error())
 		return cfg
 	}
-	_ = json.Unmarshal(body, &cfg)
+	if plaintext {
+		seal(path, body)
+	}
 	return cfg
+}
+
+// The cookie and the action id are sealed field by field: the gameweek and the roster are edited
+// by hand, and a fresh cookie pasted in as plain text is sealed on the next read.
+var secretFields = []string{"cookie", "action_id"}
+
+func decode(body []byte) (cfg Config, plaintext bool, err error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		return cfg, false, err
+	}
+	values := map[string]string{}
+	for _, name := range secretFields {
+		raw := fields[name]
+		var value string
+		switch {
+		case len(raw) == 0:
+		case secret.Sealed(raw):
+			opened, err := secret.Open(raw)
+			if err != nil {
+				return cfg, false, fmt.Errorf("%s: %w", name, err)
+			}
+			value = string(opened)
+		default:
+			if err := json.Unmarshal(raw, &value); err != nil {
+				return cfg, false, fmt.Errorf("%s: %w", name, err)
+			}
+			plaintext = plaintext || value != ""
+		}
+		values[name] = value
+		delete(fields, name)
+	}
+	rest, err := json.Marshal(fields)
+	if err != nil {
+		return cfg, false, err
+	}
+	if err := json.Unmarshal(rest, &cfg); err != nil {
+		return cfg, false, err
+	}
+	cfg.Cookie, cfg.ActionID = values["cookie"], values["action_id"]
+	return cfg, plaintext, nil
+}
+
+func seal(path string, body []byte) {
+	var fields map[string]json.RawMessage
+	err := json.Unmarshal(body, &fields)
+	for _, name := range secretFields {
+		var value string
+		if err != nil || json.Unmarshal(fields[name], &value) != nil || value == "" {
+			continue
+		}
+		fields[name], err = secret.Seal([]byte(value))
+	}
+	var blob []byte
+	if err == nil {
+		blob, err = json.MarshalIndent(fields, "", "  ")
+	}
+	if err == nil {
+		err = files.WriteAtomic(path, blob, 0o600)
+	}
+	if err != nil {
+		slog.Warn("necroporra secrets left unencrypted", "file", path, "reason", err.Error())
+		return
+	}
+	slog.Info("necroporra secrets encrypted", "file", path)
 }
 
 // State is the live half the config cannot know: which round is open right now and what you
