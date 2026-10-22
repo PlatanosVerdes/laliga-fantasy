@@ -97,7 +97,6 @@ func Save(tokens *Tokens) error {
 	return write(config.TokenFile, tokens)
 }
 
-// read opens a session file, sealing it in place when it is still plaintext.
 func read(path string) (*Tokens, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {

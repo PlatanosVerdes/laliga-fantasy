@@ -103,7 +103,6 @@ func keyID(key []byte) string {
 	return hex.EncodeToString(sum[:4])
 }
 
-// File is where the key is kept when FANTASY_SECRET_KEY is not set.
 func File() string {
 	if path := os.Getenv("FANTASY_SECRET_FILE"); path != "" {
 		return path
@@ -113,7 +112,6 @@ func File() string {
 
 var keyMu sync.Mutex
 
-// Key is the instance's key. With create, a missing key file is generated.
 func Key(create bool) ([]byte, error) {
 	if value := os.Getenv("FANTASY_SECRET_KEY"); value != "" {
 		key, err := parseKey(value)
