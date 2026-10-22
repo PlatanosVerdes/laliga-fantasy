@@ -159,17 +159,33 @@ func FetchDetail(ffID string) (Detail, error) {
 	storeMu.Lock()
 	loadStore()
 	store[ffID] = detail
-	blob, err := json.Marshal(store)
 	storeMu.Unlock()
-	if err == nil {
-		if err := os.MkdirAll(config.CacheRoot, 0o700); err == nil {
-			err = files.WriteAtomic(StoreFile(), blob, 0o600)
-		}
-		if err != nil {
-			slog.Warn("ceilings not stored", "reason", err.Error())
-		}
+	if err := saveStore(); err != nil {
+		slog.Warn("ceilings not stored", "reason", err.Error())
 	}
 	return detail, nil
+}
+
+// saveStore writes the store merged with what other processes stored since it was loaded, the
+// newer page winning, so a process for another league does not drop the pages this one read.
+func saveStore() error {
+	if err := os.MkdirAll(config.CacheRoot, 0o700); err != nil {
+		return err
+	}
+	return files.Update(StoreFile(), 0o600, func(current []byte) ([]byte, error) {
+		var disk map[string]Detail
+		if len(current) > 0 && json.Unmarshal(current, &disk) != nil {
+			slog.Warn("stored ceilings unreadable, rewriting them", "file", StoreFile())
+		}
+		storeMu.Lock()
+		defer storeMu.Unlock()
+		for id, other := range disk {
+			if mine, ok := store[id]; !ok || other.FetchedAt.After(mine.FetchedAt) {
+				store[id] = other
+			}
+		}
+		return json.Marshal(store)
+	})
 }
 
 // DetailFor is the stored page while it is fresh, and a new read otherwise. A read that fails

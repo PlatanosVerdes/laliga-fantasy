@@ -125,7 +125,7 @@ func (e *FrozenMiss) Error() string {
 
 func cachePath(rawURL, tag string) string {
 	sum := sha1.Sum([]byte(tag + "|" + rawURL))
-	return filepath.Join(config.CacheDir, tag+"_"+hex.EncodeToString(sum[:])[:20]+".cache")
+	return filepath.Join(config.TagDir(tag), tag+"_"+hex.EncodeToString(sum[:])[:20]+".cache")
 }
 
 func readCache(rawURL, tag string, ttl time.Duration) (string, bool) {
@@ -181,7 +181,7 @@ func Invalidate(tags ...string) int {
 			slog.Error("invalidating a cache tag that does not exist", "tag", tag)
 			continue
 		}
-		matches, err := filepath.Glob(filepath.Join(config.CacheDir, tag+"_*.cache"))
+		matches, err := filepath.Glob(filepath.Join(config.TagDir(tag), tag+"_*.cache"))
 		if err != nil {
 			continue
 		}

@@ -350,6 +350,8 @@ cache belong to the league, because an instruction in one league means nothing i
 <config>/accounts/<account>/leagues/<id>/     the league's settings and instructions
 <state>/accounts/<account>/leagues/<id>/      its history
 <cache>/accounts/<account>/leagues/<id>/      its cache
+<cache>/global/                               what is the same for every league: the player
+                                              catalogue, the calendar, futbolfantasy's pages
 ```
 
 The account menu at the top right switches league or account, adds an account and logs out.

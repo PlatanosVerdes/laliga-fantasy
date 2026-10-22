@@ -16,7 +16,11 @@ func cachedPlayerPage(t *testing.T, slug, ffID string) {
 	t.Helper()
 	url := strings.ReplaceAll(config.FFPlayerURL, "{slug}", slug)
 	sum := sha1.Sum([]byte("ff_player|" + url))
-	path := filepath.Join(config.CacheDir, "ff_player_"+hex.EncodeToString(sum[:])[:20]+".cache")
+	path := filepath.Join(config.TagDir("ff_player"),
+		"ff_player_"+hex.EncodeToString(sum[:])[:20]+".cache")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	page := `<div data-jugador="` + ffID + `"></div>` +
 		`<tr class="plegado plegable" data-posicion-laliga-fantasy="Titular">` +
 		`<td class="data points x"><span class="high laliga-fantasy">76</span></td></tr>`
@@ -27,7 +31,7 @@ func cachedPlayerPage(t *testing.T, slug, ffID string) {
 
 // A name slug can land on a namesake's page; his points must not become this player's baseline.
 func TestDeepEnrichIgnoresAPageOfAnotherPlayer(t *testing.T) {
-	config.CacheDir = t.TempDir()
+	config.CacheRoot, config.CacheDir = t.TempDir(), t.TempDir()
 	cachedPlayerPage(t, "angel-perez", "999")
 
 	theirs, ours := "999", "123"

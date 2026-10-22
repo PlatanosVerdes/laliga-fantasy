@@ -17,7 +17,7 @@ import (
 // Valid JSON of the wrong shape must fail inside the decode httpx retries, not after it.
 func TestACachedListOfTheWrongShapeIsFetchedAgain(t *testing.T) {
 	dir := t.TempDir()
-	config.ConfigDir, config.StateDir, config.CacheDir = dir, dir, dir
+	config.ConfigDir, config.StateDir, config.CacheDir, config.CacheRoot = dir, dir, dir, dir
 	hits := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits++
@@ -26,7 +26,11 @@ func TestACachedListOfTheWrongShapeIsFetchedAgain(t *testing.T) {
 	defer server.Close()
 
 	sum := sha1.Sum([]byte("calendar|" + server.URL))
-	path := filepath.Join(dir, "calendar_"+hex.EncodeToString(sum[:])[:20]+".cache")
+	path := filepath.Join(config.TagDir("calendar"),
+		"calendar_"+hex.EncodeToString(sum[:])[:20]+".cache")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte(`{"data":{"message":"busy"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
