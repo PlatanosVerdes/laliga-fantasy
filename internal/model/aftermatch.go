@@ -49,16 +49,16 @@ func SinceLastMatch(fixtures []Fixture, now time.Time) (time.Duration, bool) {
 }
 
 // The previous matchday too: the API moves on while its last match is still in the window.
-func recentFixtures(client *api.Client, teams []api.Team) []Fixture {
-	week, err := client.CurrentWeek(30 * time.Minute)
+func recentFixtures(global *api.Global, teams []api.Team) []Fixture {
+	week, err := global.CurrentWeek(30 * time.Minute)
 	if err != nil {
 		return nil
 	}
-	out := LoadFixtures(client, week, teams)
+	out := LoadFixtures(global, week, teams)
 	if week.WeekNumber > 1 {
 		previous := week
 		previous.WeekNumber--
-		out = append(out, LoadFixtures(client, previous, teams)...)
+		out = append(out, LoadFixtures(global, previous, teams)...)
 	}
 	return out
 }

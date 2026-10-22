@@ -39,7 +39,7 @@ var (
 )
 
 func fetch(url string, ttl time.Duration, tag string) (string, error) {
-	if cached, ok := httpx.Cached(url, tag, ttl); ok {
+	if cached, ok := httpx.Cached(config.GlobalScope(), url, tag, ttl); ok {
 		return cached, nil
 	}
 	throttle.Lock()
@@ -50,7 +50,7 @@ func fetch(url string, ttl time.Duration, tag string) (string, error) {
 	throttle.Unlock()
 
 	return httpx.Fetch(httpx.Request{URL: url, Headers: config.FFHeaders(), TTL: ttl,
-		Tag: tag, Timeout: 60 * time.Second})
+		Tag: tag, Timeout: 60 * time.Second, Cache: config.GlobalScope()})
 }
 
 // num parses both raw JS numbers from data-* attributes ("-0.0739") and rendered Spanish
@@ -411,7 +411,7 @@ func PlayerDetail(ffID string, ttl time.Duration) (map[string]any, error) {
 		return nil, err
 	}
 	detail := ParseDetail(page)
-	if written, ok := httpx.CachedAt(url, "ff_detail"); ok && ttl > 0 {
+	if written, ok := httpx.CachedAt(config.GlobalScope(), url, "ff_detail"); ok && ttl > 0 {
 		detailMu.Lock()
 		detailSeen[url] = parsedDetail{detail: detail, written: written}
 		detailMu.Unlock()

@@ -16,7 +16,7 @@ func cachedPlayerPage(t *testing.T, slug, ffID string) {
 	t.Helper()
 	url := strings.ReplaceAll(config.FFPlayerURL, "{slug}", slug)
 	sum := sha1.Sum([]byte("ff_player|" + url))
-	path := filepath.Join(config.TagDir("ff_player"),
+	path := filepath.Join(config.GlobalCacheDir(),
 		"ff_player_"+hex.EncodeToString(sum[:])[:20]+".cache")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)

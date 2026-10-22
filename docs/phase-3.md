@@ -1,7 +1,7 @@
 # Phase 3: many leagues and accounts in one process
 
 Design for phase 3 of `docs/multi-tenant.md`, read from `main` after phases 1 and 2a. Built so
-far: 3.0 to 3.3 and 3.8. Section 6 holds the decisions the owner makes before the code starts.
+far: 3.0 to 3.5 and 3.8. Section 6 holds the decisions the owner makes before the code starts.
 
 ## 0. Findings that change the plan
 
@@ -170,11 +170,40 @@ Each leaves the single-user deploy working; until 3.10 the registry holds one te
   `Bearer` are its methods and the package-level ones are gone. `Keep` writes through the
   account's `Source`. Until 3.5/3.6 bind the API, `api.Client.get`, `writes.Send`,
   `server.HasSession`/`adopt` and the CLI ask for `auth.For(config.Default().Account)`.
-- **3.4** Cache scope and tag levels, singleflight, the own-lineup tag split. *Tests:* the same
-  market URL for A and B gives two files and B never reads A's; `Invalidate(A)` leaves B; a
+- **3.4** (done) Cache scope and tag levels, singleflight, the own-lineup tag split. *Tests:* the
+  same market URL for A and B gives two files and B never reads A's; `Invalidate(A)` leaves B; a
   member tag with a global scope is refused.
-- **3.5** Bound API types; `api.New()` removed. *Test:* every request from `Member A` carries A's
-  bearer and only A's league and team.
+  `config.Tags` maps each tag to its level; `Profile.Scope(level)` and `config.GlobalScope()` are
+  the only makers of a `CacheScope`, carried as `httpx.Request.Cache` (the queue's `Scope` string
+  stays apart, and empty). Folders under the cache root: `global`, `leagues/<id>`,
+  `accounts/<account>` and `accounts/<account>/leagues/<id>`, the last being the old profile
+  folder, so market, money, offers and favourites stay where they were; squads, standings,
+  activity, weekly lineups, `me` and `leagues` start cold once and their old copies are left
+  unread. Also global: `formations`, and the reward catalogue, now `rewards` (the member's
+  `reward` is the status). The Necroporra's `necro-state` and `necro-shields` are member tags.
+  A tag with no level (writes, login, the vote) may reach the wire but is never cached; any
+  other mismatch is a `httpx.Misscoped` error before the wire. `Invalidate(scope, tags...)`
+  drops one folder; `InvalidateIn(profile, tags...)` sends each tag to that profile's folder for
+  its level. Singleflight is keyed by folder, tag, URL and priority level, so a write's read never
+  waits behind a rebuild's fetch of the same URL. A frozen replay falls back to the old profile
+  folder for league and account tags; `own_lineup` and `rewards` captured before the split miss.
+- **3.5** (done) Bound API types; `api.New()` removed. *Test:* every request from `Member A`
+  carries A's bearer and only A's league and team.
+  `api.NewGlobal()` sends no token (calendar, teams-master, players, market value, daily-reward
+  and formations used to send one; they answer without it). `api.AccountOf(profile)` has `Me`,
+  `Leagues`, `Team(league)` and `Member(league, team)`, which refuses a team that `Team` does not
+  find (the leagues list, or `Me` plus the standings): one `/leagues` read, cached an hour, each
+  time a member is built (once per serve process, once per CLI command). `League` has
+  `Standings`, `TeamSquad`, `ActivityRaw` and `TeamLineupWeek`, with the member's token.
+  `Member` has `Money`, `Favourites`, `OwnLineup`, `Offers(playerTeamID)` (a squad slot, not a
+  league or team), `Market`/`MarketRaw`, `DailyRewardStatus` and `Invalidate`; `At` carries the
+  priority to its league and account. `model.BuildLive`/`Build` take a `*api.Member`,
+  `BuildPreview` the three readers. `server.Options` has `Global`, `Account` and `Member` (nil
+  until the league is known) instead of `Client`; `cmdServe` builds the member once, lazily.
+  Left for 3.6: `writes.Send` still asks `auth.For(config.Default().Account)`; the writes, the
+  engine's `Invalidate` and `fav` drop the cache through `InvalidateIn(config.Default())`;
+  `NewGuard(member)` reads cash only for the member's team, and `cmdServe` passes nil and sets
+  `Cash` through its member; `LeagueID`, `MyTeamID` and `Identity` stay on `server.Options`.
 - **3.6** Writes bound to `Member`. **Money-safety:** for every operation, A's call path holds A's
   league and team and never B's; `Guard.Cash` reads only A's team; a token prepared on A fails
   on B; a sale or acceptance for a player not in A's universe is refused.

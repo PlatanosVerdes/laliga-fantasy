@@ -17,13 +17,13 @@ func TestTheFakeNecroporraTakesAVoteLocally(t *testing.T) {
 	}
 	t.Setenv("FANTASY_NECRO_FAKE", path)
 	store := Open(config.ProfileIn(t.TempDir(), "cuenta", "L"))
-	if !Faked() || store.Load().Gameweek != 9 || !FetchState(store.Load()).Open {
+	if !Faked() || store.Load().Gameweek != 9 || !FetchState(store.Load(), config.CacheScope{}).Open {
 		t.Fatal("the fake was not read")
 	}
 	if _, err := CastVote(store.Load(), 9, "1", "2"); err != nil {
 		t.Fatal(err)
 	}
-	if chosen := FetchState(store.Load()).Chosen; len(chosen) != 2 || chosen[0] != "1" {
+	if chosen := FetchState(store.Load(), config.CacheScope{}).Chosen; len(chosen) != 2 || chosen[0] != "1" {
 		t.Errorf("the vote did not land in the fake: %v", chosen)
 	}
 }

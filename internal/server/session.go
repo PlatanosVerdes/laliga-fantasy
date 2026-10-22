@@ -189,8 +189,8 @@ func (s *Server) adopt(writer http.ResponseWriter, request *http.Request, pasted
 	// Prove it works before saying it does: a pasted session that cannot read anything
 	// looks identical to a good one until the first request fails, hours later. Only the
 	// active account can be asked from here; another one is proved by starting on it.
-	if s.opts.Client != nil && account == config.Account {
-		if _, err := s.opts.Client.Me(0); err != nil {
+	if s.opts.Account != nil && account == config.Account {
+		if _, err := s.opts.Account().Me(0); err != nil {
 			restore()
 			s.json(writer, http.StatusBadRequest,
 				map[string]any{"error": "esa sesion no sirve: " + err.Error()})

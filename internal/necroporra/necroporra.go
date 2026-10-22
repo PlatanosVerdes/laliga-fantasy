@@ -237,7 +237,7 @@ var (
 // FetchState reads the open round. The response is cached briefly so the panel's repaint loop
 // does not hammer the external app, and a read failure falls back to the configured gameweek
 // rather than breaking the page. The call also keeps the sliding session alive.
-func FetchState(cfg Config) State {
+func FetchState(cfg Config, scope config.CacheScope) State {
 	if fake, ok := loadFake(); ok {
 		return fake.State
 	}
@@ -253,15 +253,16 @@ func FetchState(cfg Config) State {
 			"accept": "text/x-component",
 			"cookie": "__Secure-better-auth.session_token=" + cfg.Cookie,
 		},
-		Tag: "necro-state",
-		TTL: 30 * time.Second,
+		Tag:   "necro-state",
+		TTL:   30 * time.Second,
+		Cache: scope,
 	})
 	if err != nil {
 		return state
 	}
 	state = parseState(body, state)
 	if !state.Open && state.LastRound > 0 && state.Problem == "" {
-		state.Shields = fetchShields(cfg, state.LastRound)
+		state.Shields = fetchShields(cfg, scope, state.LastRound)
 	}
 	return state
 }
@@ -271,14 +272,15 @@ var reShield = regexp.MustCompile(`"children":"([^"]+)"\}\],null,null,\["\$","sp
 
 // fetchShields reads who is shielded from breakfast in a round, from the league's standings
 // for it. A failed read is no shields, which only makes the breakfast guess less exact.
-func fetchShields(cfg Config, round int) map[string]int {
+func fetchShields(cfg Config, scope config.CacheScope, round int) map[string]int {
 	body, err := httpx.Fetch(httpx.Request{
 		URL:    fmt.Sprintf("https://tebasfury.vercel.app/standings?round=%d", round),
 		Method: http.MethodGet,
 		Headers: map[string]string{"rsc": "1", "accept": "text/x-component",
 			"cookie": "__Secure-better-auth.session_token=" + cfg.Cookie},
-		Tag: "necro-shields",
-		TTL: 5 * time.Minute,
+		Tag:   "necro-shields",
+		TTL:   5 * time.Minute,
+		Cache: scope,
 	})
 	if err != nil {
 		return nil

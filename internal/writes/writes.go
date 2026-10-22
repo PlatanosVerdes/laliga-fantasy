@@ -199,7 +199,7 @@ var Operations = map[string]operation{
 			map[string]any{"goalkeeper": a.Goalkeeper, "defender": a.Defender,
 				"midfield": a.Midfield, "striker": a.Striker,
 				"tactical_formation": a.Formation}}
-	}, []string{"lineup"}},
+	}, []string{"own_lineup", "lineup"}},
 
 	// The app's own favourites, keyed by the team in the league and the player's master id.
 	"favourite": {"favorito", func(a Args) Call {
@@ -439,7 +439,6 @@ type Window struct {
 type Guard struct {
 	mu     sync.Mutex
 	tokens map[string]pending
-	client *api.Client
 	// Cash reads the current balance. Injected so the guard can be exercised without a
 	// session, and so a test cannot accidentally reach the API.
 	Cash func(teamID string) (int64, error)
@@ -453,10 +452,13 @@ type Guard struct {
 
 func (g *Guard) loading() bool { return g.Loading != nil && g.Loading() }
 
-func NewGuard(client *api.Client) *Guard {
-	guard := &Guard{tokens: map[string]pending{}, client: client}
+func NewGuard(member *api.Member) *Guard {
+	guard := &Guard{tokens: map[string]pending{}}
 	guard.Cash = func(teamID string) (int64, error) {
-		money, err := client.Money(teamID, 0)
+		if teamID != member.TeamID() {
+			return 0, fmt.Errorf("el saldo del equipo %s no es de este jugador", teamID)
+		}
+		money, err := member.Money(0)
 		if err != nil {
 			return 0, err
 		}
@@ -611,7 +613,7 @@ func (g *Guard) confirm(owner, token string, allowWrites, dryRun, recheck bool) 
 	answer, err := send(call)
 	if err != nil {
 		if entry.name == "change_offer" {
-			httpx.Invalidate(Operations[entry.name].Effects...)
+			httpx.InvalidateIn(config.Default(), Operations[entry.name].Effects...)
 			return nil, fmt.Errorf("he retirado tu oferta anterior, pero LaLiga ha rechazado la "+
 				"nueva: ahora no tienes ninguna oferta por %s: %w", entry.summary.PlayerName, err)
 		}
@@ -622,7 +624,7 @@ func (g *Guard) confirm(owner, token string, allowWrites, dryRun, recheck bool) 
 		}
 		return nil, fmt.Errorf("la API ha rechazado la operacion: %w", err)
 	}
-	dropped := httpx.Invalidate(Operations[entry.name].Effects...)
+	dropped := httpx.InvalidateIn(config.Default(), Operations[entry.name].Effects...)
 	slog.Info("write done", "operation", entry.name, "player", entry.summary.PlayerName,
 		"amount", entry.args.Amount, "method", call.Method, "path", call.Path,
 		"cash_before", entry.summary.CashBefore, "cache_dropped", dropped)
@@ -949,7 +951,7 @@ func (g *Guard) Automatic(name string, args Args, who Player, allowWrites bool) 
 	if err != nil {
 		return nil, fmt.Errorf("la API ha rechazado la operacion: %w", err)
 	}
-	dropped := httpx.Invalidate(spec.Effects...)
+	dropped := httpx.InvalidateIn(config.Default(), spec.Effects...)
 	slog.Info("automatic write done", "operation", name, "amount", args.Amount,
 		"player", who.Name, "cache_dropped", dropped)
 	return answer, nil

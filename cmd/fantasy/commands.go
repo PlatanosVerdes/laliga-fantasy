@@ -38,15 +38,15 @@ type world struct {
 	Cash     float64
 	League   string
 	TeamID   string
+	Member   *api.Member
 }
 
 func loadWorld(limit int, enrich bool) (*world, error) {
-	leagueID, teamID, err := savedLeague()
+	member, err := savedMember()
 	if err != nil {
 		return nil, err
 	}
-	client := api.New()
-	universe, err := model.BuildLive(client, leagueID, teamID, loadState(leagueID), 2*time.Hour)
+	universe, err := model.BuildLive(member, loadState(member.LeagueID()), 2*time.Hour)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +54,7 @@ func loadWorld(limit int, enrich bool) (*world, error) {
 	cash := 0.0
 	if cashOverride != nil {
 		cash = *cashOverride
-	} else if money, err := client.Money(teamID, time.Minute); err == nil {
+	} else if money, err := member.Money(time.Minute); err == nil {
 		cash = money.TeamMoney
 	}
 
@@ -82,7 +82,7 @@ func loadWorld(limit int, enrich bool) (*world, error) {
 	}
 	return &world{Universe: universe, Generic: generic, Advice: buckets,
 		Players: rowsFrom(generic["players"]), Cash: cash, League: league,
-		TeamID: teamID}, nil
+		TeamID: member.TeamID(), Member: member}, nil
 }
 
 func bucket(buckets map[string]any, name string) []map[string]any {
@@ -566,14 +566,14 @@ func cmdReward(args []string) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	leagueID, teamID, err := savedLeague()
+	member, err := savedMember()
 	if err != nil {
 		return err
 	}
-	client := api.New()
+	leagueID, teamID := member.LeagueID(), member.TeamID()
 
 	cli.Heading("Recompensa diaria")
-	catalogue, err := client.DailyRewards(time.Hour)
+	catalogue, err := member.Global().DailyRewards(time.Hour)
 	if err != nil {
 		return err
 	}
@@ -583,7 +583,7 @@ func cmdReward(args []string) error {
 	}
 	limit := api.DailyLimit(catalogue)
 
-	status, err := client.DailyRewardStatus(leagueID, teamID)
+	status, err := member.DailyRewardStatus()
 	if errors.Is(err, api.ErrRewardTaken) {
 		fmt.Println("\nHoy ya esta cobrada.")
 		return rewards.Open(config.Default()).Stamp(leagueID)
@@ -602,10 +602,10 @@ func cmdReward(args []string) error {
 	}
 
 	before := 0.0
-	if money, err := client.Money(teamID, 0); err == nil {
+	if money, err := member.Money(0); err == nil {
 		before = money.TeamMoney
 	}
-	guard := writes.NewGuard(client)
+	guard := writes.NewGuard(member)
 	if _, err := guard.Do("claim_daily_reward",
 		writes.Args{LeagueID: leagueID, TeamID: teamID},
 		writes.Player{Name: "recompensa diaria"}, true); err != nil {
@@ -615,7 +615,7 @@ func cmdReward(args []string) error {
 		return err
 	}
 	// The claim answers with no amount, so what it was worth is the difference in the balance.
-	if money, err := client.Money(teamID, 0); err == nil && before > 0 {
+	if money, err := member.Money(0); err == nil && before > 0 {
 		fmt.Printf("Cobrada: %s (saldo %s)\n", cli.Money(money.TeamMoney-before),
 			cli.Money(money.TeamMoney))
 		return nil
@@ -673,7 +673,7 @@ func cmdFav(args []string) error {
 	if _, err := writes.Send(call); err != nil {
 		return err
 	}
-	httpx.Invalidate(writes.Operations["favourite"].Effects...)
+	httpx.InvalidateIn(config.Default(), writes.Operations["favourite"].Effects...)
 	if action == "add" {
 		fmt.Println(cli.Green(fmt.Sprintf("%s marcado como favorito", text(found["name"]))))
 	} else {
@@ -966,8 +966,7 @@ func cmdRules(args []string) error {
 }
 
 func cmdLeagues(args []string) error {
-	client := api.New()
-	leagues, err := client.Leagues(time.Hour)
+	leagues, err := api.AccountOf(config.Default()).Leagues(time.Hour)
 	if err != nil {
 		return err
 	}
@@ -1102,8 +1101,8 @@ func myEleven(universe *model.Universe) ([]eleven.Player, int) {
 
 // savedLineup is who is on the pitch right now and the shape they are in. The four lines all
 // come back as lists on the way in, keeper included, which is not how they go out.
-func savedLineup(client *api.Client, teamID string) ([]string, string, error) {
-	payload, err := client.Lineup(teamID, time.Minute)
+func savedLineup(member *api.Member) ([]string, string, error) {
+	payload, err := member.OwnLineup(time.Minute)
 	if err != nil {
 		return nil, "", err
 	}
@@ -1147,8 +1146,7 @@ func cmdLineup(args []string) error {
 		fmt.Println(cli.Red("Necesito sesion y liga para ver tu alineacion."))
 		return nil
 	}
-	client := api.New()
-	saved, was, err := savedLineup(client, state.TeamID)
+	saved, was, err := savedLineup(state.Member)
 	if err != nil {
 		return err
 	}
@@ -1183,7 +1181,7 @@ func cmdLineup(args []string) error {
 		return nil
 	}
 
-	guard := writes.NewGuard(client)
+	guard := writes.NewGuard(state.Member)
 	if _, err := guard.Do("save_lineup", writes.Args{LeagueID: state.League,
 		TeamID: state.TeamID, Goalkeeper: best.Keeper, Defender: best.Defence,
 		Midfield: best.Middle, Striker: best.Attack, Formation: best.Shape.Numbers()},

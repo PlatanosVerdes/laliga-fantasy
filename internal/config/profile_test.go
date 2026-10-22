@@ -122,7 +122,8 @@ func TestAProfileLaysOutTodaysPaths(t *testing.T) {
 		ReportFile:     history + "report.html", ForecastFile: history + "forecasts.json",
 		ClauseFile: history + "clauses.json", OfferEndingsFile: history + "offer_endings.json",
 		OrderEndingsFile: history + "order_endings.json", DismissedFile: history + "dismissed.json",
-		RewardFile: history + "daily_reward.json"}
+		RewardFile: history + "daily_reward.json",
+		configRoot: "/c", stateRoot: "/s", cacheRoot: "/k"}
 	if got := ProfileFor("a", "L"); got != want {
 		t.Errorf("ProfileFor:\n got %+v\nwant %+v", got, want)
 	}

@@ -120,8 +120,8 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	// three sevens, and the shape is what a card is opened for. The opponents come off the
 	// futbolfantasy page already read above, so they cost no request of their own.
 	weeks := []map[string]any{}
-	if s.opts.Client != nil {
-		if master, err := s.opts.Client.Player(id, 6*time.Hour); err == nil {
+	if s.opts.Global != nil {
+		if master, err := s.opts.Global.Player(id, 6*time.Hour); err == nil {
 			// The row lists both sides in the order they played, so at home the opponent is
 			// the second name and away it is the first.
 			rivals := map[float64]string{}
@@ -149,8 +149,8 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	weeks = addForecasts(forecast.Open(s.profile()), id, weeks)
 
 	history := []map[string]any{}
-	if s.opts.Client != nil {
-		if series, err := s.opts.Client.PlayerMarketValue(id, 24*time.Hour); err == nil {
+	if s.opts.Global != nil {
+		if series, err := s.opts.Global.PlayerMarketValue(id, 24*time.Hour); err == nil {
 			for _, point := range series {
 				date := text(point["date"])
 				if len(date) > 10 {
@@ -575,11 +575,12 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 		s.saveLineup(writer, request)
 		return
 	}
-	if s.opts.Client == nil || s.myTeamID() == "" {
+	member := s.member()
+	if member == nil {
 		s.json(writer, http.StatusBadRequest, map[string]any{"error": "sin equipo resuelto"})
 		return
 	}
-	payload, err := s.opts.Client.Lineup(s.myTeamID(), time.Minute)
+	payload, err := member.OwnLineup(time.Minute)
 	if s.throttled(writer, err) {
 		return
 	}
@@ -588,8 +589,8 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 			map[string]any{"error": "no he podido leer la alineacion: " + err.Error()})
 		return
 	}
-	free, _ := s.opts.Client.Formations(false, 24*time.Hour)
-	premium, _ := s.opts.Client.Formations(true, 24*time.Hour)
+	free, _ := member.Global().Formations(false, 24*time.Hour)
+	premium, _ := member.Global().Formations(true, 24*time.Hour)
 
 	known := map[string]map[string]any{}
 	rows := s.rows()
@@ -614,8 +615,7 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 	// The lineup payload carries the points series only for the eleven on the pitch; the squad
 	// payload carries it for the whole squad, and it is what gives a reserve his form back.
 	masters := map[string]map[string]any{}
-	if squad, err := s.opts.Client.TeamSquad(s.leagueID(), s.myTeamID(),
-		30*time.Minute); err == nil {
+	if squad, err := member.League().TeamSquad(member.TeamID(), 30*time.Minute); err == nil {
 		for _, key := range []string{"players", "playersTeams", "teamPlayers"} {
 			for _, held := range listOf(squad[key]) {
 				master := mapOf(held["playerMaster"])
@@ -900,10 +900,11 @@ func bestOffer(row map[string]any) any {
 // budget is the cash the actions are judged against. Read from the API rather than the built
 // world so a blocked button is blocked on the real balance.
 func (s *Server) budget() float64 {
-	if s.opts.Client == nil || s.myTeamID() == "" {
+	member := s.member()
+	if member == nil {
 		return 0
 	}
-	money, err := s.opts.Client.Money(s.myTeamID(), time.Minute)
+	money, err := member.Money(time.Minute)
 	if err != nil {
 		return 0
 	}

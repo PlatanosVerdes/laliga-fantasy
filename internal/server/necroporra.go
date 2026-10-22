@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/necroporra"
@@ -52,7 +53,7 @@ func (s *Server) necroVote(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	// The round is cached for half a minute and the page with it: both have to say the vote now.
-	httpx.Invalidate("necro-state")
+	httpx.Invalidate(s.profile().Scope(config.LevelMember), "necro-state")
 	s.state.Patch("necro_vote", func(*model.Universe) bool { return true })
 	s.json(writer, http.StatusOK, map[string]any{"ok": true})
 }

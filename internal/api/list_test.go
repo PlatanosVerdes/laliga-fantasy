@@ -26,7 +26,7 @@ func TestACachedListOfTheWrongShapeIsFetchedAgain(t *testing.T) {
 	defer server.Close()
 
 	sum := sha1.Sum([]byte("calendar|" + server.URL))
-	path := filepath.Join(config.TagDir("calendar"),
+	path := filepath.Join(config.GlobalCacheDir(),
 		"calendar_"+hex.EncodeToString(sum[:])[:20]+".cache")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
@@ -35,7 +35,8 @@ func TestACachedListOfTheWrongShapeIsFetchedAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 	var matches []Match
-	err := httpx.GetJSON(httpx.Request{URL: server.URL, TTL: time.Hour, Tag: "calendar"},
+	err := httpx.GetJSON(httpx.Request{URL: server.URL, TTL: time.Hour, Tag: "calendar",
+		Cache: config.GlobalScope()},
 		&listOf{&matches})
 	if err != nil {
 		t.Fatal(err)

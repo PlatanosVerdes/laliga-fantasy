@@ -194,34 +194,31 @@ type State struct {
 
 // BuildLive is Build with the futbolfantasy half fetched and matched in Go, which is what
 // the server uses now that nothing goes through Python.
-func BuildLive(client *api.Client, leagueID, myTeamID string, state State,
-	ffTTL time.Duration) (*Universe, error) {
-	bridge, err := LoadBridge(client, ffTTL)
+func BuildLive(member *api.Member, state State, ffTTL time.Duration) (*Universe, error) {
+	bridge, err := LoadBridge(member.Global(), ffTTL)
 	reached("Datos de futbolfantasy", 4, 4)
 	if err != nil {
 		return nil, err
 	}
-	if myTeamID != "" {
-		if ids, err := client.FavouritePlayers(myTeamID, 5*time.Minute); err != nil {
-			slog.Warn("favourites unreadable", "reason", err.Error())
-		} else {
-			state.Starred = make(map[string]bool, len(ids))
-			for _, id := range ids {
-				state.Starred[id] = true
-			}
+	if ids, err := member.Favourites(5 * time.Minute); err != nil {
+		slog.Warn("favourites unreadable", "reason", err.Error())
+	} else {
+		state.Starred = make(map[string]bool, len(ids))
+		for _, id := range ids {
+			state.Starred[id] = true
 		}
 	}
-	return Build(client, leagueID, myTeamID, bridge, state)
+	return Build(member, bridge, state)
 }
 
 // LoadBridge is what used to be a Python subprocess: the market page scraped, matched to
 // LaLiga ids, and the absences resolved to the players they belong to.
-func LoadBridge(client *api.Client, ffTTL time.Duration) (*Bridge, error) {
-	players, err := allPlayers(client)
+func LoadBridge(global *api.Global, ffTTL time.Duration) (*Bridge, error) {
+	players, err := allPlayers(global)
 	if err != nil {
 		return nil, err
 	}
-	teams, err := client.TeamsMaster(24 * time.Hour)
+	teams, err := global.TeamsMaster(24 * time.Hour)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +250,7 @@ func LoadBridge(client *api.Client, ffTTL time.Duration) (*Bridge, error) {
 	}
 
 	reached("Datos de futbolfantasy", 2, 4)
-	recent := recentFixtures(client, teams)
+	recent := recentFixtures(global, teams)
 	now := time.Now()
 	absencesTTL := AbsencesTTLAt(recent, now)
 	rows, err := futbolfantasy.Absences(absencesTTL)
@@ -272,17 +269,18 @@ func LoadBridge(client *api.Client, ffTTL time.Duration) (*Bridge, error) {
 		MatchedCount: len(matched)}, nil
 }
 
-func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
-	state State) (*Universe, error) {
-	week, err := client.CurrentWeek(30 * time.Minute)
+func Build(member *api.Member, bridge *Bridge, state State) (*Universe, error) {
+	global, league := member.Global(), member.League()
+	leagueID, myTeamID := member.LeagueID(), member.TeamID()
+	week, err := global.CurrentWeek(30 * time.Minute)
 	if err != nil {
 		return nil, fmt.Errorf("week: %w", err)
 	}
-	teams, err := client.TeamsMaster(24 * time.Hour)
+	teams, err := global.TeamsMaster(24 * time.Hour)
 	if err != nil {
 		return nil, fmt.Errorf("teams: %w", err)
 	}
-	raw, err := allPlayers(client)
+	raw, err := allPlayers(global)
 	if err != nil {
 		return nil, fmt.Errorf("players: %w", err)
 	}
@@ -304,7 +302,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 	// without it the page loses that line entirely.
 	nextOpens := ""
 	if week.NextWeek != 0 {
-		if fixtures, err := client.Calendar(week.NextWeek, 6*time.Hour); err == nil {
+		if fixtures, err := global.Calendar(week.NextWeek, 6*time.Hour); err == nil {
 			var dates []string
 			for _, match := range fixtures {
 				if when := fallback(match.Date, match.MatchDate); when != "" {
@@ -321,8 +319,8 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 	universe := &Universe{
 		Week:           week,
 		NextWeekOpens:  nextOpens,
-		Fixtures:       LoadFixtures(client, week, teams),
-		Schedule:       LoadSchedule(client, week, teams),
+		Fixtures:       LoadFixtures(global, week, teams),
+		Schedule:       LoadSchedule(global, week, teams),
 		CompletedWeeks: completedWeeks,
 		CurrentWeight:  currentWeight,
 	}
@@ -368,17 +366,17 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 	// player list carries none.
 	faces := map[string]string{}
 	if leagueID != "" {
-		ownership, universe.LeagueTeams, universe.UnreadSquads, err = loadOwnership(client, leagueID)
+		ownership, universe.LeagueTeams, universe.UnreadSquads, err = loadOwnership(league)
 		if err != nil {
 			return nil, fmt.Errorf("ownership: %w", err)
 		}
 		universe.OwnershipLoaded = len(ownership) > 0
-		universe.Market, err = loadMarket(client, leagueID, myTeamID, faces)
+		universe.Market, err = loadMarket(member, faces)
 		if err != nil {
 			return nil, fmt.Errorf("market: %w", err)
 		}
 		reached("Mercado", 1, 1)
-		freshStatus(client, raw, ownership, myTeamID)
+		freshStatus(global, raw, ownership, myTeamID)
 	}
 	fichas := squadOdds(raw, ownership, myTeamID, bridge, futbolfantasy.DetailTTL)
 
@@ -500,7 +498,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 	for index := range universe.Market {
 		listingByPlayer[universe.Market[index].PlayerID] = &universe.Market[index]
 	}
-	offersByPlayer := loadOffers(client, leagueID, myTeamID, ownership)
+	offersByPlayer := loadOffers(member, ownership)
 	for index := range universe.Players {
 		id := universe.Players[index].ID
 		universe.Players[index].MarketEntry = listingByPlayer[id]
@@ -527,12 +525,12 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		for _, player := range universe.Players {
 			names[player.ID] = player.Name
 		}
-		universe.Activity = loadActivity(client, leagueID, managers, names)
-		universe.Lineups = loadLineups(client, universe.LeagueTeams, week.WeekNumber)
+		universe.Activity = loadActivity(league, managers, names)
+		universe.Lineups = loadLineups(league, universe.LeagueTeams, week.WeekNumber)
 
 		var myCash *float64
 		if myTeamID != "" {
-			if money, err := client.Money(myTeamID, time.Minute); err == nil {
+			if money, err := member.Money(time.Minute); err == nil {
 				cash := money.TeamMoney
 				myCash = &cash
 			} else {
@@ -541,7 +539,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		}
 		universe.CashModel = ReconstructCash(universe.Activity, universe.LeagueTeams,
 			myTeamID, myCash)
-		EnrichActivityValues(client.At(httpx.Enrich), universe.Activity, 18)
+		EnrichActivityValues(global.At(httpx.Enrich), universe.Activity, 18)
 	}
 
 	ApplyScores(universe.Players)
@@ -585,7 +583,7 @@ const OwnStatusTTL = 10 * time.Minute
 
 // freshStatus reads my players' status from each one's own page and keeps the graver of that
 // and the bulk list's: sending out an injured man costs more than benching a fit one.
-func freshStatus(client *api.Client, raw []map[string]any, ownership map[string]slot,
+func freshStatus(global *api.Global, raw []map[string]any, ownership map[string]slot,
 	myTeamID string) {
 	if myTeamID == "" {
 		return
@@ -603,7 +601,7 @@ func freshStatus(client *api.Client, raw []map[string]any, ownership map[string]
 		}
 		done++
 		reached("Estado de tus jugadores", done, mine)
-		detail, err := client.Player(id, OwnStatusTTL)
+		detail, err := global.Player(id, OwnStatusTTL)
 		if err != nil {
 			slog.Debug("player status unreachable", "player", id, "reason", err.Error())
 			continue
@@ -655,9 +653,8 @@ type slot struct {
 // loadOwnership walks every squad in the league. It is the only source for the clause,
 // the shield and the squad-slot id — and that slot id, not the player's own id, is what
 // the write endpoints want.
-func loadOwnership(client *api.Client, leagueID string) (map[string]slot,
-	map[string]*LeagueTeam, int, error) {
-	standings, err := client.Standings(leagueID, 30*time.Minute)
+func loadOwnership(league *api.League) (map[string]slot, map[string]*LeagueTeam, int, error) {
+	standings, err := league.Standings(30 * time.Minute)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -682,7 +679,7 @@ func loadOwnership(client *api.Client, leagueID string) (map[string]slot,
 			owner = *row.Name
 		}
 
-		squad, err := client.TeamSquad(leagueID, teamID, 30*time.Minute)
+		squad, err := league.TeamSquad(teamID, 30*time.Minute)
 		if err != nil {
 			slog.Warn("squad unreachable", "team", teamID, "reason", err.Error())
 			unread++
@@ -846,12 +843,9 @@ func myBid(entry map[string]any) map[string]any {
 
 // loadOffers asks for the offers on every player of mine, listed or not: a rival can offer for
 // somebody who is not on the market, and asking only for the listed ones never saw it.
-func loadOffers(client *api.Client, leagueID, myTeamID string,
-	ownership map[string]slot) map[string][]map[string]any {
+func loadOffers(member *api.Member, ownership map[string]slot) map[string][]map[string]any {
 	offers := map[string][]map[string]any{}
-	if leagueID == "" || myTeamID == "" {
-		return offers
-	}
+	myTeamID := member.TeamID()
 	mine, done := 0, 0
 	for _, held := range ownership {
 		if held.TeamID == myTeamID && held.PlayerTeamID != nil {
@@ -864,7 +858,7 @@ func loadOffers(client *api.Client, leagueID, myTeamID string,
 		}
 		done++
 		reached("Ofertas recibidas", done, mine)
-		received, err := client.PlayerOffers(leagueID, *held.PlayerTeamID, time.Minute)
+		received, err := member.Offers(*held.PlayerTeamID, time.Minute)
 		if err != nil {
 			slog.Debug("offers unreachable", "player", playerID, "reason", err.Error())
 			continue
@@ -905,12 +899,12 @@ func loadOffers(client *api.Client, leagueID, myTeamID string,
 
 // loadActivity walks the paged log until a page comes back empty, exactly as Python does:
 // the page size is not documented and the last page is how you learn there are no more.
-func loadActivity(client *api.Client, leagueID string, managers, names map[string]string) []Event {
+func loadActivity(league *api.League, managers, names map[string]string) []Event {
 	var raw []map[string]any
 	for index := 0; index < 20; index++ {
 		// How many pages there are is learnt from the empty one, so the step shows half done.
 		reached("Movimientos de la liga", index+1, 0)
-		page, err := client.ActivityRaw(leagueID, index, time.Minute, false)
+		page, err := league.ActivityRaw(index, time.Minute, false)
 		if err != nil {
 			slog.Warn("activity unreachable", "index", index, "reason", err.Error())
 			break
@@ -938,15 +932,14 @@ func squadPlayers(squad map[string]any) []map[string]any {
 	return nil
 }
 
-func loadMarket(client *api.Client, leagueID, myTeamID string,
-	faces map[string]string) ([]Listing, error) {
-	entries, err := client.MarketRaw(leagueID, time.Minute, false)
+func loadMarket(member *api.Member, faces map[string]string) ([]Listing, error) {
+	entries, err := member.MarketRaw(time.Minute, false)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]Listing, 0, len(entries))
 	for _, entry := range entries {
-		listing := listingOf(entry, myTeamID)
+		listing := listingOf(entry, member.TeamID())
 		if face := text(nested(entry, "playerMaster", "images", "transparent", "256x256")); face != "" {
 			faces[listing.PlayerID] = face
 		}
@@ -1004,7 +997,7 @@ func AllFinished(matches []api.Match) bool {
 
 // LoadSchedule is the fixture list beyond this week: same shape as the live fixtures, one
 // entry per match, tagged with its matchday so the page can group it.
-func LoadSchedule(client *api.Client, week api.Week, teams []api.Team) []Fixture {
+func LoadSchedule(global *api.Global, week api.Week, teams []api.Team) []Fixture {
 	names := map[string]string{}
 	for _, team := range teams {
 		names[team.ID] = fallback(team.ShortName, team.Name)
@@ -1022,9 +1015,9 @@ func LoadSchedule(client *api.Client, week api.Week, teams []api.Team) []Fixture
 		if number < week.WeekNumber {
 			ttl = long
 		}
-		matches, err := client.Calendar(number, ttl)
+		matches, err := global.Calendar(number, ttl)
 		if err == nil && ttl == long && !AllFinished(matches) {
-			matches, err = client.Calendar(number, short)
+			matches, err = global.Calendar(number, short)
 		}
 		if err != nil {
 			slog.Debug("calendar unavailable", "week", number, "reason", err.Error())
@@ -1140,8 +1133,8 @@ func ApplyHoldRule(universe *Universe, myTeamID string, league rules.League) {
 
 // LoadFixtures is this week's matches. A match changes neither the transfer log nor the
 // market, so the scheduler cannot see it any other way.
-func LoadFixtures(client *api.Client, week api.Week, teams []api.Team) []Fixture {
-	matches, err := client.Calendar(week.WeekNumber, 6*time.Hour)
+func LoadFixtures(global *api.Global, week api.Week, teams []api.Team) []Fixture {
+	matches, err := global.Calendar(week.WeekNumber, 6*time.Hour)
 	if err != nil {
 		slog.Debug("calendar unavailable", "reason", err.Error())
 		return nil

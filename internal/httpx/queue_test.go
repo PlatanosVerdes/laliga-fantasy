@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx/httpxtest"
 )
 
@@ -422,7 +423,7 @@ func TestOtherHostsDoNotWaitInTheQueue(t *testing.T) {
 }
 
 func TestACacheHitTakesNoTurnInTheQueue(t *testing.T) {
-	scratchDirs(t)
+	scope := config.ProfileIn(t.TempDir(), "a", "L").Scope(config.LevelGlobal)
 	fake := httpxtest.New(t)
 	fake.Answer("GET /api/v3/week/current", http.StatusOK, `{"weekNumber":9}`)
 	t.Cleanup(SetTransport(fake))
@@ -430,7 +431,7 @@ func TestACacheHitTakesNoTurnInTheQueue(t *testing.T) {
 	t.Cleanup(SetQueue(limited))
 
 	request := Request{URL: "https://fantasy-api.llt-services.com/api/v3/week/current",
-		TTL: time.Hour, Tag: "week", Priority: Probe}
+		TTL: time.Hour, Tag: "week", Priority: Probe, Cache: scope}
 	for range 3 {
 		if _, err := Fetch(request); err != nil {
 			t.Fatal(err)

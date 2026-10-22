@@ -14,7 +14,7 @@ import (
 // history is a daily series per player, so the value on the event's own date turns "paid 92M"
 // into "paid 92M for somebody worth 78M". Only the biggest trades are looked up: it is one
 // request each, and the small ones tell no story.
-func EnrichActivityValues(client *api.Client, events []Event, limit int) {
+func EnrichActivityValues(global *api.Global, events []Event, limit int) {
 	type sized struct {
 		index  int
 		amount float64
@@ -35,7 +35,7 @@ func EnrichActivityValues(client *api.Client, events []Event, limit int) {
 	enriched := 0
 	for _, candidate := range candidates {
 		event := &events[candidate.index]
-		history, err := client.PlayerMarketValue(*event.PlayerID, 12*time.Hour)
+		history, err := global.PlayerMarketValue(*event.PlayerID, 12*time.Hour)
 		if err != nil {
 			slog.Debug("value history unavailable", "player_id", *event.PlayerID,
 				"reason", err.Error())
