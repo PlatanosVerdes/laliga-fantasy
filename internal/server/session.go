@@ -249,7 +249,7 @@ const setupBody = `<h1>{{title}}</h1><p class="lead">{{lead}}</p>
  <div class="code-row"><input class="field mono" id="paste" name="login-redirect" aria-label="Dirección de vuelta del login" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="Pega aquí authredirect://…"><button class="btn" id="go" type="button">Entrar</button></div>
  <div id="msg"></div>
  <details class="help"><summary>¿No encuentras la URL?</summary>
-  <p>La página de LaLiga se queda en blanco o dice <i>Unsupported URL scheme</i>: es lo normal, el login ha terminado.
+  <p>La pestaña se queda congelada en la página de Google o de LaLiga, en blanco o con <i>Unsupported URL scheme</i>: es lo normal, el login ha terminado.
   Escribe <code>code=</code> en el filtro de Network y la fila aparece. En Safari, activa antes Ajustes → Avanzado →
   <b>Mostrar funciones para desarrolladores web</b>; en Safari y Firefox la dirección suele salir también en la barra.
   El código caduca en unos minutos: si falla, vuelve a abrir el login.</p></details>
