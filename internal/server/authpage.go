@@ -74,6 +74,10 @@ kbd{font:600 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;padding:3px 6px;
 .row{display:flex;justify-content:space-between;gap:12px;margin-top:18px}
 .text-btn{background:none;border:0;padding:0;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;text-decoration:none}
 .text-btn:hover{color:var(--ink)}
+.row .btn{margin:0}
+.closed{margin:0 0 16px;padding:14px;border:1px solid var(--accent);border-radius:12px;font-size:14px;color:var(--ink-2)}
+.closed b{color:var(--ink)}
+.closed .btn.wide{margin-top:12px}
 .link-in p,.aside{margin:3px 0 0;color:var(--ink-2);font-size:14px}
 .aside{margin-top:18px}
 .link-qr{width:min(240px,70vw);margin:4px auto 0;padding:8px;background:#fff;border-radius:12px}

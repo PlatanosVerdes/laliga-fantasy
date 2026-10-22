@@ -241,6 +241,8 @@ const setupBody = `<h1>{{title}}</h1><p class="lead">{{lead}}</p>
  {{linkin}}
 </section>
 <section id="finish" hidden>
+ <div class="closed" id="closed" hidden><b>Has cerrado la pestaña de LaLiga.</b> Si no llegaste a copiar la URL, vuelve a abrirla.
+  <button class="btn wide" id="reopen-closed" type="button">Abrir el login de nuevo</button></div>
  <ol class="mini">
   <li>En la pestaña de LaLiga, antes de entrar: <kbd data-for="any">⌘⌥I · F12</kbd><kbd data-for="mac" hidden>⌘⌥I</kbd><kbd data-for="pc" hidden>F12</kbd><kbd data-for="phone" hidden>⌘⌥I · F12</kbd> → <b>Network</b> → <b>Preserve log</b>.</li>
   <li>Entra con tu cuenta.</li>
@@ -253,7 +255,7 @@ const setupBody = `<h1>{{title}}</h1><p class="lead">{{lead}}</p>
   Escribe <code>code=</code> en el filtro de Network y la fila aparece. En Safari, activa antes Ajustes → Avanzado →
   <b>Mostrar funciones para desarrolladores web</b>; en Safari y Firefox la dirección suele salir también en la barra.
   El código caduca en unos minutos: si falla, vuelve a abrir el login.</p></details>
- <div class="row"><button class="text-btn" id="back-choose" type="button">← Volver</button><a class="text-btn" href="{{login}}" target="_blank" rel="noreferrer">Abrir otra vez el login ↗</a></div>
+ <div class="row"><button class="text-btn" id="back-choose" type="button">← Volver</button><button class="btn quiet" id="reopen" type="button">Abrir el login de nuevo ↗</button></div>
 </section>
 {{back}}
 <script>
@@ -271,7 +273,21 @@ const choose=document.getElementById('choose'), finish=document.getElementById('
   start.classList.add('quiet');
   if(link) choose.prepend(link);
 })();
-document.getElementById('start').addEventListener('click',()=>{choose.hidden=true;finish.hidden=false;paste.focus();});
+let loginTab=null, watch=null;
+const closed=document.getElementById('closed');
+// Opened by hand, so the page can see the tab close; the opener is cut first so LaLiga cannot steer this tab.
+function openLogin(e){
+  const url=document.getElementById('start').href;
+  const tab=window.open('','_blank');
+  if(tab){e.preventDefault(); tab.opener=null; tab.location=url; loginTab=tab;}
+  else if(e.currentTarget.tagName!=='A') window.open(url,'_blank','noopener');
+  choose.hidden=true; finish.hidden=false; closed.hidden=true; paste.focus();
+  clearInterval(watch);
+  watch=setInterval(()=>{if(loginTab&&loginTab.closed&&!go.disabled&&!paste.value.trim()){clearInterval(watch);closed.hidden=false;}},800);
+}
+document.getElementById('start').addEventListener('click',openLogin);
+document.getElementById('reopen').onclick=openLogin;
+document.getElementById('reopen-closed').onclick=openLogin;
 document.getElementById('back-choose').onclick=()=>{finish.hidden=true;choose.hidden=false;};
 const linkGo=document.getElementById('link-go'), linkCode=document.getElementById('link-code');
 if(linkGo){linkGo.onclick=()=>linkHere(linkCode.value,document.getElementById('link-msg'),linkGo);
