@@ -84,6 +84,9 @@ Each phase ships on its own and leaves the current single-user deploy working.
 2. **Identity and sessions.** Sign in with LaLiga, server-side sessions, encrypted tokens,
    `FANTASY_ALLOW`, rate limits, confirmation tokens bound to the session. With one user, it
    behaves as today after one login.
+   2a (done): sessions, `FANTASY_ALLOW`, the Origin check, login rate limit, confirmation
+   tokens bound to the session, one profile per process seen only by its own user. Left for
+   2b: tokens encrypted at rest and rate limits on writes.
 3. **Many leagues in one process.** One global world built once, one league world per active
    league on top of it, the engine and the render taking the league they work for. The
    profile switch becomes a selector instead of `syscall.Exec`. The automatic engine runs

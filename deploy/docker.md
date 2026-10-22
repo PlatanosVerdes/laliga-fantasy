@@ -36,6 +36,9 @@ services:
       # private door. All three or none; the AUD tag is on the Access app's page.
       # FANTASY_ACCESS_TEAM_DOMAIN: "<team>.cloudflareaccess.com"
       # FANTASY_ACCESS_AUD: "<application audience tag>"
+      # Who may sign in: LaLiga user ids or emails, comma separated, or "*". Unset, the users
+      # of the accounts already saved, or the first login on a fresh install.
+      # FANTASY_ALLOW: "me@example.com"
     volumes:
       # Session, cache, favourites, standing instructions and the report all live
       # here. The session is the only thing that cannot be regenerated.
