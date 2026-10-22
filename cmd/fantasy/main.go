@@ -24,12 +24,12 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/auth"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/cli"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/dismissed"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/engine"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/forecast"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/necroporra"
@@ -38,10 +38,10 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/render"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rewards"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/server"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/services"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
 
@@ -1092,8 +1092,6 @@ func validationCase(name string, args writes.Args, player writes.Player,
 	return writes.ValidationCase{Name: name, Args: args, Player: player, Cash: cash}
 }
 
-
-
 // cmdPlan is what the standing instructions would do, and what the scheduled raids would do,
 // from a recorded squad. Nothing is executed: this prints the plan.
 func cmdPlan(args []string) error {
@@ -1638,10 +1636,10 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		HoldExceptions: house.HoldExceptions,
 		MaxDebtPct:     house.MaxDebtPct,
 		RuleNotes:      house.Notes,
-		CSS: read("report.css"),
-		Plan:     policies.Plan(players, armed, time.Now()),
-		Raids:    policies.RaidPlan(players, armed, cash, clauseWindow(universe.Schedule)),
-		Window:   clauseWindow(universe.Schedule),
+		CSS:            read("report.css"),
+		Plan:           policies.Plan(players, armed, time.Now()),
+		Raids:          policies.RaidPlan(players, armed, cash, clauseWindow(universe.Schedule)),
+		Window:         clauseWindow(universe.Schedule),
 		// Spendable now: what my live bids hold is not there to spend twice.
 		Money:    advice.Money(generic, cash-number(buckets["committed"]), time.Now()),
 		Raise:    advice.ClausePlan(generic, cash-number(buckets["committed"])),
@@ -1766,9 +1764,9 @@ func cmdPage(args []string) error {
 	// their rows are the policy engine's output, not the model's.
 	document := render.Document{
 		Universe: blob.Universe, Advice: blob.Advice,
-		Swaps: advice.Swaps(blob.Universe, blob.Advice, number(blob.Advice["budget"])),
+		Swaps:     advice.Swaps(blob.Universe, blob.Advice, number(blob.Advice["budget"])),
 		Generated: args[1], LeagueName: league,
-		CSS: read("report.css"),
+		CSS:  read("report.css"),
 		Plan: rowsFrom(blob.Advice["_plan"]), Raids: rowsFrom(blob.Advice["_raids"]),
 		Policies: policiesFrom(blob.Advice["_policies"]),
 	}
@@ -1809,8 +1807,6 @@ func policiesFrom(value any) map[string]map[string]any {
 	}
 	return out
 }
-
-
 
 func cmdChecks() error {
 	for _, row := range validationTable {
@@ -2004,8 +2000,6 @@ func cmdProbe(args []string) error {
 	fmt.Printf("  peticiones: %+v\n", httpx.Stats())
 	return nil
 }
-
-
 
 // restart runs the binary again in place, on the profile active.json now names. Every path
 // points at the active profile, so a switch is a fresh start rather than a swap under readers.

@@ -400,23 +400,23 @@ var JudgedByCeiling = map[string]bool{
 
 // Summary is what a person is asked to confirm.
 type Summary struct {
-	Token       string   `json:"token"`
-	Operation   string   `json:"operation"`
-	Label       string   `json:"label"`
-	PlayerName  string   `json:"player_name"`
-	Amount      int64    `json:"amount"`
-	MinBid      int64    `json:"min_bid"`
-	Bids        int      `json:"bids"`
-	Expires     string   `json:"expires"`
-	IdealBid    int64    `json:"ideal_bid"`
-	MarketValue float64  `json:"market_value"`
+	Token       string  `json:"token"`
+	Operation   string  `json:"operation"`
+	Label       string  `json:"label"`
+	PlayerName  string  `json:"player_name"`
+	Amount      int64   `json:"amount"`
+	MinBid      int64   `json:"min_bid"`
+	Bids        int     `json:"bids"`
+	Expires     string  `json:"expires"`
+	IdealBid    int64   `json:"ideal_bid"`
+	MarketValue float64 `json:"market_value"`
 	// What the clause is and what it would become, for the one operation that changes it.
-	Clause    int64 `json:"clause"`
-	NewClause int64 `json:"new_clause"`
-	CashBefore  *int64   `json:"cash_before"`
-	CashAfter   *int64   `json:"cash_after"`
-	Warnings    []string `json:"warnings"`
-	ExpiresIn   int      `json:"expires_in"`
+	Clause     int64    `json:"clause"`
+	NewClause  int64    `json:"new_clause"`
+	CashBefore *int64   `json:"cash_before"`
+	CashAfter  *int64   `json:"cash_after"`
+	Warnings   []string `json:"warnings"`
+	ExpiresIn  int      `json:"expires_in"`
 }
 
 type pending struct {
@@ -436,9 +436,9 @@ type Window struct {
 }
 
 type Guard struct {
-	mu      sync.Mutex
-	tokens  map[string]pending
-	client  *api.Client
+	mu     sync.Mutex
+	tokens map[string]pending
+	client *api.Client
 	// Cash reads the current balance. Injected so the guard can be exercised without a
 	// session, and so a test cannot accidentally reach the API.
 	Cash func(teamID string) (int64, error)

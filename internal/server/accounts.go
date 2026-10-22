@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"net/http"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -26,9 +26,9 @@ type LeagueChoice struct {
 }
 
 type accountView struct {
-	ID      string         `json:"id"`
-	Email   string         `json:"email"`
-	Name    string         `json:"name"`
+	ID    string `json:"id"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
 	// Manager is the name the account plays under in its league: the login's own name is
 	// often "Google user".
 	Manager string         `json:"manager"`
