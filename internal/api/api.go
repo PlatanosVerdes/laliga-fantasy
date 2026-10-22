@@ -60,15 +60,15 @@ type Money struct {
 // because a rival bidding changes what the page should say even though nothing has
 // been transferred.
 type Listing struct {
-	ID              string          `json:"id"`
-	Discr           string          `json:"discr"`
-	SalePrice       json.Number     `json:"salePrice"`
-	ExpirationDate  string          `json:"expirationDate"`
-	NumberOfBids    *int            `json:"numberOfBids"`
-	NumberOfOffers  *int            `json:"numberOfOffers"`
-	DirectOffer     bool            `json:"directOffer"`
-	PlayerMaster    json.RawMessage `json:"playerMaster"`
-	SellerTeam      json.RawMessage `json:"sellerTeam"`
+	ID             string          `json:"id"`
+	Discr          string          `json:"discr"`
+	SalePrice      json.Number     `json:"salePrice"`
+	ExpirationDate string          `json:"expirationDate"`
+	NumberOfBids   *int            `json:"numberOfBids"`
+	NumberOfOffers *int            `json:"numberOfOffers"`
+	DirectOffer    bool            `json:"directOffer"`
+	PlayerMaster   json.RawMessage `json:"playerMaster"`
+	SellerTeam     json.RawMessage `json:"sellerTeam"`
 }
 
 type Activity struct {
@@ -78,11 +78,26 @@ type Activity struct {
 	Raw  json.RawMessage `json:"-"`
 }
 
-// Client holds nothing but the competition prefix; the session comes from the auth
-// package on every call so a rotation mid-run is picked up.
-type Client struct{}
+// Client holds nothing but where its requests stand in the queue to LaLiga; the session comes
+// from the auth package on every call so a rotation mid-run is picked up.
+type Client struct {
+	priority httpx.Priority
+	scope    string
+}
 
 func New() *Client { return &Client{} }
+
+func (c *Client) At(priority httpx.Priority) *Client {
+	copied := *c
+	copied.priority = priority
+	return &copied
+}
+
+func (c *Client) For(scope string) *Client {
+	copied := *c
+	copied.scope = scope
+	return &copied
+}
 
 func (c *Client) get(path string, authenticated bool, ttl time.Duration, tag string,
 	store bool, target any) error {
@@ -100,8 +115,8 @@ func (c *Client) get(path string, authenticated bool, ttl time.Duration, tag str
 		}
 		headers["Authorization"] = "Bearer " + bearer
 	}
-	return httpx.GetJSON(httpx.Request{
-		URL: url, Headers: headers, TTL: ttl, Tag: tag, Store: store}, target)
+	return httpx.GetJSON(httpx.Request{URL: url, Headers: headers, TTL: ttl, Tag: tag,
+		Store: store, Priority: c.priority, Scope: c.scope}, target)
 }
 
 // unwrap handles the two shapes the API uses for a list: a bare array, or an object

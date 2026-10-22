@@ -233,6 +233,9 @@ func cmdServe(args []string) error {
 	}
 
 	client := api.New()
+	acting := client.At(httpx.Write)
+	probing := client.At(httpx.Probe)
+	interactive := client.At(httpx.Interactive)
 	var (
 		mu       sync.Mutex
 		leagueID string
@@ -291,9 +294,9 @@ func cmdServe(args []string) error {
 		return universe, nil
 	})
 
-	guard := writes.NewGuard(client)
+	guard := writes.NewGuard(acting)
 	guard.Cash = func(team string) (int64, error) {
-		money, err := client.Money(team, time.Minute)
+		money, err := acting.Money(team, time.Minute)
 		if err != nil {
 			return 0, err
 		}
@@ -318,13 +321,13 @@ func cmdServe(args []string) error {
 		if err != nil || rewards.ClaimedToday(league) {
 			return
 		}
-		catalogue, err := client.DailyRewards(time.Hour)
+		catalogue, err := acting.DailyRewards(time.Hour)
 		if err != nil {
 			slog.Warn("daily reward catalogue unreadable", "reason", err.Error())
 			return
 		}
 		limit := api.DailyLimit(catalogue)
-		status, err := client.DailyRewardStatus(league, team)
+		status, err := acting.DailyRewardStatus(league, team)
 		switch {
 		case errors.Is(err, api.ErrRewardTaken):
 			// Claimed from the phone, most likely. Stamped so the rest of the day is quiet.
@@ -343,7 +346,7 @@ func cmdServe(args []string) error {
 		}
 
 		before := 0.0
-		if money, err := client.Money(team, 0); err == nil {
+		if money, err := acting.Money(team, 0); err == nil {
 			before = money.TeamMoney
 		}
 		// One attempt per reward left, then the stamp: a claim that answers 200 without moving
@@ -361,7 +364,7 @@ func cmdServe(args []string) error {
 		}
 		// The claim answers no amount, so what it was worth is the difference in the balance.
 		gained := 0.0
-		if money, err := client.Money(team, 0); err == nil && before > 0 {
+		if money, err := acting.Money(team, 0); err == nil && before > 0 {
 			gained = money.TeamMoney - before
 		}
 		slog.Info("daily reward claimed", "league", league, "amount", int64(gained))
@@ -396,7 +399,7 @@ func cmdServe(args []string) error {
 			}
 			return
 		}
-		saved, was, err := savedLineup(client, team)
+		saved, was, err := savedLineup(acting, team)
 		if err != nil {
 			slog.Warn("lineup unreadable", "reason", err.Error())
 			return
@@ -455,7 +458,7 @@ func cmdServe(args []string) error {
 			return
 		}
 		cash := 0.0
-		if money, err := client.Money(team, time.Minute); err == nil {
+		if money, err := acting.Money(team, time.Minute); err == nil {
 			cash = money.TeamMoney
 		}
 		rows := playerRows(universe)
@@ -576,11 +579,11 @@ func cmdServe(args []string) error {
 			if err != nil {
 				return false, nil, err
 			}
-			events, err := client.ActivityRaw(league, 0, 0, true)
+			events, err := probing.ActivityRaw(league, 0, 0, true)
 			if err != nil {
 				return false, nil, err
 			}
-			listings, err := client.MarketRaw(league, 0, true)
+			listings, err := probing.MarketRaw(league, 0, true)
 			if err != nil {
 				return false, nil, err
 			}
@@ -634,8 +637,8 @@ func cmdServe(args []string) error {
 			// Seed the probe from what the first rebuild already read, so the loop does not
 			// begin by asking the API to confirm data it is holding.
 			if league, _, err := ensureLeague(); err == nil {
-				if events, err := client.ActivityRaw(league, 0, time.Minute, false); err == nil {
-					if listings, err := client.MarketRaw(league, time.Minute, false); err == nil {
+				if events, err := probing.ActivityRaw(league, 0, time.Minute, false); err == nil {
+					if listings, err := probing.MarketRaw(league, time.Minute, false); err == nil {
 						probeParts = schedule.ProbeParts(events, listings)
 					}
 				}
@@ -698,7 +701,7 @@ func cmdServe(args []string) error {
 	panel := server.New(world, server.Options{
 		Host: *host, Port: *port, AllowWrites: allowWrites, Mode: mode, Rehearse: writes.Rehearsal,
 		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
-		Client: client, Guard: guard, LeagueID: league, MyTeamID: team,
+		Client: interactive, Guard: guard, LeagueID: league, MyTeamID: team,
 		Identity:       knownLeague,
 		HoldExceptions: rules.For(league).HoldExceptions,
 		MaxDebtPct:     rules.For(league).MaxDebtPct,
@@ -714,7 +717,7 @@ func cmdServe(args []string) error {
 		},
 		Adopted:  boot,
 		Restart:  restart,
-		Leagues:  func() ([]server.LeagueChoice, error) { return listLeagues(client) },
+		Leagues:  func() ([]server.LeagueChoice, error) { return listLeagues(interactive) },
 		Services: clocks,
 		Access:   access,
 		Allow:    os.Getenv("FANTASY_ALLOW"),
@@ -729,7 +732,7 @@ func cmdServe(args []string) error {
 			if err != nil {
 				return server.Rendered{}
 			}
-			document, err := buildDocument(universe, client, team, "", mode)
+			document, err := buildDocument(universe, interactive, team, "", mode)
 			if err != nil {
 				slog.Error("render failed", "reason", err.Error())
 				return server.Rendered{
