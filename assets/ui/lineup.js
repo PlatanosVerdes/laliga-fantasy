@@ -40,9 +40,8 @@ function sellState(p) {
 const Starts = ({p}) => p.start_probability == null ? null
   : html`<span class=${'tok-start ' + startPill(p.start_probability)} data-tip="probabilidad de ser titular">${Math.round(p.start_probability)} %</span>`;
 
-// Where the grip shows (report.css hides it under hover:hover) there is no native drag: iOS and
-// Android start one on a held tap, which swallows the click and leaves the pitch marked.
-const canDrag = () => matchMedia('(hover: hover)').matches;
+// A drag lives while drag/dragover keep firing, even held still; a phone can lose its dragend.
+const DRAG_QUIET = 1000, DRAG_GIVE_UP = 5000;
 
 const asShield = (p) => ({shielded: p.shielded, shielded_when: p.shielded_until ? whenShort(p.shielded_until) : ''});
 
@@ -51,7 +50,7 @@ function Lineup() {
   const [, setTick] = useState(0);
   const redraw = () => setTick((n) => n + 1);
   const st = useRef({state: null, dirty: false, failed: false, lifted: null, dragged: null,
-    justDragged: false, status: '', warn: false, saving: false}).current;
+    lastDrag: 0, watch: null, justDragged: false, status: '', warn: false, saving: false}).current;
 
   const load = async () => {
     try { st.state = await getJSON('/api/lineup'); st.failed = false; } catch (e) { st.failed = true; }
@@ -60,7 +59,39 @@ function Lineup() {
   };
   // A rebuild must not throw away unsaved changes: the pitch is reloaded only when clean.
   useEffect(() => { if (!st.state || !st.dirty) load(); }, [stamp]);
-  useEffect(() => () => marking(null), []);
+  const endDrag = () => {
+    clearInterval(st.watch); st.watch = null;
+    document.querySelectorAll('#pitch .dragging, #bench .dragging').forEach((node) => node.classList.remove('dragging'));
+    st.dragged = null;
+    marking(null);
+    if (st.lifted) marking(st.lifted);
+  };
+  const quiet = (ms) => Date.now() - st.lastDrag > ms;
+  useEffect(() => {
+    const alive = () => { st.lastDrag = Date.now(); };
+    // Phones cancel the pointer as the drag starts, so these only end a drag that went quiet.
+    const settle = () => {
+      if (st.dragged) setTimeout(() => { if (st.dragged && quiet(DRAG_QUIET)) endDrag(); else settle(); }, DRAG_QUIET + 200);
+    };
+    const away = () => { if (st.dragged) endDrag(); };
+    const hidden = () => { if (document.hidden) away(); };
+    // No click happens mid-drag, so any click ends one; outside the pitch it also drops a lifted player.
+    const click = (e) => {
+      away();
+      if (st.lifted && !(e.target.closest && e.target.closest('.pitch, .bench'))) {
+        st.lifted = null; st.status = ''; marking(null); redraw();
+      }
+    };
+    const on = [['drag', alive], ['dragover', alive], ['pointerup', settle], ['pointercancel', settle],
+      ['touchend', settle], ['touchcancel', settle], ['visibilitychange', hidden], ['click', click]];
+    on.forEach(([kind, run]) => document.addEventListener(kind, run, true));
+    addEventListener('blur', away);
+    return () => {
+      on.forEach(([kind, run]) => document.removeEventListener(kind, run, true));
+      removeEventListener('blur', away);
+      endDrag(); marking(null);
+    };
+  }, []);
 
   if (st.failed) return html`<${Frame} st=${st}><div class="pitch" id="pitch"><p class="slot empty" style="width:auto">Solo disponible en la version servida</p></div><//>`;
   const s = st.state;
@@ -174,24 +205,27 @@ function Lineup() {
   // What drags: who and from where.
   const source = (p, from, line, index) => ({id: String(p.id), pos: p.position_id, from, line, index});
   const draggable = (p, from, line, index) => ({
-    draggable: canDrag(),
+    draggable: true,
     onDragStart: (e) => {
       st.dragged = source(p, from, line, index);
+      st.lastDrag = Date.now();
+      clearInterval(st.watch);
+      st.watch = setInterval(() => { if (quiet(DRAG_GIVE_UP)) endDrag(); }, 1000);
       e.currentTarget.classList.add('dragging');
       marking(st.dragged);
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', String(p.id));
     },
-    onDragEnd: (e) => {
-      e.currentTarget.classList.remove('dragging'); st.dragged = null;
+    onDragEnd: () => {
+      endDrag();
       st.justDragged = true; setTimeout(() => { st.justDragged = false; }, 250);
-      marking(null);
     },
     // Dragging and clicking start the same way, so a drop must not open the card.
     onClick: (e) => {
       if (e.target.closest('.slot-grip')) return;
       if (place(from === 'bench' ? {bench: true} : {line, index})) return;
       if (st.justDragged) return;
+      endDrag();
       panel().openDetail(p.id);
     },
   });
@@ -207,7 +241,9 @@ function Lineup() {
     onDrop: (e) => {
       e.preventDefault(); e.currentTarget.classList.remove('drop-target');
       if (!st.dragged) return;
-      if (where.bench) dropOnBench(st.dragged); else dropOnSlot(st.dragged, where.line, where.index);
+      const moving = st.dragged;
+      endDrag();
+      if (where.bench) dropOnBench(moving); else dropOnSlot(moving, where.line, where.index);
     },
   });
   // Without a mouse the grip lifts a player and the next tap drops him.
