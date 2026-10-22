@@ -40,6 +40,10 @@ function sellState(p) {
 const Starts = ({p}) => p.start_probability == null ? null
   : html`<span class=${'tok-start ' + startPill(p.start_probability)} data-tip="probabilidad de ser titular">${Math.round(p.start_probability)} %</span>`;
 
+// Where the grip shows (report.css hides it under hover:hover) there is no native drag: iOS and
+// Android start one on a held tap, which swallows the click and leaves the pitch marked.
+const canDrag = () => matchMedia('(hover: hover)').matches;
+
 const asShield = (p) => ({shielded: p.shielded, shielded_when: p.shielded_until ? whenShort(p.shielded_until) : ''});
 
 function Lineup() {
@@ -170,7 +174,7 @@ function Lineup() {
   // What drags: who and from where.
   const source = (p, from, line, index) => ({id: String(p.id), pos: p.position_id, from, line, index});
   const draggable = (p, from, line, index) => ({
-    draggable: true,
+    draggable: canDrag(),
     onDragStart: (e) => {
       st.dragged = source(p, from, line, index);
       e.currentTarget.classList.add('dragging');
@@ -206,7 +210,7 @@ function Lineup() {
       if (where.bench) dropOnBench(st.dragged); else dropOnSlot(st.dragged, where.line, where.index);
     },
   });
-  // A touchscreen emits no dragstart, so the grip lifts a player and the next tap drops him.
+  // Without a mouse the grip lifts a player and the next tap drops him.
   const grip = (p, from, line, index) => html`<button class="slot-grip" type="button" title="Mover"
     onClick=${(e) => {
       e.stopPropagation();
