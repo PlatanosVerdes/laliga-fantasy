@@ -114,8 +114,7 @@ func ParseHierarchy(page, team string) []map[string]any {
 }
 
 // Hierarchies are every club's hierarchy. The clubs come from the injured page's team menu,
-// which the absences read anyway, so it is read with their lifetime; a club whose page fails
-// is just missing.
+// which the absences read anyway; a club whose page fails is just missing.
 func Hierarchies(ttl, absencesTTL time.Duration) []map[string]any {
 	menu, err := fetch(config.FFInjuredURL, absencesTTL, "ff_absences")
 	if err != nil {

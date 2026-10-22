@@ -648,8 +648,7 @@ func ParseAbsences(page, kind string) []map[string]any {
 	return out
 }
 
-// Absences are the injured and the suspended, from the two pages that list them. The error
-// is the first page that failed; the rows of the other are still returned.
+// Absences are the injured and the suspended; on error, the page that worked still counts.
 func Absences(ttl time.Duration) ([]map[string]any, error) {
 	out := []map[string]any{}
 	var failed error

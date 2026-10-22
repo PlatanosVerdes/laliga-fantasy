@@ -10,19 +10,14 @@ import (
 )
 
 const (
-	// AbsencesTTL is how long the injury pages keep while no match is near.
-	AbsencesTTL = 3 * time.Hour
-	// AfterMatchAbsencesTTL is how long they keep from kick-off until AfterMatchWindow past
-	// the final whistle, when the knocks of the day get published.
+	AbsencesTTL           = 3 * time.Hour
 	AfterMatchAbsencesTTL = 15 * time.Minute
 	AfterMatchWindow      = 2 * time.Hour
-	// MatchLength stands in for the final whistle, which the calendar does not give: ninety
-	// minutes, halftime and added time.
+	// The calendar has no final whistle: 90 minutes, half-time and added time.
 	MatchLength = 115 * time.Minute
 )
 
-// AbsencesTTLAt is how long the absences pages keep at `now`. A match under way counts as
-// recent too: an injury in the first half can be up before the second ends.
+// A match under way counts too: a first-half injury can be up before the final whistle.
 func AbsencesTTLAt(fixtures []Fixture, now time.Time) time.Duration {
 	for _, fixture := range fixtures {
 		kickoff, err := parseTime(fixture.Kickoff)
@@ -36,7 +31,6 @@ func AbsencesTTLAt(fixtures []Fixture, now time.Time) time.Duration {
 	return AbsencesTTL
 }
 
-// SinceLastMatch is how long ago the most recent match ended, false when none has.
 func SinceLastMatch(fixtures []Fixture, now time.Time) (time.Duration, bool) {
 	var latest time.Time
 	for _, fixture := range fixtures {
@@ -54,8 +48,7 @@ func SinceLastMatch(fixtures []Fixture, now time.Time) (time.Duration, bool) {
 	return now.Sub(latest), true
 }
 
-// recentFixtures is this matchday and the one before: the last match of a matchday can still
-// be in its window when the API has already moved on to the next.
+// The previous matchday too: the API moves on while its last match is still in the window.
 func recentFixtures(client *api.Client, teams []api.Team) []Fixture {
 	week, err := client.CurrentWeek(30 * time.Minute)
 	if err != nil {
@@ -70,8 +63,6 @@ func recentFixtures(client *api.Client, teams []api.Team) []Fixture {
 	return out
 }
 
-// AbsenceWatch remembers the last absences read, to log when they change and how long after
-// a match that was.
 type AbsenceWatch struct {
 	mu   sync.Mutex
 	seen map[string]bool
@@ -79,8 +70,7 @@ type AbsenceWatch struct {
 
 var absenceWatch AbsenceWatch
 
-// Changes compares rows with the previous read and keeps them as the new one. A row edited in
-// place counts as one removed and one added. The first read is never a change.
+// A row edited in place counts as one removed and one added; the first read is never a change.
 func (w *AbsenceWatch) Changes(rows []map[string]any) (added, removed int, changed bool) {
 	current := make(map[string]bool, len(rows))
 	for _, row := range rows {
@@ -111,7 +101,6 @@ func (w *AbsenceWatch) Changes(rows []map[string]any) (added, removed int, chang
 	return added, removed, added+removed > 0
 }
 
-// Observe logs one line when the absences differ from the last read.
 func (w *AbsenceWatch) Observe(rows []map[string]any, fixtures []Fixture, ttl time.Duration,
 	now time.Time) {
 	added, removed, changed := w.Changes(rows)
