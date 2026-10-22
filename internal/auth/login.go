@@ -161,8 +161,7 @@ func ExchangeCode(code, verifier string) (*Tokens, error) {
 	return tokens, nil
 }
 
-// Exchange trades the code for tokens and stores nothing, so the caller can decide first
-// whether this user may come in.
+// Exchange stores nothing, so the caller can decide first whether this user may come in.
 func Exchange(code, verifier string) (*Tokens, error) {
 	var answer map[string]any
 	err := httpx.PostForm(config.B2CTokenURL+"?p="+config.B2CSignInPolicy, map[string]string{
@@ -192,8 +191,6 @@ func randomURLSafe(bytes int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
-// Parse reads a pasted tokens.json — the fastest way out of a broken session when there is
-// already a working one on another machine — without storing it.
 func Parse(blob string) (*Tokens, error) {
 	var raw map[string]any
 	if err := json.Unmarshal([]byte(blob), &raw); err != nil {

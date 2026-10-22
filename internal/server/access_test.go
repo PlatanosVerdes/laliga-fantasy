@@ -186,7 +186,6 @@ func TestAccessDoorNeedsEverySetting(t *testing.T) {
 	}
 }
 
-// The private door asks for a session only; the tunnel's door asks for an Access token too.
 func TestOnlyTheTunnelDoorAsksForAToken(t *testing.T) {
 	panel := New(nil, Options{Access: Access{Port: 8001, TeamDomain: testTeam, Audience: testAudience}})
 	session := ownerSession(t, panel)

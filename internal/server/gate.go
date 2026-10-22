@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -67,7 +68,8 @@ func (s *Server) requireSession(next http.Handler) http.Handler {
 		if ok {
 			request = request.WithContext(context.WithValue(request.Context(), visitorKey{}, who))
 		}
-		path := request.URL.Path
+		// Cleaned, so /assets/../api/state is judged as the route it reaches.
+		path := path.Clean("/" + request.URL.Path)
 		switch {
 		case signedOut(path):
 		case !ok && path == "/":

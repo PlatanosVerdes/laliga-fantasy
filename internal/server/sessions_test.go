@@ -145,6 +145,19 @@ func TestWithoutASessionOnlyTheLoginPageAnswers(t *testing.T) {
 	}
 }
 
+func TestAnOpenPrefixDoesNotOpenTheRouteItLeadsTo(t *testing.T) {
+	freshRoot(t)
+	handler := New(nil, Options{}).Handler()
+	for _, path := range []string{"/assets/../api/state", "/assets/%2e%2e/api/views", "//api/state"} {
+		request := httptest.NewRequest(http.MethodGet, "http://localhost"+path, nil)
+		answer := httptest.NewRecorder()
+		handler.ServeHTTP(answer, request)
+		if answer.Code == http.StatusOK {
+			t.Errorf("GET %s without a session: %d %.120s", path, answer.Code, answer.Body.String())
+		}
+	}
+}
+
 func TestTheSessionCookieIsHttpOnlySecureAndLax(t *testing.T) {
 	freshRoot(t)
 	fakeExchange(t, "user-me", "me@x.com")
@@ -200,7 +213,6 @@ func TestExpiredUnknownAndRevokedSessionsAreRejected(t *testing.T) {
 		t.Errorf("a session idle for 30 days: %d", answer.Code)
 	}
 
-	// Used every day it still ends 90 days after it began.
 	busy := sessionFor(t, server, "user-me")
 	for day := 0; day < 91; day++ {
 		now = now.Add(24 * time.Hour)
@@ -307,8 +319,6 @@ func TestWithoutFantasyAllowTheSavedAccountsSignIn(t *testing.T) {
 	}
 }
 
-// Unset on a fresh install, the first to sign in owns it and the second is a stranger, even
-// once the owner has logged out of every account.
 func TestOnAFreshInstallTheFirstLoginBecomesTheOwner(t *testing.T) {
 	freshRoot(t)
 	server := New(nil, Options{})
@@ -477,7 +487,6 @@ func TestLoginAttemptsAreLimitedPerClient(t *testing.T) {
 	if status := submit("203.0.113.7:4000", ""); status != http.StatusTooManyRequests {
 		t.Errorf("attempt %d: %d, want 429", LoginAttempts+1, status)
 	}
-	// A client cannot pick another address: the header is only believed from a proxy.
 	if status := submit("203.0.113.7:4000", "198.51.100.1"); status != http.StatusTooManyRequests {
 		t.Errorf("a forged X-Forwarded-For escaped the limit: %d", status)
 	}
