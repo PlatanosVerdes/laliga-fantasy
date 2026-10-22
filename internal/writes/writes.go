@@ -439,7 +439,6 @@ type Window struct {
 type Guard struct {
 	mu     sync.Mutex
 	tokens map[string]pending
-	client *api.Client
 	// Cash reads the current balance. Injected so the guard can be exercised without a
 	// session, and so a test cannot accidentally reach the API.
 	Cash func(teamID string) (int64, error)
@@ -453,10 +452,13 @@ type Guard struct {
 
 func (g *Guard) loading() bool { return g.Loading != nil && g.Loading() }
 
-func NewGuard(client *api.Client) *Guard {
-	guard := &Guard{tokens: map[string]pending{}, client: client}
+func NewGuard(member *api.Member) *Guard {
+	guard := &Guard{tokens: map[string]pending{}}
 	guard.Cash = func(teamID string) (int64, error) {
-		money, err := client.Money(teamID, 0)
+		if teamID != member.TeamID() {
+			return 0, fmt.Errorf("el saldo del equipo %s no es de este jugador", teamID)
+		}
+		money, err := member.Money(0)
 		if err != nil {
 			return 0, err
 		}

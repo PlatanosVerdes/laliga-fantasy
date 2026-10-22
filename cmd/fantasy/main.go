@@ -232,14 +232,11 @@ func cmdServe(args []string) error {
 		writes.Rehearsal, *noAuto = true, true
 	}
 
-	client := api.New()
-	acting := client.At(httpx.Write)
-	probing := client.At(httpx.Probe)
-	interactive := client.At(httpx.Interactive)
 	var (
 		mu       sync.Mutex
 		leagueID string
 		teamID   string
+		member   *api.Member
 	)
 	// Resolved on first use rather than at startup: a fresh deploy has no settings.json and
 	// no session either, and the whole point of the setup page is to be reachable anyway.
@@ -256,13 +253,35 @@ func cmdServe(args []string) error {
 		leagueID, teamID = league, team
 		return league, team, nil
 	}
-
-	world := state.New(config.Default, func() (*model.Universe, error) {
+	ensureMember := func() (*api.Member, error) {
 		league, team, err := ensureLeague()
 		if err != nil {
 			return nil, err
 		}
-		universe, err := model.BuildLive(client, league, team, loadState(league), 2*time.Hour)
+		mu.Lock()
+		known := member
+		mu.Unlock()
+		if known != nil {
+			return known, nil
+		}
+		built, err := api.AccountOf(config.Default()).Member(league, team)
+		if err != nil {
+			return nil, err
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if member == nil {
+			member = built
+		}
+		return member, nil
+	}
+
+	world := state.New(config.Default, func() (*model.Universe, error) {
+		member, err := ensureMember()
+		if err != nil {
+			return nil, err
+		}
+		universe, err := model.BuildLive(member, loadState(member.LeagueID()), 2*time.Hour)
 		if err != nil {
 			return nil, err
 		}
@@ -294,9 +313,16 @@ func cmdServe(args []string) error {
 		return universe, nil
 	})
 
-	guard := writes.NewGuard(acting)
+	guard := writes.NewGuard(nil)
 	guard.Cash = func(team string) (int64, error) {
-		money, err := acting.Money(team, time.Minute)
+		member, err := ensureMember()
+		if err != nil {
+			return 0, err
+		}
+		if team != member.TeamID() {
+			return 0, fmt.Errorf("el saldo del equipo %s no es de este jugador", team)
+		}
+		money, err := member.At(httpx.Write).Money(time.Minute)
 		if err != nil {
 			return 0, err
 		}
@@ -317,17 +343,18 @@ func cmdServe(args []string) error {
 		if !allowWrites || *noAuto || world.Loading() {
 			return
 		}
-		league, team, err := ensureLeague()
-		if err != nil || rewards.Open(config.Default()).ClaimedToday(league) {
+		member, err := ensureMember()
+		if err != nil || rewards.Open(config.Default()).ClaimedToday(member.LeagueID()) {
 			return
 		}
-		catalogue, err := acting.DailyRewards(time.Hour)
+		acting, league, team := member.At(httpx.Write), member.LeagueID(), member.TeamID()
+		catalogue, err := acting.Global().DailyRewards(time.Hour)
 		if err != nil {
 			slog.Warn("daily reward catalogue unreadable", "reason", err.Error())
 			return
 		}
 		limit := api.DailyLimit(catalogue)
-		status, err := acting.DailyRewardStatus(league, team)
+		status, err := acting.DailyRewardStatus()
 		switch {
 		case errors.Is(err, api.ErrRewardTaken):
 			// Claimed from the phone, most likely. Stamped so the rest of the day is quiet.
@@ -346,7 +373,7 @@ func cmdServe(args []string) error {
 		}
 
 		before := 0.0
-		if money, err := acting.Money(team, 0); err == nil {
+		if money, err := acting.Money(0); err == nil {
 			before = money.TeamMoney
 		}
 		// One attempt per reward left, then the stamp: a claim that answers 200 without moving
@@ -364,7 +391,7 @@ func cmdServe(args []string) error {
 		}
 		// The claim answers no amount, so what it was worth is the difference in the balance.
 		gained := 0.0
-		if money, err := acting.Money(team, 0); err == nil && before > 0 {
+		if money, err := acting.Money(0); err == nil && before > 0 {
 			gained = money.TeamMoney - before
 		}
 		slog.Info("daily reward claimed", "league", league, "amount", int64(gained))
@@ -385,10 +412,11 @@ func cmdServe(args []string) error {
 		if universe == nil {
 			return
 		}
-		league, team, err := ensureLeague()
+		member, err := ensureMember()
 		if err != nil {
 			return
 		}
+		acting, league, team := member.At(httpx.Write), member.LeagueID(), member.TeamID()
 		squad, missing := myEleven(universe)
 		// Placing ten of eleven would bench somebody for the sake of a field the feed did not
 		// send. Better to leave the lineup alone and say why.
@@ -399,7 +427,7 @@ func cmdServe(args []string) error {
 			}
 			return
 		}
-		saved, was, err := savedLineup(acting, team)
+		saved, was, err := savedLineup(acting)
 		if err != nil {
 			slog.Warn("lineup unreadable", "reason", err.Error())
 			return
@@ -453,12 +481,13 @@ func cmdServe(args []string) error {
 		if armed, err = policies.Open(config.Default()).Load(); err != nil || len(armed) == 0 {
 			return
 		}
-		league, team, err := ensureLeague()
+		member, err := ensureMember()
 		if err != nil {
 			return
 		}
+		league, team := member.LeagueID(), member.TeamID()
 		cash := 0.0
-		if money, err := acting.Money(team, time.Minute); err == nil {
+		if money, err := member.At(httpx.Write).Money(time.Minute); err == nil {
 			cash = money.TeamMoney
 		}
 		rows := playerRows(universe)
@@ -576,15 +605,16 @@ func cmdServe(args []string) error {
 			httpx.InvalidateIn(config.Default(), tags...)
 		},
 		Probe: func() (bool, []string, error) {
-			league, _, err := ensureLeague()
+			member, err := ensureMember()
 			if err != nil {
 				return false, nil, err
 			}
-			events, err := probing.ActivityRaw(league, 0, 0, true)
+			probing := member.At(httpx.Probe)
+			events, err := probing.League().ActivityRaw(0, 0, true)
 			if err != nil {
 				return false, nil, err
 			}
-			listings, err := probing.MarketRaw(league, 0, true)
+			listings, err := probing.MarketRaw(0, true)
 			if err != nil {
 				return false, nil, err
 			}
@@ -599,7 +629,7 @@ func cmdServe(args []string) error {
 			if contains(moved, "events") {
 				// Somebody changed hands: every squad is stale however recently it was
 				// read, and so are the standings and the cash.
-				httpx.InvalidateIn(config.Default(), "squad", "money", "standing")
+				member.Invalidate("squad", "money", "standing")
 			}
 			return len(moved) > 0, moved, nil
 		},
@@ -623,8 +653,9 @@ func cmdServe(args []string) error {
 			model.StartProgress()
 			// My squad, then the market, then the rivals, each shown as soon as it is read. The
 			// build after it finds those answers in the cache and produces the same world.
-			if league, team, err := ensureLeague(); err == nil {
-				if err := model.BuildPreview(client, league, team, world.ShowPreview); err != nil {
+			if member, err := ensureMember(); err == nil {
+				if err := model.BuildPreview(member.Global(), member.League(), member,
+					world.ShowPreview); err != nil {
 					slog.Warn("preview stopped", "reason", err.Error())
 				}
 			}
@@ -637,9 +668,10 @@ func cmdServe(args []string) error {
 			model.EndProgress()
 			// Seed the probe from what the first rebuild already read, so the loop does not
 			// begin by asking the API to confirm data it is holding.
-			if league, _, err := ensureLeague(); err == nil {
-				if events, err := probing.ActivityRaw(league, 0, time.Minute, false); err == nil {
-					if listings, err := probing.MarketRaw(league, time.Minute, false); err == nil {
+			if member, err := ensureMember(); err == nil {
+				probing := member.At(httpx.Probe)
+				if events, err := probing.League().ActivityRaw(0, time.Minute, false); err == nil {
+					if listings, err := probing.MarketRaw(time.Minute, false); err == nil {
 						probeParts = schedule.ProbeParts(events, listings)
 					}
 				}
@@ -656,7 +688,7 @@ func cmdServe(args []string) error {
 		go boot()
 	case server.HasSession():
 		// An account with no league chosen: one league is chosen for it, several are asked.
-		if leagues, err := listLeagues(client); err != nil {
+		if leagues, err := listLeagues(api.AccountOf(config.Default())); err != nil {
 			slog.Error("leagues unreadable", "reason", err.Error())
 		} else if len(leagues) == 1 {
 			if err := config.SetActive(config.Account, leagues[0].ID); err == nil {
@@ -702,7 +734,21 @@ func cmdServe(args []string) error {
 	panel := server.New(world, server.Options{
 		Host: *host, Port: *port, AllowWrites: allowWrites, Mode: mode, Rehearse: writes.Rehearsal,
 		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
-		Client: interactive, Guard: guard, LeagueID: league, MyTeamID: team,
+		Global: api.NewGlobal().At(httpx.Interactive),
+		Account: func() *api.Account {
+			return api.AccountOf(config.Default()).At(httpx.Interactive)
+		},
+		Member: func() *api.Member {
+			if league, team := knownLeague(); league == "" || team == "" {
+				return nil
+			}
+			member, err := ensureMember()
+			if err != nil {
+				return nil
+			}
+			return member.At(httpx.Interactive)
+		},
+		Guard: guard, LeagueID: league, MyTeamID: team,
 		Identity:       knownLeague,
 		Profile:        config.Default,
 		HoldExceptions: rules.Open(config.Default()).For(league).HoldExceptions,
@@ -717,9 +763,11 @@ func cmdServe(args []string) error {
 				slog.Error("settle failed", "cause", cause, "reason", err.Error())
 			}
 		},
-		Adopted:  boot,
-		Restart:  restart,
-		Leagues:  func() ([]server.LeagueChoice, error) { return listLeagues(interactive) },
+		Adopted: boot,
+		Restart: restart,
+		Leagues: func() ([]server.LeagueChoice, error) {
+			return listLeagues(api.AccountOf(config.Default()).At(httpx.Interactive))
+		},
 		Services: clocks,
 		Access:   access,
 		Allow:    os.Getenv("FANTASY_ALLOW"),
@@ -730,11 +778,11 @@ func cmdServe(args []string) error {
 			if universe == nil {
 				return server.Rendered{}
 			}
-			_, team, err := ensureLeague()
+			member, err := ensureMember()
 			if err != nil {
 				return server.Rendered{}
 			}
-			document, err := buildDocument(universe, interactive, team, "", mode)
+			document, err := buildDocument(universe, member.At(httpx.Interactive), "", mode)
 			if err != nil {
 				slog.Error("render failed", "reason", err.Error())
 				return server.Rendered{
@@ -802,11 +850,11 @@ func parseInterval(value string) (time.Duration, error) {
 // Deliberately only the ported half: claiming a field that is not built yet would make
 // the comparison green for the wrong reason.
 func cmdModel(args []string) error {
-	leagueID, teamID, err := savedLeague()
+	member, err := savedMember()
 	if err != nil {
 		return err
 	}
-	universe, err := model.BuildLive(api.New(), leagueID, teamID, loadState(leagueID), 2*time.Hour)
+	universe, err := model.BuildLive(member, loadState(member.LeagueID()), 2*time.Hour)
 	if err != nil {
 		return err
 	}
@@ -860,8 +908,8 @@ func resolveLeague(wanted string) (string, string, error) {
 		return leagueID, teamID, nil
 	}
 
-	client := api.New()
-	entries, err := client.Leagues(time.Hour)
+	account := api.AccountOf(config.Default())
+	entries, err := account.Leagues(time.Hour)
 	if err != nil {
 		return "", "", err
 	}
@@ -895,28 +943,8 @@ func resolveLeague(wanted string) (string, string, error) {
 		}
 	}
 	leagueID = text(chosen["id"])
-	teamID = text(mapFrom(chosen["team"])["id"])
-	if teamID == "" {
-		// Some payloads leave the team out, so it has to be found by matching our own user
-		// id against the standings.
-		user, err := client.Me(time.Hour)
-		if err != nil {
-			return "", "", err
-		}
-		mine := fallbackText(text(user["id"]), text(user["userId"]))
-		rows, err := client.Standings(leagueID, time.Hour)
-		if err != nil {
-			return "", "", err
-		}
-		for _, row := range rows {
-			if text(row["userId"]) == mine {
-				teamID = text(row["teamId"])
-				break
-			}
-		}
-	}
-	if teamID == "" {
-		return "", "", fmt.Errorf("no encuentro tu equipo en la liga %s", leagueID)
+	if teamID, err = account.Team(leagueID); err != nil {
+		return "", "", err
 	}
 	if err := saveSettings(map[string]any{"league_id": leagueID, "team_id": teamID,
 		"league_name": chosen["name"]}); err != nil {
@@ -970,6 +998,14 @@ func savedLeague() (string, string, error) {
 		return "", "", err
 	}
 	return settings.LeagueID, settings.TeamID, nil
+}
+
+func savedMember() (*api.Member, error) {
+	leagueID, teamID, err := savedLeague()
+	if err != nil {
+		return nil, err
+	}
+	return api.AccountOf(config.Default()).Member(leagueID, teamID)
 }
 
 // cmdWake prints what the scheduler would decide for a recorded payload at a given
@@ -1280,12 +1316,11 @@ func cmdReport(args []string) error {
 		return err
 	}
 
-	leagueID, teamID, err := savedLeague()
+	member, err := savedMember()
 	if err != nil {
 		return err
 	}
-	client := api.New()
-	universe, err := model.BuildLive(client, leagueID, teamID, loadState(leagueID), 2*time.Hour)
+	universe, err := model.BuildLive(member, loadState(member.LeagueID()), 2*time.Hour)
 	if err != nil {
 		return err
 	}
@@ -1294,7 +1329,7 @@ func cmdReport(args []string) error {
 	}
 
 	// A file written by `report` acts on nothing, whatever the server would do.
-	page, err := renderPage(universe, client, teamID, *generated, "informe")
+	page, err := renderPage(universe, member, *generated, "informe")
 	if err != nil {
 		return err
 	}
@@ -1534,9 +1569,9 @@ func mineByWeek(universe *model.Universe) map[int]map[string]int {
 	return out
 }
 
-func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
+func renderPage(universe *model.Universe, member *api.Member, generated,
 	mode string) (string, error) {
-	document, err := buildDocument(universe, client, teamID, generated, mode)
+	document, err := buildDocument(universe, member, generated, mode)
 	if err != nil {
 		return "", err
 	}
@@ -1555,12 +1590,12 @@ var prepareRender = sync.OnceFunc(func() {
 	}
 })
 
-func buildDocument(universe *model.Universe, client *api.Client, teamID, generated,
+func buildDocument(universe *model.Universe, member *api.Member, generated,
 	mode string) (render.Document, error) {
 	cash := 0.0
 	if cashOverride != nil {
 		cash = *cashOverride
-	} else if money, err := client.Money(teamID, time.Minute); err == nil {
+	} else if money, err := member.Money(time.Minute); err == nil {
 		cash = money.TeamMoney
 	}
 	server.Rendering.Reached("Saldo", 1, 1)
@@ -2011,12 +2046,20 @@ func cmdProbe(args []string) error {
 		leagueID = settings.LeagueID
 	}
 
-	client := api.New()
-	events, err := client.ActivityRaw(leagueID, 0, 0, true)
+	account := api.AccountOf(config.Default())
+	teamID, err := account.Team(leagueID)
 	if err != nil {
 		return err
 	}
-	listings, err := client.Market(leagueID, 0, true)
+	member, err := account.Member(leagueID, teamID)
+	if err != nil {
+		return err
+	}
+	events, err := member.League().ActivityRaw(0, 0, true)
+	if err != nil {
+		return err
+	}
+	listings, err := member.Market(0, true)
 	if err != nil {
 		return err
 	}
@@ -2049,8 +2092,8 @@ func restart() {
 }
 
 // listLeagues is every league the active account plays in.
-func listLeagues(client *api.Client) ([]server.LeagueChoice, error) {
-	entries, err := client.Leagues(time.Hour)
+func listLeagues(account *api.Account) ([]server.LeagueChoice, error) {
+	entries, err := account.Leagues(time.Hour)
 	if err != nil {
 		return nil, err
 	}

@@ -40,7 +40,7 @@ func (l *league) TeamsMaster(ttl time.Duration) ([]api.Team, error) {
 		{ID: "t3", Name: "Betis"}}, nil
 }
 
-func (l *league) Standings(leagueID string, ttl time.Duration) ([]map[string]any, error) {
+func (l *league) Standings(ttl time.Duration) ([]map[string]any, error) {
 	l.note("standings %s", ttl)
 	return []map[string]any{
 		{"id": "rival", "manager": "Rafa", "points": 300.0, "position": 1.0},
@@ -48,7 +48,7 @@ func (l *league) Standings(leagueID string, ttl time.Duration) ([]map[string]any
 	}, nil
 }
 
-func (l *league) TeamSquad(leagueID, teamID string, ttl time.Duration) (map[string]any, error) {
+func (l *league) TeamSquad(teamID string, ttl time.Duration) (map[string]any, error) {
 	l.note("squad %s %s", teamID, ttl)
 	players := map[string][]any{
 		"me": {map[string]any{"playerMaster": map[string]any{"id": "10"}, "buyoutClause": 30000000.0},
@@ -73,12 +73,14 @@ func (l *league) Player(playerID string, ttl time.Duration) (map[string]any, err
 	return map[string]any{"playerStatus": "ok"}, nil
 }
 
-func (l *league) Money(teamID string, ttl time.Duration) (api.Money, error) {
-	l.note("money %s %s", teamID, ttl)
+func (l *league) TeamID() string { return "me" }
+
+func (l *league) Money(ttl time.Duration) (api.Money, error) {
+	l.note("money %s %s", l.TeamID(), ttl)
 	return api.Money{TeamMoney: 4_500_000}, nil
 }
 
-func (l *league) MarketRaw(leagueID string, ttl time.Duration, store bool) ([]map[string]any, error) {
+func (l *league) MarketRaw(ttl time.Duration, store bool) ([]map[string]any, error) {
 	l.note("market %s", ttl)
 	return []map[string]any{{"id": "m1", "salePrice": 9500000.0,
 		"playerMaster": map[string]any{"id": "30", "marketValue": 9000000.0}}}, nil
@@ -90,7 +92,7 @@ func TestPreviewReadsMyTeamThenTheMarketThenTheRivals(t *testing.T) {
 	source := &league{}
 	var stages []Preview
 	var askedBefore []int
-	err := BuildPreview(source, "L", "me", func(preview Preview) {
+	err := BuildPreview(source, source, source, func(preview Preview) {
 		stages = append(stages, preview)
 		askedBefore = append(askedBefore, len(source.calls))
 	})
@@ -147,7 +149,7 @@ func TestPreviewReadsMyTeamThenTheMarketThenTheRivals(t *testing.T) {
 // so the build after it reads them back from the cache instead of asking again.
 func TestPreviewAsksWhatBuildAsksForAsLong(t *testing.T) {
 	source := &league{}
-	if err := BuildPreview(source, "L", "me", func(Preview) {}); err != nil {
+	if err := BuildPreview(source, source, source, func(Preview) {}); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"week 30m0s", "teams 24h0m0s", "players 6h0m0s", "standings 30m0s",

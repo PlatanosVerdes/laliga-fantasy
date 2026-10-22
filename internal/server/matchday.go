@@ -126,7 +126,7 @@ func (s *Server) matchday(writer http.ResponseWriter, request *http.Request) {
 			"is_me":   universe.MyTeamID != nil && teamOfUser[user] == *universe.MyTeamID,
 			"players": len(squad), "playing": playing, "squad": squad,
 		}
-		if s.opts.Client != nil {
+		if s.member() != nil {
 			if fielded, formation, points, err := s.lineupOf(teamOfUser[user], week,
 				lineupTTL); err == nil && len(fielded) > 0 {
 				entry["lineup"] = fielded
@@ -211,7 +211,11 @@ func (s *Server) lineupOf(teamID string, week int,
 	if teamID == "" {
 		return nil, nil, 0, nil
 	}
-	payload, err := s.opts.Client.TeamLineupWeek(teamID, week, ttl)
+	member := s.member()
+	if member == nil {
+		return nil, nil, 0, nil
+	}
+	payload, err := member.League().TeamLineupWeek(teamID, week, ttl)
 	if err != nil {
 		return nil, nil, 0, err
 	}

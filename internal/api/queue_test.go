@@ -26,7 +26,7 @@ func TestAClientTaggedForWritesStillReadsWhileLaLigaHasUsPaused(t *testing.T) {
 	t.Cleanup(httpx.SetQueue(httpx.NewQueue(nil, httpx.DefaultLimits(), nil,
 		httpx.LaLigaHosts()...)))
 
-	client := New()
+	client := NewGlobal()
 	var limited *httpx.RateLimited
 	if _, err := client.At(httpx.Probe).CurrentWeek(0); !errors.As(err, &limited) {
 		t.Fatalf("the first answer is the 429: %v", err)

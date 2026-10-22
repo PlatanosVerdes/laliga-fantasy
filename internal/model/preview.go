@@ -56,36 +56,43 @@ type PreviewListing struct {
 	Listing Listing       `json:"listing"`
 }
 
-// PreviewSource is what the preview reads; *api.Client is one.
-type PreviewSource interface {
+// PreviewGlobal, PreviewLeague and PreviewMember are what the preview reads; *api.Global,
+// *api.League and *api.Member are them.
+type PreviewGlobal interface {
 	lister
 	CurrentWeek(ttl time.Duration) (api.Week, error)
 	TeamsMaster(ttl time.Duration) ([]api.Team, error)
-	Standings(leagueID string, ttl time.Duration) ([]map[string]any, error)
-	TeamSquad(leagueID, teamID string, ttl time.Duration) (map[string]any, error)
-	TeamLineupWeek(teamID string, week int, ttl time.Duration) (map[string]any, error)
 	Player(playerID string, ttl time.Duration) (map[string]any, error)
-	Money(teamID string, ttl time.Duration) (api.Money, error)
-	MarketRaw(leagueID string, ttl time.Duration, store bool) ([]map[string]any, error)
+}
+
+type PreviewLeague interface {
+	Standings(ttl time.Duration) ([]map[string]any, error)
+	TeamSquad(teamID string, ttl time.Duration) (map[string]any, error)
+	TeamLineupWeek(teamID string, week int, ttl time.Duration) (map[string]any, error)
+}
+
+type PreviewMember interface {
+	TeamID() string
+	Money(ttl time.Duration) (api.Money, error)
+	MarketRaw(ttl time.Duration, store bool) ([]map[string]any, error)
 }
 
 // BuildPreview reads my squad, the market and the rivals' squads, in that order, and hands
 // over what it has after each. Every request is one Build makes too, with the same lifetime,
 // so the full build that follows reads them back from the cache: the preview moves them to the
 // front of the cold start without adding any, and without touching what Build produces.
-func BuildPreview(source PreviewSource, leagueID, myTeamID string, publish func(Preview)) error {
-	if leagueID == "" || myTeamID == "" {
-		return fmt.Errorf("sin liga o sin equipo")
-	}
-	week, err := source.CurrentWeek(30 * time.Minute)
+func BuildPreview(global PreviewGlobal, league PreviewLeague, member PreviewMember,
+	publish func(Preview)) error {
+	myTeamID := member.TeamID()
+	week, err := global.CurrentWeek(30 * time.Minute)
 	if err != nil {
 		return fmt.Errorf("week: %w", err)
 	}
-	teams, err := source.TeamsMaster(24 * time.Hour)
+	teams, err := global.TeamsMaster(24 * time.Hour)
 	if err != nil {
 		return fmt.Errorf("teams: %w", err)
 	}
-	raw, err := allPlayers(source)
+	raw, err := allPlayers(global)
 	if err != nil {
 		return fmt.Errorf("players: %w", err)
 	}
@@ -107,7 +114,7 @@ func BuildPreview(source PreviewSource, leagueID, myTeamID string, publish func(
 			Points: number(entry["points"]), Status: strings.ToLower(text(entry["playerStatus"]))}, true
 	}
 
-	standings, err := source.Standings(leagueID, 30*time.Minute)
+	standings, err := league.Standings(30 * time.Minute)
 	if err != nil {
 		return fmt.Errorf("standings: %w", err)
 	}
@@ -119,7 +126,7 @@ func BuildPreview(source PreviewSource, leagueID, myTeamID string, publish func(
 		} else if row.Name != nil && *row.Name != "" {
 			team.Name = *row.Name
 		}
-		squad, err := source.TeamSquad(leagueID, row.TeamID, 30*time.Minute)
+		squad, err := league.TeamSquad(row.TeamID, 30*time.Minute)
 		if err != nil {
 			return team, err
 		}
@@ -161,7 +168,7 @@ func BuildPreview(source PreviewSource, leagueID, myTeamID string, publish func(
 		return fmt.Errorf("my team is not in the standings")
 	}
 	starters := map[string]bool{}
-	if payload, err := source.TeamLineupWeek(myTeamID, week.WeekNumber, 5*time.Minute); err == nil {
+	if payload, err := league.TeamLineupWeek(myTeamID, week.WeekNumber, 5*time.Minute); err == nil {
 		for _, shirt := range LineupOf(payload, week.WeekNumber) {
 			starters[shirt.ID] = true
 		}
@@ -169,18 +176,18 @@ func BuildPreview(source PreviewSource, leagueID, myTeamID string, publish func(
 	for index := range preview.Mine.Players {
 		player := &preview.Mine.Players[index]
 		player.Starter = starters[player.ID]
-		if detail, err := source.Player(player.ID, OwnStatusTTL); err == nil {
+		if detail, err := global.Player(player.ID, OwnStatusTTL); err == nil {
 			player.Status = graverStatus(player.Status, text(detail["playerStatus"]))
 		}
 	}
-	if money, err := source.Money(myTeamID, time.Minute); err == nil {
+	if money, err := member.Money(time.Minute); err == nil {
 		cash := money.TeamMoney
 		preview.Cash = &cash
 	}
 	reached("Tu equipo", 1, 1)
 	publish(preview)
 
-	entries, err := source.MarketRaw(leagueID, time.Minute, false)
+	entries, err := member.MarketRaw(time.Minute, false)
 	if err != nil {
 		return fmt.Errorf("market: %w", err)
 	}

@@ -34,7 +34,11 @@ func (s *Server) weekPoints(teamID string, week, last int) (float64, bool) {
 	if week >= last {
 		ttl = 10 * time.Minute
 	}
-	payload, err := s.opts.Client.TeamLineupWeek(teamID, week, ttl)
+	member := s.member()
+	if member == nil {
+		return 0, false
+	}
+	payload, err := member.League().TeamLineupWeek(teamID, week, ttl)
 	if err != nil {
 		return 0, false
 	}
@@ -93,7 +97,7 @@ func rankEach(managers []map[string]any, weeks int, from, to string) {
 
 func (s *Server) seasonTable(writer http.ResponseWriter, request *http.Request) {
 	universe := s.state.Universe()
-	if universe == nil || s.opts.Client == nil {
+	if universe == nil || s.member() == nil {
 		s.json(writer, http.StatusServiceUnavailable, map[string]any{"error": "generando"})
 		return
 	}

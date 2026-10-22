@@ -20,11 +20,11 @@ type LineupPlayer struct {
 
 // loadLineups is every manager's saved eleven for one matchday, keyed by team id. A team whose
 // lineup cannot be read is left out, and the readers fall back to what they did without it.
-func loadLineups(client *api.Client, teams map[string]*LeagueTeam,
+func loadLineups(league *api.League, teams map[string]*LeagueTeam,
 	week int) map[string][]LineupPlayer {
 	out := map[string][]LineupPlayer{}
 	for teamID := range teams {
-		payload, err := client.TeamLineupWeek(teamID, week, 5*time.Minute)
+		payload, err := league.TeamLineupWeek(teamID, week, 5*time.Minute)
 		if err != nil {
 			slog.Debug("lineup unavailable", "team", teamID, "week", week,
 				"reason", err.Error())

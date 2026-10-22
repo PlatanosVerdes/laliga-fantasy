@@ -50,8 +50,11 @@ type Options struct {
 	Page func() Rendered
 	// Refresh forces a rebuild, for /refresh.
 	Refresh func(cause string, force bool) error
-	// Client reads the live half of a request: the lineup, the value history, the balance.
-	Client *api.Client
+	// Global, Account and Member read the live half of a request: the lineup, the value history,
+	// the balance. Member answers nil until the league is known.
+	Global  *api.Global
+	Account func() *api.Account
+	Member  func() *api.Member
 	// Guard is the two-step write path. Nil means the binary was built to only read.
 	Guard *writes.Guard
 	// Which league and team every write belongs to. Identity, when set, wins: a server
@@ -265,6 +268,13 @@ func (s *Server) identity() (string, string) {
 		}
 	}
 	return s.opts.LeagueID, s.opts.MyTeamID
+}
+
+func (s *Server) member() *api.Member {
+	if s.opts.Member == nil {
+		return nil
+	}
+	return s.opts.Member()
 }
 
 func (s *Server) leagueID() string {
