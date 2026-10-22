@@ -17,7 +17,6 @@ import (
 const (
 	LinkTTL      = 2 * time.Minute
 	LinksPerUser = 3
-	LinkFailures = 5
 	linkAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 	linkLength   = 8
 )
@@ -28,11 +27,10 @@ type link struct {
 	user, email string
 	expires     time.Time
 	used        bool
-	failures    int
 }
 
 func (l *link) live(now time.Time) bool {
-	return !l.used && l.failures < LinkFailures && now.Before(l.expires)
+	return !l.used && now.Before(l.expires)
 }
 
 // Memory only, keyed by the code's SHA-256: a restart drops every code.
@@ -99,7 +97,7 @@ func (d *deviceLinks) create(user, email string) (string, error) {
 	return code, nil
 }
 
-// A miss cannot tell which code was meant, so it counts against every live one.
+// A miss burns no code, or anyone could void everyone's: the per-IP limit stops guessing.
 func (d *deviceLinks) redeem(typed string) (link, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -109,11 +107,6 @@ func (d *deviceLinks) redeem(typed string) (link, bool) {
 	if entry, ok := d.byKey[hashOf(code)]; ok && len(code) == linkLength && entry.live(now) {
 		entry.used = true
 		return *entry, true
-	}
-	for _, entry := range d.byKey {
-		if entry.live(now) {
-			entry.failures++
-		}
 	}
 	return link{}, false
 }

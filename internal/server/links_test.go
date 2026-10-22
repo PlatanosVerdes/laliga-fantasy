@@ -119,19 +119,19 @@ func TestAStrangersLinkCodeRevealsNothing(t *testing.T) {
 	}
 }
 
-func TestALinkCodeLocksAfterFiveWrongTries(t *testing.T) {
+func TestAStrangersWrongTriesDoNotVoidAnotherUsersCode(t *testing.T) {
 	server := New(nil, Options{})
 	creator := ownerSession(t, server)
 	handler := server.Handler()
 	code := createLink(t, handler, creator)
-	for try := range LinkFailures {
+	for try := range LoginAttempts {
 		if answer := redeemFrom(handler, "203.0.113.5", "WRNG-MMMM"); answer.Code != http.StatusBadRequest {
 			t.Fatalf("wrong try %d: %d", try+1, answer.Code)
 		}
 	}
-	if answer := redeemFrom(handler, "203.0.113.9", code); answer.Code != http.StatusBadRequest ||
-		cookieNamed(answer, SessionCookie) != nil {
-		t.Errorf("the right code after five wrong tries: %d %s", answer.Code, answer.Body.String())
+	if answer := redeemFrom(handler, "203.0.113.9", code); answer.Code != http.StatusOK ||
+		cookieNamed(answer, SessionCookie) == nil {
+		t.Errorf("the right code after a stranger's wrong tries: %d %s", answer.Code, answer.Body.String())
 	}
 }
 

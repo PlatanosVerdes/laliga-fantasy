@@ -67,7 +67,7 @@ DevTools, it points to linking instead.
   `/vincular#<code>`. The code is single use, lives 2 minutes in memory only, stored as its
   SHA-256, at most 3 live per user. The other device types or scans it on `/vincular` and gets
   a session of its own; the creator's cookie is never copied. Wrong codes count toward the
-  per-IP login limit and burn every live code after 5, and the user is checked against
+  per-IP login limit (a miss burns no code, so nobody can void another's), and the user is checked against
   `FANTASY_ALLOW` again when the code is used.
 
 ## Extras as modules
