@@ -36,7 +36,7 @@ type Options struct {
 	Host        string
 	Port        int
 	AllowWrites bool
-	// Rehearse is writes.Rehearsal seen from here: nothing is sent, so nothing is rebuilt after.
+	// Rehearse is the guard's Rehearsal seen from here: nothing is sent, so nothing is rebuilt after.
 	Rehearse bool
 	// Mode is what this server may do, in one word: auto, manual or solo lectura. Shown on the
 	// page and answered by /api/state, because "can it act by itself" is the first question.

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/api/apitest"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/auth"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
@@ -437,7 +438,7 @@ func TestAConfirmationTokenFromAnotherSessionIsRejected(t *testing.T) {
 	if err := world.Refresh("arranque"); err != nil {
 		t.Fatal(err)
 	}
-	guard := writes.NewGuard(nil)
+	guard := writes.NewGuard(apitest.New(t).Member("cuenta", "L", "me"))
 	guard.Cash = func(string) (int64, error) { return 50_000_000, nil }
 	server := New(world, Options{AllowWrites: true, Guard: guard, LeagueID: "L", MyTeamID: "me",
 		Profile: profile})

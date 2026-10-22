@@ -228,8 +228,9 @@ func cmdServe(args []string) error {
 	flags.Visit(func(given *flag.Flag) { tickFromFlag = tickFromFlag || given.Name == "interval" })
 	clocks := services.Open(config.Default(), serviceJobs(tick, tickFromFlag)...)
 	allowWrites := !*readOnly
-	if *rehearse && allowWrites {
-		writes.Rehearsal, *noAuto = true, true
+	rehearsal := *rehearse && allowWrites
+	if rehearsal {
+		*noAuto = true
 	}
 
 	var (
@@ -313,7 +314,8 @@ func cmdServe(args []string) error {
 		return universe, nil
 	})
 
-	guard := writes.NewGuard(nil)
+	guard := writes.GuardOf(ensureMember)
+	guard.Rehearsal = rehearsal
 	guard.Cash = func(team string) (int64, error) {
 		member, err := ensureMember()
 		if err != nil {
@@ -335,6 +337,7 @@ func cmdServe(args []string) error {
 		return &writes.Window{Open: window.Open, OpensAt: window.OpensAt}
 	}
 	guard.Loading = world.Loading
+	guard.Squad = func() *writes.Squad { return squadOf(world.Universe()) }
 
 	// The daily reward: 100.000 that no rival is competing for, and the only way to lose it is
 	// to forget. It does not go through the standing instructions because it authorises nothing
@@ -347,7 +350,7 @@ func cmdServe(args []string) error {
 		if err != nil || rewards.Open(config.Default()).ClaimedToday(member.LeagueID()) {
 			return
 		}
-		acting, league, team := member.At(httpx.Write), member.LeagueID(), member.TeamID()
+		acting, league := member.At(httpx.Write), member.LeagueID()
 		catalogue, err := acting.Global().DailyRewards(time.Hour)
 		if err != nil {
 			slog.Warn("daily reward catalogue unreadable", "reason", err.Error())
@@ -379,8 +382,7 @@ func cmdServe(args []string) error {
 		// One attempt per reward left, then the stamp: a claim that answers 200 without moving
 		// the counter must not be repeated every cycle.
 		for claimed := status.Redeemed; claimed < limit; claimed++ {
-			if _, err := guard.Automatic("claim_daily_reward",
-				writes.Args{LeagueID: league, TeamID: team},
+			if _, err := guard.Automatic("claim_daily_reward", writes.Args{},
 				writes.Player{Name: "recompensa diaria"}, allowWrites); err != nil {
 				slog.Warn("daily reward not claimed", "reason", err.Error())
 				return
@@ -416,7 +418,7 @@ func cmdServe(args []string) error {
 		if err != nil {
 			return
 		}
-		acting, league, team := member.At(httpx.Write), member.LeagueID(), member.TeamID()
+		acting := member.At(httpx.Write)
 		squad, missing := myEleven(universe)
 		// Placing ten of eleven would bench somebody for the sake of a field the feed did not
 		// send. Better to leave the lineup alone and say why.
@@ -444,9 +446,9 @@ func cmdServe(args []string) error {
 		if best.Starters() <= playing {
 			return
 		}
-		if _, err := guard.Automatic("save_lineup", writes.Args{LeagueID: league, TeamID: team,
-			Goalkeeper: best.Keeper, Defender: best.Defence, Midfield: best.Middle,
-			Striker: best.Attack, Formation: best.Shape.Numbers()},
+		if _, err := guard.Automatic("save_lineup", writes.Args{Goalkeeper: best.Keeper,
+			Defender: best.Defence, Midfield: best.Middle, Striker: best.Attack,
+			Formation: best.Shape.Numbers()},
 			writes.Player{Name: "tu alineacion"}, allowWrites); err != nil {
 			slog.Warn("lineup not saved", "reason", err.Error())
 			return
@@ -485,7 +487,7 @@ func cmdServe(args []string) error {
 		if err != nil {
 			return
 		}
-		league, team := member.LeagueID(), member.TeamID()
+		league := member.LeagueID()
 		cash := 0.0
 		if money, err := member.At(httpx.Write).Money(time.Minute); err == nil {
 			cash = money.TeamMoney
@@ -539,7 +541,7 @@ func cmdServe(args []string) error {
 				return round.Week, ok && len(used) >= schedule.ShieldsPerRound
 			}),
 			func(operation string, action policies.Row) error {
-				args := automaticArgs(action, league, team)
+				args := automaticArgs(action)
 				who := automaticPlayer(byID[text(action["player_id"])], house.HoldExceptions)
 				if who.Name == "" {
 					who.Name = text(action["name"])
@@ -602,7 +604,9 @@ func cmdServe(args []string) error {
 			return nil
 		},
 		Invalidate: func(tags ...string) {
-			httpx.InvalidateIn(config.Default(), tags...)
+			if member, err := ensureMember(); err == nil {
+				member.Invalidate(tags...)
+			}
 		},
 		Probe: func() (bool, []string, error) {
 			member, err := ensureMember()
@@ -716,7 +720,7 @@ func cmdServe(args []string) error {
 	switch {
 	case !allowWrites:
 		mode = "solo lectura"
-	case writes.Rehearsal:
+	case rehearsal:
 		mode = "ensayo"
 		fmt.Println("--rehearse: nada de lo que confirmes llega a LaLiga.")
 	case *noAuto:
@@ -732,7 +736,7 @@ func cmdServe(args []string) error {
 	}
 	necroCfg := necroporra.Open(config.Default()).Load()
 	panel := server.New(world, server.Options{
-		Host: *host, Port: *port, AllowWrites: allowWrites, Mode: mode, Rehearse: writes.Rehearsal,
+		Host: *host, Port: *port, AllowWrites: allowWrites, Mode: mode, Rehearse: rehearsal,
 		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
 		Global: api.NewGlobal().At(httpx.Interactive),
 		Account: func() *api.Account {
@@ -1087,49 +1091,49 @@ var validationTable = []struct {
 	Case  writes.ValidationCase
 }{
 	{"puja normal", validationCase("bid",
-		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 1_000_000},
+		writes.Args{MarketID: "M", Amount: 1_000_000},
 		writes.Player{Name: "X", MinBid: 900_000, IdealBid: 2_000_000}, 50_000_000)},
 	{"puja por debajo del minimo", validationCase("bid",
-		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 800_000},
+		writes.Args{MarketID: "M", Amount: 800_000},
 		writes.Player{Name: "X", MinBid: 900_000, IdealBid: 2_000_000}, 50_000_000)},
 	{"puja de cero", validationCase("bid",
-		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 0},
+		writes.Args{MarketID: "M", Amount: 0},
 		writes.Player{Name: "X"}, 50_000_000)},
 	{"puja mayor que el saldo", validationCase("bid",
-		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 2_000_000},
+		writes.Args{MarketID: "M", Amount: 2_000_000},
 		writes.Player{Name: "X", IdealBid: 9_000_000}, 1_000_000)},
 	{"puja sobre el techo rentable", validationCase("bid",
-		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 3_000_000},
+		writes.Args{MarketID: "M", Amount: 3_000_000},
 		writes.Player{Name: "X", IdealBid: 2_000_000}, 50_000_000)},
 	{"puja sin rentabilidad conocida", validationCase("bid",
-		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 1_000_000},
+		writes.Args{MarketID: "M", Amount: 1_000_000},
 		writes.Player{Name: "X"}, 50_000_000)},
 	{"puja que se come medio saldo", validationCase("bid",
-		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 600_000},
+		writes.Args{MarketID: "M", Amount: 600_000},
 		writes.Player{Name: "X", IdealBid: 900_000}, 1_000_000)},
 	{"puja con rivales", validationCase("bid",
-		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: 1_000_000},
+		writes.Args{MarketID: "M", Amount: 1_000_000},
 		writes.Player{Name: "X", IdealBid: 2_000_000, Bids: 3}, 50_000_000)},
 	{"clausula pagada de menos", validationCase("pay_clause",
-		writes.Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT", Amount: 9_000_000},
+		writes.Args{PlayerTeamID: "PT", Amount: 9_000_000},
 		writes.Player{Name: "X", Clause: 10_000_000}, 50_000_000)},
 	{"clausula exacta", validationCase("pay_clause",
-		writes.Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT", Amount: 10_000_000},
+		writes.Args{PlayerTeamID: "PT", Amount: 10_000_000},
 		writes.Player{Name: "X", Clause: 10_000_000}, 50_000_000)},
 	{"clausula sin saldo", validationCase("pay_clause",
-		writes.Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT", Amount: 10_000_000},
+		writes.Args{PlayerTeamID: "PT", Amount: 10_000_000},
 		writes.Player{Name: "X", Clause: 10_000_000}, 5_000_000)},
 	{"oferta directa negativa", validationCase("direct_offer",
-		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: -1},
+		writes.Args{MarketID: "M", Amount: -1},
 		writes.Player{Name: "X"}, 50_000_000)},
 	{"aceptar por debajo del valor", validationCase("accept_offer",
-		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", OfferID: "O", Amount: 8_000_000},
+		writes.Args{MarketID: "M", OfferID: "O", Amount: 8_000_000},
 		writes.Player{Name: "X", Value: 10_000_000}, 0)},
 	{"aceptar por encima del techo", validationCase("accept_offer",
-		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M", OfferID: "O", Amount: 12_000_000},
+		writes.Args{MarketID: "M", OfferID: "O", Amount: 12_000_000},
 		writes.Player{Name: "X", Value: 10_000_000, IdealBid: 11_000_000}, 0)},
 	{"retirar del mercado", validationCase("withdraw",
-		writes.Args{LeagueID: "L", TeamID: "T", MarketID: "M"},
+		writes.Args{MarketID: "M"},
 		writes.Player{Name: "X"}, 50_000_000)},
 }
 
@@ -1470,14 +1474,39 @@ func clauseWindow(fixtures []model.Fixture) *schedule.Window {
 	return &window
 }
 
-func automaticArgs(action policies.Row, league, team string) writes.Args {
-	return writes.Args{LeagueID: league, TeamID: team,
+func automaticArgs(action policies.Row) writes.Args {
+	return writes.Args{
 		Amount:       int64(number(action["amount"])),
 		MarketID:     text(action["market_id"]),
 		OfferID:      text(action["offer_id"]),
 		PlayerID:     text(action["player_id"]),
 		PlayerTeamID: text(action["player_team_id"]),
 	}
+}
+
+// squadOf is what the member owns in a built world, for the guard to refuse acting on anybody else.
+func squadOf(universe *model.Universe) *writes.Squad {
+	if universe == nil {
+		return nil
+	}
+	squad := &writes.Squad{Slots: map[string]bool{}, Listings: map[string]bool{}}
+	for _, player := range universe.Players {
+		if !player.IsMine {
+			continue
+		}
+		if player.PlayerTeamID != nil {
+			squad.Slots[*player.PlayerTeamID] = true
+		}
+		if player.MarketEntry != nil {
+			squad.Listings[player.MarketEntry.MarketID] = true
+		}
+	}
+	for _, listing := range universe.Market {
+		if listing.IsMine {
+			squad.Listings[listing.MarketID] = true
+		}
+	}
+	return squad
 }
 
 // automaticPlayer is what the guard judges an unattended write against, built from the same
@@ -1875,8 +1904,7 @@ func boolWord(value bool) string {
 
 func cmdCalls() error {
 	fixed := writes.Args{
-		LeagueID: "L", TeamID: "T", MarketID: "M", BidID: "B", OfferID: "O",
-		PlayerID: "P", PlayerTeamID: "PT", Amount: 1000,
+		MarketID: "M", BidID: "B", OfferID: "O", PlayerID: "P", PlayerTeamID: "PT", Amount: 1000,
 		Goalkeeper: "G", Defender: []string{"D"}, Midfield: []string{"M"},
 		Striker: []string{"S"}, Formation: []int{3, 4, 3},
 	}
@@ -1887,7 +1915,7 @@ func cmdCalls() error {
 	sort.Strings(names)
 
 	for _, name := range names {
-		call, err := writes.Build(name, fixed)
+		call, err := writes.Shape(name, fixed)
 		if err != nil {
 			return err
 		}

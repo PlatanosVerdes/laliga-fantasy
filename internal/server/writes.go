@@ -93,7 +93,7 @@ func (s *Server) favourite(writer http.ResponseWriter, request *http.Request) {
 			}
 		}
 	}
-	args := writes.Args{TeamID: s.myTeamID(), PlayerID: id, Favourite: starred}
+	args := writes.Args{PlayerID: id, Favourite: starred}
 	if _, err := s.opts.Guard.Do("favourite", args, writes.Player{Name: text(body["name"])},
 		s.opts.AllowWrites); err != nil {
 		s.writeError(writer, err)
@@ -424,8 +424,6 @@ func (s *Server) prepare(writer http.ResponseWriter, request *http.Request) {
 		operation = "bid"
 	}
 	args := writes.Args{
-		LeagueID:     s.leagueID(),
-		TeamID:       s.myTeamID(),
 		Amount:       int64(amount),
 		MarketID:     text(body["market_id"]),
 		BidID:        text(body["bid_id"]),

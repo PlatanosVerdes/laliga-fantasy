@@ -17,6 +17,7 @@ type Call struct {
 	Path          string
 	Query         string
 	Authorization string
+	Header        http.Header
 	Body          []byte
 }
 
@@ -66,7 +67,8 @@ func (f *Fake) RoundTrip(request *http.Request) (*http.Response, error) {
 	f.mu.Lock()
 	f.calls = append(f.calls, Call{Method: request.Method, Host: request.URL.Host,
 		Path: request.URL.Path, Query: request.URL.RawQuery,
-		Authorization: request.Header.Get("Authorization"), Body: body})
+		Authorization: request.Header.Get("Authorization"),
+		Header:        request.Header.Clone(), Body: body})
 	f.mu.Unlock()
 
 	forwarded := request.Clone(request.Context())

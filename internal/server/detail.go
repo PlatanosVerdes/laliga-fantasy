@@ -936,8 +936,6 @@ func (s *Server) saveLineup(writer http.ResponseWriter, request *http.Request) {
 	}
 	body := s.body(request)
 	args := writes.Args{
-		LeagueID:   s.leagueID(),
-		TeamID:     s.myTeamID(),
 		Goalkeeper: text(body["goalkeeper"]),
 		Defender:   idsOf(body["defender"]),
 		Midfield:   idsOf(body["midfield"]),

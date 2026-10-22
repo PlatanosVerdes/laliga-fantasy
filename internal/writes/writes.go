@@ -23,9 +23,7 @@ import (
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/auth"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 )
 
 const PrepareTTL = 120 * time.Second
@@ -38,6 +36,8 @@ var (
 	// ErrOutdated is the API saying the page is behind: what is being acted on is already gone,
 	// so the caller rebuilds instead of only reporting it.
 	ErrOutdated = errors.New("esa jugada ya no esta viva")
+	ErrNoMember = errors.New("no se cual es tu equipo en esta liga: recarga la pagina")
+	ErrNotMine  = errors.New("no es tuyo")
 )
 
 // Call is a request that has been built but not sent. Splitting building from sending is
@@ -52,8 +52,6 @@ type Call struct {
 // Args carries every id an operation might need. Which ones matter is per operation, and
 // the mapping below is deliberately explicit rather than clever.
 type Args struct {
-	LeagueID     string
-	TeamID       string
 	MarketID     string
 	BidID        string
 	OfferID      string
@@ -70,147 +68,150 @@ type Args struct {
 	Favourite bool
 }
 
+// where is the league and team a call is built for, stamped from the member and never from Args.
+type where struct{ LeagueID, TeamID string }
+
 type operation struct {
 	Label string
-	Build func(Args) Call
+	Build func(where, Args) Call
 	// Which cached answers this write makes false.
 	Effects []string
 }
 
 // Operations, with the id semantics spelled out. Each comment is a bug that was paid for.
 var Operations = map[string]operation{
-	"bid": {"puja", func(a Args) Call {
+	"bid": {"puja", func(w where, a Args) Call {
 		return Call{http.MethodPost,
-			fmt.Sprintf("%s/league/%s/market/%s/bid", config.CMP, a.LeagueID, a.MarketID),
+			fmt.Sprintf("%s/league/%s/market/%s/bid", config.CMP, w.LeagueID, a.MarketID),
 			map[string]any{"money": a.Amount}}
 	}, []string{"market", "money"}},
 
 	// A rival's sale is not bid on, it is offered for: POST .../market/{id}/bid answers 404 for
 	// a marketPlayerTeam entry, because the bid handler only knows the game's own listings.
 	// Same route family as accepting one, which is .../offer/{id}/accept.
-	"buy_offer": {"oferta de compra", func(a Args) Call {
+	"buy_offer": {"oferta de compra", func(w where, a Args) Call {
 		return Call{http.MethodPost,
-			fmt.Sprintf("%s/league/%s/market/%s/offer", config.CMP, a.LeagueID, a.MarketID),
+			fmt.Sprintf("%s/league/%s/market/%s/offer", config.CMP, w.LeagueID, a.MarketID),
 			map[string]any{"money": a.Amount}}
 	}, []string{"market", "money"}},
 
 	// An offer cannot be changed, only withdrawn: this one sends the new offer, and confirm
 	// withdraws the old one (OfferID) just before.
-	"change_offer": {"cambiar la oferta", func(a Args) Call {
+	"change_offer": {"cambiar la oferta", func(w where, a Args) Call {
 		return Call{http.MethodPost,
-			fmt.Sprintf("%s/league/%s/market/%s/offer", config.CMP, a.LeagueID, a.MarketID),
+			fmt.Sprintf("%s/league/%s/market/%s/offer", config.CMP, w.LeagueID, a.MarketID),
 			map[string]any{"money": a.Amount}}
 	}, []string{"market", "money"}},
 
-	"modify_bid": {"modificar puja", func(a Args) Call {
+	"modify_bid": {"modificar puja", func(w where, a Args) Call {
 		return Call{http.MethodPut,
-			fmt.Sprintf("%s/league/%s/market/%s/bid/%s", config.CMP, a.LeagueID, a.MarketID, a.BidID),
+			fmt.Sprintf("%s/league/%s/market/%s/bid/%s", config.CMP, w.LeagueID, a.MarketID, a.BidID),
 			map[string]any{"money": a.Amount}}
 	}, []string{"market", "money"}},
 
 	// Withdrawing an offer sent to a rival. Same shape as cancelling a bid, which is the only
 	// evidence available: the route answers 405 to a GET, so it exists, and the bid version is
 	// DELETE .../cancel. If the verb is wrong the API says so and the message now travels.
-	"cancel_offer": {"retirar la oferta", func(a Args) Call {
+	"cancel_offer": {"retirar la oferta", func(w where, a Args) Call {
 		return Call{http.MethodDelete,
-			fmt.Sprintf("%s/league/%s/market/%s/offer/%s/cancel", config.CMP, a.LeagueID,
+			fmt.Sprintf("%s/league/%s/market/%s/offer/%s/cancel", config.CMP, w.LeagueID,
 				a.MarketID, a.OfferID),
 			nil}
 	}, []string{"market", "money"}},
 
-	"cancel_bid": {"cancelar puja", func(a Args) Call {
+	"cancel_bid": {"cancelar puja", func(w where, a Args) Call {
 		return Call{http.MethodDelete,
-			fmt.Sprintf("%s/league/%s/market/%s/bid/%s/cancel", config.CMP, a.LeagueID, a.MarketID, a.BidID),
+			fmt.Sprintf("%s/league/%s/market/%s/bid/%s/cancel", config.CMP, w.LeagueID, a.MarketID, a.BidID),
 			nil}
 	}, []string{"market", "money"}},
 
 	// The slot id, not the player's. What you pay is valueToIncrease and the clause goes up by
 	// ClauseFactor times that, which is the app's own arithmetic: pay 8.555 and the clause
 	// gains 17.110.
-	"raise_clause": {"subir clausula", func(a Args) Call {
+	"raise_clause": {"subir clausula", func(w where, a Args) Call {
 		return Call{http.MethodPut,
-			fmt.Sprintf("%s/league/%s/buyout/player", config.CMP, a.LeagueID),
+			fmt.Sprintf("%s/league/%s/buyout/player", config.CMP, w.LeagueID),
 			map[string]any{"playerId": a.PlayerTeamID, "factor": ClauseFactor,
 				"valueToIncrease": a.Amount}}
 	}, []string{"squad"}},
 
 	// The API demands the amount in the body as a confirmation of what is being accepted;
 	// without it, it answers 400.
-	"accept_offer": {"aceptar oferta", func(a Args) Call {
+	"accept_offer": {"aceptar oferta", func(w where, a Args) Call {
 		return Call{http.MethodPost,
-			fmt.Sprintf("%s/league/%s/market/%s/offer/%s/accept", config.CMP, a.LeagueID, a.MarketID, a.OfferID),
+			fmt.Sprintf("%s/league/%s/market/%s/offer/%s/accept", config.CMP, w.LeagueID, a.MarketID, a.OfferID),
 			map[string]any{"offerMoney": a.Amount}}
 	}, []string{"market", "squad", "money", "activity", "standing", "offers"}},
 
-	"decline_offer": {"rechazar oferta", func(a Args) Call {
+	"decline_offer": {"rechazar oferta", func(w where, a Args) Call {
 		return Call{http.MethodPost,
-			fmt.Sprintf("%s/league/%s/market/%s/offer/%s/reject", config.CMP, a.LeagueID, a.MarketID, a.OfferID),
+			fmt.Sprintf("%s/league/%s/market/%s/offer/%s/reject", config.CMP, w.LeagueID, a.MarketID, a.OfferID),
 			nil}
 	}, []string{"market", "offers"}},
 
 	// `playerId` here is the squad-slot id (playerTeamId), not the player's own id.
 	// Sending the player id answers 500. Listing him is not selling him, so the cash and
 	// the log are untouched.
-	"sell_to_market": {"poner en venta", func(a Args) Call {
+	"sell_to_market": {"poner en venta", func(w where, a Args) Call {
 		return Call{http.MethodPost,
-			fmt.Sprintf("%s/league/%s/market/sell", config.CMP, a.LeagueID),
+			fmt.Sprintf("%s/league/%s/market/sell", config.CMP, w.LeagueID),
 			map[string]any{"playerId": a.PlayerTeamID, "salePrice": a.Amount}}
 	}, []string{"market", "squad"}},
 
 	// A direct offer goes against the listing, so what travels as `playerId` is the market
 	// id: you can only offer for somebody who is on the market.
-	"direct_offer": {"oferta directa", func(a Args) Call {
+	"direct_offer": {"oferta directa", func(w where, a Args) Call {
 		return Call{http.MethodPost,
-			fmt.Sprintf("%s/league/%s/market/direct-offer", config.CMP, a.LeagueID),
+			fmt.Sprintf("%s/league/%s/market/direct-offer", config.CMP, w.LeagueID),
 			map[string]any{"playerId": a.MarketID, "money": a.Amount}}
 	}, []string{"market", "money"}},
 
 	// The daily reward. The path stops at the league and the team travels in the body, which
 	// is why every team-scoped path we probed answered 404. The advert is a flag: the API takes
 	// our word for it and attaches no proof.
-	"claim_daily_reward": {"cobrar la recompensa diaria", func(a Args) Call {
+	"claim_daily_reward": {"cobrar la recompensa diaria", func(w where, a Args) Call {
 		return Call{http.MethodPost,
-			fmt.Sprintf("%s/league/%s/team/daily-reward", config.CMP, a.LeagueID),
+			fmt.Sprintf("%s/league/%s/team/daily-reward", config.CMP, w.LeagueID),
 			map[string]any{"rewardedAdType": "dailyreward", "rewardedAd": 1,
-				"teamId": a.TeamID}}
+				"teamId": w.TeamID}}
 	}, []string{"money", "reward"}},
 
 	// The shield: 24h in which nobody can pay his clause. Found by verb rather than by path,
 	// because POST, PATCH and DELETE answer 405 here and only PUT reaches the handler. The id
 	// is the slot's, like a clause rise, and the advert is a flag the API takes on trust.
-	"shield_player": {"blindar jugador", func(a Args) Call {
+	"shield_player": {"blindar jugador", func(w where, a Args) Call {
 		return Call{http.MethodPut,
-			fmt.Sprintf("%s/league/%s/shield/player", config.CMP, a.LeagueID),
+			fmt.Sprintf("%s/league/%s/shield/player", config.CMP, w.LeagueID),
 			map[string]any{"playerId": a.PlayerTeamID, "rewardedAdType": "Blindaje",
 				"rewardedAd": 1}}
 	}, []string{"squad"}},
 
-	"pay_clause": {"pagar clausula", func(a Args) Call {
+	"pay_clause": {"pagar clausula", func(w where, a Args) Call {
 		return Call{http.MethodPost,
-			fmt.Sprintf("%s/league/%s/buyout/%s/pay", config.CMP, a.LeagueID, a.PlayerTeamID),
+			fmt.Sprintf("%s/league/%s/buyout/%s/pay", config.CMP, w.LeagueID, a.PlayerTeamID),
 			map[string]any{"buyoutClauseToPay": a.Amount}}
 	}, []string{"squad", "money", "activity", "standing", "market"}},
 
 	// Shape matters: goalkeeper is a single id, not a list, and the key is snake_case.
 	// Anything else answers 500.
-	"save_lineup": {"guardar alineacion", func(a Args) Call {
+	"save_lineup": {"guardar alineacion", func(w where, a Args) Call {
 		return Call{http.MethodPut,
-			fmt.Sprintf("%s/teams/%s/lineup", config.CMP, a.TeamID),
+			fmt.Sprintf("%s/teams/%s/lineup", config.CMP, w.TeamID),
 			map[string]any{"goalkeeper": a.Goalkeeper, "defender": a.Defender,
 				"midfield": a.Midfield, "striker": a.Striker,
 				"tactical_formation": a.Formation}}
 	}, []string{"own_lineup", "lineup"}},
 
 	// The app's own favourites, keyed by the team in the league and the player's master id.
-	"favourite": {"favorito", func(a Args) Call {
+	"favourite": {"favorito", func(w where, a Args) Call {
 		return Call{http.MethodPost,
-			fmt.Sprintf("%s/teams/%s/favourite-players", config.CMP, a.TeamID),
+			fmt.Sprintf("%s/teams/%s/favourite-players", config.CMP, w.TeamID),
 			map[string]any{"player": numericID(a.PlayerID), "favourite": a.Favourite}}
 	}, []string{"favourites"}},
 
-	"withdraw": {"retirar del mercado", func(a Args) Call {
+	"withdraw": {"retirar del mercado", func(w where, a Args) Call {
 		return Call{http.MethodDelete,
-			fmt.Sprintf("%s/league/%s/market/%s/delete", config.CMP, a.LeagueID, a.MarketID),
+			fmt.Sprintf("%s/league/%s/market/%s/delete", config.CMP, w.LeagueID, a.MarketID),
 			nil}
 	}, []string{"market", "squad"}},
 }
@@ -235,62 +236,24 @@ func Validate(testCase ValidationCase) (refused bool, reason string, warnings []
 	return false, "", warnings
 }
 
-// Build is the call an operation would make, without sending it.
-func Build(name string, args Args) (Call, error) {
+func Build(name string, member *api.Member, args Args) (Call, error) {
+	if member == nil {
+		return Call{}, ErrNoMember
+	}
+	return build(name, where{member.LeagueID(), member.TeamID()}, args)
+}
+
+// Shape builds with L and T for league and team, to print what an operation sends.
+func Shape(name string, args Args) (Call, error) {
+	return build(name, where{"L", "T"}, args)
+}
+
+func build(name string, at where, args Args) (Call, error) {
 	spec, ok := Operations[name]
 	if !ok {
 		return Call{}, fmt.Errorf("%w: %s", ErrUnknown, name)
 	}
-	return spec.Build(args), nil
-}
-
-// Send puts the call on the wire. One attempt only: a write is not idempotent, and a retry
-// is how you bid twice.
-// Rehearsal makes every write a pretence: it is checked, confirmed and patched into the world as
-// usual, and never reaches LaLiga. For trying the panel's flows against the real league.
-var Rehearsal bool
-
-// send is what confirm calls, so a test can stand in for LaLiga.
-var send = Send
-
-func Send(call Call) (any, error) {
-	if Rehearsal {
-		slog.Info("write rehearsed, not sent", "method", call.Method, "path", call.Path)
-		return nil, nil
-	}
-	headers := config.APIHeaders()
-	bearer, err := auth.For(config.Default().Account).Bearer()
-	if err != nil {
-		return nil, err
-	}
-	headers["Authorization"] = "Bearer " + bearer
-
-	var body []byte
-	if call.Body != nil {
-		headers["Content-Type"] = "application/json"
-		if body, err = json.Marshal(call.Body); err != nil {
-			return nil, err
-		}
-	}
-	separator := "?"
-	if strings.Contains(call.Path, "?") {
-		separator = "&"
-	}
-	raw, err := httpx.Fetch(httpx.Request{
-		URL: config.APIBase + call.Path + separator + "x-lang=es", Method: call.Method,
-		Headers: headers, Body: body, Retries: 1, Tag: "raw", Priority: httpx.Write,
-	})
-	if err != nil {
-		return nil, explain(err)
-	}
-	if strings.TrimSpace(raw) == "" {
-		return nil, nil
-	}
-	var answer any
-	if err := json.Unmarshal([]byte(raw), &answer); err != nil {
-		return nil, err
-	}
-	return answer, nil
+	return spec.Build(at, args), nil
 }
 
 // explain turns an API refusal into something a person can act on. The URL and the JSON body
@@ -422,6 +385,7 @@ type Summary struct {
 type pending struct {
 	created time.Time
 	owner   string
+	member  *api.Member
 	name    string
 	args    Args
 	who     Player
@@ -439,6 +403,10 @@ type Window struct {
 type Guard struct {
 	mu     sync.Mutex
 	tokens map[string]pending
+	member func() (*api.Member, error)
+	// Rehearsal makes every write a pretence: it is checked, confirmed and patched into the world
+	// as usual, and never reaches LaLiga. For trying the panel's flows against the real league.
+	Rehearsal bool
 	// Cash reads the current balance. Injected so the guard can be exercised without a
 	// session, and so a test cannot accidentally reach the API.
 	Cash func(teamID string) (int64, error)
@@ -448,13 +416,29 @@ type Guard struct {
 	// Loading says the world is still being read for the first time. While it is, every
 	// operation is refused, the unattended ones too: half a league is no ground to act on.
 	Loading func() bool
+	// Squad is what the member owns; without one, nothing acting on its own players goes through.
+	Squad func() *Squad
+}
+
+type Squad struct {
+	Slots    map[string]bool
+	Listings map[string]bool
 }
 
 func (g *Guard) loading() bool { return g.Loading != nil && g.Loading() }
 
 func NewGuard(member *api.Member) *Guard {
-	guard := &Guard{tokens: map[string]pending{}}
+	return GuardOf(func() (*api.Member, error) { return member, nil })
+}
+
+// GuardOf asks for its member at each write, for a server that learns its league after start.
+func GuardOf(member func() (*api.Member, error)) *Guard {
+	guard := &Guard{tokens: map[string]pending{}, member: member}
 	guard.Cash = func(teamID string) (int64, error) {
+		member, err := guard.resolve()
+		if err != nil {
+			return 0, err
+		}
 		if teamID != member.TeamID() {
 			return 0, fmt.Errorf("el saldo del equipo %s no es de este jugador", teamID)
 		}
@@ -465,6 +449,69 @@ func NewGuard(member *api.Member) *Guard {
 		return int64(money.TeamMoney), nil
 	}
 	return guard
+}
+
+func (g *Guard) resolve() (*api.Member, error) {
+	if g.member == nil {
+		return nil, ErrNoMember
+	}
+	member, err := g.member()
+	if err != nil {
+		return nil, err
+	}
+	if member == nil {
+		return nil, ErrNoMember
+	}
+	return member, nil
+}
+
+func same(one, other *api.Member) bool {
+	return one.Profile().Account == other.Profile().Account &&
+		one.LeagueID() == other.LeagueID() && one.TeamID() == other.TeamID()
+}
+
+// An empty id is left to check, which refuses it with a sentence of its own.
+func (g *Guard) mine(name string, args Args) error {
+	var id string
+	slot := false
+	switch name {
+	case "sell_to_market", "raise_clause", "shield_player":
+		id, slot = args.PlayerTeamID, true
+	case "accept_offer", "decline_offer", "withdraw":
+		id = args.MarketID
+	default:
+		return nil
+	}
+	if id == "" {
+		return nil
+	}
+	var squad *Squad
+	if g.Squad != nil {
+		squad = g.Squad()
+	}
+	if squad == nil {
+		return errors.New("no se cual es tu plantilla: recarga la pagina")
+	}
+	owned := squad.Listings
+	if slot {
+		owned = squad.Slots
+	}
+	if !owned[id] {
+		return fmt.Errorf("%w: %s no esta en tu plantilla ni en tus anuncios", ErrNotMine, id)
+	}
+	return nil
+}
+
+func (g *Guard) send(member *api.Member, call Call) (any, error) {
+	if g.Rehearsal {
+		slog.Info("write rehearsed, not sent", "method", call.Method, "path", call.Path)
+		return nil, nil
+	}
+	answer, err := member.Send(api.Call(call))
+	if err != nil {
+		return nil, explain(err)
+	}
+	return answer, nil
 }
 
 // window is the clause window if anybody wired one, and nothing otherwise.
@@ -510,8 +557,15 @@ func (g *Guard) PrepareFor(owner, name string, args Args, who Player, allowWrite
 	if !ok {
 		return Summary{}, fmt.Errorf("%w: %s", ErrUnknown, name)
 	}
+	member, err := g.resolve()
+	if err != nil {
+		return Summary{}, err
+	}
+	if err := g.mine(name, args); err != nil {
+		return Summary{}, err
+	}
 
-	cash := g.balance(args.TeamID)
+	cash := g.balance(member)
 	warnings, err := check(name, args, who, cash, g.window())
 	if err != nil {
 		return Summary{}, err
@@ -532,18 +586,18 @@ func (g *Guard) PrepareFor(owner, name string, args Args, who Player, allowWrite
 		summary.Clause = who.Clause
 		summary.NewClause = who.Clause + ClauseFactor*args.Amount
 	}
-	g.tokens[summary.Token] = pending{created: time.Now(), owner: owner, name: name, args: args,
-		who: who, summary: summary}
+	g.tokens[summary.Token] = pending{created: time.Now(), owner: owner, member: member,
+		name: name, args: args, who: who, summary: summary}
 	slog.Info("write prepared", "operation", name, "amount", args.Amount, "player", who.Name)
 	return summary, nil
 }
 
 // balance is the current cash, or nil when it cannot be read.
-func (g *Guard) balance(teamID string) *int64 {
-	if g.Cash == nil || teamID == "" {
+func (g *Guard) balance(member *api.Member) *int64 {
+	if g.Cash == nil {
 		return nil
 	}
-	balance, err := g.Cash(teamID)
+	balance, err := g.Cash(member.TeamID())
 	if err != nil {
 		slog.Warn("cash unreadable before write", "reason", err.Error())
 		return nil
@@ -569,6 +623,10 @@ func (g *Guard) confirm(owner, token string, allowWrites, dryRun, recheck bool) 
 	if g.loading() {
 		return nil, ErrLoading
 	}
+	member, err := g.resolve()
+	if err != nil {
+		return nil, err
+	}
 	g.mu.Lock()
 	g.purge()
 	entry, ok := g.tokens[token]
@@ -576,19 +634,26 @@ func (g *Guard) confirm(owner, token string, allowWrites, dryRun, recheck bool) 
 		g.mu.Unlock()
 		return nil, errors.New("esa confirmacion es de otra sesion: vuelve a empezar")
 	}
+	if ok && !same(entry.member, member) {
+		g.mu.Unlock()
+		return nil, errors.New("esa confirmacion es de otro equipo: vuelve a empezar")
+	}
 	delete(g.tokens, token)
 	g.mu.Unlock()
 	if !ok {
 		return nil, errors.New("confirmacion caducada o ya usada: vuelve a empezar")
 	}
 	if recheck {
-		if _, err := check(entry.name, entry.args, entry.who, g.balance(entry.args.TeamID),
+		if err := g.mine(entry.name, entry.args); err != nil {
+			return nil, err
+		}
+		if _, err := check(entry.name, entry.args, entry.who, g.balance(member),
 			g.window()); err != nil {
 			return nil, err
 		}
 	}
 
-	call, err := Build(entry.name, entry.args)
+	call, err := Build(entry.name, member, entry.args)
 	if err != nil {
 		return nil, err
 	}
@@ -600,20 +665,20 @@ func (g *Guard) confirm(owner, token string, allowWrites, dryRun, recheck bool) 
 	}
 
 	if entry.name == "change_offer" {
-		withdraw, err := Build("cancel_offer", entry.args)
+		withdraw, err := Build("cancel_offer", member, entry.args)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := send(withdraw); err != nil {
+		if _, err := g.send(member, withdraw); err != nil {
 			return nil, fmt.Errorf("no he podido retirar tu oferta anterior, sigue en pie: %w", err)
 		}
 		slog.Info("write done", "operation", "cancel_offer", "player", entry.summary.PlayerName,
 			"method", withdraw.Method, "path", withdraw.Path, "for", "change_offer")
 	}
-	answer, err := send(call)
+	answer, err := g.send(member, call)
 	if err != nil {
 		if entry.name == "change_offer" {
-			httpx.InvalidateIn(config.Default(), Operations[entry.name].Effects...)
+			member.Invalidate(Operations[entry.name].Effects...)
 			return nil, fmt.Errorf("he retirado tu oferta anterior, pero LaLiga ha rechazado la "+
 				"nueva: ahora no tienes ninguna oferta por %s: %w", entry.summary.PlayerName, err)
 		}
@@ -624,7 +689,7 @@ func (g *Guard) confirm(owner, token string, allowWrites, dryRun, recheck bool) 
 		}
 		return nil, fmt.Errorf("la API ha rechazado la operacion: %w", err)
 	}
-	dropped := httpx.InvalidateIn(config.Default(), Operations[entry.name].Effects...)
+	dropped := member.Invalidate(Operations[entry.name].Effects...)
 	slog.Info("write done", "operation", entry.name, "player", entry.summary.PlayerName,
 		"amount", entry.args.Amount, "method", call.Method, "path", call.Path,
 		"cash_before", entry.summary.CashBefore, "cache_dropped", dropped)
@@ -660,6 +725,9 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 	if (name == "accept_offer" || name == "decline_offer") && args.MarketID == "" {
 		return nil, errors.New("esta oferta es por un jugador que no tienes en venta: " +
 			"respondela en la app de LaLiga")
+	}
+	if name == "withdraw" && args.MarketID == "" {
+		return nil, errors.New("no se cual es su anuncio: recarga la pagina")
 	}
 
 	// The clause window is the calendar's rule and not the market's: the API refuses a payment
@@ -920,10 +988,17 @@ func (g *Guard) Automatic(name string, args Args, who Player, allowWrites bool) 
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnknown, name)
 	}
+	member, err := g.resolve()
+	if err != nil {
+		return nil, err
+	}
+	if err := g.mine(name, args); err != nil {
+		return nil, err
+	}
 
 	var cash *int64
-	if g.Cash != nil && args.TeamID != "" {
-		balance, err := g.Cash(args.TeamID)
+	if g.Cash != nil {
+		balance, err := g.Cash(member.TeamID())
 		if err != nil {
 			slog.Warn("cash unreadable before automatic write", "operation", name,
 				"reason", err.Error())
@@ -941,17 +1016,17 @@ func (g *Guard) Automatic(name string, args Args, who Player, allowWrites bool) 
 		return nil, err
 	}
 
-	call, err := Build(name, args)
+	call, err := Build(name, member, args)
 	if err != nil {
 		return nil, err
 	}
 	slog.Info("automatic write", "operation", name, "amount", args.Amount, "player", who.Name,
 		"warnings", warnings, "method", call.Method, "path", call.Path)
-	answer, err := Send(call)
+	answer, err := g.send(member, call)
 	if err != nil {
 		return nil, fmt.Errorf("la API ha rechazado la operacion: %w", err)
 	}
-	dropped := httpx.InvalidateIn(config.Default(), spec.Effects...)
+	dropped := member.Invalidate(spec.Effects...)
 	slog.Info("automatic write done", "operation", name, "amount", args.Amount,
 		"player", who.Name, "cache_dropped", dropped)
 	return answer, nil

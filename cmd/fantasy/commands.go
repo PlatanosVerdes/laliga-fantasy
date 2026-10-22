@@ -18,7 +18,6 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
@@ -570,7 +569,7 @@ func cmdReward(args []string) error {
 	if err != nil {
 		return err
 	}
-	leagueID, teamID := member.LeagueID(), member.TeamID()
+	leagueID := member.LeagueID()
 
 	cli.Heading("Recompensa diaria")
 	catalogue, err := member.Global().DailyRewards(time.Hour)
@@ -606,8 +605,7 @@ func cmdReward(args []string) error {
 		before = money.TeamMoney
 	}
 	guard := writes.NewGuard(member)
-	if _, err := guard.Do("claim_daily_reward",
-		writes.Args{LeagueID: leagueID, TeamID: teamID},
+	if _, err := guard.Do("claim_daily_reward", writes.Args{},
 		writes.Player{Name: "recompensa diaria"}, true); err != nil {
 		return err
 	}
@@ -665,15 +663,15 @@ func cmdFav(args []string) error {
 		return nil
 	}
 
-	call, err := writes.Build("favourite", writes.Args{TeamID: state.TeamID,
+	call, err := writes.Build("favourite", state.Member, writes.Args{
 		PlayerID: text(found["id"]), Favourite: action == "add"})
 	if err != nil {
 		return err
 	}
-	if _, err := writes.Send(call); err != nil {
+	if _, err := state.Member.Send(api.Call(call)); err != nil {
 		return err
 	}
-	httpx.InvalidateIn(config.Default(), writes.Operations["favourite"].Effects...)
+	state.Member.Invalidate(writes.Operations["favourite"].Effects...)
 	if action == "add" {
 		fmt.Println(cli.Green(fmt.Sprintf("%s marcado como favorito", text(found["name"]))))
 	} else {
@@ -1182,9 +1180,9 @@ func cmdLineup(args []string) error {
 	}
 
 	guard := writes.NewGuard(state.Member)
-	if _, err := guard.Do("save_lineup", writes.Args{LeagueID: state.League,
-		TeamID: state.TeamID, Goalkeeper: best.Keeper, Defender: best.Defence,
-		Midfield: best.Middle, Striker: best.Attack, Formation: best.Shape.Numbers()},
+	if _, err := guard.Do("save_lineup", writes.Args{Goalkeeper: best.Keeper,
+		Defender: best.Defence, Midfield: best.Middle, Striker: best.Attack,
+		Formation: best.Shape.Numbers()},
 		writes.Player{Name: "tu alineacion"}, true); err != nil {
 		return err
 	}

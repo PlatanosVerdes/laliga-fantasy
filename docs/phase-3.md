@@ -1,7 +1,7 @@
 # Phase 3: many leagues and accounts in one process
 
 Design for phase 3 of `docs/multi-tenant.md`, read from `main` after phases 1 and 2a. Built so
-far: 3.0 to 3.5 and 3.8. Section 6 holds the decisions the owner makes before the code starts.
+far: 3.0 to 3.6 and 3.8. Section 6 holds the decisions the owner makes before the code starts.
 
 ## 0. Findings that change the plan
 
@@ -117,7 +117,7 @@ A activity pages (3–5).
 **Built (3.8)** as `httpx.Queue`, the transport under the cache, so a cache hit never takes a turn:
 - Defaults 5 req/s, burst 30, 4 in flight, per host (close to the unthrottled pace until the counters show LaLiga's limit); `FANTASY_LALIGA_RATE`, `_BURST`, `_IN_FLIGHT`
   and `_PATIENCE` override them. futbolfantasy is not in the queue.
-- Tagged at the source: `writes.Send`, the token refresh, `Guard.Cash` and the reads `automate`,
+- Tagged at the source: `Member.Send`, the token refresh, `Guard.Cash` and the reads `automate`,
   `claimReward` and `fixLineup` act on are P0; the server's client and the page render P1; the
   probe P2; the world build P3 (also anything untagged); the activity value history P4.
 - Strict priority between levels, round-robin between scopes inside one. P0 also skips the
@@ -204,9 +204,29 @@ Each leaves the single-user deploy working; until 3.10 the registry holds one te
   engine's `Invalidate` and `fav` drop the cache through `InvalidateIn(config.Default())`;
   `NewGuard(member)` reads cash only for the member's team, and `cmdServe` passes nil and sets
   `Cash` through its member; `LeagueID`, `MyTeamID` and `Identity` stay on `server.Options`.
-- **3.6** Writes bound to `Member`. **Money-safety:** for every operation, A's call path holds A's
-  league and team and never B's; `Guard.Cash` reads only A's team; a token prepared on A fails
-  on B; a sale or acceptance for a player not in A's universe is refused.
+- **3.6** (done) Writes bound to `Member`. **Money-safety:** for every operation, A's call path
+  holds A's league and team and never B's; `Guard.Cash` reads only A's team; a token prepared on
+  A fails on B; a sale or acceptance for a player not in A's universe is refused.
+  `Args` has no league or team: `Build(name, member, args)` stamps them, and `Member.Send(call)`
+  is the only way out, with the member's token. Right before the wire it refuses (`api.ErrForeign`)
+  a call whose segment after `league`/`leagues` is not the member's league, whose segment after
+  `team`/`teams` is not its team (a lowercase route word such as `daily-reward` is not an id), whose
+  `leagueId`/`teamId` in the body is another's, or that names neither. `NewGuard(member)` for the
+  CLI; `GuardOf(func() (*api.Member, error))` for serve, which learns its league after start. A
+  token records its member and fails, unspent, on another guard or once the guard's member
+  changes. `Rehearsal` is a `Guard` field. `Guard.Squad` (from the last built world in serve)
+  holds the member's slots and listings: a sale, a clause rise, a shield, an accepted or declined
+  offer or a withdrawal for a slot or listing outside it is refused (`ErrNotMine`) before any
+  request, also at confirm and unattended; no squad, no such operation. A withdrawal without its
+  listing id is refused like the other empty ids. Writes, the engine's `Invalidate` and `fav`
+  drop the member's own folders. A golden test pins the bytes (method, path, query, bearer,
+  headers, body) every operation sent for the live profile before this change.
+  Deviations: `writes.Call` stays a type of its own, converted to `api.Call` at the send, so
+  the operation table is untouched; `writes.Shape` builds with `L` and `T` for `fantasy calls`;
+  cancelling a bid or an offer is not checked against the squad (it acts on a rival's listing).
+  `fav` sends through `Member.Send` directly, so an API refusal there prints LaLiga's raw error
+  instead of the guard's sentence. Still on the globals: `server.HasSession`/`adopt`, the CLI's
+  session reads, and `LeagueID`, `MyTeamID`, `Identity` on `server.Options` (3.10).
 - **3.7** The model split: `BuildGlobal`, `BuildLeague`, `Compose`. *Test:* on the frozen
   fixtures, `Compose` equals today's `Build` field for field.
 - **3.8** (done) The limiter. *Tests:* P0 jumps 100 queued P3; a 429 pauses P1–P4 everywhere and
