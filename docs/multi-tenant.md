@@ -26,8 +26,8 @@ for one league (the Necroporra, house rules) are switched on per league.
 | Layer | Key | Holds |
 |---|---|---|
 | Global | none | catalogue, LaLiga teams, week, calendar, market values, player detail, futbolfantasy (market, trends, absences, hierarchies, details, ceilings), crests |
-| League | `leagueId` | market listing, standings, rival squads, activity |
-| Account in league | `accountId + leagueId` | cash, received offers, lineup, favourites, settings, policies, forecasts, outcomes, dismissed |
+| League | `leagueId` | standings, rival squads, activity, weekly lineups |
+| Account in league | `accountId + leagueId` | market (it carries our own bids), cash, received offers, lineup, favourites, settings, policies, forecasts, outcomes, dismissed |
 
 Rivals are keyed by league, not by person: a manager has a different squad in every league.
 Two users in the same league share the league layer and nothing else.
@@ -85,6 +85,8 @@ nothing.
   real league needs them.
 
 ## Phases
+
+Phase 3 is designed in detail in `docs/phase-3.md`.
 
 Each phase ships on its own and leaves the current single-user deploy working.
 
