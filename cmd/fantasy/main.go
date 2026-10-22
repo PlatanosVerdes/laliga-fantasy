@@ -1537,6 +1537,18 @@ func renderPage(universe *model.Universe, client *api.Client, teamID, generated,
 	return document.HTML(), nil
 }
 
+// prepareRender sets the render globals once; set on every render, two renders at once raced.
+var prepareRender = sync.OnceFunc(func() {
+	render.Build = buildVersion
+	render.FFPages = futbolfantasy.StoredDetail
+	var crests map[string]string
+	if body, err := os.ReadFile(filepath.Join(config.CacheRoot, "crests.json")); err == nil {
+		if json.Unmarshal(body, &crests) == nil {
+			render.Crests = crests
+		}
+	}
+})
+
 func buildDocument(universe *model.Universe, client *api.Client, teamID, generated,
 	mode string) (render.Document, error) {
 	cash := 0.0
@@ -1620,14 +1632,7 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		}
 		return string(body)
 	}
-	render.Build = buildVersion
-	render.FFPages = futbolfantasy.StoredDetail
-	var crests map[string]string
-	if body, err := os.ReadFile(filepath.Join(config.CacheRoot, "crests.json")); err == nil {
-		if json.Unmarshal(body, &crests) == nil {
-			render.Crests = crests
-		}
-	}
+	prepareRender()
 
 	document := render.Document{
 		Universe: generic, Advice: buckets, Generated: stamp, LeagueName: league,
