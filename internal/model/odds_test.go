@@ -34,7 +34,6 @@ func squadEntry(id, name string) map[string]any {
 	return map[string]any{"id": id, "nickname": name, "positionId": 2.0}
 }
 
-// The market list misses some of my players; their own page has the odds, and only they are read.
 func TestMySquadMissingOddsAreReadFromTheirPage(t *testing.T) {
 	asked := stubFichas(t, map[string]map[string]any{
 		"asier-osambela": {"start_probability": pct(40), "start_week": pct(10)},
@@ -73,7 +72,6 @@ func TestMySquadMissingOddsAreReadFromTheirPage(t *testing.T) {
 	}
 }
 
-// xPts are computed with the odds read from the page, not as an unknown.
 func TestXPtsUseTheOddsFromThePage(t *testing.T) {
 	base := Player{Available: true, BaseWeek: 5, FixtureFactor: 1}
 	unknown, filled := base, base

@@ -13,13 +13,11 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 )
 
-// Odds is a starting probability read from a player's own futbolfantasy page.
 type Odds struct {
 	Probability float64
 	Week        *int
 }
 
-// FichaSource marks starting odds that came from the player's page, not the market list.
 const FichaSource = "ficha"
 
 // oddsWorkers bounds the pages read at once; futbolfantasy's own throttle spaces them anyway.
@@ -33,13 +31,10 @@ var (
 	}
 )
 
-// oddsWanted is one of mine the market list gave no starting odds, and how to find his page.
 type oddsWanted struct {
 	id, slug, ffID string
 }
 
-// squadOdds reads the page of every player of my squad the market list left without starting
-// odds. The market list misses some of them, and the page has the number.
 func squadOdds(raw []map[string]any, ownership map[string]slot, myTeamID string, bridge *Bridge,
 	ttl time.Duration) map[string]*Odds {
 	if myTeamID == "" {
@@ -119,7 +114,6 @@ func readOdds(wanted []oddsWanted, ttl time.Duration) map[string]*Odds {
 	return out
 }
 
-// applyOdds takes the market list's starting odds, else the ones read from his page.
 func (p *Player) applyOdds(trend *Trend, ficha *Odds) {
 	switch {
 	case trend != nil && trend.StartProbability != nil:
@@ -132,7 +126,6 @@ func (p *Player) applyOdds(trend *Trend, ficha *Odds) {
 	}
 }
 
-// score is the expected points per matchday from what is known of him by now.
 func (p *Player) score(status string) {
 	// Unknown minutes and a price-derived baseline are both guesses; discount them
 	// so a fringe player with no data cannot outrank a known starter.
