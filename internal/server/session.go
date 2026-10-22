@@ -238,9 +238,13 @@ const setupBody = `<h1>{{title}}</h1><p class="lead">{{lead}}</p>
  <li><div><b>Abre el login de LaLiga</b>
   <p>Entra como en la app: Google, Apple o correo.</p>
   <a class="btn" href="{{login}}" target="_blank" rel="noreferrer">Abrir el login ↗</a></div></li>
- <li><div><b>Copia la dirección final</b>
-  <p>Al terminar, el navegador intentará abrir <code>authredirect://…</code> y dará error: es lo
-  normal. Copia la dirección completa de la barra.</p></div></li>
+ <li><div><b>Antes de entrar, abre las herramientas de red</b>
+  <p>En la pestaña del login: <code>Cmd+Opt+I</code> (Mac) o <code>Ctrl+Shift+I</code> →
+  pestaña <b>Network</b> (Red) → marca <b>Preserve log</b> (Conservar registro). Ahora entra.</p></div></li>
+ <li><div><b>Copia la última petición</b>
+  <p>Al terminar, la página se queda en blanco y la barra no cambia: es lo normal. En Network, la
+  última fila, en rojo y <code>(canceled)</code>, es <code>authredirect://…?code=…</code>:
+  botón derecho → <b>Copy → Copy URL</b>. En Safari y Firefox suele salir también en la barra.</p></div></li>
  <li><div><b>Pégala aquí</b>
   <textarea id="paste" placeholder="authredirect://com.lfp.laligafantasy?code=…"></textarea>
   <button class="btn" id="go">Entrar</button></div></li>

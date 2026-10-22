@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/files"
@@ -119,6 +120,13 @@ func ExtractCode(text, expectedState string) (string, error) {
 	if !strings.Contains(text, "code=") && !strings.Contains(text, "?") {
 		return text, nil
 	}
+	// DevTools' "Copy as cURL" and similar wrap the URL: keep only the piece holding the code.
+	for _, field := range strings.FieldsFunc(text, func(r rune) bool { return unicode.IsSpace(r) || strings.ContainsRune(`"'`, r) }) {
+		if strings.Contains(field, "code=") {
+			text = field
+			break
+		}
+	}
 
 	query := text
 	if parsed, err := url.Parse(text); err == nil && parsed.RawQuery != "" {
@@ -139,6 +147,10 @@ func ExtractCode(text, expectedState string) (string, error) {
 	}
 	code := params.Get("code")
 	if code == "" {
+		if parsed, err := url.Parse(text); err == nil && strings.HasPrefix(parsed.Scheme, "http") {
+			return "", fmt.Errorf("esa es una página intermedia del login (%s), no la final: el código "+
+				"está en la última petición de Network, la que sale (canceled)", parsed.Host)
+		}
 		return "", errors.New("la URL pegada no contiene ningun `code=`")
 	}
 	if got := params.Get("state"); expectedState != "" && got != "" && got != expectedState {
