@@ -238,3 +238,24 @@ func TestTheTunnelDoorAlsoAsksForASession(t *testing.T) {
 		}
 	}
 }
+
+func TestEachRequestKnowsTheDoorItCameIn(t *testing.T) {
+	now := time.Now()
+	cloudflare := newSigner(t, "current")
+	keys := newAccessKeys(Access{TeamDomain: testTeam, Audience: testAudience})
+	keys.certsURL = certsServer(t, cloudflare).URL
+	keys.now = func() time.Time { return now }
+	door := ""
+	record := http.HandlerFunc(func(_ http.ResponseWriter, request *http.Request) { door = doorOf(request) })
+
+	tunnel := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+	tunnel.Header.Set(AccessHeader, cloudflare.token(t, validClaims(now)))
+	keys.middleware(record).ServeHTTP(httptest.NewRecorder(), tunnel)
+	if door != "access" {
+		t.Errorf("through the tunnel: %q", door)
+	}
+	record.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/state", nil))
+	if door != "private" {
+		t.Errorf("through the private door: %q", door)
+	}
+}
