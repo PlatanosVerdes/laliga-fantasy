@@ -31,6 +31,8 @@ const version = 1
 var ErrWrongKey = errors.New("la clave no coincide: este fichero se cifro con otra " +
 	"FANTASY_SECRET_KEY o con otro secret.key")
 
+var ErrNoKey = errors.New("falta la clave para descifrar")
+
 // ErrDamaged is a file sealed under this key that no longer authenticates.
 var ErrDamaged = errors.New("el fichero cifrado esta danado o lo han modificado")
 
@@ -133,7 +135,7 @@ func Key(create bool) ([]byte, error) {
 	body, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		if !create {
-			return nil, fmt.Errorf("falta la clave para descifrar: ni FANTASY_SECRET_KEY ni %s", path)
+			return nil, fmt.Errorf("%w: ni FANTASY_SECRET_KEY ni %s", ErrNoKey, path)
 		}
 		return generate(path)
 	}

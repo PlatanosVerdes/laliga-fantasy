@@ -662,6 +662,9 @@ func cmdServe(args []string) error {
 			fmt.Println("Varias ligas: elige una en la pagina.")
 		}
 	default:
+		if _, err := auth.Load(); err != nil {
+			slog.Error("session unreadable", "reason", err.Error())
+		}
 		fmt.Println("Sin sesion: abre la pagina y pega el login.")
 	}
 	if *noAuto {

@@ -9,6 +9,7 @@
 package auth
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -22,6 +23,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/files"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/secret"
 )
 
 // Each refresh is a hit on LaLiga's identity provider and can trigger a security
@@ -77,31 +79,78 @@ var mu sync.Mutex
 
 // Load reads the stored session, seeding it from the environment on first run.
 func Load() (*Tokens, error) {
-	raw, err := os.ReadFile(config.TokenFile)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return seedFromEnv()
-		}
-		return nil, err
+	tokens, err := read(config.TokenFile)
+	if errors.Is(err, os.ErrNotExist) {
+		return seedFromEnv()
 	}
-	var tokens Tokens
-	if err := json.Unmarshal(raw, &tokens); err != nil {
-		return nil, fmt.Errorf("tokens.json no es un JSON valido: %w", err)
-	}
-	return &tokens, nil
+	return tokens, err
+}
+
+// LoadAccount reads an account's session, active or not.
+func LoadAccount(account string) (*Tokens, error) {
+	return read(config.AccountTokenFile(account))
 }
 
 func Save(tokens *Tokens) error {
 	if err := config.EnsureDirs(); err != nil {
 		return err
 	}
+	return write(config.TokenFile, tokens)
+}
+
+// read opens a session file, sealing it in place when it is still plaintext.
+func read(path string) (*Tokens, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	plain := raw
+	sealed := secret.Sealed(raw)
+	if sealed {
+		if plain, err = secret.Open(raw); err != nil {
+			return nil, fmt.Errorf("no se puede leer la sesion %s: %w", path, err)
+		}
+	}
+	var tokens Tokens
+	if err := json.Unmarshal(plain, &tokens); err != nil {
+		return nil, fmt.Errorf("tokens.json no es un JSON valido: %w", err)
+	}
+	if !sealed {
+		sealInPlace(path, raw)
+	}
+	return &tokens, nil
+}
+
+func sealInPlace(path string, plain []byte) {
+	mu.Lock()
+	defer mu.Unlock()
+	// A renewal saved since it was read is newer: sealing the old bytes would roll it back.
+	if current, err := os.ReadFile(path); err != nil || !bytes.Equal(current, plain) {
+		return
+	}
+	sealed, err := secret.Seal(plain)
+	if err == nil {
+		err = files.WriteAtomic(path, sealed, 0o600)
+	}
+	if err != nil {
+		slog.Warn("session file left unencrypted", "file", path, "reason", err.Error())
+		return
+	}
+	slog.Info("session file encrypted", "file", path)
+}
+
+func write(path string, tokens *Tokens) error {
 	blob, err := json.MarshalIndent(tokens, "", "  ")
+	if err != nil {
+		return err
+	}
+	sealed, err := secret.Seal(blob)
 	if err != nil {
 		return err
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	return files.WriteAtomic(config.TokenFile, blob, 0o600)
+	return files.WriteAtomic(path, sealed, 0o600)
 }
 
 func seedFromEnv() (*Tokens, error) {
@@ -323,12 +372,8 @@ func userOf(claims map[string]any, email string) string {
 }
 
 func AccountUser(account string) string {
-	body, err := os.ReadFile(config.AccountTokenFile(account))
+	tokens, err := LoadAccount(account)
 	if err != nil {
-		return ""
-	}
-	var tokens Tokens
-	if json.Unmarshal(body, &tokens) != nil {
 		return ""
 	}
 	return tokens.User()

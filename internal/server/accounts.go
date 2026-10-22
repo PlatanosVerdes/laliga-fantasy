@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/auth"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/files"
 )
@@ -59,14 +60,9 @@ func (s *Server) accounts(writer http.ResponseWriter, request *http.Request) {
 			continue
 		}
 		view := accountView{ID: id, Active: id == active, Leagues: []LeagueChoice{}}
-		var tokens struct {
-			Email string `json:"email"`
-			Name  string `json:"name"`
+		if tokens, err := auth.LoadAccount(id); err == nil {
+			view.Email, view.Name = tokens.Email, tokens.Name
 		}
-		if body, err := os.ReadFile(config.AccountTokenFile(id)); err == nil {
-			_ = json.Unmarshal(body, &tokens)
-		}
-		view.Email, view.Name = tokens.Email, tokens.Name
 		view.Manager = s.managerName(id)
 		known := map[string]bool{}
 		if view.Active {
@@ -90,16 +86,10 @@ func (s *Server) accounts(writer http.ResponseWriter, request *http.Request) {
 }
 
 func accountEmail(account string) string {
-	var tokens struct {
-		Email string `json:"email"`
+	if tokens, err := auth.LoadAccount(account); err == nil && tokens.Email != "" {
+		return tokens.Email
 	}
-	if body, err := os.ReadFile(config.AccountTokenFile(account)); err == nil {
-		_ = json.Unmarshal(body, &tokens)
-	}
-	if tokens.Email == "" {
-		return account
-	}
-	return tokens.Email
+	return account
 }
 
 // managerName is the account's manager name: read from the world for the active account and

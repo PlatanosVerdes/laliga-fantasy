@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -52,5 +54,27 @@ func TestAWorkingSessionIsNotReplacedByAccident(t *testing.T) {
 	}
 	if tokens, _ := auth.Load(); tokens == nil || tokens.RefreshToken != "good" {
 		t.Errorf("the working session was replaced: %+v", tokens)
+	}
+}
+
+// A session this key cannot open is still a session: a paste does not take it for none.
+func TestASessionUnderAnotherKeyIsNotReplacedByAccident(t *testing.T) {
+	config.TokenFile = filepath.Join(t.TempDir(), "tokens.json")
+	if err := auth.Save(&auth.Tokens{AccessToken: "good", RefreshToken: "good"}); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(config.TokenFile)
+	t.Setenv("FANTASY_SECRET_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	s := &Server{}
+	request := httptest.NewRequest(http.MethodPost, "/api/session",
+		strings.NewReader(`{"paste":"{\"refresh_token\":\"x\"}"}`))
+	request = request.WithContext(context.WithValue(request.Context(), visitorKey{}, visitor{User: "user-me"}))
+	recorder := httptest.NewRecorder()
+	s.session(recorder, request)
+	if recorder.Code != http.StatusConflict || !strings.Contains(recorder.Body.String(), "la clave no coincide") {
+		t.Errorf("status %d: %s", recorder.Code, recorder.Body)
+	}
+	if after, _ := os.ReadFile(config.TokenFile); string(after) != string(before) {
+		t.Error("the session was replaced")
 	}
 }
