@@ -251,15 +251,22 @@ func (d Document) saleSwaps() map[string]advice.Clausulazo {
 }
 
 // clauseButton pays his clause now, or schedules the clausulazo for when it opens.
-func clauseButton(player map[string]any, cost float64, opens, class string) Act {
+func clauseButton(player map[string]any, cost float64, opens, class string, armedMax map[string]any) Act {
 	id, name := text(player["id"]), text(player["name"])
 	if opens == "" {
 		return Act{Label: "Pagar cláusula " + esMoney(cost), Class: "op " + class, Do: "op",
 			Args: map[string]any{"op": "pay_clause", "player_id": id, "name": name,
 				"amount": int64(cost)}}
 	}
-	return Act{Label: "Programar clausulazo", Class: "raid-btn " + class, Do: "raid",
-		Args: map[string]any{"id": id, "name": name, "max": int64(cost),
+	label, ceiling := "Programar clausulazo", cost
+	if truthy(player["raid_scheduled"]) {
+		label = "Cambiar clausulazo programado"
+		if armed := number(armedMax[id]); armed > 0 {
+			ceiling = armed
+		}
+	}
+	return Act{Label: label, Class: "raid-btn " + class, Do: "raid",
+		Args: map[string]any{"id": id, "name": name, "max": int64(ceiling),
 			"clause": int64(number(player["clause"]))}}
 }
 
@@ -299,7 +306,7 @@ func (d Document) saleSwapCards() []Card {
 			Impact: fmt.Sprintf("tu once %s xPts · te quedan %s", esSigned(move.Gain),
 				esMoney(move.CashAfter)),
 			Tone:    "accent",
-			Buttons: []Act{accept, clauseButton(in, move.Cost, move.Opens, "dcard-go dcard-second")},
+			Buttons: []Act{accept, clauseButton(in, move.Cost, move.Opens, "dcard-go dcard-second", d.raidCeilings())},
 			Weight:  move.Gain, Cash: amount - move.Cost,
 		})
 	}
@@ -326,7 +333,15 @@ func (d Document) upgradeCards(covered map[string]bool) []Card {
 		Why: []string{fmt.Sprintf("Su cláusula (de %s) cuesta %s y nadie puede negarse.",
 			text(in["owner"]), esMoney(move.Cost))},
 		Impact: "te quedan " + esMoney(move.CashAfter), Tone: "accent",
-		Buttons: []Act{clauseButton(in, move.Cost, move.Opens, "dcard-go")},
+		Buttons: []Act{clauseButton(in, move.Cost, move.Opens, "dcard-go", d.raidCeilings())},
 		Weight:  move.Gain, Cash: -move.Cost,
 	}}
+}
+
+func (d Document) raidCeilings() map[string]any {
+	out := map[string]any{}
+	for _, raid := range d.Raids {
+		out[text(raid["player_id"])] = raid["max_pay"]
+	}
+	return out
 }
