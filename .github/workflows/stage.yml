@@ -1,0 +1,25 @@
+name: Stage
+
+# Runs the branch it is started on as the read-only stage on the Pi, at fantasy-stage, or turns
+# the stage off: gh workflow run stage.yml --ref <branch> [-f action=stop].
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        options: [deploy, stop]
+        default: deploy
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  stage:
+    uses: PlatanosVerdes/workflows/.github/workflows/stage.yml@main
+    with:
+      action: ${{ inputs.action }}
+      deploy-repo: PlatanosVerdes/rpi-services
+    secrets:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
