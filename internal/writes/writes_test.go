@@ -7,25 +7,42 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/api/apitest"
 )
 
-// Nothing here can reach the network: Cash is stubbed and Send is never called (send is). Every case
-// is a guarantee that stands between a click and somebody's money.
+// Nothing here reaches LaLiga: the member is the fake's and Cash is stubbed. Every case is a
+// guarantee that stands between a click and somebody's money.
 
-func guard(cash int64) *Guard {
-	g := &Guard{tokens: map[string]pending{}}
+func guard(t *testing.T, cash int64) *Guard {
+	t.Helper()
+	return guardOf(apitest.New(t).Member("a", "L", "T"), cash)
+}
+
+func guardOf(member *api.Member, cash int64) *Guard {
+	g := NewGuard(member)
 	g.Cash = func(string) (int64, error) { return cash, nil }
+	g.Squad = func() *Squad {
+		return &Squad{Slots: map[string]bool{"PT": true, "slot": true},
+			Listings: map[string]bool{"M": true}}
+	}
 	return g
 }
 
+func memberIn(t *testing.T, league, team string) *api.Member {
+	t.Helper()
+	return apitest.New(t).Member("a", league, team)
+}
+
 func bidArgs(amount int64) Args {
-	return Args{LeagueID: "L", TeamID: "T", MarketID: "M", Amount: amount}
+	return Args{MarketID: "M", Amount: amount}
 }
 
 func TestTokenIsSingleUse(t *testing.T) {
 	// The whole point of the two-step guard: a double click, a retry or a replayed request
 	// must not bid twice.
-	g := guard(50_000_000)
+	g := guard(t, 50_000_000)
 	summary, err := g.Prepare("bid", bidArgs(1_000_000), Player{Name: "X", IdealBid: 2_000_000}, true)
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
@@ -39,7 +56,7 @@ func TestTokenIsSingleUse(t *testing.T) {
 }
 
 func TestATokenIsConfirmedOnlyByWhoPreparedIt(t *testing.T) {
-	g := guard(50_000_000)
+	g := guard(t, 50_000_000)
 	summary, err := g.PrepareFor("session-a", "bid", bidArgs(1_000_000),
 		Player{Name: "X", IdealBid: 2_000_000}, true)
 	if err != nil {
@@ -56,7 +73,7 @@ func TestATokenIsConfirmedOnlyByWhoPreparedIt(t *testing.T) {
 }
 
 func TestTokenExpires(t *testing.T) {
-	g := guard(50_000_000)
+	g := guard(t, 50_000_000)
 	summary, err := g.Prepare("bid", bidArgs(1_000_000), Player{Name: "X", IdealBid: 2_000_000}, true)
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
@@ -74,7 +91,7 @@ func TestTokenExpires(t *testing.T) {
 }
 
 func TestReadOnlyRefusesBothSteps(t *testing.T) {
-	g := guard(50_000_000)
+	g := guard(t, 50_000_000)
 	if _, err := g.Prepare("bid", bidArgs(1_000_000), Player{}, false); !errors.Is(err, ErrDisabled) {
 		t.Fatalf("prepare en solo lectura deberia negarse, dio %v", err)
 	}
@@ -85,7 +102,7 @@ func TestReadOnlyRefusesBothSteps(t *testing.T) {
 }
 
 func TestBidBelowTheFloorIsRefused(t *testing.T) {
-	g := guard(50_000_000)
+	g := guard(t, 50_000_000)
 	_, err := g.Prepare("bid", bidArgs(900_000), Player{Name: "X", MinBid: 1_000_000}, true)
 	if err == nil {
 		t.Fatal("una puja por debajo del minimo deberia rechazarse")
@@ -96,7 +113,7 @@ func TestBidBelowTheFloorIsRefused(t *testing.T) {
 }
 
 func TestBidAboveCashIsRefused(t *testing.T) {
-	g := guard(1_000_000)
+	g := guard(t, 1_000_000)
 	if _, err := g.Prepare("bid", bidArgs(2_000_000), Player{Name: "X"}, true); err == nil {
 		t.Fatal("no te llega y aun asi lo ha aceptado")
 	}
@@ -104,7 +121,7 @@ func TestBidAboveCashIsRefused(t *testing.T) {
 
 func TestBidAboveTheProfitableCeilingOnlyWarns(t *testing.T) {
 	// A warning, not a refusal: paying over the odds is a decision, not a mistake.
-	g := guard(50_000_000)
+	g := guard(t, 50_000_000)
 	summary, err := g.Prepare("bid", bidArgs(3_000_000),
 		Player{Name: "X", IdealBid: 2_000_000}, true)
 	if err != nil {
@@ -116,7 +133,7 @@ func TestBidAboveTheProfitableCeilingOnlyWarns(t *testing.T) {
 }
 
 func TestNoProfitabilityAtAllStillWarns(t *testing.T) {
-	g := guard(50_000_000)
+	g := guard(t, 50_000_000)
 	summary, err := g.Prepare("bid", bidArgs(1_000_000), Player{Name: "X"}, true)
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
@@ -133,8 +150,8 @@ func TestNoProfitabilityAtAllStillWarns(t *testing.T) {
 }
 
 func TestPayingLessThanTheClauseIsRefused(t *testing.T) {
-	g := guard(50_000_000)
-	args := Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT", Amount: 9_000_000}
+	g := guard(t, 50_000_000)
+	args := Args{PlayerTeamID: "PT", Amount: 9_000_000}
 	if _, err := g.Prepare("pay_clause", args, Player{Name: "X", Clause: 10_000_000}, true); err == nil {
 		t.Fatal("pagar por debajo de la clausula deberia rechazarse")
 	}
@@ -142,10 +159,10 @@ func TestPayingLessThanTheClauseIsRefused(t *testing.T) {
 
 // The summary can sit open for two minutes; a window that closes meanwhile stops the payment.
 func TestConfirmChecksAgain(t *testing.T) {
-	g := guard(50_000_000)
+	g := guard(t, 50_000_000)
 	window := &Window{Open: true}
 	g.Clauses = func() *Window { return window }
-	args := Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT", Amount: 10_000_000}
+	args := Args{PlayerTeamID: "PT", Amount: 10_000_000}
 	summary, err := g.Prepare("pay_clause", args, Player{Name: "X", Clause: 10_000_000}, true)
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
@@ -159,24 +176,24 @@ func TestConfirmChecksAgain(t *testing.T) {
 // The 400 the API answers to playerId "" is unreadable; refusing it here says which field is
 // missing, and a listing priced at zero is not a listing.
 func TestListingWithoutSlotOrPriceIsRefused(t *testing.T) {
-	g := guard(50_000_000)
+	g := guard(t, 50_000_000)
 	if _, err := g.Prepare("sell_to_market",
-		Args{LeagueID: "L", TeamID: "T", Amount: 9_000_000}, Player{Name: "X"}, true); err == nil {
+		Args{Amount: 9_000_000}, Player{Name: "X"}, true); err == nil {
 		t.Error("poner en venta sin la ficha de la plantilla deberia rechazarse")
 	}
 	if _, err := g.Prepare("sell_to_market",
-		Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT"}, Player{Name: "X"}, true); err == nil {
+		Args{PlayerTeamID: "PT"}, Player{Name: "X"}, true); err == nil {
 		t.Error("poner en venta a cero deberia rechazarse")
 	}
 	if _, err := g.Prepare("pay_clause",
-		Args{LeagueID: "L", TeamID: "T", Amount: 1_000_000}, Player{Name: "X"}, true); err == nil {
+		Args{Amount: 1_000_000}, Player{Name: "X"}, true); err == nil {
 		t.Error("pagar una clausula sin la ficha deberia rechazarse")
 	}
 }
 
 func TestAcceptingBelowMarketValueWarns(t *testing.T) {
-	g := guard(0)
-	args := Args{LeagueID: "L", TeamID: "T", MarketID: "M", OfferID: "O", Amount: 8_000_000}
+	g := guard(t, 0)
+	args := Args{MarketID: "M", OfferID: "O", Amount: 8_000_000}
 	summary, err := g.Prepare("accept_offer", args,
 		Player{Name: "X", Value: 10_000_000}, true)
 	if err != nil {
@@ -190,7 +207,7 @@ func TestAcceptingBelowMarketValueWarns(t *testing.T) {
 func TestCashMovesInTheRightDirection(t *testing.T) {
 	// A bid takes money out, accepting an offer brings it in. Getting this backwards would
 	// make the confirmation dialog lie about the consequence.
-	g := guard(10_000_000)
+	g := guard(t, 10_000_000)
 	bid, err := g.Prepare("bid", bidArgs(1_000_000), Player{Name: "X", IdealBid: 5_000_000}, true)
 	if err != nil {
 		t.Fatalf("prepare bid: %v", err)
@@ -199,7 +216,7 @@ func TestCashMovesInTheRightDirection(t *testing.T) {
 		t.Fatalf("una puja deberia dejar 9.000.000, dice %v", bid.CashAfter)
 	}
 
-	args := Args{LeagueID: "L", TeamID: "T", MarketID: "M", OfferID: "O", Amount: 2_000_000}
+	args := Args{MarketID: "M", OfferID: "O", Amount: 2_000_000}
 	sale, err := g.Prepare("accept_offer", args, Player{Name: "X", Value: 2_000_000}, true)
 	if err != nil {
 		t.Fatalf("prepare accept: %v", err)
@@ -210,9 +227,9 @@ func TestCashMovesInTheRightDirection(t *testing.T) {
 }
 
 func TestDryRunReturnsTheCallAndSendsNothing(t *testing.T) {
-	g := guard(50_000_000)
+	g := guard(t, 50_000_000)
 	summary, err := g.Prepare("sell_to_market",
-		Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "PT", Amount: 5_000_000},
+		Args{PlayerTeamID: "PT", Amount: 5_000_000},
 		Player{Name: "X"}, true)
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
@@ -249,10 +266,10 @@ func TestEveryOperationDeclaresItsEffects(t *testing.T) {
 
 // An unattended write with no readable balance is a write with no limit: it must not happen.
 func TestAutomaticRefusesToSpendWithoutABalance(t *testing.T) {
-	blind := &Guard{tokens: map[string]pending{},
-		Cash: func(string) (int64, error) { return 0, errors.New("money 503") }}
+	blind := guard(t, 0)
+	blind.Cash = func(string) (int64, error) { return 0, errors.New("money 503") }
 
-	args := Args{LeagueID: "1", TeamID: "2", PlayerTeamID: "3", Amount: 5_000_000}
+	args := Args{PlayerTeamID: "3", Amount: 5_000_000}
 	_, err := blind.Automatic("pay_clause", args, Player{Name: "Youssef",
 		Clause: 5_000_000}, true)
 	if err == nil {
@@ -267,7 +284,7 @@ func TestAutomaticRefusesToSpendWithoutABalance(t *testing.T) {
 // the league and the team travels in the body. Getting either wrong is a 404 or a 400, and there
 // is no second capture to compare against.
 func TestClaimDailyRewardCallShape(t *testing.T) {
-	call, err := Build("claim_daily_reward", Args{LeagueID: "018012894", TeamID: "38126981"})
+	call, err := Build("claim_daily_reward", memberIn(t, "018012894", "38126981"), Args{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,9 +308,9 @@ func TestClaimDailyRewardCallShape(t *testing.T) {
 // the clause goes up by twice it. Both numbers have to be in the confirmation, and the balance
 // has to come down, which it did not.
 func TestRaiseClauseSaysWhatTheClauseBecomes(t *testing.T) {
-	g := guard(50_000_000)
+	g := guard(t, 50_000_000)
 	summary, err := g.Prepare("raise_clause",
-		Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "slot", Amount: 4_656_624},
+		Args{PlayerTeamID: "slot", Amount: 4_656_624},
 		Player{Name: "Ferran Jutglà", Value: 9_313_248, Clause: 15_192_896}, true)
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
@@ -312,7 +329,8 @@ func TestRaiseClauseSaysWhatTheClauseBecomes(t *testing.T) {
 
 // The factor lives in one place, and the call carries it.
 func TestRaiseClauseCallCarriesTheFactor(t *testing.T) {
-	call, err := Build("raise_clause", Args{LeagueID: "L", PlayerTeamID: "slot", Amount: 1_000})
+	call, err := Build("raise_clause", memberIn(t, "L", "T"),
+		Args{PlayerTeamID: "slot", Amount: 1_000})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -327,7 +345,7 @@ func TestRaiseClauseCallCarriesTheFactor(t *testing.T) {
 // The shield is addressed by the slot, like a clause: sending the player's own id comes back
 // 404 and looks like the route is wrong.
 func TestShieldGoesByTheSlot(t *testing.T) {
-	call, err := Build("shield_player", Args{LeagueID: "L", PlayerTeamID: "slot"})
+	call, err := Build("shield_player", memberIn(t, "L", "T"), Args{PlayerTeamID: "slot"})
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -344,8 +362,8 @@ func TestShieldGoesByTheSlot(t *testing.T) {
 
 // A live shield cannot be bought over: the advert would be spent for nothing.
 func TestShieldRefusedWhileOneHolds(t *testing.T) {
-	g := guard(50_000_000)
-	_, err := g.Prepare("shield_player", Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "slot"},
+	g := guard(t, 50_000_000)
+	_, err := g.Prepare("shield_player", Args{PlayerTeamID: "slot"},
 		Player{Name: "M. Dituro", Shielded: true,
 			ShieldedUntil: "2026-09-05T17:46:36+02:00"}, true)
 	if err == nil {
@@ -360,9 +378,9 @@ func TestShieldRefusedWhileOneHolds(t *testing.T) {
 // the figure: a listing does not pay today, it pays if somebody buys, and the page labels it
 // with that condition.
 func TestSummarySaysWhereTheBalanceEndsUp(t *testing.T) {
-	g := guard(10_000_000)
+	g := guard(t, 10_000_000)
 	paying, err := g.Prepare("pay_clause",
-		Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "slot", Amount: 1_725_981},
+		Args{PlayerTeamID: "slot", Amount: 1_725_981},
 		Player{Name: "Raúl"}, true)
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
@@ -372,7 +390,7 @@ func TestSummarySaysWhereTheBalanceEndsUp(t *testing.T) {
 	}
 
 	listing, err := g.Prepare("sell_to_market",
-		Args{LeagueID: "L", TeamID: "T", PlayerTeamID: "slot", Amount: 11_020_000},
+		Args{PlayerTeamID: "slot", Amount: 11_020_000},
 		Player{Name: "Tárrega", Value: 11_020_000}, true)
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
@@ -384,7 +402,8 @@ func TestSummarySaysWhereTheBalanceEndsUp(t *testing.T) {
 
 // The star travels the way the app sends it: the player as a number, the side it lands on.
 func TestFavouriteIsTheAppsCall(t *testing.T) {
-	call, err := Build("favourite", Args{TeamID: "38126981", PlayerID: "2541", Favourite: true})
+	call, err := Build("favourite", memberIn(t, "L", "38126981"),
+		Args{PlayerID: "2541", Favourite: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,16 +423,17 @@ func TestAnOfferWithoutAListingIsAnsweredInTheApp(t *testing.T) {
 	}
 }
 
-// A rehearsal never reaches the API: with no session at all, a real send would fail on the bearer.
+// A rehearsal never reaches the API.
 func TestARehearsedWriteIsNotSent(t *testing.T) {
-	Rehearsal = true
-	defer func() { Rehearsal = false }()
-	call, err := Build("decline_offer", Args{LeagueID: "1", MarketID: "2", OfferID: "3"})
-	if err != nil {
-		t.Fatal(err)
+	laliga := apitest.New(t)
+	g := guardOf(laliga.Member("a", "L", "T"), 0)
+	g.Rehearsal = true
+	if _, err := g.Automatic("decline_offer", Args{MarketID: "M", OfferID: "3"}, Player{},
+		true); err != nil {
+		t.Errorf("a rehearsed write failed, so it tried to send: %v", err)
 	}
-	if _, err := Send(call); err != nil {
-		t.Errorf("a rehearsed send failed, so it tried to send: %v", err)
+	if writes := laliga.Writes(); len(writes) != 0 {
+		t.Errorf("a rehearsed write reached LaLiga: %+v", writes)
 	}
 }
 
@@ -458,27 +478,31 @@ func TestABidFitsCashPlusDebtRoomMinusOtherBids(t *testing.T) {
 // Changing an offer is two calls in order: the old one withdrawn, then the new one sent. When
 // LaLiga refuses the second, the message must say there is no offer left at all.
 func TestChangingAnOfferWithdrawsThenOffers(t *testing.T) {
-	var calls []string
+	laliga := apitest.New(t)
 	refuseNew := false
-	send = func(call Call) (any, error) {
-		calls = append(calls, call.Method+" "+call.Path)
-		if refuseNew && call.Method == http.MethodPost {
-			return nil, errors.New("400 bad request")
-		}
-		return nil, nil
-	}
-	defer func() { send = Send }()
-	args := Args{LeagueID: "L", TeamID: "T", MarketID: "M", OfferID: "old", Amount: 16_200_000}
+	laliga.Handle("POST /api/v1/competition/1/league/L/market/M/offer",
+		func(writer http.ResponseWriter, _ *http.Request) {
+			if refuseNew {
+				http.Error(writer, "bad request", http.StatusBadRequest)
+			}
+		})
+	member := laliga.Member("a", "L", "T")
+	args := Args{MarketID: "M", OfferID: "old", Amount: 16_200_000}
 	who := Player{Name: "Kike Salas", MyBidID: "old", MyBid: 15_700_000}
 
 	for _, refuse := range []bool{false, true} {
-		calls, refuseNew = nil, refuse
-		g := guard(28_000_000)
+		refuseNew = refuse
+		before := len(laliga.Writes())
+		g := guardOf(member, 28_000_000)
 		summary, err := g.Prepare("change_offer", args, who, true)
 		if err != nil {
 			t.Fatalf("prepare: %v", err)
 		}
 		_, err = g.Confirm(summary.Token, true, false)
+		var calls []string
+		for _, call := range laliga.Writes()[before:] {
+			calls = append(calls, call.Method+" "+strings.TrimPrefix(call.Path, "/api"))
+		}
 		want := []string{"DELETE /v1/competition/1/league/L/market/M/offer/old/cancel",
 			"POST /v1/competition/1/league/L/market/M/offer"}
 		if strings.Join(calls, " | ") != strings.Join(want, " | ") {
@@ -505,7 +529,7 @@ func TestChangingAnOfferToTheSameAmountIsRefused(t *testing.T) {
 // While the first build is on its way nothing acts: not a click, not a token prepared before it,
 // not an instruction firing unattended. And the refusal says why, in the words the page shows.
 func TestNothingActsWhileTheLeagueLoads(t *testing.T) {
-	g := guard(50_000_000)
+	g := guard(t, 50_000_000)
 	summary, err := g.Prepare("bid", bidArgs(1_000_000), Player{Name: "X", IdealBid: 2_000_000}, true)
 	if err != nil {
 		t.Fatalf("prepare before loading: %v", err)
@@ -520,13 +544,13 @@ func TestNothingActsWhileTheLeagueLoads(t *testing.T) {
 	if _, err := g.Confirm(summary.Token, true, true); !errors.Is(err, ErrLoading) {
 		t.Errorf("confirm while loading: %v", err)
 	}
-	if _, err := g.Do("favourite", Args{TeamID: "T", PlayerID: "1", Favourite: true},
+	if _, err := g.Do("favourite", Args{PlayerID: "1", Favourite: true},
 		Player{Name: "X"}, true); !errors.Is(err, ErrLoading) {
 		t.Errorf("a one-step write while loading: %v", err)
 	}
 	for _, operation := range []string{"pay_clause", "shield_player", "accept_offer",
 		"claim_daily_reward", "save_lineup"} {
-		if _, err := g.Automatic(operation, Args{LeagueID: "1", TeamID: "2", PlayerTeamID: "3",
+		if _, err := g.Automatic(operation, Args{PlayerTeamID: "3",
 			Amount: 1_000_000}, Player{Name: "X", Clause: 1_000_000}, true); !errors.Is(err, ErrLoading) {
 			t.Errorf("unattended %s while loading: %v", operation, err)
 		}

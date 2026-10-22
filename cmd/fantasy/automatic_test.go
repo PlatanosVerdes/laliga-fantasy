@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/api/apitest"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
@@ -23,7 +24,7 @@ func TestAutomaticListingCarriesTheSlotAndThePrice(t *testing.T) {
 		t.Fatalf("el plan deberia ponerlo en venta, dice %v", plan)
 	}
 
-	args := automaticArgs(plan[0], "L", "T")
+	args := automaticArgs(plan[0])
 	if args.PlayerTeamID != "25009250" {
 		t.Errorf("ficha %q, esperaba la de su plantilla", args.PlayerTeamID)
 	}
@@ -31,7 +32,7 @@ func TestAutomaticListingCarriesTheSlotAndThePrice(t *testing.T) {
 		t.Errorf("importe %d, esperaba 9.333.631", args.Amount)
 	}
 
-	call, err := writes.Build("sell_to_market", args)
+	call, err := writes.Build("sell_to_market", apitest.New(t).Member("a", "L", "T"), args)
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -54,7 +55,7 @@ func TestAutomaticRaidCarriesTheSlotAndTheAmount(t *testing.T) {
 	if len(plan) != 1 || text(plan[0]["action"]) != "pagar_clausula" {
 		t.Fatalf("el plan deberia pagar la clausula, dice %v", plan)
 	}
-	args := automaticArgs(plan[0], "L", "T")
+	args := automaticArgs(plan[0])
 	if args.PlayerTeamID != "31000001" || args.Amount != 1_000_000 {
 		t.Errorf("ficha %q e importe %d", args.PlayerTeamID, args.Amount)
 	}

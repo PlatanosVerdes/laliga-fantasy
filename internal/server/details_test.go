@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/api/apitest"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
@@ -53,7 +54,7 @@ func biddingServer(t *testing.T, read func(string) (futbolfantasy.Detail, error)
 	if err := world.Refresh("arranque"); err != nil {
 		t.Fatal(err)
 	}
-	guard := writes.NewGuard(nil)
+	guard := writes.NewGuard(apitest.New(t).Member("cuenta", "L", "me"))
 	guard.Cash = func(string) (int64, error) { return 50_000_000, nil }
 	return asOwner(t, New(world, Options{AllowWrites: true, Guard: guard, LeagueID: "L", MyTeamID: "me",
 		Profile: profile}))

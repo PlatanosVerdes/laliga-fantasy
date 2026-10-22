@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/auth"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
@@ -19,7 +20,7 @@ const (
 	goldenTeam   = "38126981"
 )
 
-var goldenArgs = Args{LeagueID: goldenLeague, TeamID: goldenTeam, MarketID: "14693409",
+var goldenArgs = Args{MarketID: "14693409",
 	BidID: "5501", OfferID: "37547860", PlayerID: "2541", PlayerTeamID: "25009250",
 	Amount: 1_000_000, Goalkeeper: "11", Defender: []string{"21", "22", "23"},
 	Midfield: []string{"31", "32", "33", "34"}, Striker: []string{"41", "42", "43"},
@@ -67,6 +68,8 @@ func liveProfile(t *testing.T) *httpxtest.Fake {
 	}
 	fake := httpxtest.New(t)
 	fake.Answer("/api/", 200, `{}`)
+	fake.Answer("GET /api"+config.CMP+"/leagues", 200,
+		`[{"id":"`+goldenLeague+`","team":{"id":"`+goldenTeam+`"}}]`)
 	t.Cleanup(httpx.SetTransport(fake))
 	t.Cleanup(httpx.SetQueue(httpx.NewQueue(nil, httpx.DefaultLimits(), nil)))
 	return fake
@@ -74,8 +77,16 @@ func liveProfile(t *testing.T) *httpxtest.Fake {
 
 func liveGuard(t *testing.T) *Guard {
 	t.Helper()
-	g := &Guard{tokens: map[string]pending{}}
+	member, err := api.AccountOf(config.Default()).Member(goldenLeague, goldenTeam)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := NewGuard(member)
 	g.Cash = func(string) (int64, error) { return 50_000_000, nil }
+	g.Squad = func() *Squad {
+		return &Squad{Slots: map[string]bool{goldenArgs.PlayerTeamID: true},
+			Listings: map[string]bool{goldenArgs.MarketID: true}}
+	}
 	return g
 }
 
