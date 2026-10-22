@@ -86,7 +86,6 @@ func Load() (*Tokens, error) {
 	return tokens, err
 }
 
-// LoadAccount reads an account's session, active or not.
 func LoadAccount(account string) (*Tokens, error) {
 	return read(config.AccountTokenFile(account))
 }

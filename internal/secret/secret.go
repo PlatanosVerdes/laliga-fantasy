@@ -1,9 +1,5 @@
-// Package secret seals what the app keeps on disk that would open a session by itself: the
-// LaLiga tokens and the Necroporra cookie. AES-256-GCM under one key per instance, so a copy of
-// the data folder without the key opens nothing.
-//
-// The key is FANTASY_SECRET_KEY (32 bytes, base64 or hex) when set. Otherwise it is read from
-// FANTASY_SECRET_FILE, by default <config root>/secret.key, created on first use.
+// Package secret seals what would open a session by itself (LaLiga tokens, the Necroporra
+// cookie) with AES-256-GCM, so a copy of the data folder without the key opens nothing.
 package secret
 
 import (
@@ -27,16 +23,14 @@ import (
 
 const version = 1
 
-// ErrWrongKey is a file sealed under another key: the file is fine, the key is not.
 var ErrWrongKey = errors.New("la clave no coincide: este fichero se cifro con otra " +
 	"FANTASY_SECRET_KEY o con otro secret.key")
 
 var ErrNoKey = errors.New("falta la clave para descifrar")
 
-// ErrDamaged is a file sealed under this key that no longer authenticates.
 var ErrDamaged = errors.New("el fichero cifrado esta danado o lo han modificado")
 
-// envelope is what a sealed file holds. KeyID tells a wrong key from a damaged file.
+// KeyID tells a wrong key from a damaged file.
 type envelope struct {
 	V     int    `json:"v"`
 	KeyID string `json:"kid"`
@@ -44,7 +38,6 @@ type envelope struct {
 	Data  []byte `json:"data"`
 }
 
-// Sealed is whether blob is an envelope rather than plaintext.
 func Sealed(blob []byte) bool {
 	var sealed envelope
 	return json.Unmarshal(blob, &sealed) == nil && sealed.V > 0 && sealed.Data != nil
