@@ -58,7 +58,7 @@ func biddingServer(t *testing.T, read func(string) (futbolfantasy.Detail, error)
 	}
 	guard := writes.NewGuard(nil)
 	guard.Cash = func(string) (int64, error) { return 50_000_000, nil }
-	return New(world, Options{AllowWrites: true, Guard: guard, LeagueID: "L", MyTeamID: "me"}).Handler()
+	return asOwner(t, New(world, Options{AllowWrites: true, Guard: guard, LeagueID: "L", MyTeamID: "me"}))
 }
 
 func prepareBid(handler http.Handler) (int, map[string]any) {

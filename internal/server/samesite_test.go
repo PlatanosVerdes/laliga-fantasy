@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -43,6 +44,7 @@ func TestAWorkingSessionIsNotReplacedByAccident(t *testing.T) {
 	s := &Server{}
 	request := httptest.NewRequest(http.MethodPost, "/api/session",
 		strings.NewReader(`{"paste":"{\"refresh_token\":\"x\"}"}`))
+	request = request.WithContext(context.WithValue(request.Context(), visitorKey{}, visitor{User: "user-me"}))
 	recorder := httptest.NewRecorder()
 	s.session(recorder, request)
 	if recorder.Code != http.StatusConflict {

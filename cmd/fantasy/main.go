@@ -714,6 +714,7 @@ func cmdServe(args []string) error {
 		Leagues:  func() ([]server.LeagueChoice, error) { return listLeagues(client) },
 		Services: clocks,
 		Access:   access,
+		Allow:    os.Getenv("FANTASY_ALLOW"),
 		// The page is rendered on demand from whatever the last rebuild left, so a slow
 		// refresh never blocks a request and a failed one still serves the last good world.
 		Page: func() server.Rendered {

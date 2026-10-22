@@ -192,18 +192,6 @@ func randomURLSafe(bytes int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
-// Adopt takes a pasted tokens.json and stores it after checking it is usable.
-func Adopt(blob string) (*Tokens, error) {
-	tokens, err := Parse(blob)
-	if err != nil {
-		return nil, err
-	}
-	if _, err := Store(tokens); err != nil {
-		return nil, err
-	}
-	return tokens, nil
-}
-
 // Parse reads a pasted tokens.json — the fastest way out of a broken session when there is
 // already a working one on another machine — without storing it.
 func Parse(blob string) (*Tokens, error) {
