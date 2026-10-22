@@ -15,7 +15,6 @@ import (
 	"unicode"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/files"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 )
 
@@ -234,12 +233,5 @@ func Keep(tokens *Tokens) (string, error) {
 	if err := os.MkdirAll(config.AccountDir(account), 0o700); err != nil {
 		return "", err
 	}
-	blob, err := json.MarshalIndent(tokens, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	mu.Lock()
-	err = files.WriteAtomic(config.AccountTokenFile(account), blob, 0o600)
-	mu.Unlock()
-	return account, err
+	return account, write(config.AccountTokenFile(account), tokens)
 }

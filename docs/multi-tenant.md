@@ -46,8 +46,9 @@ own, no user table to maintain.
 - **CSRF**: the JSON-only rule stays, plus an `Origin` check on every write. The single-use
   confirmation token is bound to the session that prepared it.
 - **Tokens at rest** (LaLiga refresh tokens, Necroporra cookies) are encrypted with AES-GCM
-  under a key the instance generates on first start, kept outside the data folder or given
-  through `FANTASY_SECRET_KEY`.
+  under `FANTASY_SECRET_KEY`, or a key the instance generates on first start into
+  `FANTASY_SECRET_FILE` (default `<config root>/secret.key`). Only the variable keeps the key
+  out of the data folder; the key is what to back up beside it.
 - **HTTPS**: the host terminates TLS (Caddy, Traefik, a tunnel). The app refuses to issue a
   session cookie over plain HTTP except on `localhost`.
 - **Rate limits** on login attempts and on writes, per user and per IP.
@@ -94,8 +95,10 @@ Each phase ships on its own and leaves the current single-user deploy working.
    `FANTASY_ALLOW`, rate limits, confirmation tokens bound to the session. With one user, it
    behaves as today after one login.
    2a (done): sessions, `FANTASY_ALLOW`, the Origin check, login rate limit, confirmation
-   tokens bound to the session, one profile per process seen only by its own user. Left for
-   2b: tokens encrypted at rest and rate limits on writes.
+   tokens bound to the session, one profile per process seen only by its own user.
+   2b: tokens encrypted at rest (done): `tokens.json` and the Necroporra cookie and action id
+   sealed with AES-256-GCM under `FANTASY_SECRET_KEY` or `<config root>/secret.key`, plaintext
+   files sealed on their first read. Left: rate limits on writes.
 3. **Many leagues in one process.** One global world built once, one league world per active
    league on top of it, the engine and the render taking the league they work for. The
    profile switch becomes a selector instead of `syscall.Exec`. The automatic engine runs
@@ -110,7 +113,7 @@ Each phase ships on its own and leaves the current single-user deploy working.
 - The automatic engine spends real money. Phase 3 needs tests proving that one account's
   plan never uses another account's cash, squad or tokens.
 - Migration: the first start of each phase moves files. Back up `appdata/laliga-fantasy` on the
-  Pi before deploying any of them.
+  Pi before deploying any of them. From 2b on, back up the key too.
 - LaLiga rate limits grow with the number of accounts. Phase 1 removes the duplicated global
   fetches, but per-league fetches still scale with leagues; a global request budget may be
   needed.

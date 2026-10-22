@@ -662,6 +662,9 @@ func cmdServe(args []string) error {
 			fmt.Println("Varias ligas: elige una en la pagina.")
 		}
 	default:
+		if _, err := auth.Load(); err != nil {
+			slog.Error("session unreadable", "reason", err.Error())
+		}
 		fmt.Println("Sin sesion: abre la pagina y pega el login.")
 	}
 	if *noAuto {
@@ -1904,9 +1907,24 @@ func cmdAuth(args []string) error {
 			fallbackText(tokens.Email, "tu cuenta"))))
 		return nil
 
+	case "export":
+		tokens, err := auth.Load()
+		if err != nil {
+			return err
+		}
+		if tokens == nil {
+			return fmt.Errorf("sin sesion: ejecuta `fantasy auth browser`")
+		}
+		blob, err := json.MarshalIndent(tokens, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(blob))
+		return nil
+
 	case "status":
 	default:
-		return fmt.Errorf("no se que es `auth %s`: usa browser, code o status", action)
+		return fmt.Errorf("no se que es `auth %s`: usa browser, code, status o export", action)
 	}
 
 	tokens, err := auth.Load()
