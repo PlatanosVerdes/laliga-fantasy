@@ -1,5 +1,4 @@
-// Package httpxtest is a fake LaLiga for tests: every request, whatever its host, lands on one
-// local server that answers by route and records who asked for what.
+// Package httpxtest is a fake LaLiga that records whose token asked for what.
 package httpxtest
 
 import (
@@ -12,7 +11,6 @@ import (
 	"testing"
 )
 
-// Call is one request as it left the process: whose token, which method, which path and body.
 type Call struct {
 	Method        string
 	Host          string
@@ -22,7 +20,6 @@ type Call struct {
 	Body          []byte
 }
 
-// Fake is an http.RoundTripper; hand it to httpx.SetTransport.
 type Fake struct {
 	server *httptest.Server
 	mux    *http.ServeMux
@@ -44,12 +41,10 @@ func New(t testing.TB) *Fake {
 	return fake
 }
 
-// Handle answers a ServeMux pattern, such as "GET /api/v4/user/me".
 func (f *Fake) Handle(pattern string, handler http.HandlerFunc) {
 	f.mux.HandleFunc(pattern, handler)
 }
 
-// Answer is Handle with a fixed status and JSON body.
 func (f *Fake) Answer(pattern string, status int, body string) {
 	f.Handle(pattern, func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
@@ -82,7 +77,6 @@ func (f *Fake) RoundTrip(request *http.Request) (*http.Response, error) {
 	return http.DefaultTransport.RoundTrip(forwarded)
 }
 
-// Calls is every request so far, oldest first.
 func (f *Fake) Calls() []Call {
 	f.mu.Lock()
 	defer f.mu.Unlock()

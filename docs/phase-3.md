@@ -115,7 +115,7 @@ A activity pages (3–5).
   never blocks writes.
 
 **Built (3.8)** as `httpx.Queue`, the transport under the cache, so a cache hit never takes a turn:
-- Defaults 2 req/s, burst 10, 2 in flight, per host; `FANTASY_LALIGA_RATE`, `_BURST`, `_IN_FLIGHT`
+- Defaults 5 req/s, burst 30, 4 in flight, per host (close to the unthrottled pace until the counters show LaLiga's limit); `FANTASY_LALIGA_RATE`, `_BURST`, `_IN_FLIGHT`
   and `_PATIENCE` override them. futbolfantasy is not in the queue.
 - Tagged at the source: `writes.Send`, the token refresh, `Guard.Cash` and the reads `automate`,
   `claimReward` and `fixLineup` act on are P0; the server's client and the page render P1; the

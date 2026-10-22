@@ -78,8 +78,7 @@ type Activity struct {
 	Raw  json.RawMessage `json:"-"`
 }
 
-// Client holds nothing but where its requests stand in the queue to LaLiga; the session comes
-// from the auth package on every call so a rotation mid-run is picked up.
+// The session comes from auth on every call, so a token rotated mid-run is picked up.
 type Client struct {
 	priority httpx.Priority
 	scope    string

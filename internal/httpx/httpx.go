@@ -43,7 +43,6 @@ var (
 	transport   http.RoundTripper = http.DefaultTransport
 )
 
-// SetTransport replaces what puts requests on the wire, and returns what puts the old one back.
 func SetTransport(next http.RoundTripper) func() {
 	transportMu.Lock()
 	previous := transport

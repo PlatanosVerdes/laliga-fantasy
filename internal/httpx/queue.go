@@ -53,11 +53,11 @@ type Limits struct {
 }
 
 func DefaultLimits() Limits {
-	return Limits{Rate: 2, Burst: 10, InFlight: 2, Patience: 15 * time.Second,
+	// Close to today's unthrottled pace: the counters are there to find LaLiga's real limit first.
+	return Limits{Rate: 5, Burst: 30, InFlight: 4, Patience: 15 * time.Second,
 		WriteGap: 5 * time.Second, FirstPause: time.Minute, MaxPause: 30 * time.Minute}
 }
 
-// LimitsFromEnv reads FANTASY_LALIGA_RATE, _BURST, _IN_FLIGHT and _PATIENCE over the defaults.
 func LimitsFromEnv() Limits {
 	limits := DefaultLimits()
 	if value, ok := envValue("FANTASY_LALIGA_RATE", parseFloat); ok && value > 0 {

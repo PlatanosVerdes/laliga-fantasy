@@ -137,7 +137,7 @@ func TestRequestsTogetherShareOneRender(t *testing.T) {
 func TestHealthCarriesTheQueueToLaLiga(t *testing.T) {
 	server, _, _ := paintedServer(t)
 	queue, _ := healthOf(t, server)["queue"].(map[string]any)
-	if queue["rate"] != 2.0 || queue["burst"] != 10.0 || queue["hosts"] == nil {
+	if queue["rate"] != 5.0 || queue["burst"] != 30.0 || queue["hosts"] == nil {
 		t.Errorf("queue %v", queue)
 	}
 }
