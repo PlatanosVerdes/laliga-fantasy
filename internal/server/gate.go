@@ -38,7 +38,7 @@ func (s *Server) doors() *gate {
 
 func signedOut(path string) bool {
 	switch path {
-	case "/healthz", "/api/health", "/favicon.ico", "/apple-touch-icon.png", "/api/session", "/api/logout",
+	case "/healthz", "/api/health", "/metrics", "/favicon.ico", "/apple-touch-icon.png", "/api/session", "/api/logout",
 		"/vincular", "/api/link/redeem":
 		return true
 	}
