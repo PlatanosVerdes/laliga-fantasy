@@ -1939,20 +1939,21 @@ func yesNo(value bool) string {
 }
 
 func cmdCache() error {
-	entries, err := filepath.Glob(filepath.Join(config.CacheDir, "*.cache"))
-	if err != nil {
-		return err
-	}
-	var total int64
-	for _, path := range entries {
-		if info, err := os.Stat(path); err == nil {
-			total += info.Size()
+	for _, dir := range []string{config.CacheDir, config.GlobalCacheDir()} {
+		entries, err := filepath.Glob(filepath.Join(dir, "*.cache"))
+		if err != nil {
+			return err
 		}
+		var total int64
+		for _, path := range entries {
+			if info, err := os.Stat(path); err == nil {
+				total += info.Size()
+			}
+		}
+		// Megabytes as Python prints them: 10^6, not 2^20. The figure is for a human, and
+		// the two sides have to agree on it or every comparison starts with a false alarm.
+		fmt.Printf("%d ficheros · %.1f MB en %s\n", len(entries), float64(total)/1_000_000, dir)
 	}
-	// Megabytes as Python prints them: 10^6, not 2^20. The figure is for a human, and
-	// the two sides have to agree on it or every comparison starts with a false alarm.
-	fmt.Printf("%d ficheros · %.1f MB en %s\n", len(entries),
-		float64(total)/1_000_000, config.CacheDir)
 	return nil
 }
 

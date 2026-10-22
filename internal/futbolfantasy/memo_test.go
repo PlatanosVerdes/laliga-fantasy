@@ -15,7 +15,11 @@ import (
 func cachedPage(t *testing.T, url, body string) {
 	t.Helper()
 	sum := sha1.Sum([]byte("ff_detail|" + url))
-	path := filepath.Join(config.CacheDir, "ff_detail_"+hex.EncodeToString(sum[:])[:20]+".cache")
+	path := filepath.Join(config.TagDir("ff_detail"),
+		"ff_detail_"+hex.EncodeToString(sum[:])[:20]+".cache")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +34,7 @@ func maxValue(detail map[string]any) float64 {
 
 // Redrawing the panel parsed the same pages every time; a fresh one is parsed once.
 func TestAFreshPageIsParsedOnce(t *testing.T) {
-	config.CacheDir = t.TempDir()
+	config.CacheRoot, config.CacheDir = t.TempDir(), t.TempDir()
 	url := strings.ReplaceAll(config.FFDetailURL, "{ff_id}", "memo")
 	cachedPage(t, url, `var max_valor = 111;`)
 	first, err := PlayerDetail("memo", time.Hour)
@@ -49,7 +53,7 @@ func TestAFreshPageIsParsedOnce(t *testing.T) {
 
 // Kept no longer than the page it came from would have been served from disk.
 func TestAStalePageIsParsedAgain(t *testing.T) {
-	config.CacheDir = t.TempDir()
+	config.CacheRoot, config.CacheDir = t.TempDir(), t.TempDir()
 	url := strings.ReplaceAll(config.FFDetailURL, "{ff_id}", "memo-stale")
 	cachedPage(t, url, `var max_valor = 111;`)
 	if _, err := PlayerDetail("memo-stale", time.Hour); err != nil {
@@ -69,4 +73,3 @@ func TestAStalePageIsParsedAgain(t *testing.T) {
 		t.Errorf("a stale parse was served: %v", maxValue(again))
 	}
 }
-
