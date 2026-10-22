@@ -103,13 +103,16 @@ export function Button({tone = 'outline', place = 'row', on = false, tip, classN
 
 // A dialog over the page: Escape and a click on the backdrop close it.
 export function Modal({label, onClose, children}) {
+  // Closed only by a press that also began on the backdrop: a drag out of the card is not a dismissal.
+  const pressed = useRef(false);
   useEffect(() => {
     const onKey = (event) => { if (event.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
   return html`<div class="modal" role="dialog" aria-modal="true" aria-label=${label}
-      onClick=${(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      onMouseDown=${(event) => { pressed.current = event.target === event.currentTarget; }}
+      onClick=${(event) => { if (pressed.current && event.target === event.currentTarget) onClose(); pressed.current = false; }}>
     <div class="modal-card">${children}</div></div>`;
 }
 

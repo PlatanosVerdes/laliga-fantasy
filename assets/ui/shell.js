@@ -406,11 +406,13 @@ function AccountMenu() {
       <a class="acct-item" role="menuitem" href="/vincular/nuevo">Vincular un dispositivo</a>
       <div class="acct-sep"></div>
       <button type="button" role="menuitem" class="acct-item"
-        onClick=${() => { setOpen(false); askSignOut({name: active ? who(active) : '',
-          onDisconnect: active ? () => act('/api/accounts/logout', {account: active.id}, 'Desconectando…') : null}); }}>Cerrar sesión</button>`}
+        onClick=${() => { setOpen(false); askSignOut(); }}>Cerrar sesión</button>`}
     </div>` : null}
   </div>`;
 }
+
+// As in Modal: a drag that ends on the backdrop is not a dismissal.
+let drawerPressed = false;
 
 function LiveDot({build}) {
   const l = useLive();
@@ -545,7 +547,8 @@ function Drawer() {
   }, [d ? d.name + '/' + d.arg : '']);
   const View = d && DRAWER[d.name];
   return html`<div class=${'drawer' + (d && POPUPS.has(d.name) ? ' as-pop' : '')} id="drawer" hidden=${!d} role="dialog" aria-modal="true"
-      onClick=${(e) => { if (e.target === e.currentTarget) closeDrawer(); }}>
+      onMouseDown=${(e) => { drawerPressed = e.target === e.currentTarget; }}
+      onClick=${(e) => { if (drawerPressed && e.target === e.currentTarget) closeDrawer(); drawerPressed = false; }}>
     <div class="drawer-panel">
       <button class="drawer-close" type="button" aria-label="Cerrar" onClick=${closeDrawer}>×</button>
       <div class="drawer-body" data-view=${d ? d.name : undefined}>${View ? html`<${View} key=${d.name + '/' + d.arg} arg=${d.arg} d=${d}/>` : null}</div>
