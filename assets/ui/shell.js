@@ -407,7 +407,7 @@ function AccountMenu() {
       <button type="button" role="menuitem" class="acct-item"
         onClick=${() => postJSON('/api/logout', {}).then(() => { location.href = '/'; }, (e) => flash('No se ha podido', e.message))}>Salir de este navegador</button>
       ${active ? html`<button type="button" role="menuitem" class="acct-item acct-out"
-        onClick=${() => { if (confirm('Cerrar la sesión de ' + who(active) + '? Sus instrucciones se guardan por si vuelves.')) act('/api/accounts/logout', {account: active.id}, 'Cerrando sesión…'); }}>Cerrar sesión</button>` : null}`}
+        onClick=${() => { if (confirm('¿Desconectar ' + who(active) + ' de LaLiga? El panel deja de seguir esta cuenta y las acciones automáticas se paran. Sus instrucciones se guardan por si vuelves.')) act('/api/accounts/logout', {account: active.id}, 'Desconectando…'); }}>Desconectar de LaLiga</button>` : null}`}
     </div>` : null}
   </div>`;
 }

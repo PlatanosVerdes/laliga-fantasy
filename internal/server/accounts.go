@@ -371,7 +371,7 @@ const failedBody = `<div class="centered"><h1>No puedo leer esta liga</h1><div c
 <p class="lead">LaLiga no la devuelve: puede que ya no estés en ella. Elige otra o cambia de cuenta.</p>
 <div class="choices">{{leagues}}</div>
 <p class="lead" style="margin-top:16px;font-size:13px">Detalle: {{reason}}</p>
-<div class="btn-row"><a class="btn quiet" href="/?cuenta=nueva">Entrar con otra cuenta</a><button class="btn quiet" id="out" type="button">Cerrar sesión</button></div><div id="msg"></div></div>
+<div class="btn-row"><a class="btn quiet" href="/?cuenta=nueva">Entrar con otra cuenta</a><button class="btn quiet" id="out" type="button">Desconectar de LaLiga</button></div><div id="msg"></div></div>
 <script>
 const go=(url,body)=>{document.querySelectorAll('.auth button').forEach((x)=>x.disabled=true);
   switchTo(url,body);};
