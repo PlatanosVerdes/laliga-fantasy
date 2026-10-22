@@ -199,7 +199,7 @@ var Operations = map[string]operation{
 			map[string]any{"goalkeeper": a.Goalkeeper, "defender": a.Defender,
 				"midfield": a.Midfield, "striker": a.Striker,
 				"tactical_formation": a.Formation}}
-	}, []string{"lineup"}},
+	}, []string{"own_lineup", "lineup"}},
 
 	// The app's own favourites, keyed by the team in the league and the player's master id.
 	"favourite": {"favorito", func(a Args) Call {
@@ -611,7 +611,7 @@ func (g *Guard) confirm(owner, token string, allowWrites, dryRun, recheck bool) 
 	answer, err := send(call)
 	if err != nil {
 		if entry.name == "change_offer" {
-			httpx.Invalidate(Operations[entry.name].Effects...)
+			httpx.InvalidateIn(config.Default(), Operations[entry.name].Effects...)
 			return nil, fmt.Errorf("he retirado tu oferta anterior, pero LaLiga ha rechazado la "+
 				"nueva: ahora no tienes ninguna oferta por %s: %w", entry.summary.PlayerName, err)
 		}
@@ -622,7 +622,7 @@ func (g *Guard) confirm(owner, token string, allowWrites, dryRun, recheck bool) 
 		}
 		return nil, fmt.Errorf("la API ha rechazado la operacion: %w", err)
 	}
-	dropped := httpx.Invalidate(Operations[entry.name].Effects...)
+	dropped := httpx.InvalidateIn(config.Default(), Operations[entry.name].Effects...)
 	slog.Info("write done", "operation", entry.name, "player", entry.summary.PlayerName,
 		"amount", entry.args.Amount, "method", call.Method, "path", call.Path,
 		"cash_before", entry.summary.CashBefore, "cache_dropped", dropped)
@@ -949,7 +949,7 @@ func (g *Guard) Automatic(name string, args Args, who Player, allowWrites bool) 
 	if err != nil {
 		return nil, fmt.Errorf("la API ha rechazado la operacion: %w", err)
 	}
-	dropped := httpx.Invalidate(spec.Effects...)
+	dropped := httpx.InvalidateIn(config.Default(), spec.Effects...)
 	slog.Info("automatic write done", "operation", name, "amount", args.Amount,
 		"player", who.Name, "cache_dropped", dropped)
 	return answer, nil

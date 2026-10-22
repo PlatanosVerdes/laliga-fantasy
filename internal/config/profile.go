@@ -65,6 +65,8 @@ type Profile struct {
 	OrderEndingsFile string
 	DismissedFile    string
 	RewardFile       string
+
+	configRoot, stateRoot, cacheRoot string
 }
 
 // ProfileFor lays a profile out under the roots. Without an account every file sits at the
@@ -80,7 +82,8 @@ func ProfileIn(root, account, league string) Profile {
 func layout(configRoot, stateRoot, cacheRoot, account, league string) Profile {
 	p := Profile{Account: account, League: league,
 		ConfigDir: configRoot, StateDir: stateRoot, CacheDir: cacheRoot,
-		TokenFile: filepath.Join(configRoot, "accounts", ".none", "tokens.json")}
+		TokenFile:  filepath.Join(configRoot, "accounts", ".none", "tokens.json"),
+		configRoot: configRoot, stateRoot: stateRoot, cacheRoot: cacheRoot}
 	if account != "" {
 		p.ConfigDir = filepath.Join(configRoot, "accounts", account)
 		p.TokenFile = filepath.Join(p.ConfigDir, "tokens.json")
@@ -119,10 +122,15 @@ func (p *Profile) fill() {
 
 func ActiveProfile() Profile { return ProfileFor(Active()) }
 
+func (p Profile) In(league string) Profile {
+	return layout(p.configRoot, p.stateRoot, p.cacheRoot, p.Account, league)
+}
+
 // Default is the profile the process runs on, read from the globals Use fills until they go.
 func Default() Profile {
 	p := Profile{Account: Account, League: League,
-		ConfigDir: ConfigDir, StateDir: StateDir, CacheDir: CacheDir, TokenFile: TokenFile}
+		ConfigDir: ConfigDir, StateDir: StateDir, CacheDir: CacheDir, TokenFile: TokenFile,
+		configRoot: ConfigRoot, stateRoot: StateRoot, cacheRoot: CacheRoot}
 	p.fill()
 	p.SettingsFile, p.PolicyFile, p.RulesFile, p.ServicesFile = SettingsFile, PolicyFile, RulesFile,
 		ServicesFile

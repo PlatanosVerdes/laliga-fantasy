@@ -86,37 +86,6 @@ func FFHeaders() map[string]string {
 	}
 }
 
-// Tags name cached responses. Other packages invalidate by tag, and a tag that matches
-// nothing fails silently — it drops no files and reports success — so the set is
-// declared once and checked against.
-var Tags = map[string]bool{
-	"activity": true, "calendar": true, "favourites": true, "formations": true, "leagues": true,
-	"lineup": true, "market": true, "me": true, "money": true, "mv": true,
-	"offers": true, "player": true, "players": true, "reward": true, "squad": true,
-	"standing": true, "teams": true, "week": true,
-	// futbolfantasy's pages, cached the same way.
-	"ff_market": true, "ff_detail": true, "ff_player": true, "ff_absences": true,
-	"ff_hierarchy": true,
-	// The Necroporra's round, dropped once a vote is cast.
-	"necro-state": true,
-}
-
-// GlobalTags carry no league or account in the URL and answer the same to whoever asks.
-var GlobalTags = map[string]bool{
-	"players": true, "player": true, "mv": true, "teams": true, "week": true, "calendar": true,
-	"ff_market": true, "ff_detail": true, "ff_player": true, "ff_absences": true,
-	"ff_hierarchy": true,
-}
-
-func GlobalCacheDir() string { return filepath.Join(CacheRoot, "global") }
-
-func TagDir(tag string) string {
-	if GlobalTags[tag] {
-		return GlobalCacheDir()
-	}
-	return CacheDir
-}
-
 func init() {
 	ConfigRoot, StateRoot, CacheRoot = resolveDirs()
 	ConfigDir, StateDir, CacheDir = ConfigRoot, StateRoot, CacheRoot

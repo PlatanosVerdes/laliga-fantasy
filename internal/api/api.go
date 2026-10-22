@@ -115,7 +115,8 @@ func (c *Client) get(path string, authenticated bool, ttl time.Duration, tag str
 		headers["Authorization"] = "Bearer " + bearer
 	}
 	return httpx.GetJSON(httpx.Request{URL: url, Headers: headers, TTL: ttl, Tag: tag,
-		Store: store, Priority: c.priority, Scope: c.scope}, target)
+		Store: store, Priority: c.priority, Scope: c.scope,
+		Cache: config.Default().ScopeOf(tag)}, target)
 }
 
 // unwrap handles the two shapes the API uses for a list: a bare array, or an object
@@ -200,7 +201,7 @@ type DailyRewardStatus struct {
 
 func (c *Client) DailyRewards(ttl time.Duration) ([]DailyReward, error) {
 	var rewards []DailyReward
-	err := c.getList(config.CMP+"/daily-reward", ttl, "reward", false, &rewards)
+	err := c.getList(config.CMP+"/daily-reward", ttl, "rewards", false, &rewards)
 	return rewards, err
 }
 
@@ -342,7 +343,7 @@ var LineupLines = []string{"goalkeeper", "defender", "midfield", "striker"}
 func (c *Client) Lineup(teamID string, ttl time.Duration) (map[string]any, error) {
 	var payload map[string]any
 	err := c.get(fmt.Sprintf("%s/teams/%s/lineup", config.CMP, teamID), true, ttl,
-		"lineup", false, &payload)
+		"own_lineup", false, &payload)
 	return payload, err
 }
 

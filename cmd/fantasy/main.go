@@ -573,7 +573,7 @@ func cmdServe(args []string) error {
 			return nil
 		},
 		Invalidate: func(tags ...string) {
-			httpx.Invalidate(tags...)
+			httpx.InvalidateIn(config.Default(), tags...)
 		},
 		Probe: func() (bool, []string, error) {
 			league, _, err := ensureLeague()
@@ -599,7 +599,7 @@ func cmdServe(args []string) error {
 			if contains(moved, "events") {
 				// Somebody changed hands: every squad is stale however recently it was
 				// read, and so are the standings and the cash.
-				httpx.Invalidate("squad", "money", "standing")
+				httpx.InvalidateIn(config.Default(), "squad", "money", "standing")
 			}
 			return len(moved) > 0, moved, nil
 		},
@@ -1662,7 +1662,7 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 	}
 	server.Rendering.Reached("Plan y cláusulas", 1, 1)
 	necro := necroporra.Open(config.Default()).Load()
-	necroState := necroporra.FetchState(necro)
+	necroState := necroporra.FetchState(necro, config.Default().Scope(config.LevelMember))
 	server.Rendering.Reached("Necroporra", 1, 1)
 	document.NecroGameweek = necroState.Gameweek
 	document.NecroDeadline = necroState.Deadline
@@ -1694,7 +1694,7 @@ func autoNecroVote(cfg necroporra.Config, universe func() *model.Universe,
 		if team == "" {
 			return
 		}
-		state := necroporra.FetchState(cfg)
+		state := necroporra.FetchState(cfg, config.Default().Scope(config.LevelMember))
 		if !state.Open || state.Voted() || done[state.Gameweek] || state.ClosesAt.IsZero() {
 			return
 		}
@@ -1968,7 +1968,10 @@ func yesNo(value bool) string {
 }
 
 func cmdCache() error {
-	for _, dir := range []string{config.CacheDir, config.GlobalCacheDir()} {
+	profile := config.Default()
+	for _, level := range []config.Level{config.LevelGlobal, config.LevelLeague, config.LevelAccount,
+		config.LevelMember} {
+		dir := profile.Scope(level).Dir()
 		entries, err := filepath.Glob(filepath.Join(dir, "*.cache"))
 		if err != nil {
 			return err

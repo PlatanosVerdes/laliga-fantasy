@@ -117,7 +117,9 @@ type Request struct {
 	Timeout  time.Duration
 	Retries  int
 	Priority Priority
-	Scope    string
+	// Scope is the queue's turn; Cache is the folder the answer is kept in.
+	Scope string
+	Cache config.CacheScope
 }
 
 // Frozen is the differential harness's guarantee: TTLs are ignored and the network is
@@ -147,17 +149,45 @@ func (e *FrozenMiss) Error() string {
 	return "FANTASY_FREEZE: no hay nada en cache para " + e.Tag + " " + e.URL
 }
 
-func cachePath(rawURL, tag string) string {
-	sum := sha1.Sum([]byte(tag + "|" + rawURL))
-	return filepath.Join(config.TagDir(tag), tag+"_"+hex.EncodeToString(sum[:])[:20]+".cache")
+// Misscoped is a request whose cache folder is not its tag's level, refused before the wire.
+type Misscoped struct {
+	Tag   string
+	Want  config.Level
+	Scope config.Level
 }
 
-func readCache(rawURL, tag string, ttl time.Duration) (string, bool) {
-	if ttl <= 0 && !Frozen {
+func (e *Misscoped) Error() string {
+	return fmt.Sprintf("cache tag %q is %s, the request is scoped %s", e.Tag, e.Want, e.Scope)
+}
+
+func admit(request Request) error {
+	want := config.TagLevel(request.Tag)
+	if request.Cache.Level() != want ||
+		(want == config.LevelNone && (request.TTL > 0 || request.Store)) {
+		return &Misscoped{Tag: request.Tag, Want: want, Scope: request.Cache.Level()}
+	}
+	return nil
+}
+
+func cacheName(rawURL, tag string) string {
+	sum := sha1.Sum([]byte(tag + "|" + rawURL))
+	return tag + "_" + hex.EncodeToString(sum[:])[:20] + ".cache"
+}
+
+func cachePath(scope config.CacheScope, rawURL, tag string) string {
+	return filepath.Join(scope.Dir(), cacheName(rawURL, tag))
+}
+
+func readCache(scope config.CacheScope, rawURL, tag string, ttl time.Duration) (string, bool) {
+	if (ttl <= 0 && !Frozen) || scope.Level() == config.LevelNone {
 		return "", false
 	}
-	path := cachePath(rawURL, tag)
+	path := cachePath(scope, rawURL, tag)
 	info, err := os.Stat(path)
+	if err != nil && Frozen && scope.Legacy() != "" {
+		path = filepath.Join(scope.Legacy(), cacheName(rawURL, tag))
+		info, err = os.Stat(path)
+	}
 	if err != nil {
 		return "", false
 	}
@@ -171,41 +201,53 @@ func readCache(rawURL, tag string, ttl time.Duration) (string, bool) {
 	return string(body), true
 }
 
-func writeCache(rawURL, tag, body string) {
-	if err := config.EnsureDirs(); err != nil {
+func writeCache(scope config.CacheScope, rawURL, tag, body string) {
+	if err := os.MkdirAll(scope.Dir(), 0o700); err != nil {
 		return
 	}
-	_ = files.WriteAtomic(cachePath(rawURL, tag), []byte(body), 0o600)
+	_ = files.WriteAtomic(cachePath(scope, rawURL, tag), []byte(body), 0o600)
 }
 
 // Cached is a cache-only read, so callers can throttle just the real requests.
-func Cached(rawURL, tag string, ttl time.Duration) (string, bool) {
-	return readCache(rawURL, tag, ttl)
+func Cached(scope config.CacheScope, rawURL, tag string, ttl time.Duration) (string, bool) {
+	if config.TagLevel(tag) != scope.Level() {
+		return "", false
+	}
+	return readCache(scope, rawURL, tag, ttl)
 }
 
 // CachedAt is when the cached response was written, which is how old it is to whoever keeps a
 // copy of it in memory.
-func CachedAt(rawURL, tag string) (time.Time, bool) {
-	info, err := os.Stat(cachePath(rawURL, tag))
+func CachedAt(scope config.CacheScope, rawURL, tag string) (time.Time, bool) {
+	if config.TagLevel(tag) != scope.Level() || scope.Level() == config.LevelNone {
+		return time.Time{}, false
+	}
+	info, err := os.Stat(cachePath(scope, rawURL, tag))
 	if err != nil {
 		return time.Time{}, false
 	}
 	return info.ModTime(), true
 }
 
-// Invalidate drops cached responses by tag, so the next read goes to the wire. Used
-// when something just learned makes a long TTL wrong: a transfer means every squad is
-// stale however recently it was read.
-func Invalidate(tags ...string) int {
+// Invalidate drops cached responses by tag in one scope, so the next read there goes to the
+// wire. Used when something just learned makes a long TTL wrong: a transfer means every squad
+// is stale however recently it was read.
+func Invalidate(scope config.CacheScope, tags ...string) int {
 	dropped := 0
 	for _, tag := range tags {
-		if !config.Tags[tag] {
+		level, known := config.Tags[tag]
+		if !known {
 			// A misspelled tag drops no files and still reports success, which would
 			// leave a write believing it had invalidated data it had not.
 			slog.Error("invalidating a cache tag that does not exist", "tag", tag)
 			continue
 		}
-		matches, err := filepath.Glob(filepath.Join(config.TagDir(tag), tag+"_*.cache"))
+		if level != scope.Level() {
+			slog.Error("invalidating a cache tag outside its scope", "tag", tag,
+				"level", level.String(), "scope", scope.Level().String())
+			continue
+		}
+		matches, err := filepath.Glob(filepath.Join(scope.Dir(), tag+"_*.cache"))
 		if err != nil {
 			continue
 		}
@@ -216,7 +258,16 @@ func Invalidate(tags ...string) int {
 		}
 	}
 	if dropped > 0 {
-		slog.Debug("cache invalidated", "tags", tags, "files", dropped)
+		slog.Debug("cache invalidated", "tags", tags, "scope", scope.Dir(), "files", dropped)
+	}
+	return dropped
+}
+
+// InvalidateIn drops each tag in the profile's own scope for that tag's level.
+func InvalidateIn(profile config.Profile, tags ...string) int {
+	dropped := 0
+	for _, tag := range tags {
+		dropped += Invalidate(profile.ScopeOf(tag), tag)
 	}
 	return dropped
 }
@@ -241,7 +292,11 @@ func fetch(request Request) (string, bool, error) {
 		request.Retries = 3
 	}
 
-	if body, ok := readCache(request.URL, request.Tag, request.TTL); ok {
+	if err := admit(request); err != nil {
+		return "", false, err
+	}
+
+	if body, ok := readCache(request.Cache, request.URL, request.Tag, request.TTL); ok {
 		bump(&stats.CacheHits)
 		slog.Debug("http cache hit", "url", request.URL, "tag", request.Tag,
 			"bytes", len(body))
@@ -252,6 +307,17 @@ func fetch(request Request) (string, bool, error) {
 		return "", false, &FrozenMiss{URL: request.URL, Tag: request.Tag}
 	}
 
+	if request.Cache.Level() == config.LevelNone || request.Method != http.MethodGet {
+		body, err := onWire(request)
+		return body, false, err
+	}
+	key := strings.Join([]string{request.Cache.Dir(), request.Tag, request.URL,
+		request.Priority.String()}, "|")
+	body, err := inFlight.do(key, func() (string, error) { return onWire(request) })
+	return body, false, err
+}
+
+func onWire(request Request) (string, error) {
 	var lastErr error
 	for attempt := 1; attempt <= request.Retries; attempt++ {
 		body, status, err := once(request)
@@ -259,21 +325,21 @@ func fetch(request Request) (string, bool, error) {
 			slog.Debug("http ok", "url", request.URL, "tag", request.Tag, "status", status,
 				"bytes", len(body))
 			if request.TTL > 0 || request.Store {
-				writeCache(request.URL, request.Tag, body)
+				writeCache(request.Cache, request.URL, request.Tag, body)
 			}
-			return body, false, nil
+			return body, nil
 		}
 
 		var limited *RateLimited
 		var throttled *Throttled
 		if errors.As(err, &limited) || errors.As(err, &throttled) {
-			return "", false, err
+			return "", err
 		}
 		var httpErr *Error
 		if errors.As(err, &httpErr) &&
 			(httpErr.Status == 400 || httpErr.Status == 401 || httpErr.Status == 403 ||
 				httpErr.Status == 404) {
-			return "", false, err
+			return "", err
 		}
 		lastErr = err
 		slog.Warn("http failure", "url", request.URL, "tag", request.Tag,
@@ -283,7 +349,7 @@ func fetch(request Request) (string, bool, error) {
 	if lastErr == nil {
 		lastErr = fmt.Errorf("unreachable: %s", request.URL)
 	}
-	return "", false, lastErr
+	return "", lastErr
 }
 
 func once(request Request) (string, int, error) {
@@ -371,7 +437,7 @@ func GetJSON(request Request, target any) error {
 	}
 	slog.Warn("cached response does not parse, fetching again", "url", request.URL,
 		"tag", request.Tag, "reason", err.Error())
-	_ = os.Remove(cachePath(request.URL, request.Tag))
+	_ = os.Remove(cachePath(request.Cache, request.URL, request.Tag))
 	// A failed decode can leave fields behind; an Unmarshaler resets its own state.
 	if _, custom := target.(json.Unmarshaler); !custom {
 		Reset(target)

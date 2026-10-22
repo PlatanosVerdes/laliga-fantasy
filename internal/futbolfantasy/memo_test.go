@@ -15,7 +15,7 @@ import (
 func cachedPage(t *testing.T, url, body string) {
 	t.Helper()
 	sum := sha1.Sum([]byte("ff_detail|" + url))
-	path := filepath.Join(config.TagDir("ff_detail"),
+	path := filepath.Join(config.GlobalCacheDir(),
 		"ff_detail_"+hex.EncodeToString(sum[:])[:20]+".cache")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)

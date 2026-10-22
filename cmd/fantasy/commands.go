@@ -673,7 +673,7 @@ func cmdFav(args []string) error {
 	if _, err := writes.Send(call); err != nil {
 		return err
 	}
-	httpx.Invalidate(writes.Operations["favourite"].Effects...)
+	httpx.InvalidateIn(config.Default(), writes.Operations["favourite"].Effects...)
 	if action == "add" {
 		fmt.Println(cli.Green(fmt.Sprintf("%s marcado como favorito", text(found["name"]))))
 	} else {
