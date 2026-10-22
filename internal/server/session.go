@@ -45,10 +45,10 @@ func (s *Server) setup(writer http.ResponseWriter, request *http.Request) {
 
 	_, signed := visitorOf(request)
 	adding := request.URL.Query().Get("cuenta") == "nueva" && signed
-	title, lead, back := "Inicia sesión", "Entra con tu cuenta de LaLiga Fantasy y el panel se pone en marcha.", ""
+	title, lead, back := "Inicia sesión", "Con tu cuenta de LaLiga Fantasy.", ""
 	linkIn := linkInBox
 	if adding {
-		title, lead = "Añadir cuenta", "Entra con otra cuenta de LaLiga Fantasy. Queda guardada y el panel pasa a usarla."
+		title, lead = "Añadir cuenta", "Queda guardada y el panel pasa a usarla."
 		back, linkIn = `<a class="back" href="/">← Volver al panel</a>`, ""
 	}
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -235,31 +235,30 @@ func (s *Server) foreign(writer http.ResponseWriter, who visitor) {
 }
 
 const setupBody = `<h1>{{title}}</h1><p class="lead">{{lead}}</p>
-<div class="phone" data-for="phone" hidden><p class="lead">En el móvil o la tableta no hay herramientas de red, y sin
-ellas no se puede sacar el código del login. Haz la primera entrada en un ordenador, o, si ya has entrado en otro
-dispositivo, vincula este con el código que te dé allí.</p>
- <button class="btn quiet" id="show-steps" type="button">Ver los pasos igualmente</button></div>
-<ol class="steps">
- <li><div><b>Abre el login de LaLiga</b>
-  <p>Entra como en la app: Google, Apple o correo.</p>
-  <a class="btn" href="{{login}}" target="_blank" rel="noreferrer">Abrir el login ↗</a></div></li>
- <li><div><b>Antes de entrar, abre las herramientas de red</b>
-  <p>En la pestaña del login: <span data-for="any"><code>Cmd+Opt+I</code> en Mac, <code>F12</code> o
-  <code>Ctrl+Shift+I</code> en Windows y Linux</span><span data-for="mac" hidden><code>Cmd+Opt+I</code>
-  (en Safari, antes activa Ajustes → Avanzado → <b>Mostrar funciones para desarrolladores web</b>)</span><span
-  data-for="pc" hidden><code>F12</code> o <code>Ctrl+Shift+I</code></span> →
-  pestaña <b>Network</b> (Red) → marca <b>Preserve log</b> (Conservar registro). Ahora entra.</p></div></li>
- <li><div><b>Copia la última petición</b>
-  <p>Al terminar, la página se queda en blanco y la barra no cambia: es lo normal. En Network, la
-  última fila, en rojo y <code>(canceled)</code>, es <code>authredirect://…?code=…</code>:
-  botón derecho → <b>Copy → Copy URL</b>. En Safari y Firefox suele salir también en la barra.</p></div></li>
- <li><div><b>Pégala aquí</b>
-  <textarea id="paste" name="login-redirect" aria-label="Dirección de vuelta del login" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="authredirect://com.lfp.laligafantasy?code=…"></textarea>
-  <button class="btn" id="go">Entrar</button></div></li>
-</ol>
-<div id="msg"></div>{{linkin}}{{back}}
+<section id="choose" class="choose">
+ <a class="btn wide" id="start" href="{{login}}" target="_blank" rel="noreferrer">Continuar con LaLiga Fantasy</a>
+ <p class="hint phone-hint" data-for="phone" hidden>Pide las herramientas de red: mejor la primera vez desde un ordenador.</p>
+ {{linkin}}
+</section>
+<section id="finish" hidden>
+ <ol class="mini">
+  <li>En la pestaña de LaLiga, antes de entrar: <kbd data-for="any">⌘⌥I · F12</kbd><kbd data-for="mac" hidden>⌘⌥I</kbd><kbd data-for="pc" hidden>F12</kbd><kbd data-for="phone" hidden>⌘⌥I · F12</kbd> → <b>Network</b> → <b>Preserve log</b>.</li>
+  <li>Entra con tu cuenta.</li>
+  <li>Copia la última fila, <code>(canceled)</code>: botón derecho → <b>Copy URL</b>.</li>
+ </ol>
+ <div class="code-row"><input class="field mono" id="paste" name="login-redirect" aria-label="Dirección de vuelta del login" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="Pega aquí authredirect://…"><button class="btn" id="go" type="button">Entrar</button></div>
+ <div id="msg"></div>
+ <details class="help"><summary>¿No encuentras la URL?</summary>
+  <p>La página de LaLiga se queda en blanco o dice <i>Unsupported URL scheme</i>: es lo normal, el login ha terminado.
+  Escribe <code>code=</code> en el filtro de Network y la fila aparece. En Safari, activa antes Ajustes → Avanzado →
+  <b>Mostrar funciones para desarrolladores web</b>; en Safari y Firefox la dirección suele salir también en la barra.
+  El código caduca en unos minutos: si falla, vuelve a abrir el login.</p></details>
+ <div class="row"><button class="text-btn" id="back-choose" type="button">← Volver</button><a class="text-btn" href="{{login}}" target="_blank" rel="noreferrer">Abrir otra vez el login ↗</a></div>
+</section>
+{{back}}
 <script>
-const msg=document.getElementById('msg'), go=document.getElementById('go');
+const msg=document.getElementById('msg'), go=document.getElementById('go'), paste=document.getElementById('paste');
+const choose=document.getElementById('choose'), finish=document.getElementById('finish');
 (()=>{
   const ua=navigator.userAgent||'', hints=navigator.userAgentData;
   const platform=(hints&&hints.platform)||navigator.platform||ua;
@@ -268,22 +267,25 @@ const msg=document.getElementById('msg'), go=document.getElementById('go');
   const os=phone?'phone':/Mac/i.test(platform)?'mac':'pc';
   document.querySelectorAll('[data-for]').forEach((e)=>{e.hidden=e.dataset.for!==os;});
   if(os!=='phone') return;
-  const steps=document.querySelector('.steps'), link=document.querySelector('.link-in');
-  steps.hidden=true;
-  if(link){link.classList.add('first');steps.before(link);}
-  document.getElementById('show-steps').onclick=(e)=>{steps.hidden=false;e.target.remove();
-    document.querySelectorAll('[data-for="any"]').forEach((x)=>{x.hidden=false;});};
+  const start=document.getElementById('start'), link=document.querySelector('.link-in');
+  start.classList.add('quiet');
+  if(link) choose.prepend(link);
 })();
-const linkGo=document.getElementById('link-go');
-if(linkGo) linkGo.onclick=()=>linkHere(document.getElementById('link-code').value,document.getElementById('link-msg'),linkGo);
+document.getElementById('start').addEventListener('click',()=>{choose.hidden=true;finish.hidden=false;paste.focus();});
+document.getElementById('back-choose').onclick=()=>{finish.hidden=true;choose.hidden=false;};
+const linkGo=document.getElementById('link-go'), linkCode=document.getElementById('link-code');
+if(linkGo){linkGo.onclick=()=>linkHere(linkCode.value,document.getElementById('link-msg'),linkGo);
+  linkCode.addEventListener('keydown',(e)=>{if(e.key==='Enter') linkGo.click();});}
+paste.addEventListener('keydown',(e)=>{if(e.key==='Enter') go.click();});
+paste.addEventListener('input',()=>{if(/code=/.test(paste.value)&&!go.disabled) go.click();});
 go.onclick=async()=>{
-  const paste=document.getElementById('paste').value.trim();
-  if(!paste) return;
+  const pasted=paste.value.trim();
+  if(!pasted) return;
   go.disabled=true; msg.className=''; msg.textContent='Comprobando…';
   try{
     const res=await fetch('/api/session',{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({paste, add: new URLSearchParams(location.search).get('cuenta')==='nueva'})});
+      body:JSON.stringify({paste:pasted, add: new URLSearchParams(location.search).get('cuenta')==='nueva'})});
     await refused(res);
     const data=await res.json();
     if(!res.ok) throw new Error(data.error||res.status);
@@ -304,18 +306,20 @@ go.onclick=async()=>{
 };
 async function refused(res){const data=await res.clone().json().catch(()=>({}));
   if(!data.refused) return;
-  document.querySelector('.steps').remove();
+  finish.remove(); choose.remove();
   document.querySelector('.auth h1').textContent='Sin acceso';
   document.querySelector('.auth .lead').textContent=data.error;
-  msg.className='';msg.innerHTML='<a class="btn quiet" href="/?nuevo=1">Entrar con otra cuenta</a>';
+  msg.className='';
+  document.querySelector('.auth').insertAdjacentHTML('beforeend','<a class="btn quiet" href="/?nuevo=1">Entrar con otra cuenta</a>');
   throw new Error('');}
 </script>
 `
 
-const linkInBox = `<section class="link-in"><b>¿Ya has entrado en otro dispositivo?</b>
-<p>Allí, menú de la cuenta → <b>Vincular un dispositivo</b>, y escribe aquí el código o escanea el QR con la cámara.</p>
-<input class="code" id="link-code" name="device-link" aria-label="Código de vinculación" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="ABCD-EFGH" maxlength="12">
-<button class="btn" id="link-go" type="button">Vincular</button><div class="msg" id="link-msg"></div></section>`
+const linkInBox = `<div class="or"><span>o con un código</span></div>
+<section class="link-in">
+<div class="code-row"><input class="field code" id="link-code" name="device-link" aria-label="Código de vinculación" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="ABCD-EFGH" maxlength="12"><button class="btn quiet" id="link-go" type="button">Vincular</button></div>
+<p class="hint">Desde un dispositivo donde ya hayas entrado: menú de la cuenta → Vincular un dispositivo.</p>
+<div class="msg" id="link-msg"></div></section>`
 
 const foreignBody = `<h1>El panel sigue otra cuenta</h1>
 <p class="lead">Ahora mismo está con la cuenta de otra persona, y eso no se enseña. Puedes pasarlo a una tuya:

@@ -221,7 +221,7 @@ func TestTheLoginPageCarriesTheStepsForEveryPlatformAndTheLinkBox(t *testing.T) 
 	server := New(nil, Options{})
 	page := visit(server.Handler(), http.MethodGet, "/", "").Body.String()
 	for _, part := range []string{`data-for="any"`, `data-for="mac" hidden`, `data-for="pc" hidden`,
-		`data-for="phone" hidden`, `F12`, `Cmd+Opt+I`, `id="link-code"`} {
+		`data-for="phone" hidden`, `F12`, `⌘⌥I`, `id="link-code"`} {
 		if !strings.Contains(page, part) {
 			t.Errorf("the login page lacks %s", part)
 		}
