@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 )
@@ -12,11 +11,10 @@ import (
 // A cold start's preview is shown, never acted on. Its squad lacks Camavinga, whose instruction
 // a world would drop as sold; a preview leaves it, and every reader that acts sees no world.
 func TestAPreviewIsShownButNeverActedOn(t *testing.T) {
-	armSelling(t)
-	config.StateDir = t.TempDir()
+	profile := armSelling(t)
 	built := &model.Universe{Players: []model.Player{
 		{ID: "1", Name: "Camavinga", IsMine: true}, {ID: "2", Name: "Yuri", IsMine: true}}}
-	world := New(func() (*model.Universe, error) { return built, nil })
+	world := New(profile, func() (*model.Universe, error) { return built, nil })
 	channel := world.Subscribe()
 	defer world.Unsubscribe(channel)
 
@@ -45,7 +43,7 @@ func TestAPreviewIsShownButNeverActedOn(t *testing.T) {
 	if world.Patch("test", func(*model.Universe) bool { return true }) {
 		t.Error("a patch landed on the preview")
 	}
-	left, err := policies.Load()
+	left, err := policies.Open(profile()).Load()
 	if err != nil || len(left) != 2 {
 		t.Fatalf("instructions after the preview: %v %v", left, err)
 	}

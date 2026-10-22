@@ -233,5 +233,5 @@ func Keep(tokens *Tokens) (string, error) {
 	if err := os.MkdirAll(config.AccountDir(account), 0o700); err != nil {
 		return "", err
 	}
-	return account, write(config.AccountTokenFile(account), tokens)
+	return account, For(account).write(tokens)
 }

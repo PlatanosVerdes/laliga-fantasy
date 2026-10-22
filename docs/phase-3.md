@@ -1,7 +1,7 @@
 # Phase 3: many leagues and accounts in one process
 
 Design for phase 3 of `docs/multi-tenant.md`, read from `main` after phases 1 and 2a. Built so
-far: 3.0 and 3.8. Section 6 holds the decisions the owner makes before the code starts.
+far: 3.0 to 3.3 and 3.8. Section 6 holds the decisions the owner makes before the code starts.
 
 ## 0. Findings that change the plan
 
@@ -149,12 +149,27 @@ Each leaves the single-user deploy working; until 3.10 the registry holds one te
 - **3.0** (done) Test seams and the render race: swappable `RoundTripper`
   (`httpx.SetTransport`), a fake LaLiga server that records bearer, method, path and body
   (`httpx/httpxtest`); `render.*` set once. *Test:* two concurrent renders under `-race`.
-- **3.1** `config.Profile`. *Test:* every path equals today's.
-- **3.2** A store per profile for policies, outcomes, dismissed, rewards, forecast, rules,
+- **3.1** (done) `config.Profile`. *Test:* every path equals today's.
+  Built as a value from `config.ProfileFor(account, league)` (or `ProfileIn(root, ...)` for one
+  root); `Use` fills the globals from it. `config.Default()` reads the globals rather than a
+  stored value, because a fresh install picks its league after start (`resolveLeague` calls
+  `Use` again); it becomes a stored value in 3.11. `LogFile` and `UsageFile` stay at the state
+  root, outside any profile.
+- **3.2** (done) A store per profile for policies, outcomes, dismissed, rewards, forecast, rules,
   clausulazos, necroporra, services. *Tests:* writes on A invisible on B; parallel updates under
   `-race`.
-- **3.3** `auth.Source` per account. *Tests:* concurrent refreshes write only their own
+  Each package has `Open(profile)` returning one store per file, so two openers of one profile
+  share its lock (`model.OpenClauses` for the clause file; `services.Open` wraps `New`). The
+  package-level functions are gone. `cmd` opens from `config.Default()` at each use, and
+  `state.New` and `server.Options.Profile` take a `func() config.Profile` for the same reason as
+  `Default`. The house rules reach `model.Build` through `model.State.House` instead of a read
+  inside it. Locks are per file now, not per package: with one profile that is the same thing.
+- **3.3** (done) `auth.Source` per account. *Tests:* concurrent refreshes write only their own
   `tokens.json`; A stopped leaves B working; one account's tenants refresh once.
+  `auth.For(account)` caches one `Source` per tokens.json; `Load`, `Save`, `Refresh` and
+  `Bearer` are its methods and the package-level ones are gone. `Keep` writes through the
+  account's `Source`. Until 3.5/3.6 bind the API, `api.Client.get`, `writes.Send`,
+  `server.HasSession`/`adopt` and the CLI ask for `auth.For(config.Default().Account)`.
 - **3.4** Cache scope and tag levels, singleflight, the own-lineup tag split. *Tests:* the same
   market URL for A and B gives two files and B never reads A's; `Invalidate(A)` leaves B; a
   member tag with a global scope is refused.

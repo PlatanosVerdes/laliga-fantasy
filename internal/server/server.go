@@ -87,6 +87,8 @@ type Options struct {
 	Access Access
 	// Allow is FANTASY_ALLOW; empty lets in only the users already known to the install.
 	Allow string
+	// Profile is whose files the panel reads and writes, asked on every use; nil is config.Default.
+	Profile func() config.Profile
 }
 
 // Rendered is one build of the world: the page, and the views the client draws from JSON.
@@ -248,8 +250,13 @@ func New(world *state.State, opts Options) *Server {
 	if opts.Assets == "" {
 		opts.Assets = "assets"
 	}
+	if opts.Profile == nil {
+		opts.Profile = config.Default
+	}
 	return &Server{state: world, opts: opts}
 }
+
+func (s *Server) profile() config.Profile { return s.opts.Profile() }
 
 func (s *Server) identity() (string, string) {
 	if s.opts.Identity != nil {
@@ -275,7 +282,7 @@ func (s *Server) holdExceptions() string {
 		return s.opts.HoldExceptions
 	}
 	if league := s.leagueID(); league != "" {
-		return rules.For(league).HoldExceptions
+		return rules.Open(s.profile()).For(league).HoldExceptions
 	}
 	return ""
 }
@@ -286,7 +293,7 @@ func (s *Server) maxDebtPct() float64 {
 		return s.opts.MaxDebtPct
 	}
 	if league := s.leagueID(); league != "" {
-		return rules.For(league).MaxDebtPct
+		return rules.Open(s.profile()).For(league).MaxDebtPct
 	}
 	return 0
 }

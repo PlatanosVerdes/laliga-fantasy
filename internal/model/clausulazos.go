@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"math"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
@@ -28,13 +29,37 @@ type clauseLog struct {
 	Clausulazos map[string]bool       `json:"clausulazos"`
 }
 
-// MarkClausulazos tells clause payments from agreed transfers, which the log does not: it calls
+type ClauseStore struct {
+	profile config.Profile
+	mu      sync.Mutex
+}
+
+var (
+	clausesMu     sync.Mutex
+	clausesOpened = map[string]*ClauseStore{}
+)
+
+// One store per file, so everyone writing it shares its lock.
+func OpenClauses(profile config.Profile) *ClauseStore {
+	clausesMu.Lock()
+	defer clausesMu.Unlock()
+	if store := clausesOpened[profile.ClauseFile]; store != nil {
+		return store
+	}
+	store := &ClauseStore{profile: profile}
+	clausesOpened[profile.ClauseFile] = store
+	return store
+}
+
+// Mark tells clause payments from agreed transfers, which the log does not: it calls
 // both "traspaso". A transfer is a clausulazo when it was paid exactly the clause the seller's
 // player had at the previous build, or, with nothing remembered, exactly what the seller paid
 // for him once his lock was over (a clause nobody raised is the price paid).
-func MarkClausulazos(universe *Universe, now time.Time) error {
+func (s *ClauseStore) Mark(universe *Universe, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	log := clauseLog{Seen: map[string]seenClause{}, Clausulazos: map[string]bool{}}
-	body, err := os.ReadFile(config.ClauseFile)
+	body, err := os.ReadFile(s.profile.ClauseFile)
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
@@ -78,10 +103,10 @@ func MarkClausulazos(universe *Universe, now time.Time) error {
 	if err != nil {
 		return err
 	}
-	if err := config.EnsureDirs(); err != nil {
+	if err := s.profile.EnsureDirs(); err != nil {
 		return err
 	}
-	return os.WriteFile(config.ClauseFile, blob, 0o600)
+	return os.WriteFile(s.profile.ClauseFile, blob, 0o600)
 }
 
 func paidTheClause(events []Event, index int, seen map[string]seenClause) bool {

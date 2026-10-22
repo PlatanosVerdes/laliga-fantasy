@@ -3,7 +3,6 @@ package forecast
 import (
 	"math"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,11 +13,9 @@ import (
 
 var saturday = time.Date(2026, 10, 3, 16, 0, 0, 0, time.UTC)
 
-func useTempFile(t *testing.T) {
+func tempStore(t *testing.T) *Store {
 	t.Helper()
-	previous := config.ForecastFile
-	config.ForecastFile = filepath.Join(t.TempDir(), "forecasts.json")
-	t.Cleanup(func() { config.ForecastFile = previous })
+	return Open(config.ProfileIn(t.TempDir(), "cuenta", "L"))
 }
 
 func points(value float64) *float64 { return &value }
@@ -48,23 +45,23 @@ func world(xpts map[string]float64, lineup []model.LineupPlayer) *model.Universe
 // The forecast that counts is the last one before his kick-off: until then it follows the model,
 // and from then on nothing the model says can touch it.
 func TestTheForecastFreezesAtKickOff(t *testing.T) {
-	useTempFile(t)
+	store := tempStore(t)
 	lineup := []model.LineupPlayer{{ID: "1", Name: "Uno", TeamID: "10"}}
 
-	if _, err := Record(world(map[string]float64{"1": 5}, lineup), saturday.Add(-2*time.Hour)); err != nil {
+	if _, err := store.Record(world(map[string]float64{"1": 5}, lineup), saturday.Add(-2*time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Record(world(map[string]float64{"1": 6}, lineup), saturday.Add(-time.Hour)); err != nil {
+	if _, err := store.Record(world(map[string]float64{"1": 6}, lineup), saturday.Add(-time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	log, err := Record(world(map[string]float64{"1": 1}, lineup), saturday.Add(time.Hour))
+	log, err := store.Record(world(map[string]float64{"1": 1}, lineup), saturday.Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := log[7]["a"].Players["1"].XPts; got != 6 {
 		t.Errorf("forecast = %v, want 6: el ultimo antes de empezar", got)
 	}
-	reread, err := Load()
+	reread, err := store.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,20 +75,20 @@ func TestTheForecastFreezesAtKickOff(t *testing.T) {
 
 // Points arrive while the match is being played and keep moving until it is over.
 func TestPointsFollowTheFeed(t *testing.T) {
-	useTempFile(t)
+	store := tempStore(t)
 	lineup := []model.LineupPlayer{{ID: "1", Name: "Uno", TeamID: "10"}}
-	Record(world(map[string]float64{"1": 5}, lineup), saturday.Add(-time.Hour))
+	store.Record(world(map[string]float64{"1": 5}, lineup), saturday.Add(-time.Hour))
 
 	lineup[0].Points = points(2)
-	Record(world(map[string]float64{"1": 5}, lineup), saturday.Add(time.Hour))
+	store.Record(world(map[string]float64{"1": 5}, lineup), saturday.Add(time.Hour))
 	lineup[0].Points = points(9)
-	log, _ := Record(world(map[string]float64{"1": 5}, lineup), saturday.Add(2*time.Hour))
+	log, _ := store.Record(world(map[string]float64{"1": 5}, lineup), saturday.Add(2*time.Hour))
 	if got := log[7]["a"].Players["1"].Points; got == nil || *got != 9 {
 		t.Errorf("points = %v, want 9", got)
 	}
 	// A pass where the feed has no row for him does not wipe what it said before.
 	lineup[0].Points = nil
-	log, _ = Record(world(map[string]float64{"1": 5}, lineup), saturday.Add(3*time.Hour))
+	log, _ = store.Record(world(map[string]float64{"1": 5}, lineup), saturday.Add(3*time.Hour))
 	if got := log[7]["a"].Players["1"].Points; got == nil || *got != 9 {
 		t.Errorf("points = %v, want que sigan los 9", got)
 	}
@@ -99,25 +96,25 @@ func TestPointsFollowTheFeed(t *testing.T) {
 
 // It runs on every rebuild, so the same world twice must not rewrite the file.
 func TestRecordIsIdempotent(t *testing.T) {
-	useTempFile(t)
+	store := tempStore(t)
 	lineup := []model.LineupPlayer{{ID: "1", Name: "Uno", TeamID: "10", Points: points(3)},
 		{ID: "2", Name: "Dos", TeamID: "20"}}
 	universe := world(map[string]float64{"1": 5, "2": 4}, lineup)
 	now := saturday.Add(-time.Hour)
 
-	Record(universe, now)
-	first, err := os.ReadFile(config.ForecastFile)
+	store.Record(universe, now)
+	first, err := os.ReadFile(store.path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	stamp := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
-	os.Chtimes(config.ForecastFile, stamp, stamp)
-	Record(universe, now)
-	second, _ := os.ReadFile(config.ForecastFile)
+	os.Chtimes(store.path, stamp, stamp)
+	store.Record(universe, now)
+	second, _ := os.ReadFile(store.path)
 	if string(first) != string(second) {
 		t.Error("el mismo mundo dos veces ha cambiado el fichero")
 	}
-	if info, _ := os.Stat(config.ForecastFile); !info.ModTime().Equal(stamp) {
+	if info, _ := os.Stat(store.path); !info.ModTime().Equal(stamp) {
 		t.Error("sin cambios no se escribe el fichero")
 	}
 }
@@ -125,10 +122,10 @@ func TestRecordIsIdempotent(t *testing.T) {
 // Somebody first seen after his kick-off has no forecast from before it, and one taken out of the
 // eleven before his match was never part of it.
 func TestOnlyWhatWasForecastBeforeKickOffIsKept(t *testing.T) {
-	useTempFile(t)
-	Record(world(map[string]float64{"1": 5, "2": 4},
+	store := tempStore(t)
+	store.Record(world(map[string]float64{"1": 5, "2": 4},
 		[]model.LineupPlayer{{ID: "2", Name: "Dos", TeamID: "20"}}), saturday.Add(-time.Hour))
-	log, _ := Record(world(map[string]float64{"1": 5, "2": 4},
+	log, _ := store.Record(world(map[string]float64{"1": 5, "2": 4},
 		[]model.LineupPlayer{{ID: "1", Name: "Uno", TeamID: "10"}}), saturday.Add(time.Hour))
 	if _, seen := log[7]["a"]; seen {
 		t.Errorf("ni el que entro tarde ni el que salio antes de jugar: %+v", log[7]["a"])
@@ -207,7 +204,6 @@ func TestNothingRecordedIsNoReview(t *testing.T) {
 
 // The game scores an eleven locked with fewer than eleven shirts as zero, forecast included.
 func TestAnElevenShortOfElevenScoresZero(t *testing.T) {
-	useTempFile(t)
 	lineup := []model.LineupPlayer{{ID: "1", Name: "Uno", TeamID: "10", Points: points(9)}}
 	log := Log{}
 	Update(log, world(map[string]float64{"1": 5}, lineup), saturday.Add(-time.Hour))

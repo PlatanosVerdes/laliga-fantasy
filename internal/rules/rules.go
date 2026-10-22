@@ -9,6 +9,7 @@ package rules
 import (
 	"encoding/json"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
@@ -28,10 +29,30 @@ type League struct {
 	Notes []string `json:"notes,omitempty"`
 }
 
-func path() string { return config.RulesFile }
+type Store struct {
+	profile config.Profile
+	mu      sync.Mutex
+}
 
-func Load() (map[string]League, error) {
-	body, err := os.ReadFile(path())
+var (
+	openMu sync.Mutex
+	opened = map[string]*Store{}
+)
+
+// One store per file, so everyone writing it shares its lock.
+func Open(profile config.Profile) *Store {
+	openMu.Lock()
+	defer openMu.Unlock()
+	if store := opened[profile.RulesFile]; store != nil {
+		return store
+	}
+	store := &Store{profile: profile}
+	opened[profile.RulesFile] = store
+	return store
+}
+
+func (s *Store) Load() (map[string]League, error) {
+	body, err := os.ReadFile(s.profile.RulesFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return map[string]League{}, nil
@@ -45,20 +66,22 @@ func Load() (map[string]League, error) {
 	return out, nil
 }
 
-func Save(leagues map[string]League) error {
-	if err := config.EnsureDirs(); err != nil {
+func (s *Store) Save(leagues map[string]League) error {
+	if err := s.profile.EnsureDirs(); err != nil {
 		return err
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	blob, err := json.MarshalIndent(leagues, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path(), blob, 0o600)
+	return os.WriteFile(s.profile.RulesFile, blob, 0o600)
 }
 
 // For returns the rules of one league, empty when it has none.
-func For(leagueID string) League {
-	leagues, err := Load()
+func (s *Store) For(leagueID string) League {
+	leagues, err := s.Load()
 	if err != nil {
 		return League{}
 	}

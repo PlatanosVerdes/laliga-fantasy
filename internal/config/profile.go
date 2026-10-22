@@ -41,36 +41,113 @@ func AccountTokenFile(account string) string {
 	return filepath.Join(AccountDir(account), "tokens.json")
 }
 
+// Profile is where one account in one league keeps its files. A value: two profiles can be
+// open at once, and nothing in it changes under a reader.
+type Profile struct {
+	Account string
+	League  string
+
+	ConfigDir string
+	StateDir  string
+	CacheDir  string
+
+	TokenFile      string
+	SettingsFile   string
+	PolicyFile     string
+	RulesFile      string
+	ServicesFile   string
+	NecroporraFile string
+
+	ReportFile       string
+	ForecastFile     string
+	ClauseFile       string
+	OfferEndingsFile string
+	OrderEndingsFile string
+	DismissedFile    string
+	RewardFile       string
+}
+
+// ProfileFor lays a profile out under the roots. Without an account every file sits at the
+// roots, and without a league the account's own folder holds the league's files.
+func ProfileFor(account, league string) Profile {
+	return layout(ConfigRoot, StateRoot, CacheRoot, account, league)
+}
+
+func ProfileIn(root, account, league string) Profile {
+	return layout(root, root, filepath.Join(root, "cache"), account, league)
+}
+
+func layout(configRoot, stateRoot, cacheRoot, account, league string) Profile {
+	p := Profile{Account: account, League: league,
+		ConfigDir: configRoot, StateDir: stateRoot, CacheDir: cacheRoot,
+		TokenFile: filepath.Join(configRoot, "accounts", ".none", "tokens.json")}
+	if account != "" {
+		p.ConfigDir = filepath.Join(configRoot, "accounts", account)
+		p.TokenFile = filepath.Join(p.ConfigDir, "tokens.json")
+		if league != "" {
+			dir := filepath.Join("accounts", account, "leagues", league)
+			p.ConfigDir = filepath.Join(configRoot, dir)
+			p.StateDir = filepath.Join(stateRoot, dir)
+			p.CacheDir = filepath.Join(cacheRoot, dir)
+		}
+	}
+	p.fill()
+	return p
+}
+
+func (p *Profile) fill() {
+	p.SettingsFile = filepath.Join(p.ConfigDir, "settings.json")
+	p.PolicyFile = filepath.Join(p.ConfigDir, "policies.json")
+	// The league's house rules: they belong with the instructions, because nothing can
+	// regenerate them.
+	p.RulesFile = filepath.Join(p.ConfigDir, "rules.json")
+	// The job intervals changed from the page: a preference, so it sits with the settings.
+	p.ServicesFile = filepath.Join(p.ConfigDir, "services.json")
+	p.NecroporraFile = filepath.Join(p.ConfigDir, "necroporra.json")
+	p.ReportFile = filepath.Join(p.StateDir, "report.html")
+	// What was forecast for each saved eleven before kick-off: once the ball rolls it cannot be
+	// asked again, so losing the file loses that history.
+	p.ForecastFile = filepath.Join(p.StateDir, "forecasts.json")
+	// The clauses seen at the last build: the log does not tell a clause paid from an offer
+	// accepted, and the clause before the transfer is the only way to.
+	p.ClauseFile = filepath.Join(p.StateDir, "clauses.json")
+	p.OfferEndingsFile = filepath.Join(p.StateDir, "offer_endings.json")
+	p.OrderEndingsFile = filepath.Join(p.StateDir, "order_endings.json")
+	p.DismissedFile = filepath.Join(p.StateDir, "dismissed.json")
+	p.RewardFile = filepath.Join(p.StateDir, "daily_reward.json")
+}
+
+func ActiveProfile() Profile { return ProfileFor(Active()) }
+
+// Default is the profile the process runs on, read from the globals Use fills until they go.
+func Default() Profile {
+	p := Profile{Account: Account, League: League,
+		ConfigDir: ConfigDir, StateDir: StateDir, CacheDir: CacheDir, TokenFile: TokenFile}
+	p.fill()
+	p.SettingsFile, p.PolicyFile, p.RulesFile, p.ServicesFile = SettingsFile, PolicyFile, RulesFile,
+		ServicesFile
+	p.ReportFile, p.ForecastFile, p.ClauseFile = ReportFile, ForecastFile, ClauseFile
+	return p
+}
+
+func (p Profile) EnsureDirs() error {
+	for _, dir := range []string{p.ConfigDir, p.StateDir, p.CacheDir} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Use points every path at a profile. Called once at start; a switch writes active.json and
 // restarts instead.
 func Use(account, league string) {
-	Account, League = account, league
-	ConfigDir, StateDir, CacheDir = ConfigRoot, StateRoot, CacheRoot
-	TokenFile = filepath.Join(ConfigRoot, "accounts", ".none", "tokens.json")
-	if account != "" {
-		TokenFile = AccountTokenFile(account)
-		ConfigDir = AccountDir(account)
-		if league != "" {
-			profile := filepath.Join("accounts", account, "leagues", league)
-			ConfigDir = filepath.Join(ConfigRoot, profile)
-			StateDir = filepath.Join(StateRoot, profile)
-			CacheDir = filepath.Join(CacheRoot, profile)
-		}
-	}
-	SettingsFile = filepath.Join(ConfigDir, "settings.json")
-	PolicyFile = filepath.Join(ConfigDir, "policies.json")
-	// The league's house rules: they belong with the instructions, because nothing can
-	// regenerate them.
-	RulesFile = filepath.Join(ConfigDir, "rules.json")
-	// The job intervals changed from the page: a preference, so it sits with the settings.
-	ServicesFile = filepath.Join(ConfigDir, "services.json")
-	ReportFile = filepath.Join(StateDir, "report.html")
-	// What was forecast for each saved eleven before kick-off: once the ball rolls it cannot be
-	// asked again, so losing the file loses that history.
-	ForecastFile = filepath.Join(StateDir, "forecasts.json")
-	// The clauses seen at the last build: the log does not tell a clause paid from an offer
-	// accepted, and the clause before the transfer is the only way to.
-	ClauseFile = filepath.Join(StateDir, "clauses.json")
+	p := ProfileFor(account, league)
+	Account, League = p.Account, p.League
+	ConfigDir, StateDir, CacheDir = p.ConfigDir, p.StateDir, p.CacheDir
+	TokenFile, SettingsFile, PolicyFile, RulesFile, ServicesFile = p.TokenFile, p.SettingsFile,
+		p.PolicyFile, p.RulesFile, p.ServicesFile
+	ReportFile, ForecastFile, ClauseFile = p.ReportFile, p.ForecastFile, p.ClauseFile
 	// The log and the usage are the panel's, whoever is in it. The .log suffix is load-bearing:
 	// Vector tails *.log, so both reach VictoriaLogs with no configuration.
 	LogFile = filepath.Join(StateRoot, "fantasy.log")

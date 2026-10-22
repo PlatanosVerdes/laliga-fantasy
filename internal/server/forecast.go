@@ -22,7 +22,7 @@ func (s *Server) forecastWeek(writer http.ResponseWriter, request *http.Request)
 		s.json(writer, http.StatusServiceUnavailable, map[string]any{"error": "generando"})
 		return
 	}
-	log, err := forecast.Load()
+	log, err := forecast.Open(s.profile()).Load()
 	if err != nil {
 		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
@@ -38,8 +38,8 @@ func (s *Server) forecastWeek(writer http.ResponseWriter, request *http.Request)
 
 // addForecasts puts beside each matchday what was expected of him that day, from whichever
 // eleven he was in, and adds the matchday in play when it has a forecast and no points yet.
-func addForecasts(id string, weeks []map[string]any) []map[string]any {
-	log, err := forecast.Load()
+func addForecasts(store *forecast.Store, id string, weeks []map[string]any) []map[string]any {
+	log, err := store.Load()
 	if err != nil || len(log) == 0 {
 		return weeks
 	}

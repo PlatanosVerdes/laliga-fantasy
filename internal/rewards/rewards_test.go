@@ -3,6 +3,8 @@ package rewards
 import (
 	"testing"
 	"time"
+
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 )
 
 // The zone database has to travel inside the binary. It shipped once without it, on an alpine
@@ -22,5 +24,16 @@ func TestTodayIsMadridsDay(t *testing.T) {
 	}
 	if got, want := Today(), time.Now().In(madrid).Format("2006-01-02"); got != want {
 		t.Fatalf("Today() = %q, want %q", got, want)
+	}
+}
+
+func TestAClaimIsStampedOnItsOwnProfile(t *testing.T) {
+	root := t.TempDir()
+	a, b := Open(config.ProfileIn(root, "uno", "L")), Open(config.ProfileIn(root, "dos", "L"))
+	if err := a.Stamp("L"); err != nil {
+		t.Fatal(err)
+	}
+	if !a.ClaimedToday("L") || b.ClaimedToday("L") {
+		t.Errorf("claimed: a %v, b %v", a.ClaimedToday("L"), b.ClaimedToday("L"))
 	}
 }

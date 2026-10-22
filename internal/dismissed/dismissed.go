@@ -8,7 +8,6 @@ package dismissed
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -20,12 +19,32 @@ import (
 // dead long before this; it only bounds the ones that do not.
 const Keep = 14 * 24 * time.Hour
 
-func path() string { return filepath.Join(config.StateDir, "dismissed.json") }
+type Store struct {
+	profile config.Profile
+	mu      sync.Mutex
+}
+
+var (
+	openMu sync.Mutex
+	opened = map[string]*Store{}
+)
+
+// One store per file, so everyone writing it shares its lock.
+func Open(profile config.Profile) *Store {
+	openMu.Lock()
+	defer openMu.Unlock()
+	if store := opened[profile.DismissedFile]; store != nil {
+		return store
+	}
+	store := &Store{profile: profile}
+	opened[profile.DismissedFile] = store
+	return store
+}
 
 // Load is every live dismissal, keyed by card, with when it was made.
-func Load() map[string]time.Time {
+func (s *Store) Load() map[string]time.Time {
 	out := map[string]time.Time{}
-	body, err := os.ReadFile(path())
+	body, err := os.ReadFile(s.profile.DismissedFile)
 	if err != nil {
 		return out
 	}
@@ -42,27 +61,29 @@ func Load() map[string]time.Time {
 	return out
 }
 
-var mu sync.Mutex
-
 // Add dismisses one card.
-func Add(key string) error {
-	mu.Lock()
-	defer mu.Unlock()
-	all := Load()
+func (s *Store) Add(key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	all := s.Load()
 	all[key] = time.Now()
-	return save(all)
+	return s.save(all)
 }
 
 // Clear brings every dismissed card back.
-func Clear() error { return save(map[string]time.Time{}) }
+func (s *Store) Clear() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.save(map[string]time.Time{})
+}
 
-func save(all map[string]time.Time) error {
-	if err := config.EnsureDirs(); err != nil {
+func (s *Store) save(all map[string]time.Time) error {
+	if err := s.profile.EnsureDirs(); err != nil {
 		return err
 	}
 	blob, err := json.MarshalIndent(all, "", "  ")
 	if err != nil {
 		return err
 	}
-	return files.WriteAtomic(path(), blob, 0o600)
+	return files.WriteAtomic(s.profile.DismissedFile, blob, 0o600)
 }

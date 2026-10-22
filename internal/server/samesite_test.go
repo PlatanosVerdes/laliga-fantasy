@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -39,8 +38,9 @@ func TestOnlyJSONWritesReachTheAPI(t *testing.T) {
 
 // A working session is not overwritten by a stray paste.
 func TestAWorkingSessionIsNotReplacedByAccident(t *testing.T) {
-	config.TokenFile = filepath.Join(t.TempDir(), "tokens.json")
-	if err := auth.Save(&auth.Tokens{AccessToken: "good", RefreshToken: "good"}); err != nil {
+	freshRoot(t)
+	source := auth.For(config.Account)
+	if err := source.Save(&auth.Tokens{AccessToken: "good", RefreshToken: "good"}); err != nil {
 		t.Fatal(err)
 	}
 	s := &Server{}
@@ -52,18 +52,22 @@ func TestAWorkingSessionIsNotReplacedByAccident(t *testing.T) {
 	if recorder.Code != http.StatusConflict {
 		t.Errorf("status %d, want 409", recorder.Code)
 	}
-	if tokens, _ := auth.Load(); tokens == nil || tokens.RefreshToken != "good" {
+	if tokens, _ := source.Load(); tokens == nil || tokens.RefreshToken != "good" {
 		t.Errorf("the working session was replaced: %+v", tokens)
 	}
 }
 
 // A session this key cannot open is still a session: a paste does not take it for none.
 func TestASessionUnderAnotherKeyIsNotReplacedByAccident(t *testing.T) {
-	config.TokenFile = filepath.Join(t.TempDir(), "tokens.json")
-	if err := auth.Save(&auth.Tokens{AccessToken: "good", RefreshToken: "good"}); err != nil {
+	freshRoot(t)
+	source := auth.For(config.Account)
+	if err := source.Save(&auth.Tokens{AccessToken: "good", RefreshToken: "good"}); err != nil {
 		t.Fatal(err)
 	}
-	before, _ := os.ReadFile(config.TokenFile)
+	before, err := os.ReadFile(config.ProfileFor(config.Account, "").TokenFile)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("FANTASY_SECRET_KEY", base64.StdEncoding.EncodeToString(make([]byte, 32)))
 	s := &Server{}
 	request := httptest.NewRequest(http.MethodPost, "/api/session",
@@ -74,7 +78,7 @@ func TestASessionUnderAnotherKeyIsNotReplacedByAccident(t *testing.T) {
 	if recorder.Code != http.StatusConflict || !strings.Contains(recorder.Body.String(), "la clave no coincide") {
 		t.Errorf("status %d: %s", recorder.Code, recorder.Body)
 	}
-	if after, _ := os.ReadFile(config.TokenFile); string(after) != string(before) {
+	if after, _ := os.ReadFile(config.ProfileFor(config.Account, "").TokenFile); string(after) != string(before) {
 		t.Error("the session was replaced")
 	}
 }

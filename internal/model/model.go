@@ -184,11 +184,12 @@ var positions = map[int]string{1: "POR", 2: "DEF", 3: "MED", 4: "DEL", 5: "ENT"}
 // Build assembles the structural universe. TTLs match the Python ones so a frozen cache
 // serves both sides identically.
 // State is what we chose rather than what the feed says: the stars set in the app, the
-// standing instructions we armed. Passed in rather than read in Build so the model stays a
-// pure function of its inputs, which is what makes it comparable.
+// standing instructions we armed, the house rules we agreed. Passed in rather than read in Build
+// so the model stays a pure function of its inputs, which is what makes it comparable.
 type State struct {
 	Starred map[string]bool
 	Raids   map[string]bool
+	House   rules.League
 }
 
 // BuildLive is Build with the futbolfantasy half fetched and matched in Go, which is what
@@ -547,7 +548,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 
 	// The league's hold rule: bought less than N days ago means not sellable, and the only
 	// record of when a player changed hands is the league log.
-	ApplyHoldRule(universe, myTeamID, rules.For(leagueID))
+	ApplyHoldRule(universe, myTeamID, state.House)
 
 	// Clock-derived, so it comes after the rows exist and before anything reads it.
 	now := time.Now().UTC()

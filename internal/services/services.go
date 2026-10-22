@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 )
 
 // Where an interval came from.
@@ -92,6 +94,8 @@ var (
 	ErrInvalid = errors.New("intervalo no valido")
 	ErrEnvOnly = errors.New("solo se cambia con su variable de entorno")
 )
+
+func Open(profile config.Profile, jobs ...Job) *Registry { return New(profile.ServicesFile, jobs...) }
 
 // New builds the registry from the jobs, the environment and the overrides file at path. A
 // variable or a saved override that does not parse or falls outside the bounds is ignored with

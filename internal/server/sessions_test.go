@@ -32,10 +32,8 @@ func TestMain(m *testing.M) {
 
 func freshRoot(t *testing.T) {
 	t.Helper()
-	root, account, league, tokens := config.ConfigRoot, config.Account, config.League, config.TokenFile
-	t.Cleanup(func() {
-		config.ConfigRoot, config.Account, config.League, config.TokenFile = root, account, league, tokens
-	})
+	root, account, league := config.ConfigRoot, config.Account, config.League
+	t.Cleanup(func() { config.ConfigRoot, config.Account, config.League = root, account, league })
 	config.ConfigRoot = t.TempDir()
 	config.Account, config.League = "", ""
 }
@@ -63,7 +61,6 @@ func ownerSession(t *testing.T, server *Server) *http.Cookie {
 	t.Helper()
 	freshRoot(t)
 	config.Account = saveAccount(t, "me@x.com", "user-me")
-	config.TokenFile = config.AccountTokenFile(config.Account)
 	return sessionFor(t, server, "user-me")
 }
 
@@ -344,7 +341,6 @@ func TestASessionCannotSeeOrActOnAnotherUsersAccount(t *testing.T) {
 	mine := saveAccount(t, "a@x.com", "user-a")
 	theirs := saveAccount(t, "b@x.com", "user-b")
 	config.Account, config.League = theirs, "L"
-	config.TokenFile = config.AccountTokenFile(theirs)
 	server := New(nil, Options{AllowWrites: true, Guard: writes.NewGuard(nil)})
 	handler := server.Handler()
 	a := sessionFor(t, server, "user-a")
@@ -428,9 +424,9 @@ func TestACrossOriginWriteIsRejected(t *testing.T) {
 }
 
 func TestAConfirmationTokenFromAnotherSessionIsRejected(t *testing.T) {
-	config.StateDir = t.TempDir()
+	profile := tempProfile(t)
 	bids := 0
-	world := state.New(func() (*model.Universe, error) {
+	world := state.New(profile, func() (*model.Universe, error) {
 		universe := &model.Universe{
 			Market:  []model.Listing{{MarketID: "m", MinBid: 1_000_000, Bids: &bids}},
 			Players: []model.Player{{ID: "p", Name: "Barato", Value: 1_000_000}},
@@ -443,7 +439,8 @@ func TestAConfirmationTokenFromAnotherSessionIsRejected(t *testing.T) {
 	}
 	guard := writes.NewGuard(nil)
 	guard.Cash = func(string) (int64, error) { return 50_000_000, nil }
-	server := New(world, Options{AllowWrites: true, Guard: guard, LeagueID: "L", MyTeamID: "me"})
+	server := New(world, Options{AllowWrites: true, Guard: guard, LeagueID: "L", MyTeamID: "me",
+		Profile: profile})
 	a := ownerSession(t, server)
 	b := sessionFor(t, server, "user-me")
 	handler := server.Handler()

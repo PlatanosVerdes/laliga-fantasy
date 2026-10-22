@@ -108,3 +108,57 @@ func TestMigrationMovesEverythingWhenTheRootsAreOne(t *testing.T) {
 		}
 	}
 }
+
+func TestAProfileLaysOutTodaysPaths(t *testing.T) {
+	ConfigRoot, StateRoot, CacheRoot = "/c", "/s", "/k"
+	league := "/c/accounts/a/leagues/L/"
+	history := "/s/accounts/a/leagues/L/"
+	want := Profile{Account: "a", League: "L",
+		ConfigDir: "/c/accounts/a/leagues/L", StateDir: "/s/accounts/a/leagues/L",
+		CacheDir: "/k/accounts/a/leagues/L", TokenFile: "/c/accounts/a/tokens.json",
+		SettingsFile: league + "settings.json", PolicyFile: league + "policies.json",
+		RulesFile: league + "rules.json", ServicesFile: league + "services.json",
+		NecroporraFile: league + "necroporra.json",
+		ReportFile:     history + "report.html", ForecastFile: history + "forecasts.json",
+		ClauseFile: history + "clauses.json", OfferEndingsFile: history + "offer_endings.json",
+		OrderEndingsFile: history + "order_endings.json", DismissedFile: history + "dismissed.json",
+		RewardFile: history + "daily_reward.json"}
+	if got := ProfileFor("a", "L"); got != want {
+		t.Errorf("ProfileFor:\n got %+v\nwant %+v", got, want)
+	}
+	Use("a", "L")
+	if got := Default(); got != want {
+		t.Errorf("Default after Use:\n got %+v\nwant %+v", got, want)
+	}
+	if TokenFile != want.TokenFile || PolicyFile != want.PolicyFile || ClauseFile != want.ClauseFile ||
+		ServicesFile != want.ServicesFile || LogFile != "/s/fantasy.log" || UsageFile != "/s/usage.log" {
+		t.Errorf("Use filled the globals differently: %s %s %s %s %s %s", TokenFile, PolicyFile,
+			ClauseFile, ServicesFile, LogFile, UsageFile)
+	}
+}
+
+func TestAccountOnlyAndFlatLayoutsResolveAsBefore(t *testing.T) {
+	ConfigRoot, StateRoot, CacheRoot = "/c", "/s", "/k"
+	account := ProfileFor("a", "")
+	if account.ConfigDir != "/c/accounts/a" || account.StateDir != "/s" || account.CacheDir != "/k" ||
+		account.PolicyFile != "/c/accounts/a/policies.json" || account.DismissedFile != "/s/dismissed.json" ||
+		account.TokenFile != "/c/accounts/a/tokens.json" {
+		t.Errorf("account only: %+v", account)
+	}
+	flat := ProfileFor("", "")
+	if flat.ConfigDir != "/c" || flat.PolicyFile != "/c/policies.json" ||
+		flat.ForecastFile != "/s/forecasts.json" || flat.TokenFile != "/c/accounts/.none/tokens.json" {
+		t.Errorf("flat: %+v", flat)
+	}
+	one := "/data"
+	ConfigRoot, StateRoot, CacheRoot = one, one, filepath.Join(one, "cache")
+	if container := ProfileFor("a", "L"); container.PolicyFile != "/data/accounts/a/leagues/L/policies.json" ||
+		container.ClauseFile != "/data/accounts/a/leagues/L/clauses.json" ||
+		container.CacheDir != "/data/cache/accounts/a/leagues/L" {
+		t.Errorf("one root: %+v", container)
+	}
+	Use("", "")
+	if Default() != ProfileFor("", "") || Default().PolicyFile != "/data/policies.json" {
+		t.Errorf("Default on the flat layout: %+v", Default())
+	}
+}

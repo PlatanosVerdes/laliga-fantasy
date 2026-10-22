@@ -20,7 +20,7 @@ import (
 // HasSession reports whether there is anything to authenticate with. A stored refresh token
 // is enough: the access token is renewed on first use.
 func HasSession() bool {
-	tokens, err := auth.Load()
+	tokens, err := auth.For(config.Default().Account).Load()
 	// A session given up on is shown as none, so the page asks for the login that restarts it.
 	return err == nil && tokens != nil && !tokens.Stopped() &&
 		(tokens.RefreshToken != "" || tokens.AccessToken != "")
@@ -158,7 +158,7 @@ func (s *Server) adopt(writer http.ResponseWriter, request *http.Request, pasted
 			"error": "ya hay una sesion que funciona; para cambiarla manda replace: true"})
 		return
 	}
-	if _, err := auth.Load(); locked(err) && !truthy(body["replace"]) && !truthy(body["add"]) {
+	if _, err := auth.For(config.Default().Account).Load(); locked(err) && !truthy(body["replace"]) && !truthy(body["add"]) {
 		s.json(writer, http.StatusConflict, map[string]any{
 			"error": err.Error() + "; para cambiarla por esta manda replace: true"})
 		return

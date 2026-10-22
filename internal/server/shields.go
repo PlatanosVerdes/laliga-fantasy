@@ -42,7 +42,7 @@ func (s *Server) shieldBudget(at time.Time) shieldBudget {
 	}
 	budget := shieldBudget{Known: true, Round: round, Limit: schedule.ShieldsPerRound, Used: used,
 		Booked: []state.ShieldUse{}}
-	armed, err := policies.Load()
+	armed, err := policies.Open(s.profile()).Load()
 	if err != nil {
 		return budget
 	}

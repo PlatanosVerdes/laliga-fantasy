@@ -15,6 +15,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/eleven"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/forecast"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
@@ -101,7 +102,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 		}
 	}
 
-	armed, _ := policies.Load()
+	armed, _ := policies.Open(s.profile()).Load()
 	listing := mapOf(player["market"])
 	offers := listOf(player["offers"])
 	clause := number(player["clause"])
@@ -145,7 +146,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 			}
 		}
 	}
-	weeks = addForecasts(id, weeks)
+	weeks = addForecasts(forecast.Open(s.profile()), id, weeks)
 
 	history := []map[string]any{}
 	if s.opts.Client != nil {

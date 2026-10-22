@@ -1,8 +1,12 @@
 package outcomes
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 )
 
 // Telling the four endings apart is the whole point: a refusal says something about the rival,
@@ -52,5 +56,36 @@ func TestClassify(t *testing.T) {
 	if kept.Outcome != "rechazada" {
 		t.Errorf("el dueno de siempre sigue siendo el dueno: esperaba rechazada, dio %q",
 			kept.Outcome)
+	}
+}
+
+func TestAppendsOnTwoProfilesSideBySide(t *testing.T) {
+	root := t.TempDir()
+	stores := []*Store{Open(config.ProfileIn(root, "cuenta", "A")), Open(config.ProfileIn(root, "cuenta", "B"))}
+	var wait sync.WaitGroup
+	for i := range 40 {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			store := stores[i%2]
+			if err := store.Append(Ending{At: fmt.Sprint(i), PlayerID: fmt.Sprint(i % 2)}); err != nil {
+				t.Error(err)
+			}
+			if err := store.AppendOrders(Order{PlayerID: fmt.Sprint(i % 2)}); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wait.Wait()
+	for index, store := range stores {
+		endings, orders := store.Load(), store.LoadOrders()
+		if len(endings) != 20 || len(orders) != 20 {
+			t.Errorf("store %d kept %d endings and %d orders of 20", index, len(endings), len(orders))
+		}
+		for _, ending := range endings {
+			if ending.PlayerID != fmt.Sprint(index) {
+				t.Errorf("store %d holds %+v", index, ending)
+			}
+		}
 	}
 }

@@ -1,7 +1,6 @@
 package model
 
 import (
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -17,14 +16,14 @@ func transfer(id, player, seller, buyer, at string, amount float64) Event {
 // tell; Luismi Cruz at the price tete alejo paid, which the log alone tells; Morcillo was an
 // offer accepted inside the lock, which neither may call a clausulazo.
 func TestMarkClausulazos(t *testing.T) {
-	config.ClauseFile = filepath.Join(t.TempDir(), "clauses.json")
+	store := OpenClauses(config.ProfileIn(t.TempDir(), "cuenta", "L"))
 	jm, me, tete, papi := "JMjugon", "PlatanosVerdes", "tete alejo", "-papi—"
 	clause := 71_200_626.0
 	universe := &Universe{
 		LeagueTeams: map[string]*LeagueTeam{"1": {Manager: &jm}},
 		Players:     []Player{{ID: "2541", OwnerTeamID: strPtr("1"), Clause: &clause}},
 	}
-	if err := MarkClausulazos(universe, time.Date(2026, 10, 6, 13, 0, 0, 0, time.UTC)); err != nil {
+	if err := store.Mark(universe, time.Date(2026, 10, 6, 13, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -37,7 +36,7 @@ func TestMarkClausulazos(t *testing.T) {
 		{TypeID: 31, PlayerID: strPtr("4001"), Buyer: &me, Amount: f64(850_000),
 			Raw: map[string]any{"id": "e", "createdAt": "2026-09-22T19:02:00+02:00"}},
 	}
-	if err := MarkClausulazos(universe, time.Date(2026, 10, 6, 14, 0, 0, 0, time.UTC)); err != nil {
+	if err := store.Mark(universe, time.Date(2026, 10, 6, 14, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 	got := map[string]bool{}

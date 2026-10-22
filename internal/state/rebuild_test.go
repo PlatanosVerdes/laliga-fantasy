@@ -2,21 +2,17 @@ package state
 
 import (
 	"encoding/json"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 )
 
 // Four clicks in a row started four rebuilds at once, and each announced the same change.
 func TestRebuildsSideBySideAnnounceAChangeOnce(t *testing.T) {
-	config.StateDir = t.TempDir()
-	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
 	offers := 0
-	world := New(func() (*model.Universe, error) {
+	world := New(tempProfile(t), func() (*model.Universe, error) {
 		time.Sleep(20 * time.Millisecond)
 		player := model.Player{ID: "1", Name: "Unai Lopez", IsMine: true}
 		for range offers {
