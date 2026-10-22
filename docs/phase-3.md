@@ -163,19 +163,20 @@ Each leaves the single-user deploy working; until 3.10 the registry holds one te
 Back up `appdata/laliga-fantasy` on the Pi before deploying 3.2 or later. The config and state
 layout on disk does not change; new cache folders are additions.
 
-## 6. Decisions for the owner
+## 6. Decisions (taken 2026-10-22)
 
-1. **Automation for a tenant nobody opens.** A newly added tenant starts manual, with an explicit
-   per-tenant "auto" switch (recommended). The existing tenant keeps today's mode.
-2. **Whose token reads shared league data.** Any member, a fixed reader, or each member for
-   itself (no sharing, more requests).
-3. **Logs.** `fantasy.log` and `usage.log` are process-wide and record automatic actions. They
-   need a tenant field and must not be readable by another user.
-4. **House rules** shared by members of the same league, or a copy per account (phase 5 decides
-   the editor; the storage is chosen here).
-5. **Limits.** Unknown whether LaLiga limits per IP or per token; rates and budgets are guesses.
-   A week of per-scope counters on today's deploy, before 3.9, is worth it.
-6. **CPU.** A render costs ~4 s on the Pi; rendering only for watched tenants is required.
-7. **Necroporra's automatic vote** runs only for tenants that have `necroporra.json` until the
-   module work in phase 4.
-8. **Ship the limiter (3.8) before the registry (3.9)**, so it is proven with one tenant first.
+1. **Automation:** a new tenant starts with every automatic action off; its owner arms each one
+   ("siempre" in market, clauses...). The existing tenant keeps today's mode.
+2. **League reads:** each member reads with its own token, as the official app does. No reading
+   on another member's account; the queue absorbs the extra requests.
+3. **One request queue for the whole instance** (LaLiga sees one IP), with priorities (a user's
+   own actions first, so they feel instant) and fair turns between users.
+4. **House rules:** one copy per league, editable by any member of that league on the instance,
+   every change logged with who and when and shown to the others. The instance's host does not
+   edit anyone's rules.
+5. **Order:** the queue (3.0 seams, then 3.8) ships first and is proven on today's single tenant,
+   with per-scope request counters, before the registry (3.9).
+
+Still open: whether LaLiga limits per IP or per token (the counters will tell), CPU per render on
+the Pi (render only watched tenants), logs with a tenant field, and the Necroporra vote per tenant
+until phase 4.
