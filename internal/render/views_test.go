@@ -307,3 +307,25 @@ func TestBuyLineOutOfReachKeepsMyBid(t *testing.T) {
 		t.Errorf("acts = %+v, want one disabled button", line.Acts)
 	}
 }
+
+// Every row of Mi plantilla carries the starting odds the futbolfantasy pages gave.
+func TestMySquadRowsCarryTheStartingOdds(t *testing.T) {
+	document := decidingDocument()
+	squad := rows(document.Advice["squad"])
+	squad[0]["start_probability"] = 72.4
+	document.Advice["squad"] = squad
+	for _, block := range document.MySquadData().Main {
+		for _, row := range block.Rows {
+			if row.Player == nil {
+				continue
+			}
+			got, has := row.Player["start_probability"]
+			if row.Player["id"] == text(squad[0]["id"]) && got != 72.0 {
+				t.Errorf("rounded odds on his row: %v", got)
+			}
+			if row.Player["id"] != text(squad[0]["id"]) && has {
+				t.Errorf("no odds invented for %v", row.Player["id"])
+			}
+		}
+	}
+}

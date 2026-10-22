@@ -1,7 +1,7 @@
 import {html, render, useState, useEffect, useRef, panel} from './lib.js';
 import {ApiFace, ShieldMark} from './components.js';
 import {getJSON, postJSON, useStamp} from './api.js';
-import {dec, mny, whenShort, health, xClass} from './format.js';
+import {dec, mny, whenShort, health, xClass, startPill} from './format.js';
 
 // The lineup editor: the saved eleven from /api/lineup on a pitch, the bench beside it, drag
 // and drop (or lift and tap on a touchscreen), formations, the best eleven the server worked out,
@@ -36,6 +36,9 @@ function sellState(p) {
   if (p.listed_for) return `en venta por ${mny(p.listed_for)}`;
   return 'se puede vender';
 }
+
+const Starts = ({p}) => p.start_probability == null ? null
+  : html`<span class=${'tok-start ' + startPill(p.start_probability)} data-tip="probabilidad de ser titular">${Math.round(p.start_probability)} %</span>`;
 
 const asShield = (p) => ({shielded: p.shielded, shielded_when: p.shielded_until ? whenShort(p.shielded_until) : ''});
 
@@ -223,7 +226,7 @@ function Lineup() {
       ${grip(p, 'pitch', line, index)}${p.listed_for ? html`<span class="tok-flag" title=${'en venta por ' + mny(p.listed_for)}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.2 8.6V3.2a1 1 0 0 1 1-1h5.4l5.2 5.2a1 1 0 0 1 0 1.4l-4.4 4.4a1 1 0 0 1-1.4 0z"/><circle cx="5.4" cy="5.4" r="1.2"/></svg></span>` : null}
       <${ApiFace} p=${p} size="md"/>
       <span class="tok-name">${p.name}<${ShieldMark} p=${asShield(p)}/></span>
-      <span class=${'tok-x ' + xClass(p.xpts || 0)}>${dec(p.xpts || 0)}</span>
+      <span class="tok-nums"><span class=${'tok-x ' + xClass(p.xpts || 0)}>${dec(p.xpts || 0)}</span><${Starts} p=${p}/></span>
     </div>`;
   };
   const benchItem = (p) => {
@@ -233,6 +236,7 @@ function Lineup() {
       ${grip(p, 'bench')}<${ApiFace} p=${p} size="sm"/>
       <span class="bench-who"><span class="bench-name">${p.name}<${ShieldMark} p=${asShield(p)}/></span>
         <span class="bench-sell">${sellState(p)}</span></span>
+      <${Starts} p=${p}/>
       <span class=${'pos pos-' + pos.toLowerCase()}>${pos}</span>
       <span class=${'tx ' + xClass(p.xpts || 0)}>${dec(p.xpts || 0)}</span>
     </div>`;

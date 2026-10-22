@@ -32,6 +32,9 @@ export function esDay(stamp) {
 // The xPts colour scale, render.xptsClass's thresholds.
 export const xClass = (v) => v >= 6 ? 'x-hi' : v >= 3.5 ? 'x-mid' : v >= 2 ? 'x-lo' : 'x-bad';
 
+// The starting odds' pill, render.startsCell's thresholds.
+export const startPill = (v) => 'pill-' + (v >= 75 ? 'good' : v >= 50 ? 'warning' : v >= 30 ? 'serious' : 'critical');
+
 // The card's own helpers.
 export const dec = (v, d = 1) => v == null || isNaN(v) ? '—'
   : Number(v).toFixed(d).replace('-', '−');
