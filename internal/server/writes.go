@@ -432,8 +432,9 @@ func (s *Server) prepare(writer http.ResponseWriter, request *http.Request) {
 	if args.PlayerTeamID == "" {
 		args.PlayerTeamID = s.slotFor(args.PlayerID)
 	}
-	summary, err := s.opts.Guard.Prepare(operation, args, s.playerFor(text(body["player_id"])),
-		s.opts.AllowWrites)
+	who, _ := visitorOf(request)
+	summary, err := s.opts.Guard.PrepareFor(who.key, operation, args,
+		s.playerFor(text(body["player_id"])), s.opts.AllowWrites)
 	if err != nil {
 		s.writeError(writer, err)
 		return
@@ -452,7 +453,8 @@ func (s *Server) confirm(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	body := s.body(request)
-	result, err := s.opts.Guard.Confirm(text(body["token"]), s.opts.AllowWrites,
+	who, _ := visitorOf(request)
+	result, err := s.opts.Guard.ConfirmFor(who.key, text(body["token"]), s.opts.AllowWrites,
 		truthy(body["dry_run"]))
 	if err != nil {
 		if args, ok := result["args"].(writes.Args); ok {

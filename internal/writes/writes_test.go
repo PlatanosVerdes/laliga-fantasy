@@ -38,6 +38,23 @@ func TestTokenIsSingleUse(t *testing.T) {
 	}
 }
 
+func TestATokenIsConfirmedOnlyByWhoPreparedIt(t *testing.T) {
+	g := guard(50_000_000)
+	summary, err := g.PrepareFor("session-a", "bid", bidArgs(1_000_000),
+		Player{Name: "X", IdealBid: 2_000_000}, true)
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	for _, other := range []string{"session-b", ""} {
+		if _, err := g.ConfirmFor(other, summary.Token, true, true); err == nil {
+			t.Fatalf("%q confirmed a token prepared by session-a", other)
+		}
+	}
+	if _, err := g.ConfirmFor("session-a", summary.Token, true, true); err != nil {
+		t.Fatalf("the session that prepared it was refused: %v", err)
+	}
+}
+
 func TestTokenExpires(t *testing.T) {
 	g := guard(50_000_000)
 	summary, err := g.Prepare("bid", bidArgs(1_000_000), Player{Name: "X", IdealBid: 2_000_000}, true)

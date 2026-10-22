@@ -57,9 +57,18 @@ own, no user table to maintain.
 - **A proxy in front** (Cloudflare Access, Authelia, oauth2-proxy) stays supported as an extra
   layer. It never replaces the app's own session.
 
-The redirect goes to `authredirect://com.lfp.laligafantasy`, so the user pastes the address
-bar back. That stays unless LaLiga's client accepts another redirect; the page should explain
-the step better.
+The redirect goes to `authredirect://com.lfp.laligafantasy`, so the user copies the
+`(canceled)` request out of DevTools. That stays unless LaLiga's client accepts another redirect.
+The login page shows the keys for the visitor's platform, and on a phone or tablet, which has no
+DevTools, it points to linking instead.
+
+- **Linking a device** (like WhatsApp Web or a TV sign-in): a signed-in browser opens
+  *Vincular un dispositivo* and gets a one-time code, `ABCD-EFGH`, with a QR of
+  `/vincular#<code>`. The code is single use, lives 2 minutes in memory only, stored as its
+  SHA-256, at most 3 live per user. The other device types or scans it on `/vincular` and gets
+  a session of its own; the creator's cookie is never copied. Wrong codes count toward the
+  per-IP login limit (a miss burns no code, so nobody can void another's), and the user is checked against
+  `FANTASY_ALLOW` again when the code is used.
 
 ## Extras as modules
 
@@ -84,6 +93,9 @@ Each phase ships on its own and leaves the current single-user deploy working.
 2. **Identity and sessions.** Sign in with LaLiga, server-side sessions, encrypted tokens,
    `FANTASY_ALLOW`, rate limits, confirmation tokens bound to the session. With one user, it
    behaves as today after one login.
+   2a (done): sessions, `FANTASY_ALLOW`, the Origin check, login rate limit, confirmation
+   tokens bound to the session, one profile per process seen only by its own user. Left for
+   2b: tokens encrypted at rest and rate limits on writes.
 3. **Many leagues in one process.** One global world built once, one league world per active
    league on top of it, the engine and the render taking the league they work for. The
    profile switch becomes a selector instead of `syscall.Exec`. The automatic engine runs

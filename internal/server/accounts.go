@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"net/http"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,9 +27,9 @@ type LeagueChoice struct {
 }
 
 type accountView struct {
-	ID      string         `json:"id"`
-	Email   string         `json:"email"`
-	Name    string         `json:"name"`
+	ID    string `json:"id"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
 	// Manager is the name the account plays under in its league: the login's own name is
 	// often "Google user".
 	Manager string         `json:"manager"`
@@ -38,9 +39,14 @@ type accountView struct {
 
 // accounts lists the saved accounts and their leagues: the active account's live from the API,
 // the others as they were last used, since asking needs their session.
-func (s *Server) accounts(writer http.ResponseWriter, _ *http.Request) {
+func (s *Server) accounts(writer http.ResponseWriter, request *http.Request) {
+	who, _ := visitorOf(request)
+	active := ""
+	if owns(who, config.Account) {
+		active = config.Account
+	}
 	live := []LeagueChoice{}
-	if s.opts.Leagues != nil && config.Account != "" {
+	if s.opts.Leagues != nil && active != "" {
 		if leagues, err := s.opts.Leagues(); err == nil {
 			live = leagues
 		} else {
@@ -49,7 +55,10 @@ func (s *Server) accounts(writer http.ResponseWriter, _ *http.Request) {
 	}
 	out := []accountView{}
 	for _, id := range config.Accounts() {
-		view := accountView{ID: id, Active: id == config.Account, Leagues: []LeagueChoice{}}
+		if !owns(who, id) {
+			continue
+		}
+		view := accountView{ID: id, Active: id == active, Leagues: []LeagueChoice{}}
 		var tokens struct {
 			Email string `json:"email"`
 			Name  string `json:"name"`
@@ -73,8 +82,24 @@ func (s *Server) accounts(writer http.ResponseWriter, _ *http.Request) {
 		}
 		out = append(out, view)
 	}
-	s.json(writer, http.StatusOK, map[string]any{"account": config.Account,
-		"league": config.League, "accounts": out})
+	league := ""
+	if active != "" {
+		league = config.League
+	}
+	s.json(writer, http.StatusOK, map[string]any{"account": active, "league": league, "accounts": out})
+}
+
+func accountEmail(account string) string {
+	var tokens struct {
+		Email string `json:"email"`
+	}
+	if body, err := os.ReadFile(config.AccountTokenFile(account)); err == nil {
+		_ = json.Unmarshal(body, &tokens)
+	}
+	if tokens.Email == "" {
+		return account
+	}
+	return tokens.Email
 }
 
 // managerName is the account's manager name: read from the world for the active account and
@@ -116,12 +141,7 @@ func (s *Server) useAccount(writer http.ResponseWriter, request *http.Request) {
 	if account == "" {
 		account = config.Account
 	}
-	saved := false
-	for _, id := range config.Accounts() {
-		saved = saved || id == account
-	}
-	if !saved {
-		s.json(writer, http.StatusBadRequest, map[string]any{"error": "esa cuenta no esta guardada"})
+	if !s.mine(writer, request, account) {
 		return
 	}
 	if strings.ContainsAny(league, `/\.`) {
@@ -148,12 +168,7 @@ func (s *Server) logout(writer http.ResponseWriter, request *http.Request) {
 	if account == "" {
 		account = config.Account
 	}
-	saved := false
-	for _, id := range config.Accounts() {
-		saved = saved || id == account
-	}
-	if !saved {
-		s.json(writer, http.StatusBadRequest, map[string]any{"error": "esa cuenta no esta guardada"})
+	if !s.mine(writer, request, account) {
 		return
 	}
 	if err := os.Remove(config.AccountTokenFile(account)); err != nil {
@@ -166,8 +181,15 @@ func (s *Server) logout(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	next, league := "", ""
+	who, _ := visitorOf(request)
 	if left := config.Accounts(); len(left) > 0 {
 		next = left[0]
+		for _, id := range left {
+			if owns(who, id) {
+				next = id
+				break
+			}
+		}
 		for id := range config.AccountLeagues(next) {
 			league = id
 			break
@@ -181,6 +203,19 @@ func (s *Server) logout(writer http.ResponseWriter, request *http.Request) {
 	s.restartSoon()
 }
 
+func (s *Server) mine(writer http.ResponseWriter, request *http.Request, account string) bool {
+	if !slices.Contains(config.Accounts(), account) {
+		s.json(writer, http.StatusBadRequest, map[string]any{"error": "esa cuenta no esta guardada"})
+		return false
+	}
+	if who, _ := visitorOf(request); !owns(who, account) {
+		slog.Warn("account of another user refused", "account", account, "user", who.User)
+		s.json(writer, http.StatusForbidden, map[string]any{"error": "esa cuenta es de otra persona"})
+		return false
+	}
+	return true
+}
+
 // AvatarStyle is the DiceBear style the accounts are drawn in.
 const AvatarStyle = "thumbs"
 
@@ -188,11 +223,7 @@ const AvatarStyle = "thumbs"
 // depend on it after the first time, and what it is sent is a hash of the account, not the email.
 func (s *Server) avatar(writer http.ResponseWriter, request *http.Request) {
 	account := request.URL.Query().Get("account")
-	saved := false
-	for _, id := range config.Accounts() {
-		saved = saved || id == account
-	}
-	if !saved {
+	if who, _ := visitorOf(request); !owns(who, account) || !slices.Contains(config.Accounts(), account) {
 		http.NotFound(writer, request)
 		return
 	}
@@ -340,7 +371,7 @@ const failedBody = `<div class="centered"><h1>No puedo leer esta liga</h1><div c
 <p class="lead">LaLiga no la devuelve: puede que ya no estés en ella. Elige otra o cambia de cuenta.</p>
 <div class="choices">{{leagues}}</div>
 <p class="lead" style="margin-top:16px;font-size:13px">Detalle: {{reason}}</p>
-<div class="btn-row"><a class="btn quiet" href="/?cuenta=nueva">Entrar con otra cuenta</a><button class="btn quiet" id="out" type="button">Cerrar sesión</button></div><div id="msg"></div></div>
+<div class="btn-row"><a class="btn quiet" href="/?cuenta=nueva">Entrar con otra cuenta</a><button class="btn quiet" id="out" type="button">Desconectar de LaLiga</button></div><div id="msg"></div></div>
 <script>
 const go=(url,body)=>{document.querySelectorAll('.auth button').forEach((x)=>x.disabled=true);
   switchTo(url,body);};

@@ -186,9 +186,9 @@ func TestAccessDoorNeedsEverySetting(t *testing.T) {
 	}
 }
 
-// The private door stays open to whoever reaches it; only the tunnel's door asks for a token.
 func TestOnlyTheTunnelDoorAsksForAToken(t *testing.T) {
 	panel := New(nil, Options{Access: Access{Port: 8001, TeamDomain: testTeam, Audience: testAudience}})
+	session := ownerSession(t, panel)
 	for _, c := range []struct {
 		door http.Handler
 		name string
@@ -198,9 +198,43 @@ func TestOnlyTheTunnelDoorAsksForAToken(t *testing.T) {
 		{panel.AccessHandler(), "tunnel", http.StatusForbidden},
 	} {
 		recorder := httptest.NewRecorder()
-		c.door.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/no-such-page", nil))
+		request := httptest.NewRequest(http.MethodGet, "/no-such-page", nil)
+		request.AddCookie(session)
+		c.door.ServeHTTP(recorder, request)
 		if recorder.Code != c.want {
 			t.Errorf("%s door answered %d, want %d", c.name, recorder.Code, c.want)
+		}
+	}
+}
+
+// Through Access a session is still required: the proxy is an extra lock, not the key.
+func TestTheTunnelDoorAlsoAsksForASession(t *testing.T) {
+	now := time.Now()
+	sign := newSigner(t, "k1")
+	panel := New(nil, Options{})
+	session := ownerSession(t, panel)
+	keys := newAccessKeys(Access{TeamDomain: testTeam, Audience: testAudience})
+	keys.certsURL = certsServer(t, sign).URL
+	keys.now = func() time.Time { return now }
+	door := keys.middleware(panel.Handler())
+	token := sign.token(t, validClaims(now))
+	for _, c := range []struct {
+		name    string
+		session bool
+		want    int
+	}{
+		{"Access token alone", false, http.StatusUnauthorized},
+		{"Access token and session", true, http.StatusNotFound},
+	} {
+		request := httptest.NewRequest(http.MethodGet, "/no-such-page", nil)
+		request.Header.Set(AccessHeader, token)
+		if c.session {
+			request.AddCookie(session)
+		}
+		recorder := httptest.NewRecorder()
+		door.ServeHTTP(recorder, request)
+		if recorder.Code != c.want {
+			t.Errorf("%s: %d, want %d", c.name, recorder.Code, c.want)
 		}
 	}
 }

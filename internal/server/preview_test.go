@@ -100,7 +100,7 @@ func post(handler http.Handler, path string) *httptest.ResponseRecorder {
 func TestEveryOperationIsRefusedWhileTheLeagueLoads(t *testing.T) {
 	server, world := loadingServer(t)
 	world.ShowPreview(samplePreview(model.PreviewRivals))
-	handler := server.Handler()
+	handler := asOwner(t, server)
 	for path := range operations {
 		answer := post(handler, path)
 		var body map[string]any
@@ -141,18 +141,13 @@ func TestTheGuardRefusalMapsToUnavailable(t *testing.T) {
 // drawn, and the panel once it is.
 func TestTheColdStartServesThePreviewUntilThePanelIsDrawn(t *testing.T) {
 	server, world := loadingServer(t)
-	defer func(league, tokens string) { config.League, config.TokenFile = league, tokens }(
-		config.League, config.TokenFile)
+	handler := asOwner(t, server)
 	config.League = "L"
-	config.TokenFile = filepath.Join(t.TempDir(), "tokens.json")
-	if err := os.WriteFile(config.TokenFile, []byte(`{"access_token":"x","refresh_token":"y"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
 	painted := &painter{release: make(chan struct{})}
 	server.opts.Page = painted.page
 	open := func() string {
 		recorder := httptest.NewRecorder()
-		server.index(recorder, httptest.NewRequest(http.MethodGet, "http://x/", nil))
+		handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "http://x/", nil))
 		return recorder.Body.String()
 	}
 

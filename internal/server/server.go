@@ -81,6 +81,8 @@ type Options struct {
 	// private one (tailnet, Caddy), so the panel is still reachable when Cloudflare is
 	// blocked or the proxy is down.
 	Access Access
+	// Allow is FANTASY_ALLOW; empty lets in only the users already known to the install.
+	Allow string
 }
 
 // Rendered is one build of the world: the page, and the views the client draws from JSON.
@@ -106,6 +108,11 @@ type Server struct {
 	drawing map[string]chan struct{}
 	drawMu  sync.Mutex
 	season  season
+
+	gateOnce sync.Once
+	gate     *gate
+	// Held from admitting to recording the owner, or two first logins would both own the install.
+	loginMu sync.Mutex
 }
 
 // Rendering is how far the page being drawn has got. Options.Page reports its steps here; a
@@ -317,8 +324,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/accounts/use", s.useAccount)
 	mux.HandleFunc("/api/accounts/logout", s.logout)
 	mux.HandleFunc("/api/accounts/avatar", s.avatar)
+	mux.HandleFunc("/api/logout", s.signOut)
+	mux.HandleFunc("/api/devices", s.devices)
+	mux.HandleFunc("/vincular", s.linkPage)
+	mux.HandleFunc("/vincular/nuevo", s.newLinkPage)
+	mux.HandleFunc("/api/link", s.createLink)
+	mux.HandleFunc("/api/link/status", s.linkStatus)
+	mux.HandleFunc("/api/link/redeem", s.redeemLink)
 	mux.HandleFunc("/", s.index)
-	return logging(sameSiteOnly(s.whileLoading(mux)))
+	return logging(sameOrigin(sameSiteOnly(s.requireSession(s.whileLoading(mux)))))
 }
 
 // AccessHandler is Handler behind the Access check, for the tunnel's door.
@@ -583,6 +597,10 @@ func (s *Server) index(writer http.ResponseWriter, request *http.Request) {
 	if !HasSession() || request.URL.Query().Get("cuenta") == "nueva" {
 		slog.Warn("no session or adding one: serving the login page")
 		s.setup(writer, request)
+		return
+	}
+	if who, _ := visitorOf(request); !owns(who, config.Account) {
+		s.foreign(writer, who)
 		return
 	}
 	if config.League == "" {

@@ -1,5 +1,5 @@
 import {html, useState, useEffect, useRef, panel} from './lib.js';
-import {Modal, useDialogTrace} from './components.js';
+import {Modal, Icon, useDialogTrace} from './components.js';
 import {prepare, confirm, postJSON, changed, closeDialog, openDialog, useCash, useMeta} from './api.js';
 import {exact, group, digits, stampText} from './format.js';
 
@@ -279,7 +279,29 @@ function RaidDialog({p, done}) {
   <//>`;
 }
 
-export const DIALOGS = {amount: AmountDialog, shield: ShieldDialog, raid: RaidDialog};
+const DEVICE = html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>`;
+const DEVICES = html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="14" height="10" rx="1.5"/><path d="M1 18h12"/><rect x="16" y="9" width="7" height="12" rx="1.5"/></svg>`;
+
+function SignOutDialog() {
+  const [error, setError] = useState('');
+  const [count, setCount] = useState(0);
+  useEffect(() => { fetch('/api/devices').then((r) => r.json()).then((d) => setCount(d.count || 0), () => {}); }, []);
+  const out = (everywhere) => postJSON('/api/logout', {everywhere}).then(() => { location.href = '/'; }, (e) => setError(e.message));
+  return html`<${Modal} label="Cerrar sesión" onClose=${closeDialog}>
+    <button type="button" class="modal-x" aria-label="Cerrar" onClick=${closeDialog}><${Icon} name="x"/></button>
+    <h3>Cerrar sesión</h3>
+    <div class="signout-options">
+      <button type="button" class="signout-opt main" onClick=${() => out(false)}>${DEVICE}<span>En este dispositivo</span></button>
+      <button type="button" class="signout-opt" onClick=${() => out(true)}>${DEVICES}<span>En todos los dispositivos
+        <small>${count > 1 ? count + ' sesiones abiertas, también las vinculadas con QR' : 'También los vinculados con QR'}</small></span></button>
+    </div>
+    <div class="modal-actions"><button type="button" onClick=${closeDialog}>Cancelar</button></div>
+    ${error ? html`<p class="bid-error">${error}</p>` : null}
+  </${Modal}>`;
+}
+export const askSignOut = (props) => show('signout', props);
+
+export const DIALOGS = {amount: AmountDialog, shield: ShieldDialog, raid: RaidDialog, signout: SignOutDialog};
 
 // The notice that an operation landed, said at once without waiting for the rebuild.
 let notices = [];

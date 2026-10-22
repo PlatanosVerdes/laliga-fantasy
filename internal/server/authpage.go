@@ -21,6 +21,7 @@ const authFrame = `<!doctype html><html lang="es"><meta charset="utf-8">
 <title>Fantasy · {{title}}</title>
 <link rel="stylesheet" href="/assets/report.css">
 <style>
+[hidden]{display:none!important}
 .auth-wrap{position:fixed;inset:0;overflow:auto;display:grid;place-items:center;padding:24px 16px;box-sizing:border-box}
 .auth{width:min(520px,100%);background:var(--surface);border:1px solid var(--line);border-radius:16px;
   padding:28px 28px 24px;box-shadow:0 10px 40px rgba(0,0,0,.18)}
@@ -45,8 +46,44 @@ textarea{width:100%;box-sizing:border-box;min-height:84px;margin-top:10px;paddin
   border-radius:10px;border:1px solid var(--line);background:var(--plane);color:var(--ink);
   font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
 textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
-#msg{margin-top:14px;min-height:20px;font-size:14px;color:var(--ink-2)}
-#msg.bad{color:var(--critical)} #msg.good{color:var(--good)}
+#msg,.msg{margin-top:14px;min-height:20px;font-size:14px;color:var(--ink-2)}
+#msg.bad,.msg.bad{color:var(--critical)} #msg.good,.msg.good{color:var(--good)}
+.auth input.code{width:100%;box-sizing:border-box;margin-top:10px;padding:10px 12px;border-radius:10px;
+  border:1px solid var(--line);background:var(--plane);color:var(--ink);text-transform:uppercase;
+  font:600 18px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em}
+.auth input.code:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.auth .btn.wide{display:flex;justify-content:center;width:100%;box-sizing:border-box;margin:0;padding:12px 16px;font-size:15px}
+.hint{margin:10px 0 0;color:var(--muted);font-size:13px}
+.or{display:flex;align-items:center;gap:12px;margin:22px 0 14px;color:var(--muted);font-size:12px}
+.or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.choose .link-in:first-child+.or,.choose .link-in:first-child{margin-top:0}
+.code-row{display:flex;gap:8px;align-items:stretch}
+.code-row .btn{margin:0;flex:none}
+.auth .field{flex:1;min-width:0;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--line);
+  background:var(--plane);color:var(--ink);font:14px/1.3 inherit}
+.auth .field.mono{font:13px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace}
+.auth .field:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.auth .field.code{text-transform:uppercase;font:600 16px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em}
+.mini{margin:0 0 16px;padding-left:20px;display:grid;gap:8px;color:var(--ink-2);font-size:14px}
+.mini code,.help code{font-size:12.5px;background:var(--mid);padding:1px 5px;border-radius:5px}
+kbd{font:600 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;padding:3px 6px;border:1px solid var(--line);
+  border-bottom-width:2px;border-radius:6px;background:var(--plane)}
+.help{margin-top:16px;font-size:13px;color:var(--ink-2)}
+.help summary{cursor:pointer;color:var(--muted)}
+.help p{margin:8px 0 0;line-height:1.5}
+.row{display:flex;justify-content:space-between;gap:12px;margin-top:18px}
+.text-btn{background:none;border:0;padding:0;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;text-decoration:none}
+.text-btn:hover{color:var(--ink)}
+.row .btn{margin:0}
+.closed{margin:0 0 16px;padding:14px;border:1px solid var(--accent);border-radius:12px;font-size:14px;color:var(--ink-2)}
+.closed b{color:var(--ink)}
+.closed .btn.wide{margin-top:12px}
+.link-in p,.aside{margin:3px 0 0;color:var(--ink-2);font-size:14px}
+.aside{margin-top:18px}
+.link-qr{width:min(240px,70vw);margin:4px auto 0;padding:8px;background:#fff;border-radius:12px}
+.link-qr svg{display:block;width:100%;height:auto}
+.link-code{margin:14px 0 0;text-align:center;font:700 28px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;
+  letter-spacing:.12em}
 .choices{display:grid;gap:8px}
 .choices button{font:inherit;text-align:left;padding:13px 15px;border:1px solid var(--line);border-radius:12px;
   background:var(--plane);color:var(--ink);cursor:pointer;display:flex;justify-content:space-between;
@@ -159,6 +196,18 @@ function followPreview(){
     }catch(e){}finally{busy=false;}};
   poll=setInterval(check,700);
   check();
+}
+async function linkHere(code,msg,button){
+  if(!code.trim()) return;
+  button.disabled=true; msg.className='msg'; msg.textContent='Comprobando…';
+  try{
+    const res=await fetch('/api/link/redeem',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({code})});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error||res.status);
+    msg.className='msg good'; msg.textContent='Dispositivo vinculado. Cargando…';
+    location.href='/';
+  }catch(e){msg.className='msg bad'; msg.textContent=e.message; button.disabled=false;}
 }
 // A switch: note the process before asking for it, so a restart quicker than the first poll
 // still counts as one.

@@ -360,6 +360,15 @@ a reader; the page shows the build's progress until the new league is ready. An 
 single league gets it chosen automatically; with several, the page asks. Logging out deletes
 only that account's session; its leagues' instructions stay for the next login.
 
+**Signing in.** The LaLiga login is the panel's login: every browser signs in once with the
+paste flow and gets a server-side session (an `HttpOnly`, `Secure`, `SameSite=Lax` cookie, 30
+days idle, 90 at most; only `localhost` gets it over plain HTTP). A session sees only the
+accounts of the LaLiga user it signed in as; when the panel is following somebody else's, the
+page says so and offers to switch to one of yours. "Cerrar sesión" ends the session here or on every device
+and leaves the account's tokens, and so the automatic engine, alone. Who may sign in is
+**`FANTASY_ALLOW`**: LaLiga user ids or emails separated by commas, or `*`. Unset, the users of
+the accounts already saved may, and on a fresh install the first login becomes the owner.
+
 An install from before profiles is moved into its first profile on the first start, once.
 Back up the data directory before upgrading.
 
