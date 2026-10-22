@@ -46,7 +46,7 @@ func loadWorld(limit int, enrich bool) (*world, error) {
 		return nil, err
 	}
 	client := api.New()
-	universe, err := model.BuildLive(client, leagueID, teamID, loadState(), 2*time.Hour)
+	universe, err := model.BuildLive(client, leagueID, teamID, loadState(leagueID), 2*time.Hour)
 	if err != nil {
 		return nil, err
 	}
@@ -586,7 +586,7 @@ func cmdReward(args []string) error {
 	status, err := client.DailyRewardStatus(leagueID, teamID)
 	if errors.Is(err, api.ErrRewardTaken) {
 		fmt.Println("\nHoy ya esta cobrada.")
-		return rewards.Stamp(leagueID)
+		return rewards.Open(config.Default()).Stamp(leagueID)
 	}
 	if err != nil {
 		return err
@@ -594,7 +594,7 @@ func cmdReward(args []string) error {
 	fmt.Printf("\nHoy: %d de %d cobradas\n", status.Redeemed, limit)
 	if status.Redeemed >= limit {
 		fmt.Println("Ya no queda nada por cobrar hoy.")
-		return rewards.Stamp(leagueID)
+		return rewards.Open(config.Default()).Stamp(leagueID)
 	}
 	if !*claim {
 		fmt.Println("Queda por cobrar. `fantasy reward --claim` la cobra.")
@@ -611,7 +611,7 @@ func cmdReward(args []string) error {
 		writes.Player{Name: "recompensa diaria"}, true); err != nil {
 		return err
 	}
-	if err := rewards.Stamp(leagueID); err != nil {
+	if err := rewards.Open(config.Default()).Stamp(leagueID); err != nil {
 		return err
 	}
 	// The claim answers with no amount, so what it was worth is the difference in the balance.
@@ -692,7 +692,7 @@ func cmdAlways(args []string) error {
 	}
 	rest := flags.Args()
 
-	armed, err := policies.Load()
+	armed, err := policies.Open(config.Default()).Load()
 	if err != nil {
 		return err
 	}
@@ -757,7 +757,7 @@ func cmdAlways(args []string) error {
 			return nil
 		}
 		// Only the listing side: a shield or a raid booked on him is another instruction.
-		if err := policies.Clear(id, "listing"); err != nil {
+		if err := policies.Open(config.Default()).Clear(id, "listing"); err != nil {
 			return err
 		}
 		fmt.Printf("Quitado: %s\n", label)
@@ -786,7 +786,7 @@ func cmdAlways(args []string) error {
 			value = number(row["value"])
 		}
 	}
-	policy, err := policies.Set(id, func(policy *policies.Policy) {
+	policy, err := policies.Open(config.Default()).Set(id, func(policy *policies.Policy) {
 		policy.Name, policy.AlwaysList = label, true
 		if *minPrice != 0 {
 			policy.MinPrice = minPrice
@@ -822,7 +822,7 @@ func cmdRaid(args []string) error {
 		return err
 	}
 	rest := flags.Args()
-	armed, err := policies.Load()
+	armed, err := policies.Open(config.Default()).Load()
 	if err != nil {
 		return err
 	}
@@ -872,7 +872,7 @@ func cmdRaid(args []string) error {
 	id := text(found["id"])
 
 	if action == "rm" {
-		if err := policies.Clear(id, "raid"); err != nil {
+		if err := policies.Open(config.Default()).Clear(id, "raid"); err != nil {
 			return err
 		}
 		fmt.Printf("Quitado el clausulazo de %s\n", text(found["name"]))
@@ -887,7 +887,7 @@ func cmdRaid(args []string) error {
 			ceiling = number(found["value"]) * 1.5
 		}
 	}
-	if _, err := policies.Set(id, func(policy *policies.Policy) {
+	if _, err := policies.Open(config.Default()).Set(id, func(policy *policies.Policy) {
 		policy.Name, policy.Raid = text(found["name"]), true
 		policy.MaxPay = &ceiling
 		policy.Owner = text(found["owner"])
@@ -909,7 +909,7 @@ func cmdRules(args []string) error {
 	if err != nil {
 		return err
 	}
-	all, err := rules.Load()
+	all, err := rules.Open(config.Default()).Load()
 	if err != nil {
 		return err
 	}
@@ -958,7 +958,7 @@ func cmdRules(args []string) error {
 	}
 
 	all[leagueID] = league
-	if err := rules.Save(all); err != nil {
+	if err := rules.Open(config.Default()).Save(all); err != nil {
 		return err
 	}
 	fmt.Println(cli.Green("guardado"))

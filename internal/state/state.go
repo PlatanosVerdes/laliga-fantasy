@@ -4,15 +4,16 @@
 package state
 
 import (
-	"fmt"
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"slices"
 	"sync"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/outcomes"
@@ -57,32 +58,34 @@ var Discrete = []string{"cash", "squad", "listed", "offers", "points", "absences
 
 type State struct {
 	builder Builder
+	// profile is read on every use: a fresh install picks its league after the world is made.
+	profile func() config.Profile
 	// warm re-renders the page before anybody is told there is something new. A patch or a
 	// rebuild invalidates the page cache, and rendering it costs about four seconds on the Pi:
 	// paying that in the browser is what made a write feel slow.
 	warm func()
 
-	mu          sync.RWMutex
+	mu sync.RWMutex
 	// rebuilding lets one rebuild run at a time. Side by side, each compared the world against
 	// the same "before" and announced the same change, and a slow one could land last with older
 	// data than a quick one.
-	rebuilding  sync.Mutex
-	universe    *model.Universe
-	version     int
+	rebuilding sync.Mutex
+	universe   *model.Universe
+	version    int
 	// revision moves on every rebuild and every in-place patch, unlike version, which only
 	// moves when the world actually looks different. It is what the page cache keys on: a
 	// rebuild that changed nothing still has to produce the same page, and a patch that
 	// changed one offer has to produce a different one.
-	revision    uint64
+	revision uint64
 	// Which league moves have already been written to the log, so a rebuild does not repeat
 	// them. Nil until the first pass, which only learns.
-	seenMoves   map[string]bool
+	seenMoves map[string]bool
 	// What I had pending on the previous pass, to be able to tell how each one ended. Nil until
 	// the first pass, which only learns.
 	minePending map[string]outcomes.Pending
 	// Bids and offers I cancelled, by market id. The market keeps listing them for a minute or
 	// two after the DELETE answers, and a rebuild in that window brought them back.
-	withdrawn   map[string]withdrawal
+	withdrawn map[string]withdrawal
 	// Offers for my players that I accepted or declined, by offer id, for the same reason.
 	answered    map[string]time.Time
 	generatedAt time.Time
@@ -100,8 +103,8 @@ type State struct {
 	nudged func(string)
 }
 
-func New(builder Builder) *State {
-	return &State{builder: builder, subs: map[chan []byte]bool{}}
+func New(profile func() config.Profile, builder Builder) *State {
+	return &State{builder: builder, profile: profile, subs: map[chan []byte]bool{}}
 }
 
 // OnFirstWatcher is called when a browser connects and nobody was watching. The engine
@@ -267,7 +270,7 @@ func (s *State) SchedulePayload() schedule.Payload {
 	// The armed instructions, because a clause unlock is only a deadline for a player somebody
 	// is waiting for. Without this the payload arrived with no policies, the unlock never became
 	// a deadline, and the engine slept through the one instant a clause raid can be won.
-	if armed, err := policies.Load(); err == nil {
+	if armed, err := policies.Open(s.profile()).Load(); err == nil {
 		payload.Policies = make(map[string]schedule.Policy, len(armed))
 		for id, policy := range armed {
 			entry := schedule.Policy{Raid: policy.Raid}
@@ -631,7 +634,8 @@ func (s *State) forgetSold(universe *model.Universe) {
 	if universe == nil || len(universe.Players) == 0 {
 		return
 	}
-	armed, err := policies.Load()
+	store := policies.Open(s.profile())
+	armed, err := store.Load()
 	if err != nil {
 		return
 	}
@@ -652,20 +656,20 @@ func (s *State) forgetSold(universe *model.Universe) {
 	if yours == 0 {
 		return
 	}
-	gone, err := policies.Forget(policies.Sold(mine, armed)...)
+	gone, err := store.Forget(policies.Sold(mine, armed)...)
 	if err != nil {
 		slog.Error("could not forget the instructions of sold players", "reason", err.Error())
 		return
 	}
-	record(gone, "siempre en mercado", "ya no es tuyo")
+	s.record(gone, "siempre en mercado", "ya no es tuyo")
 
 	// The mirror image on the buy side: a raid on somebody who is now yours is done.
-	signed, err := policies.Disarm(policies.Signed(mine, armed)...)
+	signed, err := store.Disarm(policies.Signed(mine, armed)...)
 	if err != nil {
 		slog.Error("could not disarm the raids of signed players", "reason", err.Error())
 		return
 	}
-	record(signed, "clausulazo", "ya es tuyo")
+	s.record(signed, "clausulazo", "ya es tuyo")
 
 	// And the third: a raid whose target changed hands, or has no owner to pay a clause to. Not
 	// while a squad is missing: its players have no owner this pass only because it failed to load.
@@ -673,18 +677,18 @@ func (s *State) forgetSold(universe *model.Universe) {
 		slog.Warn("raids left armed: a squad did not load", "unread", universe.UnreadSquads)
 		return
 	}
-	traded, err := policies.Disarm(policies.Traded(owners, mine, armed)...)
+	traded, err := store.Disarm(policies.Traded(owners, mine, armed)...)
 	if err != nil {
 		slog.Error("could not disarm the raids of traded players", "reason", err.Error())
 		return
 	}
-	record(traded, "clausulazo", "el jugador ya no esta donde estaba")
+	s.record(traded, "clausulazo", "el jugador ya no esta donde estaba")
 }
 
 // record writes what was taken down where the page can read it afterwards. The game keeps no
 // trace of an instruction of ours, so an order cancelled in the background is a thing that
 // simply stopped existing unless it is written here.
-func record(dropped []policies.Dropped, kind, why string) {
+func (s *State) record(dropped []policies.Dropped, kind, why string) {
 	if len(dropped) == 0 {
 		return
 	}
@@ -698,7 +702,7 @@ func record(dropped []policies.Dropped, kind, why string) {
 		}
 		endings = append(endings, ending)
 	}
-	if err := outcomes.AppendOrders(endings...); err != nil {
+	if err := outcomes.Open(s.profile()).AppendOrders(endings...); err != nil {
 		slog.Warn("instruction endings not saved", "reason", err.Error())
 	}
 }
@@ -775,7 +779,7 @@ func (s *State) trackMine(universe *model.Universe) {
 	if len(endings) == 0 {
 		return
 	}
-	if err := outcomes.Append(endings...); err != nil {
+	if err := outcomes.Open(s.profile()).Append(endings...); err != nil {
 		slog.Error("could not save how the offers ended", "reason", err.Error())
 	}
 }

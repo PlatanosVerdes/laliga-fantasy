@@ -9,7 +9,7 @@ package rewards
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
+	"sync"
 	"time"
 	// The zone database, embedded: the runtime image has no /usr/share/zoneinfo, and
 	// without it LoadLocation fails and the day silently becomes UTC's, two hours late.
@@ -18,7 +18,27 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 )
 
-func path() string { return filepath.Join(config.StateDir, "daily_reward.json") }
+type Store struct {
+	profile config.Profile
+	mu      sync.Mutex
+}
+
+var (
+	openMu sync.Mutex
+	opened = map[string]*Store{}
+)
+
+// One store per file, so everyone writing it shares its lock.
+func Open(profile config.Profile) *Store {
+	openMu.Lock()
+	defer openMu.Unlock()
+	if store := opened[profile.RewardFile]; store != nil {
+		return store
+	}
+	store := &Store{profile: profile}
+	opened[profile.RewardFile] = store
+	return store
+}
 
 // Today is the day a claim belongs to, in the game's own timezone: the counter resets at
 // midnight in Spain, not at midnight UTC.
@@ -30,9 +50,9 @@ func Today() string {
 	return time.Now().In(location).Format("2006-01-02")
 }
 
-func load() map[string]string {
+func (s *Store) load() map[string]string {
 	claimed := map[string]string{}
-	body, err := os.ReadFile(path())
+	body, err := os.ReadFile(s.profile.RewardFile)
 	if err != nil {
 		return claimed
 	}
@@ -43,21 +63,23 @@ func load() map[string]string {
 }
 
 // ClaimedToday says whether this league's reward was already taken today.
-func ClaimedToday(leagueID string) bool {
-	return load()[leagueID] == Today()
+func (s *Store) ClaimedToday(leagueID string) bool {
+	return s.load()[leagueID] == Today()
 }
 
 // Stamp records the claim. Also called when the API says the reward is already gone, so a
 // reward claimed from the phone does not have the cycle asking again all afternoon.
-func Stamp(leagueID string) error {
-	if err := config.EnsureDirs(); err != nil {
+func (s *Store) Stamp(leagueID string) error {
+	if err := s.profile.EnsureDirs(); err != nil {
 		return err
 	}
-	claimed := load()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	claimed := s.load()
 	claimed[leagueID] = Today()
 	body, err := json.MarshalIndent(claimed, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path(), body, 0o600)
+	return os.WriteFile(s.profile.RewardFile, body, 0o600)
 }

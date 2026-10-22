@@ -1,7 +1,6 @@
 package state
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
@@ -9,25 +8,32 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/policies"
 )
 
-func armSelling(t *testing.T) {
+func tempProfile(t *testing.T) func() config.Profile {
 	t.Helper()
-	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
-	if err := policies.Save(map[string]policies.Policy{
+	profile := config.ProfileIn(t.TempDir(), "cuenta", "L")
+	return func() config.Profile { return profile }
+}
+
+func armSelling(t *testing.T) func() config.Profile {
+	t.Helper()
+	profile := tempProfile(t)
+	if err := policies.Open(profile()).Save(map[string]policies.Policy{
 		"1": {ID: "1", Name: "Camavinga", AlwaysList: true, AutoSell: true},
 		"2": {ID: "2", Name: "Yuri", AlwaysList: true},
 	}); err != nil {
 		t.Fatalf("save: %v", err)
 	}
+	return profile
 }
 
 func TestForgetSoldDropsWhatIsNoLongerYours(t *testing.T) {
-	armSelling(t)
-	(&State{}).forgetSold(&model.Universe{Players: []model.Player{
+	profile := armSelling(t)
+	(&State{profile: profile}).forgetSold(&model.Universe{Players: []model.Player{
 		{ID: "1", Name: "Camavinga", IsMine: false},
 		{ID: "2", Name: "Yuri", IsMine: true},
 	}})
 
-	left, err := policies.Load()
+	left, err := policies.Open(profile()).Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -42,13 +48,13 @@ func TestForgetSoldDropsWhatIsNoLongerYours(t *testing.T) {
 // A world where nothing is yours is a world that came back short. Acting on it would throw
 // away amounts nobody can retype.
 func TestForgetSoldIgnoresAWorldWithNothingYours(t *testing.T) {
-	armSelling(t)
-	(&State{}).forgetSold(&model.Universe{Players: []model.Player{
+	profile := armSelling(t)
+	(&State{profile: profile}).forgetSold(&model.Universe{Players: []model.Player{
 		{ID: "1", Name: "Camavinga", IsMine: false},
 		{ID: "2", Name: "Yuri", IsMine: false},
 	}})
 
-	left, err := policies.Load()
+	left, err := policies.Open(profile()).Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -60,19 +66,19 @@ func TestForgetSoldIgnoresAWorldWithNothingYours(t *testing.T) {
 // A raid target sold to the market: in the world, nobody's, and not yours. The order has no
 // clause left to pay, so it goes, and the log says why.
 func TestForgetSoldDisarmsARaidOnAPlayerNobodyOwns(t *testing.T) {
-	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
+	profile := tempProfile(t)
 	limit := 66_000_000.0
-	if err := policies.Save(map[string]policies.Policy{
+	if err := policies.Open(profile()).Save(map[string]policies.Policy{
 		"2387": {ID: "2387", Name: "Camello", Raid: true, MaxPay: &limit, Owner: "La rataneta"},
 	}); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	(&State{}).forgetSold(&model.Universe{Players: []model.Player{
+	(&State{profile: profile}).forgetSold(&model.Universe{Players: []model.Player{
 		{ID: "2387", Name: "Camello"},
 		{ID: "2", Name: "Yuri", IsMine: true},
 	}})
 
-	left, err := policies.Load()
+	left, err := policies.Open(profile()).Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -84,17 +90,17 @@ func TestForgetSoldDisarmsARaidOnAPlayerNobodyOwns(t *testing.T) {
 // A rival squad that fails to load leaves its players without an owner for one pass; that is not
 // a sale, and the raids on them stay armed.
 func TestAMissingSquadDoesNotDisarmRaids(t *testing.T) {
-	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
-	if err := policies.Save(map[string]policies.Policy{
+	profile := tempProfile(t)
+	if err := policies.Open(profile()).Save(map[string]policies.Policy{
 		"5": {ID: "5", Name: "Yoel Lago", Raid: true, Owner: "-papi—"},
 	}); err != nil {
 		t.Fatal(err)
 	}
-	(&State{}).forgetSold(&model.Universe{UnreadSquads: 1, Players: []model.Player{
+	(&State{profile: profile}).forgetSold(&model.Universe{UnreadSquads: 1, Players: []model.Player{
 		{ID: "1", Name: "Mine", IsMine: true},
 		{ID: "5", Name: "Yoel Lago"},
 	}})
-	left, err := policies.Load()
+	left, err := policies.Open(profile()).Load()
 	if err != nil {
 		t.Fatal(err)
 	}

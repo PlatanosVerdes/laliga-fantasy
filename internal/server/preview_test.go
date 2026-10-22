@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -78,13 +77,12 @@ func TestThePreviewShowsWhatIsReadAndWaitsForTheRest(t *testing.T) {
 
 func loadingServer(t *testing.T) (*Server, *state.State) {
 	t.Helper()
-	config.StateDir = t.TempDir()
-	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
-	world := state.New(func() (*model.Universe, error) {
+	profile := tempProfile(t)
+	world := state.New(profile, func() (*model.Universe, error) {
 		return &model.Universe{Players: []model.Player{{ID: "10", Name: "Courtois", IsMine: true}}}, nil
 	})
 	return New(world, Options{AllowWrites: true, Guard: writes.NewGuard(nil), LeagueID: "L",
-		MyTeamID: "me"}), world
+		MyTeamID: "me", Profile: profile}), world
 }
 
 func post(handler http.Handler, path string) *httptest.ResponseRecorder {
@@ -110,7 +108,7 @@ func TestEveryOperationIsRefusedWhileTheLeagueLoads(t *testing.T) {
 			t.Errorf("%s while loading: %d %s", path, answer.Code, answer.Body.String())
 		}
 	}
-	if raw, err := os.ReadFile(config.PolicyFile); err == nil && strings.Contains(string(raw), "10") {
+	if raw, err := os.ReadFile(server.profile().PolicyFile); err == nil && strings.Contains(string(raw), "10") {
 		t.Errorf("an instruction was written while loading: %s", raw)
 	}
 

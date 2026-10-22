@@ -226,7 +226,7 @@ func cmdServe(args []string) error {
 	}
 	tickFromFlag := false
 	flags.Visit(func(given *flag.Flag) { tickFromFlag = tickFromFlag || given.Name == "interval" })
-	clocks := services.New(config.ServicesFile, serviceJobs(tick, tickFromFlag)...)
+	clocks := services.Open(config.Default(), serviceJobs(tick, tickFromFlag)...)
 	allowWrites := !*readOnly
 	if *rehearse && allowWrites {
 		writes.Rehearsal, *noAuto = true, true
@@ -257,12 +257,12 @@ func cmdServe(args []string) error {
 		return league, team, nil
 	}
 
-	world := state.New(func() (*model.Universe, error) {
+	world := state.New(config.Default, func() (*model.Universe, error) {
 		league, team, err := ensureLeague()
 		if err != nil {
 			return nil, err
 		}
-		universe, err := model.BuildLive(client, league, team, loadState(), 2*time.Hour)
+		universe, err := model.BuildLive(client, league, team, loadState(league), 2*time.Hour)
 		if err != nil {
 			return nil, err
 		}
@@ -281,10 +281,10 @@ func cmdServe(args []string) error {
 		}
 		model.Reached("Preparando la página", 0, 1)
 		now := time.Now()
-		if err := model.MarkClausulazos(universe, now); err != nil {
+		if err := model.OpenClauses(config.Default()).Mark(universe, now); err != nil {
 			slog.Warn("clausulazos not marked", "reason", err.Error())
 		}
-		forecasts, err := forecast.Record(universe, now)
+		forecasts, err := forecast.Open(config.Default()).Record(universe, now)
 		if err != nil {
 			slog.Warn("forecast log not written", "reason", err.Error())
 		}
@@ -318,7 +318,7 @@ func cmdServe(args []string) error {
 			return
 		}
 		league, team, err := ensureLeague()
-		if err != nil || rewards.ClaimedToday(league) {
+		if err != nil || rewards.Open(config.Default()).ClaimedToday(league) {
 			return
 		}
 		catalogue, err := acting.DailyRewards(time.Hour)
@@ -331,7 +331,7 @@ func cmdServe(args []string) error {
 		switch {
 		case errors.Is(err, api.ErrRewardTaken):
 			// Claimed from the phone, most likely. Stamped so the rest of the day is quiet.
-			if err := rewards.Stamp(league); err != nil {
+			if err := rewards.Open(config.Default()).Stamp(league); err != nil {
 				slog.Warn("daily reward stamp failed", "reason", err.Error())
 			}
 			return
@@ -339,7 +339,7 @@ func cmdServe(args []string) error {
 			slog.Warn("daily reward unreadable", "reason", err.Error())
 			return
 		case status.Redeemed >= limit:
-			if err := rewards.Stamp(league); err != nil {
+			if err := rewards.Open(config.Default()).Stamp(league); err != nil {
 				slog.Warn("daily reward stamp failed", "reason", err.Error())
 			}
 			return
@@ -359,7 +359,7 @@ func cmdServe(args []string) error {
 				return
 			}
 		}
-		if err := rewards.Stamp(league); err != nil {
+		if err := rewards.Open(config.Default()).Stamp(league); err != nil {
 			slog.Warn("daily reward stamp failed", "reason", err.Error())
 		}
 		// The claim answers no amount, so what it was worth is the difference in the balance.
@@ -437,7 +437,7 @@ func cmdServe(args []string) error {
 		if universe == nil {
 			return
 		}
-		armed, err := policies.Load()
+		armed, err := policies.Open(config.Default()).Load()
 		if err != nil || len(armed) == 0 {
 			return
 		}
@@ -445,12 +445,12 @@ func cmdServe(args []string) error {
 		for id, policy := range armed {
 			if when, err := time.Parse(time.RFC3339, text(policy.ShieldAt)); err == nil &&
 				time.Since(when) > policies.ShieldGrace {
-				if err := policies.AdvanceShield(id); err != nil {
+				if err := policies.Open(config.Default()).AdvanceShield(id); err != nil {
 					slog.Warn("stale shield not dropped", "reason", err.Error())
 				}
 			}
 		}
-		if armed, err = policies.Load(); err != nil || len(armed) == 0 {
+		if armed, err = policies.Open(config.Default()).Load(); err != nil || len(armed) == 0 {
 			return
 		}
 		league, team, err := ensureLeague()
@@ -499,7 +499,7 @@ func cmdServe(args []string) error {
 		for _, row := range rows {
 			byID[text(row["id"])] = row
 		}
-		house := rules.For(league)
+		house := rules.Open(config.Default()).For(league)
 
 		// An expired listing is no listing, and the plan is the one that knows it now: the rule
 		// used to be applied to these rows here, where only the acting half could see it.
@@ -526,7 +526,8 @@ func cmdServe(args []string) error {
 			// The shield is an appointment, not a state: once bought it makes way for the next
 			// one booked, and left armed it would be bought again on the next cycle.
 			if text(action["operation"]) == "shield_player" && truthyValue(action["ok"]) {
-				if err := policies.AdvanceShield(text(action["player_id"])); err != nil {
+				store := policies.Open(config.Default())
+				if err := store.AdvanceShield(text(action["player_id"])); err != nil {
 					slog.Warn("shield instruction not cleared", "reason", err.Error())
 				}
 			}
@@ -534,7 +535,7 @@ func cmdServe(args []string) error {
 			// disappears on the next sweep, and with nothing written the section would show
 			// only that he is suddenly yours.
 			if text(action["operation"]) == "pay_clause" && truthyValue(action["ok"]) {
-				if err := outcomes.AppendOrders(outcomes.Order{
+				if err := outcomes.Open(config.Default()).AppendOrders(outcomes.Order{
 					PlayerID: text(action["player_id"]), Player: text(action["name"]),
 					Kind: "clausulazo", Outcome: "pagada", Amount: number(action["amount"]),
 					Why: "se libero la clausula y seguia por debajo de tu limite",
@@ -697,14 +698,15 @@ func cmdServe(args []string) error {
 		defer mu.Unlock()
 		return leagueID, teamID
 	}
-	necroCfg := necroporra.Load()
+	necroCfg := necroporra.Open(config.Default()).Load()
 	panel := server.New(world, server.Options{
 		Host: *host, Port: *port, AllowWrites: allowWrites, Mode: mode, Rehearse: writes.Rehearsal,
 		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
 		Client: interactive, Guard: guard, LeagueID: league, MyTeamID: team,
 		Identity:       knownLeague,
-		HoldExceptions: rules.For(league).HoldExceptions,
-		MaxDebtPct:     rules.For(league).MaxDebtPct,
+		Profile:        config.Default,
+		HoldExceptions: rules.Open(config.Default()).For(league).HoldExceptions,
+		MaxDebtPct:     rules.Open(config.Default()).For(league).MaxDebtPct,
 		NecroCookie:    necroCfg.Cookie,
 		NecroAction:    necroCfg.ActionID,
 		NecroGameweek:  necroCfg.Gameweek,
@@ -804,7 +806,7 @@ func cmdModel(args []string) error {
 	if err != nil {
 		return err
 	}
-	universe, err := model.BuildLive(api.New(), leagueID, teamID, loadState(), 2*time.Hour)
+	universe, err := model.BuildLive(api.New(), leagueID, teamID, loadState(leagueID), 2*time.Hour)
 	if err != nil {
 		return err
 	}
@@ -821,11 +823,12 @@ func cmdModel(args []string) error {
 	return nil
 }
 
-// loadState reads the standing instructions; the stars come from the app, in BuildLive. A
-// missing file is not an error: no instructions is a perfectly good state.
-func loadState() model.State {
-	state := model.State{Starred: map[string]bool{}, Raids: map[string]bool{}}
-	armed, err := policies.Load()
+// loadState reads the standing instructions and the house rules; the stars come from the app, in
+// BuildLive. A missing file is not an error: no instructions is a perfectly good state.
+func loadState(leagueID string) model.State {
+	state := model.State{Starred: map[string]bool{}, Raids: map[string]bool{},
+		House: rules.Open(config.Default()).For(leagueID)}
+	armed, err := policies.Open(config.Default()).Load()
 	if err == nil {
 		for id, policy := range armed {
 			if policy.Raid {
@@ -994,7 +997,7 @@ func cmdWake(args []string) error {
 		}
 	}
 	// Policies live in a file, not in the dump.
-	state := loadState()
+	state := loadState("")
 	payload.Policies = map[string]schedule.Policy{}
 	for id := range state.Raids {
 		payload.Policies[id] = schedule.Policy{Raid: true}
@@ -1119,7 +1122,7 @@ func cmdPlan(args []string) error {
 			return err
 		}
 	}
-	armed, err := policies.Load()
+	armed, err := policies.Open(config.Default()).Load()
 	if err != nil {
 		return err
 	}
@@ -1282,7 +1285,7 @@ func cmdReport(args []string) error {
 		return err
 	}
 	client := api.New()
-	universe, err := model.BuildLive(client, leagueID, teamID, loadState(), 2*time.Hour)
+	universe, err := model.BuildLive(client, leagueID, teamID, loadState(leagueID), 2*time.Hour)
 	if err != nil {
 		return err
 	}
@@ -1371,7 +1374,7 @@ func untilNextInstant(rows []map[string]any,
 // orderRows is the log of what became of the standing instructions, in the same shape the page
 // reads everything else in.
 func orderRows() []map[string]any {
-	saved := outcomes.LoadOrders()
+	saved := outcomes.Open(config.Default()).LoadOrders()
 	if len(saved) == 0 {
 		return nil
 	}
@@ -1391,14 +1394,14 @@ func orderRows() []map[string]any {
 
 func dismissedKeys() map[string]bool {
 	out := map[string]bool{}
-	for key := range dismissed.Load() {
+	for key := range dismissed.Open(config.Default()).Load() {
 		out[key] = true
 	}
 	return out
 }
 
 func endingRows() []map[string]any {
-	saved := outcomes.Load()
+	saved := outcomes.Open(config.Default()).Load()
 	if len(saved) == 0 {
 		return nil
 	}
@@ -1586,7 +1589,7 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		})
 	}
 
-	armed, err := policies.Load()
+	armed, err := policies.Open(config.Default()).Load()
 	if err != nil {
 		return render.Document{}, err
 	}
@@ -1608,7 +1611,7 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 
 	// The rules are per league, so they are read with the league the page belongs to.
 	leagueID, _, _ := savedLeague()
-	house := rules.For(leagueID)
+	house := rules.Open(config.Default()).For(leagueID)
 
 	stamp := generated
 	if stamp == "" {
@@ -1658,7 +1661,7 @@ func buildDocument(universe *model.Universe, client *api.Client, teamID, generat
 		Policies: policyRows,
 	}
 	server.Rendering.Reached("Plan y cláusulas", 1, 1)
-	necro := necroporra.Load()
+	necro := necroporra.Open(config.Default()).Load()
 	necroState := necroporra.FetchState(necro)
 	server.Rendering.Reached("Necroporra", 1, 1)
 	document.NecroGameweek = necroState.Gameweek

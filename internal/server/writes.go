@@ -132,7 +132,7 @@ func (s *Server) always(writer http.ResponseWriter, request *http.Request) {
 	name := text(body["name"])
 
 	if _, ok := body["auto_sell"]; ok {
-		entry, err := policies.Set(id, func(policy *policies.Policy) {
+		entry, err := policies.Open(s.profile()).Set(id, func(policy *policies.Policy) {
 			policy.Name = name
 			policy.AlwaysList = true
 			policy.AutoSell = truthy(body["auto_sell"])
@@ -173,7 +173,7 @@ func (s *Server) always(writer http.ResponseWriter, request *http.Request) {
 				unset = append(unset, key)
 			}
 		}
-		entry, err := policies.Set(id, func(policy *policies.Policy) {
+		entry, err := policies.Open(s.profile()).Set(id, func(policy *policies.Policy) {
 			policy.Name = name
 			policy.AlwaysList = true
 			if amount, ok := amounts["min_price"]; ok {
@@ -196,7 +196,7 @@ func (s *Server) always(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	armed, err := policies.Load()
+	armed, err := policies.Open(s.profile()).Load()
 	if err != nil {
 		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
@@ -205,9 +205,9 @@ func (s *Server) always(writer http.ResponseWriter, request *http.Request) {
 	// and removing it to turn a listing off would take the appointment with it.
 	on := true
 	if armed[id].AlwaysList {
-		err, on = policies.Clear(id, "listing"), false
+		err, on = policies.Open(s.profile()).Clear(id, "listing"), false
 	} else {
-		_, err = policies.Set(id, func(policy *policies.Policy) {
+		_, err = policies.Open(s.profile()).Set(id, func(policy *policies.Policy) {
 			policy.Name = name
 			policy.AlwaysList = true
 		})
@@ -237,7 +237,7 @@ func (s *Server) cancelRaid(writer http.ResponseWriter, request *http.Request) {
 		s.json(writer, http.StatusBadRequest, map[string]any{"error": "falta el id"})
 		return
 	}
-	armed, err := policies.Load()
+	armed, err := policies.Open(s.profile()).Load()
 	if err != nil {
 		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
@@ -251,9 +251,10 @@ func (s *Server) cancelRaid(writer http.ResponseWriter, request *http.Request) {
 	// Nothing else armed on him means the whole entry goes, so the file does not fill up with
 	// instructions that say nothing.
 	if !entry.AlwaysList && entry.MinPrice == nil && entry.AcceptAbove == nil && !entry.AutoSell {
-		err = policies.Remove(id)
+		err = policies.Open(s.profile()).Remove(id)
 	} else {
-		_, err = policies.Set(id, func(policy *policies.Policy) { policy.Raid = false }, "max_pay")
+		_, err = policies.Open(s.profile()).Set(id, func(policy *policies.Policy) { policy.Raid = false },
+			"max_pay")
 	}
 	if err != nil {
 		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
@@ -267,7 +268,7 @@ func (s *Server) cancelRaid(writer http.ResponseWriter, request *http.Request) {
 	if entry.MaxPay != nil {
 		ending.Amount = *entry.MaxPay
 	}
-	if err := outcomes.AppendOrders(ending); err != nil {
+	if err := outcomes.Open(s.profile()).AppendOrders(ending); err != nil {
 		slog.Warn("instruction ending not saved", "reason", err.Error())
 	}
 	s.settle("raid")
@@ -286,9 +287,9 @@ func (s *Server) dismiss(writer http.ResponseWriter, request *http.Request) {
 	var err error
 	switch {
 	case truthy(body["restore"]):
-		err = dismissed.Clear()
+		err = dismissed.Open(s.profile()).Clear()
 	case key != "":
-		err = dismissed.Add(key)
+		err = dismissed.Open(s.profile()).Add(key)
 	default:
 		s.json(writer, http.StatusBadRequest, map[string]any{"error": "falta la tarjeta"})
 		return
@@ -322,7 +323,7 @@ func (s *Server) raid(writer http.ResponseWriter, request *http.Request) {
 			break
 		}
 	}
-	entry, err := policies.Set(id, func(policy *policies.Policy) {
+	entry, err := policies.Open(s.profile()).Set(id, func(policy *policies.Policy) {
 		policy.Name = text(body["name"])
 		policy.Raid = true
 		policy.MaxPay = &maxPay
@@ -369,7 +370,7 @@ func (s *Server) shield(writer http.ResponseWriter, request *http.Request) {
 			budget.Round.Week, schedule.ShieldsPerRound, budget.Describe())})
 		return
 	}
-	entry, err := policies.BookShield(id, text(body["name"]), at)
+	entry, err := policies.Open(s.profile()).BookShield(id, text(body["name"]), at)
 	if err != nil {
 		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})
 		return
@@ -392,9 +393,9 @@ func (s *Server) cancelShield(writer http.ResponseWriter, request *http.Request)
 		s.json(writer, http.StatusBadRequest, map[string]any{"error": "falta el id"})
 		return
 	}
-	drop := func() error { return policies.Clear(id, "shield") }
+	drop := func() error { return policies.Open(s.profile()).Clear(id, "shield") }
 	if at := text(body["at"]); at != "" {
-		drop = func() error { return policies.UnbookShield(id, at) }
+		drop = func() error { return policies.Open(s.profile()).UnbookShield(id, at) }
 	}
 	if err := drop(); err != nil {
 		s.json(writer, http.StatusInternalServerError, map[string]any{"error": err.Error()})

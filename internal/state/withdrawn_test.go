@@ -1,11 +1,9 @@
 package state
 
 import (
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/outcomes"
 )
@@ -24,9 +22,8 @@ func worldWithMyOffer() *model.Universe {
 }
 
 func TestAWithdrawnOfferStaysGoneAndEndsAsWithdrawn(t *testing.T) {
-	config.StateDir = t.TempDir()
-	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
-	world := New(func() (*model.Universe, error) { return worldWithMyOffer(), nil })
+	profile := tempProfile(t)
+	world := New(profile, func() (*model.Universe, error) { return worldWithMyOffer(), nil })
 	if err := world.Refresh("start"); err != nil {
 		t.Fatalf("refresh: %v", err)
 	}
@@ -39,7 +36,7 @@ func TestAWithdrawnOfferStaysGoneAndEndsAsWithdrawn(t *testing.T) {
 	if listing := world.Universe().Players[0].MarketEntry; listing.MyBidID != nil {
 		t.Error("the rebuild brought back an offer that was withdrawn")
 	}
-	endings := outcomes.Load()
+	endings := outcomes.Open(profile()).Load()
 	if len(endings) != 1 || endings[0].Outcome != "retirada" {
 		t.Fatalf("endings = %+v, want one retirada", endings)
 	}

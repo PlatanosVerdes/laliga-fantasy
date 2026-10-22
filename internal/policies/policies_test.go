@@ -2,7 +2,6 @@ package policies
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -37,8 +36,8 @@ func TestSold(t *testing.T) {
 }
 
 func TestForgetKeepsTheRaid(t *testing.T) {
-	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
-	if err := Save(map[string]Policy{
+	store := Open(config.ProfileIn(t.TempDir(), "cuenta", "L"))
+	if err := store.Save(map[string]Policy{
 		"1": {ID: "1", Name: "Camavinga", AlwaysList: true, AutoSell: true},
 		"2": {ID: "2", Name: "Youssef", AlwaysList: true, MinPrice: amount(2_000_000),
 			Raid: true, MaxPay: amount(1_200_000)},
@@ -47,7 +46,7 @@ func TestForgetKeepsTheRaid(t *testing.T) {
 		t.Fatalf("save: %v", err)
 	}
 
-	gone, err := Forget("1", "2", "9")
+	gone, err := store.Forget("1", "2", "9")
 	if err != nil {
 		t.Fatalf("forget: %v", err)
 	}
@@ -59,7 +58,7 @@ func TestForgetKeepsTheRaid(t *testing.T) {
 		t.Errorf("gone = %v, want los ids 1 y 2", gone)
 	}
 
-	left, err := Load()
+	left, err := store.Load()
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
@@ -262,30 +261,30 @@ func TestTraded(t *testing.T) {
 // Shields are booked in any order and fire soonest first; each one bought moves the next up,
 // and the last one takes the instruction with it.
 func TestShieldQueue(t *testing.T) {
-	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
+	store := Open(config.ProfileIn(t.TempDir(), "cuenta", "L"))
 	friday, wednesday := "2026-10-09T21:00:00+02:00", "2026-10-07T19:57:00+02:00"
 	for _, at := range []string{friday, wednesday, friday} {
-		if _, err := BookShield("1", "Ángel Pérez", at); err != nil {
+		if _, err := store.BookShield("1", "Ángel Pérez", at); err != nil {
 			t.Fatalf("book: %v", err)
 		}
 	}
-	armed, _ := Load()
+	armed, _ := store.Load()
 	if times := armed["1"].ShieldTimes(); len(times) != 2 || times[0] != wednesday {
 		t.Fatalf("times = %v, want [%s %s]", times, wednesday, friday)
 	}
 
-	if err := AdvanceShield("1"); err != nil {
+	if err := store.AdvanceShield("1"); err != nil {
 		t.Fatalf("advance: %v", err)
 	}
-	armed, _ = Load()
+	armed, _ = store.Load()
 	if at := armed["1"].ShieldAt; at == nil || *at != friday || len(armed["1"].ShieldQueue) != 0 {
 		t.Fatalf("after the first, %+v", armed["1"])
 	}
 
-	if err := AdvanceShield("1"); err != nil {
+	if err := store.AdvanceShield("1"); err != nil {
 		t.Fatalf("advance: %v", err)
 	}
-	armed, _ = Load()
+	armed, _ = store.Load()
 	if _, left := armed["1"]; left {
 		t.Errorf("the last one bought leaves nothing behind, got %+v", armed["1"])
 	}

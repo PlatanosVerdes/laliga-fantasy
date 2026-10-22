@@ -61,7 +61,7 @@ type Event struct {
 	Premium    *float64 `json:"premium,omitempty"`
 	PremiumAbs *float64 `json:"premium_abs,omitempty"`
 	// Clausulazo marks a transfer paid at the clause rather than agreed: the log calls both
-	// "traspaso". See MarkClausulazos.
+	// "traspaso". See ClauseStore.Mark.
 	Clausulazo bool `json:"clausulazo,omitempty"`
 	Raw      map[string]any `json:"raw"`
 }

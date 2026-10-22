@@ -428,9 +428,9 @@ func TestACrossOriginWriteIsRejected(t *testing.T) {
 }
 
 func TestAConfirmationTokenFromAnotherSessionIsRejected(t *testing.T) {
-	config.StateDir = t.TempDir()
+	profile := tempProfile(t)
 	bids := 0
-	world := state.New(func() (*model.Universe, error) {
+	world := state.New(profile, func() (*model.Universe, error) {
 		universe := &model.Universe{
 			Market:  []model.Listing{{MarketID: "m", MinBid: 1_000_000, Bids: &bids}},
 			Players: []model.Player{{ID: "p", Name: "Barato", Value: 1_000_000}},
@@ -443,7 +443,8 @@ func TestAConfirmationTokenFromAnotherSessionIsRejected(t *testing.T) {
 	}
 	guard := writes.NewGuard(nil)
 	guard.Cash = func(string) (int64, error) { return 50_000_000, nil }
-	server := New(world, Options{AllowWrites: true, Guard: guard, LeagueID: "L", MyTeamID: "me"})
+	server := New(world, Options{AllowWrites: true, Guard: guard, LeagueID: "L", MyTeamID: "me",
+		Profile: profile})
 	a := ownerSession(t, server)
 	b := sessionFor(t, server, "user-me")
 	handler := server.Handler()

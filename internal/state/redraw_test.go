@@ -11,7 +11,7 @@ import (
 // The futbolfantasy pages landing behind the page move the page and not the world: the cache
 // key changes, the version does not, and an open tab hears of it once the page is drawn.
 func TestARedrawMovesThePageButNotTheWorld(t *testing.T) {
-	world := New(func() (*model.Universe, error) { return &model.Universe{}, nil })
+	world := New(tempProfile(t), func() (*model.Universe, error) { return &model.Universe{}, nil })
 	world.Redraw(map[string]any{"type": "details"})
 	if key, _ := world.RenderStamp(); key != "0.0" {
 		t.Errorf("nothing to redraw while the league loads: %s", key)

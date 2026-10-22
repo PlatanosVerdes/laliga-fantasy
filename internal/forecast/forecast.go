@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
@@ -43,10 +44,32 @@ const FullEleven = 11
 // Log is matchday number to team id to that team's eleven.
 type Log map[int]map[string]*Team
 
+type Store struct {
+	path string
+	mu   sync.Mutex
+}
+
+var (
+	openMu sync.Mutex
+	opened = map[string]*Store{}
+)
+
+// One store per file, so everyone writing it shares its lock.
+func Open(profile config.Profile) *Store {
+	openMu.Lock()
+	defer openMu.Unlock()
+	if store := opened[profile.ForecastFile]; store != nil {
+		return store
+	}
+	store := &Store{path: profile.ForecastFile}
+	opened[profile.ForecastFile] = store
+	return store
+}
+
 // Load reads the log. A missing file is an empty log; a broken one is an error, so it is never
 // overwritten by a fresh one.
-func Load() (Log, error) {
-	body, err := os.ReadFile(config.ForecastFile)
+func (s *Store) Load() (Log, error) {
+	body, err := os.ReadFile(s.path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return Log{}, nil
 	}
@@ -60,21 +83,23 @@ func Load() (Log, error) {
 	return log, nil
 }
 
-func save(log Log) error {
-	if err := os.MkdirAll(filepath.Dir(config.ForecastFile), 0o700); err != nil {
+func (s *Store) save(log Log) error {
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return err
 	}
 	blob, err := json.MarshalIndent(log, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(config.ForecastFile, blob, 0o600)
+	return os.WriteFile(s.path, blob, 0o600)
 }
 
 // Record brings the log up to date with the universe and writes it only when something changed.
 // It returns the log as it now stands, even when writing it failed.
-func Record(universe *model.Universe, now time.Time) (Log, error) {
-	log, err := Load()
+func (s *Store) Record(universe *model.Universe, now time.Time) (Log, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	log, err := s.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +109,7 @@ func Record(universe *model.Universe, now time.Time) (Log, error) {
 	if err != nil || string(before) == string(after) {
 		return log, err
 	}
-	return log, save(log)
+	return log, s.save(log)
 }
 
 // Update writes the current matchday's saved elevens into the log. A player's forecast is

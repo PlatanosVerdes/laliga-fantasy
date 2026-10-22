@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
-	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -30,16 +29,15 @@ func (p *painter) page() Rendered {
 
 func paintedServer(t *testing.T) (*Server, *state.State, *painter) {
 	t.Helper()
-	config.StateDir = t.TempDir()
-	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
-	world := state.New(func() (*model.Universe, error) {
+	profile := tempProfile(t)
+	world := state.New(profile, func() (*model.Universe, error) {
 		return &model.Universe{Players: []model.Player{{ID: "1", Name: "Unai Lopez"}}}, nil
 	})
 	if err := world.Refresh("start"); err != nil {
 		t.Fatal(err)
 	}
 	painted := &painter{release: make(chan struct{})}
-	server := New(world, Options{Page: painted.page})
+	server := New(world, Options{Page: painted.page, Profile: profile})
 	go func() { painted.release <- struct{}{} }()
 	if got := server.render().HTML; got != "page 1" {
 		t.Fatalf("first render: %q", got)
@@ -140,4 +138,10 @@ func TestHealthCarriesTheQueueToLaLiga(t *testing.T) {
 	if queue["rate"] != 5.0 || queue["burst"] != 30.0 || queue["hosts"] == nil {
 		t.Errorf("queue %v", queue)
 	}
+}
+
+func tempProfile(t *testing.T) func() config.Profile {
+	t.Helper()
+	profile := config.ProfileIn(t.TempDir(), "cuenta", "L")
+	return func() config.Profile { return profile }
 }

@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 )
 
 // The local stand-in reads its round from a file and takes a vote into it, never the real app.
@@ -14,13 +16,14 @@ func TestTheFakeNecroporraTakesAVoteLocally(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("FANTASY_NECRO_FAKE", path)
-	if !Faked() || Load().Gameweek != 9 || !FetchState(Load()).Open {
+	store := Open(config.ProfileIn(t.TempDir(), "cuenta", "L"))
+	if !Faked() || store.Load().Gameweek != 9 || !FetchState(store.Load()).Open {
 		t.Fatal("the fake was not read")
 	}
-	if _, err := CastVote(Load(), 9, "1", "2"); err != nil {
+	if _, err := CastVote(store.Load(), 9, "1", "2"); err != nil {
 		t.Fatal(err)
 	}
-	if chosen := FetchState(Load()).Chosen; len(chosen) != 2 || chosen[0] != "1" {
+	if chosen := FetchState(store.Load()).Chosen; len(chosen) != 2 || chosen[0] != "1" {
 		t.Errorf("the vote did not land in the fake: %v", chosen)
 	}
 }

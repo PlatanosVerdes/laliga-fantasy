@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
@@ -41,14 +42,35 @@ func (c Config) CanVote() bool {
 	return c.Cookie != "" && c.ActionID != "" && c.Gameweek > 0 && len(c.Roster) > 0
 }
 
-func file() string {
+type Store struct {
+	profile config.Profile
+	// mu keeps two reads from sealing the same plaintext file at once.
+	mu sync.Mutex
+}
+
+var (
+	openMu sync.Mutex
+	opened = map[string]*Store{}
+)
+
+// One store per file, so everyone writing it shares its lock.
+func Open(profile config.Profile) *Store {
+	openMu.Lock()
+	defer openMu.Unlock()
+	if store := opened[profile.NecroporraFile]; store != nil {
+		return store
+	}
+	store := &Store{profile: profile}
+	opened[profile.NecroporraFile] = store
+	return store
+}
+
+func (s *Store) file() string {
 	if path := os.Getenv("FANTASY_NECROPORRA"); path != "" {
 		return path
 	}
-	if config.ConfigDir != "" {
-		if path := filepath.Join(config.ConfigDir, "necroporra.json"); exists(path) {
-			return path
-		}
+	if s.profile.ConfigDir != "" && exists(s.profile.NecroporraFile) {
+		return s.profile.NecroporraFile
 	}
 	return filepath.Join("data", "necroporra.json")
 }
@@ -79,11 +101,13 @@ func loadFake() (Fake, bool) {
 
 // Load reads the config. A read error returns the zero Config, which disables voting without
 // failing the page.
-func Load() Config {
+func (s *Store) Load() Config {
 	if fake, ok := loadFake(); ok {
 		return fake.Config
 	}
-	path := file()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	path := s.file()
 	body, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}

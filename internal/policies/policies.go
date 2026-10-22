@@ -101,8 +101,32 @@ func clock(stamp string) string {
 	return when.Local().Format("02/01 15:04")
 }
 
-func Load() (map[string]Policy, error) {
-	body, err := os.ReadFile(config.PolicyFile)
+type Store struct {
+	profile config.Profile
+	// mu makes every read-modify-write of the file one step. The engine, a rebuild and a click
+	// all edit it, and two edits that read the same version lost each other's changes.
+	mu sync.Mutex
+}
+
+var (
+	openMu sync.Mutex
+	opened = map[string]*Store{}
+)
+
+// One store per file, so everyone writing it shares its lock.
+func Open(profile config.Profile) *Store {
+	openMu.Lock()
+	defer openMu.Unlock()
+	if store := opened[profile.PolicyFile]; store != nil {
+		return store
+	}
+	store := &Store{profile: profile}
+	opened[profile.PolicyFile] = store
+	return store
+}
+
+func (s *Store) Load() (map[string]Policy, error) {
+	body, err := os.ReadFile(s.profile.PolicyFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return map[string]Policy{}, nil
@@ -113,7 +137,7 @@ func Load() (map[string]Policy, error) {
 	// A file that will not parse is an error, never an empty set: the next save would turn it
 	// into one and every armed instruction would be gone.
 	if err := json.Unmarshal(body, &out); err != nil {
-		return nil, fmt.Errorf("%s no es un JSON valido: %w", config.PolicyFile, err)
+		return nil, fmt.Errorf("%s no es un JSON valido: %w", s.profile.PolicyFile, err)
 	}
 	if out == nil {
 		out = map[string]Policy{}
@@ -121,27 +145,23 @@ func Load() (map[string]Policy, error) {
 	return out, nil
 }
 
-func Save(policies map[string]Policy) error {
-	if err := config.EnsureDirs(); err != nil {
+func (s *Store) Save(policies map[string]Policy) error {
+	if err := s.profile.EnsureDirs(); err != nil {
 		return err
 	}
 	blob, err := json.MarshalIndent(policies, "", "  ")
 	if err != nil {
 		return err
 	}
-	return files.WriteAtomic(config.PolicyFile, blob, 0o600)
+	return files.WriteAtomic(s.profile.PolicyFile, blob, 0o600)
 }
-
-// fileMu makes every read-modify-write of the file one step. The engine, a rebuild and a click
-// all edit it, and two edits that read the same version lost each other's changes.
-var fileMu sync.Mutex
 
 // Update loads the instructions, lets change edit them and saves them if it says so, all under
 // the one lock. Every edit goes through here.
-func Update(change func(armed map[string]Policy) (bool, error)) error {
-	fileMu.Lock()
-	defer fileMu.Unlock()
-	armed, err := Load()
+func (s *Store) Update(change func(armed map[string]Policy) (bool, error)) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	armed, err := s.Load()
 	if err != nil {
 		return err
 	}
@@ -149,7 +169,7 @@ func Update(change func(armed map[string]Policy) (bool, error)) error {
 	if err != nil || !changed {
 		return err
 	}
-	return Save(armed)
+	return s.Save(armed)
 }
 
 // GoodOfferFloor is (bar, which reference set it). The winning reference is quoted in the
@@ -314,7 +334,7 @@ func Plan(players []Row, policies map[string]Policy, now time.Time) []Row {
 				// The API lists by squad slot, not by player: without it the call travels with
 				// playerId "" and comes back 400.
 				"player_team_id": player["player_team_id"],
-				"action": "poner_en_venta", "amount": price, "why": why})
+				"action":         "poner_en_venta", "amount": price, "why": why})
 			continue
 		}
 
@@ -713,9 +733,9 @@ func truthy(value any) bool {
 
 // Set writes one instruction, merging with whatever is already stored so a page that only
 // knows about one switch cannot wipe the amounts. Keys listed in unset are cleared.
-func Set(id string, apply func(*Policy), unset ...string) (Policy, error) {
+func (s *Store) Set(id string, apply func(*Policy), unset ...string) (Policy, error) {
 	var entry Policy
-	err := Update(func(armed map[string]Policy) (bool, error) {
+	err := s.Update(func(armed map[string]Policy) (bool, error) {
 		entry = set(armed, id, apply, unset...)
 		return true, nil
 	})
@@ -745,8 +765,8 @@ func set(armed map[string]Policy, id string, apply func(*Policy), unset ...strin
 // Clear takes one instruction off a player and leaves the rest alone: somebody can have a
 // player always-listed and shield-armed, and calling off one is not calling off the other. With
 // nothing left the entry goes, so the file does not fill up with instructions that say nothing.
-func Clear(id, what string) error {
-	return Update(func(armed map[string]Policy) (bool, error) { return clearOne(armed, id, what) })
+func (s *Store) Clear(id, what string) error {
+	return s.Update(func(armed map[string]Policy) (bool, error) { return clearOne(armed, id, what) })
 }
 
 func clearOne(armed map[string]Policy, id, what string) (bool, error) {
@@ -788,8 +808,8 @@ func (p Policy) ShieldTimes() []string {
 }
 
 // BookShield adds one hour to the player's shields, keeping them in order and without repeats.
-func BookShield(id, name, at string) (Policy, error) {
-	return Set(id, func(policy *Policy) {
+func (s *Store) BookShield(id, name, at string) (Policy, error) {
+	return s.Set(id, func(policy *Policy) {
 		policy.Name = name
 		times := policy.ShieldTimes()
 		for _, booked := range times {
@@ -805,8 +825,8 @@ func BookShield(id, name, at string) (Policy, error) {
 }
 
 // UnbookShield drops one booked hour, and the whole instruction with the last one.
-func UnbookShield(id, at string) error {
-	return Update(func(armed map[string]Policy) (bool, error) { return unbook(armed, id, at) })
+func (s *Store) UnbookShield(id, at string) error {
+	return s.Update(func(armed map[string]Policy) (bool, error) { return unbook(armed, id, at) })
 }
 
 func unbook(armed map[string]Policy, id, at string) (bool, error) {
@@ -826,8 +846,8 @@ func unbook(armed map[string]Policy, id, at string) (bool, error) {
 }
 
 // AdvanceShield moves the next booked shield up once the current one is bought or stale.
-func AdvanceShield(id string) error {
-	return Update(func(armed map[string]Policy) (bool, error) {
+func (s *Store) AdvanceShield(id string) error {
+	return s.Update(func(armed map[string]Policy) (bool, error) {
 		times := armed[id].ShieldTimes()
 		if len(times) <= 1 {
 			return clearOne(armed, id, "shield")
@@ -845,8 +865,8 @@ func stampBefore(one, two string) bool {
 	return first.Before(second)
 }
 
-func Remove(id string) error {
-	return Update(func(armed map[string]Policy) (bool, error) {
+func (s *Store) Remove(id string) error {
+	return s.Update(func(armed map[string]Policy) (bool, error) {
 		_, found := armed[id]
 		delete(armed, id)
 		return found, nil
@@ -925,12 +945,12 @@ func Traded(owners map[string]string, known map[string]bool, policies map[string
 //
 // Not only tidying: an armed raid left on a player of yours would come back to life the day you
 // sell him and pay a clause nobody armed again.
-func Disarm(ids ...string) ([]Dropped, error) {
+func (s *Store) Disarm(ids ...string) ([]Dropped, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
 	var gone []Dropped
-	err := Update(func(armed map[string]Policy) (bool, error) {
+	err := s.Update(func(armed map[string]Policy) (bool, error) {
 		gone = disarm(armed, ids)
 		return len(gone) > 0, nil
 	})
@@ -972,12 +992,12 @@ type Dropped struct {
 
 // Forget drops the sell side of these instructions and reports the names it dropped. A
 // scheduled raid on the same player survives, because that one is still about to happen.
-func Forget(ids ...string) ([]Dropped, error) {
+func (s *Store) Forget(ids ...string) ([]Dropped, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
 	var gone []Dropped
-	err := Update(func(armed map[string]Policy) (bool, error) {
+	err := s.Update(func(armed map[string]Policy) (bool, error) {
 		gone = forget(armed, ids)
 		return len(gone) > 0, nil
 	})

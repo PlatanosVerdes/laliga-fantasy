@@ -9,7 +9,6 @@ package outcomes
 import (
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -38,10 +37,32 @@ type Ending struct {
 	NewOwner string `json:"new_owner,omitempty"`
 }
 
-func path() string { return filepath.Join(config.StateDir, "offer_endings.json") }
+type Store struct {
+	profile config.Profile
+	// mu makes each append one read-and-write: a rebuild and a click append at the same time,
+	// and two appends that read the same file kept only one of the two.
+	mu sync.Mutex
+}
 
-func Load() []Ending {
-	body, err := os.ReadFile(path())
+var (
+	openMu sync.Mutex
+	opened = map[string]*Store{}
+)
+
+// One store per file, so everyone writing it shares its lock.
+func Open(profile config.Profile) *Store {
+	openMu.Lock()
+	defer openMu.Unlock()
+	if store := opened[profile.OfferEndingsFile]; store != nil {
+		return store
+	}
+	store := &Store{profile: profile}
+	opened[profile.OfferEndingsFile] = store
+	return store
+}
+
+func (s *Store) Load() []Ending {
+	body, err := os.ReadFile(s.profile.OfferEndingsFile)
 	if err != nil {
 		return nil
 	}
@@ -53,10 +74,6 @@ func Load() []Ending {
 	sort.SliceStable(out, func(one, two int) bool { return out[one].At > out[two].At })
 	return out
 }
-
-// appendMu makes each append one read-and-write: a rebuild and a click append at the same time,
-// and two appends that read the same file kept only one of the two.
-var appendMu sync.Mutex
 
 // readable is whether the file is absent or parses: one that does not is left alone rather than
 // overwritten with only the newest lines.
@@ -72,20 +89,20 @@ func readable(path string, into any) error {
 }
 
 // Append writes new endings, newest first, keeping the file bounded.
-func Append(fresh ...Ending) error {
+func (s *Store) Append(fresh ...Ending) error {
 	if len(fresh) == 0 {
 		return nil
 	}
-	if err := config.EnsureDirs(); err != nil {
+	if err := s.profile.EnsureDirs(); err != nil {
 		return err
 	}
-	appendMu.Lock()
-	defer appendMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	var check []Ending
-	if err := readable(path(), &check); err != nil {
+	if err := readable(s.profile.OfferEndingsFile, &check); err != nil {
 		return err
 	}
-	all := append(fresh, Load()...)
+	all := append(fresh, s.Load()...)
 	if len(all) > Keep {
 		all = all[:Keep]
 	}
@@ -93,7 +110,7 @@ func Append(fresh ...Ending) error {
 	if err != nil {
 		return err
 	}
-	return files.WriteAtomic(path(), blob, 0o600)
+	return files.WriteAtomic(s.profile.OfferEndingsFile, blob, 0o600)
 }
 
 // Pending is one of my bids or offers as it stood on the previous pass: what has to be remembered
@@ -168,10 +185,8 @@ type Order struct {
 	Amount  float64 `json:"amount,omitempty"`
 }
 
-func ordersPath() string { return filepath.Join(config.StateDir, "order_endings.json") }
-
-func LoadOrders() []Order {
-	body, err := os.ReadFile(ordersPath())
+func (s *Store) LoadOrders() []Order {
+	body, err := os.ReadFile(s.profile.OrderEndingsFile)
 	if err != nil {
 		return nil
 	}
@@ -185,17 +200,17 @@ func LoadOrders() []Order {
 
 // AppendOrders writes new endings, newest first, keeping the file bounded. The stamp is filled
 // in here so no caller has to remember to.
-func AppendOrders(fresh ...Order) error {
+func (s *Store) AppendOrders(fresh ...Order) error {
 	if len(fresh) == 0 {
 		return nil
 	}
-	if err := config.EnsureDirs(); err != nil {
+	if err := s.profile.EnsureDirs(); err != nil {
 		return err
 	}
-	appendMu.Lock()
-	defer appendMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	var check []Order
-	if err := readable(ordersPath(), &check); err != nil {
+	if err := readable(s.profile.OrderEndingsFile, &check); err != nil {
 		return err
 	}
 	now := time.Now().Format(time.RFC3339)
@@ -204,7 +219,7 @@ func AppendOrders(fresh ...Order) error {
 			fresh[index].At = now
 		}
 	}
-	all := append(fresh, LoadOrders()...)
+	all := append(fresh, s.LoadOrders()...)
 	if len(all) > KeepOrders {
 		all = all[:KeepOrders]
 	}
@@ -212,5 +227,5 @@ func AppendOrders(fresh ...Order) error {
 	if err != nil {
 		return err
 	}
-	return files.WriteAtomic(ordersPath(), blob, 0o600)
+	return files.WriteAtomic(s.profile.OrderEndingsFile, blob, 0o600)
 }

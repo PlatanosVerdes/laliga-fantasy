@@ -5,12 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
@@ -35,8 +33,7 @@ func TestAPageLandingIsDrawnBehindTheOpenPage(t *testing.T) {
 func biddingServer(t *testing.T, read func(string) (futbolfantasy.Detail, error),
 	stored map[string]futbolfantasy.Detail) http.Handler {
 	t.Helper()
-	config.StateDir = t.TempDir()
-	config.PolicyFile = filepath.Join(t.TempDir(), "policies.json")
+	profile := tempProfile(t)
 	wasRead, wasStored := readCeiling, storedCeiling
 	t.Cleanup(func() { readCeiling, storedCeiling = wasRead, wasStored })
 	readCeiling = read
@@ -45,7 +42,7 @@ func biddingServer(t *testing.T, read func(string) (futbolfantasy.Detail, error)
 		return ceiling, ok
 	}
 	ffID, bids := "ff-20", 0
-	world := state.New(func() (*model.Universe, error) {
+	world := state.New(profile, func() (*model.Universe, error) {
 		universe := &model.Universe{
 			Market:  []model.Listing{{MarketID: "mk-20", MinBid: 2_000_000, Bids: &bids}},
 			Players: []model.Player{{ID: "20", Name: "Barato", FFID: &ffID, Value: 2_000_000}},
@@ -58,7 +55,8 @@ func biddingServer(t *testing.T, read func(string) (futbolfantasy.Detail, error)
 	}
 	guard := writes.NewGuard(nil)
 	guard.Cash = func(string) (int64, error) { return 50_000_000, nil }
-	return asOwner(t, New(world, Options{AllowWrites: true, Guard: guard, LeagueID: "L", MyTeamID: "me"}))
+	return asOwner(t, New(world, Options{AllowWrites: true, Guard: guard, LeagueID: "L", MyTeamID: "me",
+		Profile: profile}))
 }
 
 func prepareBid(handler http.Handler) (int, map[string]any) {
