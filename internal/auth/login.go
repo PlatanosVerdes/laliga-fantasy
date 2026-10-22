@@ -45,6 +45,25 @@ func pendingPath() string { return filepath.Join(config.ConfigRoot, "pending_aut
 // unlike the web client this flow accepts the federated logins (Google, Apple, Facebook) that
 // the app offers.
 func StartLogin() (*Pending, error) {
+	pending, err := NewLogin()
+	if err != nil {
+		return nil, err
+	}
+	if err := config.EnsureDirs(); err != nil {
+		return nil, err
+	}
+	blob, err := json.Marshal(pending)
+	if err != nil {
+		return nil, err
+	}
+	// 0600: the verifier is half of a credential until the exchange happens.
+	if err := os.WriteFile(pendingPath(), blob, 0o600); err != nil {
+		return nil, err
+	}
+	return pending, nil
+}
+
+func NewLogin() (*Pending, error) {
 	verifier, err := randomURLSafe(40)
 	if err != nil {
 		return nil, err
@@ -68,22 +87,9 @@ func StartLogin() (*Pending, error) {
 	// Same value as state: B2C wants a nonce and there is nothing else to bind it to here.
 	params.Set("nonce", state)
 
-	pending := &Pending{Verifier: verifier, State: state,
+	return &Pending{Verifier: verifier, State: state,
 		Started: float64(time.Now().Unix()),
-		URL:     AuthorizeURL + "?" + params.Encode()}
-
-	if err := config.EnsureDirs(); err != nil {
-		return nil, err
-	}
-	blob, err := json.Marshal(pending)
-	if err != nil {
-		return nil, err
-	}
-	// 0600: the verifier is half of a credential until the exchange happens.
-	if err := os.WriteFile(pendingPath(), blob, 0o600); err != nil {
-		return nil, err
-	}
-	return pending, nil
+		URL:     AuthorizeURL + "?" + params.Encode()}, nil
 }
 
 func LoadPending() (*Pending, error) {
@@ -143,6 +149,21 @@ func ExtractCode(text, expectedState string) (string, error) {
 
 // ExchangeCode finishes the login and stores the session in its account.
 func ExchangeCode(code, verifier string) (*Tokens, error) {
+	tokens, err := Exchange(code, verifier)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := Store(tokens); err != nil {
+		return nil, err
+	}
+	// The pending verifier is spent either way.
+	_ = os.Remove(pendingPath())
+	return tokens, nil
+}
+
+// Exchange trades the code for tokens and stores nothing, so the caller can decide first
+// whether this user may come in.
+func Exchange(code, verifier string) (*Tokens, error) {
 	var answer map[string]any
 	err := httpx.PostForm(config.B2CTokenURL+"?p="+config.B2CSignInPolicy, map[string]string{
 		"grant_type":    "authorization_code",
@@ -160,11 +181,6 @@ func ExchangeCode(code, verifier string) (*Tokens, error) {
 	if tokens.AccessToken == "" {
 		return nil, errors.New("la respuesta no traia ningun token")
 	}
-	if _, err := Store(tokens); err != nil {
-		return nil, err
-	}
-	// The pending verifier is spent either way.
-	_ = os.Remove(pendingPath())
 	return tokens, nil
 }
 
@@ -176,9 +192,21 @@ func randomURLSafe(bytes int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
-// Adopt takes a pasted tokens.json — the fastest way out of a broken session when there is
-// already a working one on another machine — and stores it after checking it is usable.
+// Adopt takes a pasted tokens.json and stores it after checking it is usable.
 func Adopt(blob string) (*Tokens, error) {
+	tokens, err := Parse(blob)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := Store(tokens); err != nil {
+		return nil, err
+	}
+	return tokens, nil
+}
+
+// Parse reads a pasted tokens.json — the fastest way out of a broken session when there is
+// already a working one on another machine — without storing it.
+func Parse(blob string) (*Tokens, error) {
 	var raw map[string]any
 	if err := json.Unmarshal([]byte(blob), &raw); err != nil {
 		return nil, fmt.Errorf("eso no es un JSON valido: %w", err)
@@ -187,9 +215,6 @@ func Adopt(blob string) (*Tokens, error) {
 	if tokens.RefreshToken == "" && tokens.AccessToken == "" {
 		return nil, errors.New("el JSON no trae ni access_token ni refresh_token")
 	}
-	if _, err := Store(tokens); err != nil {
-		return nil, err
-	}
 	return tokens, nil
 }
 
@@ -197,6 +222,17 @@ func Adopt(blob string) (*Tokens, error) {
 // active one; its league is chosen on the next start. Logging in again to the active account
 // only renews its session.
 func Store(tokens *Tokens) (string, error) {
+	account, err := Keep(tokens)
+	if err != nil {
+		return "", err
+	}
+	if account != config.Account {
+		return account, config.SetActive(account, "")
+	}
+	return account, nil
+}
+
+func Keep(tokens *Tokens) (string, error) {
 	account := config.AccountID(tokens.Email)
 	if err := os.MkdirAll(config.AccountDir(account), 0o700); err != nil {
 		return "", err
@@ -208,11 +244,5 @@ func Store(tokens *Tokens) (string, error) {
 	mu.Lock()
 	err = files.WriteAtomic(config.AccountTokenFile(account), blob, 0o600)
 	mu.Unlock()
-	if err != nil {
-		return "", err
-	}
-	if account != config.Account {
-		return account, config.SetActive(account, "")
-	}
-	return account, nil
+	return account, err
 }

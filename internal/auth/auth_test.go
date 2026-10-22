@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -60,5 +61,26 @@ func TestAnUnreachableProviderNeverStopsTheSession(t *testing.T) {
 	}
 	if tokens, _ := Load(); tokens.Stopped() || tokens.FailedRefreshes != 0 {
 		t.Errorf("network failures counted as refusals: %+v", tokens)
+	}
+}
+
+func fakeJWT(claims string) string {
+	return "e30." + base64.RawURLEncoding.EncodeToString([]byte(claims)) + ".sig"
+}
+
+func TestTheUserComesFromTheToken(t *testing.T) {
+	for _, c := range []struct{ claims, want string }{
+		{`{"oid":"o-1","sub":"s-1","email":"A@x.com"}`, "o-1"},
+		{`{"sub":"Not supported currently. Use oid claim.","email":"A@x.com"}`, "a@x.com"},
+		{`{"sub":"s-1"}`, "s-1"},
+	} {
+		tokens := Normalize(map[string]any{"access_token": fakeJWT(c.claims)})
+		if tokens.UserID != c.want {
+			t.Errorf("%s: user %q, want %q", c.claims, tokens.UserID, c.want)
+		}
+		tokens.UserID = ""
+		if got := tokens.User(); got != c.want {
+			t.Errorf("%s without a stored id: %q, want %q", c.claims, got, c.want)
+		}
 	}
 }

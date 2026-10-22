@@ -55,6 +55,7 @@ type Tokens struct {
 	Email        string  `json:"email,omitempty"`
 	Name         string  `json:"name,omitempty"`
 	IDP          string  `json:"idp,omitempty"`
+	UserID       string  `json:"user_id,omitempty"`
 	RefreshedAt  float64 `json:"refreshed_at,omitempty"`
 	// FailedRefreshes counts renewals failed in a row and LastAttempt is the latest, failed or
 	// not: the cooldown runs from it, so a failing renewal is not retried on every call.
@@ -182,6 +183,7 @@ func Normalize(raw map[string]any) *Tokens {
 		Email:        email,
 		Name:         name,
 		IDP:          str(claims["idp"]),
+		UserID:       userOf(claims, email),
 		RefreshedAt:  num(raw["refreshed_at"]),
 	}
 }
@@ -294,6 +296,42 @@ func Bearer() (string, error) {
 		return "", errors.New("el token ha caducado y no se ha podido refrescar; vuelve a ejecutar `auth browser`")
 	}
 	return tokens.AccessToken, nil
+}
+
+func (t *Tokens) User() string {
+	if t == nil {
+		return ""
+	}
+	if t.UserID != "" {
+		return t.UserID
+	}
+	claims := decodeJWT(t.AccessToken)
+	if len(claims) == 0 {
+		claims = decodeJWT(t.IDToken)
+	}
+	return userOf(claims, t.Email)
+}
+
+// B2C fills sub with a sentence when the policy does not issue it, hence the space check.
+func userOf(claims map[string]any, email string) string {
+	for _, key := range []string{"oid", "sub"} {
+		if id := str(claims[key]); id != "" && !strings.Contains(id, " ") {
+			return id
+		}
+	}
+	return strings.ToLower(email)
+}
+
+func AccountUser(account string) string {
+	body, err := os.ReadFile(config.AccountTokenFile(account))
+	if err != nil {
+		return ""
+	}
+	var tokens Tokens
+	if json.Unmarshal(body, &tokens) != nil {
+		return ""
+	}
+	return tokens.User()
 }
 
 func decodeJWT(token string) map[string]any {
