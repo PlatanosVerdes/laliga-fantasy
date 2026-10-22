@@ -426,7 +426,7 @@ func logging(next http.Handler) http.Handler {
 		}
 		slog.Log(request.Context(), level, "http", "method", request.Method,
 			"path", request.URL.Path, "status", wrapped.status, "ms", elapsed,
-			"bytes", wrapped.bytes)
+			"bytes", wrapped.bytes, "door", doorOf(request))
 	})
 }
 

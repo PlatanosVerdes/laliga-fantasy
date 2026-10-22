@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -16,6 +17,15 @@ import (
 	"sync"
 	"time"
 )
+
+type doorKey struct{}
+
+func doorOf(request *http.Request) string {
+	if door, ok := request.Context().Value(doorKey{}).(string); ok {
+		return door
+	}
+	return "private"
+}
 
 // AccessHeader carries the token Cloudflare Access signs for every request it lets through.
 const AccessHeader = "Cf-Access-Jwt-Assertion"
@@ -86,7 +96,7 @@ func (k *accessKeys) middleware(next http.Handler) http.Handler {
 			http.Error(writer, "forbidden", http.StatusForbidden)
 			return
 		}
-		next.ServeHTTP(writer, request)
+		next.ServeHTTP(writer, request.WithContext(context.WithValue(request.Context(), doorKey{}, "access")))
 	})
 }
 
