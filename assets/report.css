@@ -1070,6 +1070,7 @@ body:has(.drawer.as-pop:not([hidden])) .cmp-tray{display:none}
 .acct-menu .acct-item.on{color:var(--accent);font-weight:600;cursor:default}
 .acct-item.on::after{content:" ✓"}
 .acct-menu .acct-item.acct-out{color:var(--critical)}
+.acct-item small{display:block;margin-top:2px;font-size:12px;color:var(--muted);font-weight:400}
 .acct-sep{height:1px;background:var(--line);margin:4px 6px}
 .acct-note{margin:8px 10px;color:var(--muted);font-size:13px}
 .acct-wait{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:16px;

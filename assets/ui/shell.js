@@ -405,9 +405,9 @@ function AccountMenu() {
       <a class="acct-item" role="menuitem" href="/?cuenta=nueva">Añadir cuenta</a>
       <a class="acct-item" role="menuitem" href="/vincular/nuevo">Vincular un dispositivo</a>
       <button type="button" role="menuitem" class="acct-item"
-        onClick=${() => postJSON('/api/logout', {}).then(() => { location.href = '/'; }, (e) => flash('No se ha podido', e.message))}>Salir de este navegador</button>
-      ${active ? html`<button type="button" role="menuitem" class="acct-item acct-out"
-        onClick=${() => { if (confirm('¿Desconectar ' + who(active) + ' de LaLiga? El panel deja de seguir esta cuenta y las acciones automáticas se paran. Sus instrucciones se guardan por si vuelves.')) act('/api/accounts/logout', {account: active.id}, 'Desconectando…'); }}>Desconectar de LaLiga</button>` : null}`}
+        onClick=${() => postJSON('/api/logout', {}).then(() => { location.href = '/'; }, (e) => flash('No se ha podido', e.message))}>Cerrar sesión<small>Solo en este navegador. El panel sigue funcionando.</small></button>
+      ${active ? html`<div class="acct-sep"></div><button type="button" role="menuitem" class="acct-item acct-out"
+        onClick=${() => { if (confirm('¿Desconectar ' + who(active) + ' de LaLiga? El panel deja de seguir esta cuenta y las acciones automáticas se paran. Sus instrucciones se guardan por si vuelves.')) act('/api/accounts/logout', {account: active.id}, 'Desconectando…'); }}>Desconectar de LaLiga<small>Para el panel y sus acciones automáticas.</small></button>` : null}`}
     </div>` : null}
   </div>`;
 }
