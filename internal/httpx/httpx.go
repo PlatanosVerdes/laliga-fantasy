@@ -37,7 +37,29 @@ type Counters struct {
 var (
 	mu    sync.Mutex
 	stats Counters
+
+	transportMu sync.RWMutex
+	transport   http.RoundTripper = http.DefaultTransport
 )
+
+// SetTransport replaces what puts requests on the wire, and returns what puts the old one back.
+func SetTransport(next http.RoundTripper) func() {
+	transportMu.Lock()
+	previous := transport
+	transport = next
+	transportMu.Unlock()
+	return func() {
+		transportMu.Lock()
+		transport = previous
+		transportMu.Unlock()
+	}
+}
+
+func wire() http.RoundTripper {
+	transportMu.RLock()
+	defer transportMu.RUnlock()
+	return transport
+}
 
 func Stats() Counters {
 	mu.Lock()
@@ -272,8 +294,8 @@ func once(request Request) (string, int, error) {
 	}
 	req.Header.Set("Accept-Encoding", "gzip")
 
-	ctxClient := &http.Client{Timeout: request.Timeout}
-	resp, err := ctxClient.Do(req)
+	client := &http.Client{Timeout: request.Timeout, Transport: wire()}
+	resp, err := client.Do(req)
 	if err != nil {
 		bump(&stats.Errors)
 		return "", 0, err
