@@ -279,7 +279,30 @@ function RaidDialog({p, done}) {
   <//>`;
 }
 
-export const DIALOGS = {amount: AmountDialog, shield: ShieldDialog, raid: RaidDialog};
+function SignOutDialog({name, onDisconnect}) {
+  const [step, setStep] = useState('choose');
+  const [error, setError] = useState('');
+  const out = (everywhere) => postJSON('/api/logout', {everywhere}).then(() => { location.href = '/'; }, (e) => setError(e.message));
+  return html`<${Modal} label="Cerrar sesión" onClose=${closeDialog}>
+    ${step === 'choose' ? html`
+      <h3>Cerrar sesión</h3>
+      <div class="signout-options">
+        <button type="button" class="signout-opt main" onClick=${() => out(false)}>En este dispositivo</button>
+        <button type="button" class="signout-opt" onClick=${() => out(true)}>En todos los dispositivos<small>También los vinculados con QR.</small></button>
+      </div>
+      <p class="signout-note">El panel sigue funcionando con tu cuenta de LaLiga.</p>
+      ${onDisconnect ? html`<button type="button" class="signout-danger" onClick=${() => setStep('disconnect')}>Desconectar ${name} de LaLiga…</button>` : null}`
+    : html`
+      <h3>Desconectar de LaLiga</h3>
+      <p class="shield-help">El panel deja de seguir a ${name} y se paran sus acciones automáticas. Sus instrucciones se guardan por si vuelves.</p>
+      <div class="modal-actions"><button type="button" onClick=${() => setStep('choose')}>Volver</button>
+        <button type="button" class="bid-drop signout-confirm" onClick=${() => { closeDialog(); onDisconnect(); }}>Desconectar</button></div>`}
+    <p class="bid-error">${error}</p>
+  </${Modal}>`;
+}
+export const askSignOut = (props) => show('signout', props);
+
+export const DIALOGS = {amount: AmountDialog, shield: ShieldDialog, raid: RaidDialog, signout: SignOutDialog};
 
 // The notice that an operation landed, said at once without waiting for the rebuild.
 let notices = [];

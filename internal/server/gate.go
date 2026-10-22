@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -141,7 +142,13 @@ func (s *Server) signOut(writer http.ResponseWriter, request *http.Request) {
 		s.json(writer, http.StatusMethodNotAllowed, map[string]any{"error": "solo POST"})
 		return
 	}
-	if who, ok := visitorOf(request); ok {
+	var body struct {
+		Everywhere bool `json:"everywhere"`
+	}
+	_ = json.NewDecoder(request.Body).Decode(&body)
+	if who, ok := visitorOf(request); ok && body.Everywhere {
+		slog.Info("signed out everywhere", "user", who.User, "sessions", s.doors().sessions.closeUser(who.User))
+	} else if ok {
 		s.doors().sessions.close(who.key)
 		slog.Info("signed out", "user", who.User)
 	}

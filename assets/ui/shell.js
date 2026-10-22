@@ -3,7 +3,7 @@ import {ViewScreen} from './view.js';
 import {ApiFace, Icon, Countdown} from './components.js';
 import {getJSON, postJSON, useView, useCash, changed, getViews, reloadViews} from './api.js';
 import {fmt, esMoney, exact, countdownText} from './format.js';
-import {flash} from './dialogs.js';
+import {flash, askSignOut} from './dialogs.js';
 import {compare} from './compare.js';
 
 // The page around the views: the tab bar with the search, the live dot and the version, the
@@ -404,10 +404,10 @@ function AccountMenu() {
       ${leagues.length > 1 || accounts.length > 1 ? html`<div class="acct-sep"></div>` : null}
       <a class="acct-item" role="menuitem" href="/?cuenta=nueva">Añadir cuenta</a>
       <a class="acct-item" role="menuitem" href="/vincular/nuevo">Vincular un dispositivo</a>
+      <div class="acct-sep"></div>
       <button type="button" role="menuitem" class="acct-item"
-        onClick=${() => postJSON('/api/logout', {}).then(() => { location.href = '/'; }, (e) => flash('No se ha podido', e.message))}>Cerrar sesión<small>Solo en este navegador. El panel sigue funcionando.</small></button>
-      ${active ? html`<div class="acct-sep"></div><button type="button" role="menuitem" class="acct-item acct-out"
-        onClick=${() => { if (confirm('¿Desconectar ' + who(active) + ' de LaLiga? El panel deja de seguir esta cuenta y las acciones automáticas se paran. Sus instrucciones se guardan por si vuelves.')) act('/api/accounts/logout', {account: active.id}, 'Desconectando…'); }}>Desconectar de LaLiga<small>Para el panel y sus acciones automáticas.</small></button>` : null}`}
+        onClick=${() => { setOpen(false); askSignOut({name: active ? who(active) : '',
+          onDisconnect: active ? () => act('/api/accounts/logout', {account: active.id}, 'Desconectando…') : null}); }}>Cerrar sesión</button>`}
     </div>` : null}
   </div>`;
 }

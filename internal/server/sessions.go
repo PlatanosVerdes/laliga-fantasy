@@ -150,6 +150,23 @@ func (s *sessionStore) find(id string) (visitor, bool) {
 	return *who, true
 }
 
+func (s *sessionStore) closeUser(user string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.load()
+	closed := 0
+	for key, who := range s.byKey {
+		if who.User == user {
+			delete(s.byKey, key)
+			closed++
+		}
+	}
+	if closed > 0 {
+		s.save()
+	}
+	return closed
+}
+
 func (s *sessionStore) close(key string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

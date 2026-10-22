@@ -500,3 +500,35 @@ func TestLoginAttemptsAreLimitedPerClient(t *testing.T) {
 		t.Error("another client behind the same proxy was limited too")
 	}
 }
+
+func TestSigningOutEverywhereEndsOnlyThatUsersSessions(t *testing.T) {
+	server := New(nil, Options{Allow: "*"})
+	here := ownerSession(t, server)
+	phone := sessionFor(t, server, "user-me")
+	stranger := sessionFor(t, server, "user-other")
+	handler := server.Handler()
+	if answer := visit(handler, http.MethodPost, "/api/logout", `{"everywhere":true}`, here); answer.Code != http.StatusOK {
+		t.Fatalf("signing out everywhere: %d %s", answer.Code, answer.Body.String())
+	}
+	for name, cookie := range map[string]*http.Cookie{"this browser": here, "the linked phone": phone} {
+		if _, ok := server.doors().sessions.find(cookie.Value); ok {
+			t.Errorf("%s is still signed in", name)
+		}
+	}
+	if _, ok := server.doors().sessions.find(stranger.Value); !ok {
+		t.Error("another user's session ended too")
+	}
+}
+
+func TestSigningOutHereLeavesTheOtherDevices(t *testing.T) {
+	server := New(nil, Options{})
+	here := ownerSession(t, server)
+	phone := sessionFor(t, server, "user-me")
+	visit(server.Handler(), http.MethodPost, "/api/logout", `{}`, here)
+	if _, ok := server.doors().sessions.find(here.Value); ok {
+		t.Error("this browser is still signed in")
+	}
+	if _, ok := server.doors().sessions.find(phone.Value); !ok {
+		t.Error("the phone was signed out too")
+	}
+}
