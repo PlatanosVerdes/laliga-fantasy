@@ -1544,6 +1544,10 @@ button.reach-btn:hover{filter:brightness(1.1);text-decoration:underline}
   font-variant-numeric:tabular-nums;color:#fff}
 .mk-once .tok-x.x-hi{color:var(--good)} .mk-once .tok-x.x-lo{color:var(--warning)}
 .mk-once .tok-x.x-bad{color:var(--critical)}
+.mk-once .tok-nums{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:2px 3px}
+.mk-once .tok-start{flex:none;font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+.mk-once .slot .tok-start{font-size:10px;padding:1px 6px;border-radius:999px;background:rgba(0,0,0,.55)}
 .mk-once .tok-flag{position:absolute;top:0;right:4px}
 .mk-once .slot-grip{left:2px;top:2px}
 .mk-once .pitch-wrap{grid-template-columns:minmax(0,1fr) 300px}

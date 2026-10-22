@@ -3,6 +3,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"html"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/auth"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/files"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/secret"
 )
 
 // HasSession reports whether there is anything to authenticate with. A stored refresh token
@@ -22,6 +24,11 @@ func HasSession() bool {
 	// A session given up on is shown as none, so the page asks for the login that restarts it.
 	return err == nil && tokens != nil && !tokens.Stopped() &&
 		(tokens.RefreshToken != "" || tokens.AccessToken != "")
+}
+
+// locked is a session that exists but this key cannot open: kept, never taken for none.
+func locked(err error) bool {
+	return errors.Is(err, secret.ErrWrongKey) || errors.Is(err, secret.ErrNoKey)
 }
 
 var exchange = auth.Exchange
@@ -149,6 +156,11 @@ func (s *Server) adopt(writer http.ResponseWriter, request *http.Request, pasted
 	if HasSession() && !truthy(body["replace"]) && !truthy(body["add"]) {
 		s.json(writer, http.StatusConflict, map[string]any{
 			"error": "ya hay una sesion que funciona; para cambiarla manda replace: true"})
+		return
+	}
+	if _, err := auth.Load(); locked(err) && !truthy(body["replace"]) && !truthy(body["add"]) {
+		s.json(writer, http.StatusConflict, map[string]any{
+			"error": err.Error() + "; para cambiarla por esta manda replace: true"})
 		return
 	}
 	tokens, err := auth.Parse(pasted)
