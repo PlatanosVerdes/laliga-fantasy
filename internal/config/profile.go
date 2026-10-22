@@ -73,7 +73,6 @@ func ProfileFor(account, league string) Profile {
 	return layout(ConfigRoot, StateRoot, CacheRoot, account, league)
 }
 
-// ProfileIn lays a profile out under one root, the way FANTASY_DATA_DIR does.
 func ProfileIn(root, account, league string) Profile {
 	return layout(root, root, filepath.Join(root, "cache"), account, league)
 }
@@ -118,7 +117,6 @@ func (p *Profile) fill() {
 	p.RewardFile = filepath.Join(p.StateDir, "daily_reward.json")
 }
 
-// ActiveProfile is the profile active.json names.
 func ActiveProfile() Profile { return ProfileFor(Active()) }
 
 // Default is the profile the process runs on, read from the globals Use fills until they go.
@@ -132,7 +130,6 @@ func Default() Profile {
 	return p
 }
 
-// EnsureDirs creates the profile's folders, 0700 like the roots.
 func (p Profile) EnsureDirs() error {
 	for _, dir := range []string{p.ConfigDir, p.StateDir, p.CacheDir} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {

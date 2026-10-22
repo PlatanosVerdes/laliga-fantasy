@@ -59,7 +59,6 @@ func TestClassify(t *testing.T) {
 	}
 }
 
-// Appends on two profiles at once keep every ending, each on its own file.
 func TestAppendsOnTwoProfilesSideBySide(t *testing.T) {
 	root := t.TempDir()
 	stores := []*Store{Open(config.ProfileIn(root, "cuenta", "A")), Open(config.ProfileIn(root, "cuenta", "B"))}

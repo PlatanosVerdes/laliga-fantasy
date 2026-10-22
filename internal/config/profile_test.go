@@ -109,7 +109,6 @@ func TestMigrationMovesEverythingWhenTheRootsAreOne(t *testing.T) {
 	}
 }
 
-// Every path a profile names is the one the globals named before it existed.
 func TestAProfileLaysOutTodaysPaths(t *testing.T) {
 	ConfigRoot, StateRoot, CacheRoot = "/c", "/s", "/k"
 	league := "/c/accounts/a/leagues/L/"
@@ -138,8 +137,6 @@ func TestAProfileLaysOutTodaysPaths(t *testing.T) {
 	}
 }
 
-// An account with no league keeps the league's files in its own folder, and no account at all
-// is the flat layout of a single-account install: everything at the roots.
 func TestAccountOnlyAndFlatLayoutsResolveAsBefore(t *testing.T) {
 	ConfigRoot, StateRoot, CacheRoot = "/c", "/s", "/k"
 	account := ProfileFor("a", "")

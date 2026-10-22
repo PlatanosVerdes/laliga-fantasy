@@ -16,8 +16,6 @@ import (
 
 const tokenPath = "/laligadspprob2c.onmicrosoft.com/oauth2/v2.0/token"
 
-// fakeProvider renews every refresh token into "<token>-2" with access "new-<token>", and turns
-// down the ones listed as revoked.
 func fakeProvider(t *testing.T, revoked ...string) *httpxtest.Fake {
 	t.Helper()
 	fake := httpxtest.New(t)
@@ -38,7 +36,6 @@ func fakeProvider(t *testing.T, revoked ...string) *httpxtest.Fake {
 	return fake
 }
 
-// refreshes counts the renewals the provider was asked for, by refresh token.
 func refreshes(fake *httpxtest.Fake) map[string]int {
 	out := map[string]int{}
 	for _, call := range fake.Calls() {
@@ -58,7 +55,6 @@ func tempRoot(t *testing.T) {
 	config.ConfigRoot = t.TempDir()
 }
 
-// expiring stores a session about to die, so the next Bearer has to renew it.
 func expiring(t *testing.T, account string, tokens Tokens) *Source {
 	t.Helper()
 	tokens.ExpiresOn = time.Now().Add(time.Minute).Unix()
@@ -81,7 +77,6 @@ func bearers(t *testing.T, source *Source, times int, wait *sync.WaitGroup, want
 	}
 }
 
-// Two accounts renewing at once each write their own tokens.json, and never the other's.
 func TestConcurrentRefreshesWriteOnlyTheirOwnSession(t *testing.T) {
 	tempRoot(t)
 	fake := fakeProvider(t)
@@ -111,7 +106,6 @@ func TestConcurrentRefreshesWriteOnlyTheirOwnSession(t *testing.T) {
 	}
 }
 
-// An account given up on stops only itself: the other keeps renewing and answering.
 func TestAStoppedAccountLeavesTheOtherWorking(t *testing.T) {
 	tempRoot(t)
 	fakeProvider(t, "rA")
@@ -133,7 +127,6 @@ func TestAStoppedAccountLeavesTheOtherWorking(t *testing.T) {
 	}
 }
 
-// Everything acting for one account shares its session, so a burst renews it once.
 func TestOneAccountIsOneSourceAndRenewsOnce(t *testing.T) {
 	tempRoot(t)
 	fake := fakeProvider(t)

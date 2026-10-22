@@ -91,7 +91,6 @@ var (
 	sources   = map[string]*Source{}
 )
 
-// For is the account's session, one per tokens.json.
 func For(account string) *Source {
 	path := config.ProfileFor(account, "").TokenFile
 	sourcesMu.Lock()
