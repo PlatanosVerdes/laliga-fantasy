@@ -72,7 +72,8 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	// Neither the hierarchy nor, for some players, the starting probability is in the market list.
-	// Reading the page costs a request, so only the player being looked at gets one.
+	// Reading the page costs a request, so only the player being looked at gets one; my squad's
+	// odds are already read when the world is built.
 	var ffMatches []map[string]any
 	if name := fallback(text(player["ff_name"]), text(player["name"])); name != "" {
 		slug := matching.SlugifyFF(name)
