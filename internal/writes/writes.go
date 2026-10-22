@@ -421,6 +421,7 @@ type Summary struct {
 
 type pending struct {
 	created time.Time
+	owner   string
 	name    string
 	args    Args
 	who     Player
@@ -493,6 +494,10 @@ func (g *Guard) purge() {
 
 // Prepare validates an operation and returns a summary plus a single-use token.
 func (g *Guard) Prepare(name string, args Args, who Player, allowWrites bool) (Summary, error) {
+	return g.PrepareFor("", name, args, who, allowWrites)
+}
+
+func (g *Guard) PrepareFor(owner, name string, args Args, who Player, allowWrites bool) (Summary, error) {
 	if !allowWrites {
 		return Summary{}, ErrDisabled
 	}
@@ -525,8 +530,8 @@ func (g *Guard) Prepare(name string, args Args, who Player, allowWrites bool) (S
 		summary.Clause = who.Clause
 		summary.NewClause = who.Clause + ClauseFactor*args.Amount
 	}
-	g.tokens[summary.Token] = pending{created: time.Now(), name: name, args: args, who: who,
-		summary: summary}
+	g.tokens[summary.Token] = pending{created: time.Now(), owner: owner, name: name, args: args,
+		who: who, summary: summary}
 	slog.Info("write prepared", "operation", name, "amount", args.Amount, "player", who.Name)
 	return summary, nil
 }
@@ -548,10 +553,14 @@ func (g *Guard) balance(teamID string) *int64 {
 // failed attempt cannot be replayed. The checks run again, since the cash and the clause
 // window may have moved while the person read the summary.
 func (g *Guard) Confirm(token string, allowWrites, dryRun bool) (map[string]any, error) {
-	return g.confirm(token, allowWrites, dryRun, true)
+	return g.confirm("", token, allowWrites, dryRun, true)
 }
 
-func (g *Guard) confirm(token string, allowWrites, dryRun, recheck bool) (map[string]any, error) {
+func (g *Guard) ConfirmFor(owner, token string, allowWrites, dryRun bool) (map[string]any, error) {
+	return g.confirm(owner, token, allowWrites, dryRun, true)
+}
+
+func (g *Guard) confirm(owner, token string, allowWrites, dryRun, recheck bool) (map[string]any, error) {
 	if !allowWrites {
 		return nil, ErrDisabled
 	}
@@ -561,6 +570,10 @@ func (g *Guard) confirm(token string, allowWrites, dryRun, recheck bool) (map[st
 	g.mu.Lock()
 	g.purge()
 	entry, ok := g.tokens[token]
+	if ok && entry.owner != owner {
+		g.mu.Unlock()
+		return nil, errors.New("esa confirmacion es de otra sesion: vuelve a empezar")
+	}
 	delete(g.tokens, token)
 	g.mu.Unlock()
 	if !ok {
@@ -953,7 +966,7 @@ func (g *Guard) Do(name string, args Args, who Player, allowWrites bool) (map[st
 	if err != nil {
 		return nil, err
 	}
-	return g.confirm(summary.Token, allowWrites, false, false)
+	return g.confirm("", summary.Token, allowWrites, false, false)
 }
 
 // numericID sends a player id the way the app does, as a number.
