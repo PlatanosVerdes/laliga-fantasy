@@ -256,10 +256,8 @@ func (s *Server) newLinkPage(writer http.ResponseWriter, request *http.Request) 
 }
 
 const linkInBody = `<h1>Vincular este dispositivo</h1>
-<p class="lead">Escribe el código que sale en el dispositivo donde ya has entrado (menú de la cuenta →
-<b>Vincular un dispositivo</b>), o escanea allí el QR con la cámara.</p>
-<input class="code" id="link-code" name="device-link" aria-label="Código de vinculación" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="ABCD-EFGH" maxlength="12">
-<button class="btn" id="link-go">Vincular</button>
+<p class="lead">El código del otro dispositivo: menú de la cuenta → Vincular un dispositivo.</p>
+<div class="code-row"><input class="field code" id="link-code" name="device-link" aria-label="Código de vinculación" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="ABCD-EFGH" maxlength="12"><button class="btn" id="link-go">Vincular</button></div>
 <div class="msg" id="link-msg"></div>{{other}}
 <a class="back" href="/">← Volver</a>
 <script>
@@ -271,8 +269,7 @@ box.onkeydown=(e)=>{if(e.key==='Enter') go.click();};
 </script>`
 
 const linkOutBody = `<h1>Vincular un dispositivo</h1>
-<p class="lead">En el otro dispositivo, escanea el QR con la cámara o abre <b id="link-where">/vincular</b> y escribe el código.
-Sirve una vez y caduca en 2 minutos. Nadie más debería verlo.</p>
+<p class="lead">Escanéalo con la cámara del otro dispositivo, o abre <b id="link-where">/vincular</b> y escribe el código.</p>
 <div id="link-show" hidden><div class="link-qr" id="link-qr"></div><div class="link-code" id="link-code"></div></div>
 <div class="msg" id="link-msg">Creando el código…</div>
 <div class="btn-row"><button class="btn quiet" id="link-again" type="button" hidden>Otro código</button></div>
@@ -292,7 +289,7 @@ async function create(){
     document.getElementById('link-show').hidden=false;
     const until=Date.now()+data.expires_in*1000;
     const left=()=>{const s=Math.max(0,Math.round((until-Date.now())/1000));
-      msg.textContent='Esperando al otro dispositivo… caduca en '+Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+      msg.textContent='Un solo uso · caduca en '+Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
     left(); tick=setInterval(left,1000);
     poll=setInterval(async()=>{
       const answer=await fetch('/api/link/status',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -300,8 +297,9 @@ async function create(){
       if(!answer||answer.status==='waiting') return;
       clearInterval(poll); clearInterval(tick);
       document.getElementById('link-show').hidden=true;
-      if(answer.status==='linked'){msg.className='msg good';msg.textContent='Dispositivo vinculado. Ya puede usar el panel.';}
-      else{msg.className='msg bad';msg.textContent='El código ha caducado.';}
+      if(answer.status==='linked'){msg.className='msg good';msg.textContent='✓ Dispositivo vinculado. Volviendo al panel…';
+        setTimeout(()=>{location.href='/';},1500);return;}
+      msg.className='msg bad';msg.textContent='El código ha caducado.';
       again.hidden=false;
     },2000);
   }catch(e){msg.className='msg bad';msg.textContent=e.message;again.hidden=false;}
