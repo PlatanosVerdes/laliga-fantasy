@@ -648,9 +648,11 @@ func ParseAbsences(page, kind string) []map[string]any {
 	return out
 }
 
-// Absences are the injured and the suspended, from the two pages that list them.
-func Absences(ttl time.Duration) []map[string]any {
+// Absences are the injured and the suspended, from the two pages that list them. The error
+// is the first page that failed; the rows of the other are still returned.
+func Absences(ttl time.Duration) ([]map[string]any, error) {
 	out := []map[string]any{}
+	var failed error
 	for _, source := range []struct{ URL, Kind string }{
 		{config.FFInjuredURL, "lesionado"},
 		{config.FFSuspendedURL, "sancionado"},
@@ -658,11 +660,14 @@ func Absences(ttl time.Duration) []map[string]any {
 		page, err := fetch(source.URL, ttl, "ff_absences")
 		if err != nil {
 			// One page missing is a page missing, not a reason to lose the other.
+			if failed == nil {
+				failed = err
+			}
 			continue
 		}
 		out = append(out, ParseAbsences(page, source.Kind)...)
 	}
-	return out
+	return out, failed
 }
 
 func nilString(value string) *string {
