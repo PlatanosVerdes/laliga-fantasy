@@ -532,3 +532,14 @@ func TestSigningOutHereLeavesTheOtherDevices(t *testing.T) {
 		t.Error("the phone was signed out too")
 	}
 }
+
+func TestDevicesCountsOnlyTheVisitorsOwnSessions(t *testing.T) {
+	server := New(nil, Options{Allow: "*"})
+	here := ownerSession(t, server)
+	sessionFor(t, server, "user-me")
+	sessionFor(t, server, "user-other")
+	answer := visit(server.Handler(), http.MethodGet, "/api/devices", "", here)
+	if answer.Code != http.StatusOK || !strings.Contains(answer.Body.String(), `"count":2`) {
+		t.Errorf("devices: %d %s", answer.Code, answer.Body.String())
+	}
+}

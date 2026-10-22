@@ -1,5 +1,5 @@
 import {html, useState, useEffect, useRef, panel} from './lib.js';
-import {Modal, useDialogTrace} from './components.js';
+import {Modal, Icon, useDialogTrace} from './components.js';
 import {prepare, confirm, postJSON, changed, closeDialog, openDialog, useCash, useMeta} from './api.js';
 import {exact, group, digits, stampText} from './format.js';
 
@@ -279,25 +279,32 @@ function RaidDialog({p, done}) {
   <//>`;
 }
 
+const DEVICE = html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>`;
+const DEVICES = html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="14" height="10" rx="1.5"/><path d="M1 18h12"/><rect x="16" y="9" width="7" height="12" rx="1.5"/></svg>`;
+
 function SignOutDialog({name, onDisconnect}) {
   const [step, setStep] = useState('choose');
   const [error, setError] = useState('');
+  const [count, setCount] = useState(0);
+  useEffect(() => { fetch('/api/devices').then((r) => r.json()).then((d) => setCount(d.count || 0), () => {}); }, []);
   const out = (everywhere) => postJSON('/api/logout', {everywhere}).then(() => { location.href = '/'; }, (e) => setError(e.message));
   return html`<${Modal} label="Cerrar sesión" onClose=${closeDialog}>
+    <button type="button" class="modal-x" aria-label="Cerrar" onClick=${closeDialog}><${Icon} name="x"/></button>
     ${step === 'choose' ? html`
       <h3>Cerrar sesión</h3>
       <div class="signout-options">
-        <button type="button" class="signout-opt main" onClick=${() => out(false)}>En este dispositivo</button>
-        <button type="button" class="signout-opt" onClick=${() => out(true)}>En todos los dispositivos<small>También los vinculados con QR.</small></button>
+        <button type="button" class="signout-opt main" onClick=${() => out(false)}>${DEVICE}<span>En este dispositivo</span></button>
+        <button type="button" class="signout-opt" onClick=${() => out(true)}>${DEVICES}<span>En todos los dispositivos
+          <small>${count > 1 ? count + ' sesiones abiertas, también las vinculadas con QR' : 'También los vinculados con QR'}</small></span></button>
       </div>
-      <p class="signout-note">El panel sigue funcionando con tu cuenta de LaLiga.</p>
-      ${onDisconnect ? html`<button type="button" class="signout-danger" onClick=${() => setStep('disconnect')}>Desconectar ${name} de LaLiga…</button>` : null}`
+      <div class="modal-actions"><button type="button" onClick=${closeDialog}>Cancelar</button></div>
+      ${onDisconnect ? html`<div class="signout-zone"><button type="button" class="signout-danger" onClick=${() => setStep('disconnect')}>Desconectar de LaLiga…</button></div>` : null}`
     : html`
       <h3>Desconectar de LaLiga</h3>
       <p class="shield-help">El panel deja de seguir a ${name} y se paran sus acciones automáticas. Sus instrucciones se guardan por si vuelves.</p>
       <div class="modal-actions"><button type="button" onClick=${() => setStep('choose')}>Volver</button>
         <button type="button" class="bid-drop signout-confirm" onClick=${() => { closeDialog(); onDisconnect(); }}>Desconectar</button></div>`}
-    <p class="bid-error">${error}</p>
+    ${error ? html`<p class="bid-error">${error}</p>` : null}
   </${Modal}>`;
 }
 export const askSignOut = (props) => show('signout', props);

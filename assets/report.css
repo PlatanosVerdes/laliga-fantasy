@@ -1070,15 +1070,20 @@ body:has(.drawer.as-pop:not([hidden])) .cmp-tray{display:none}
 .acct-menu .acct-item.on{color:var(--accent);font-weight:600;cursor:default}
 .acct-item.on::after{content:" ✓"}
 .acct-menu .acct-item.acct-out{color:var(--critical)}
-.signout-options{display:grid;gap:8px;margin-top:14px}
-.signout-opt{font:inherit;font-size:14px;text-align:left;padding:12px 14px;border-radius:10px;cursor:pointer;
-  border:1px solid var(--line);background:var(--plane);color:var(--ink)}
+.modal-card:has(.modal-x){position:relative}
+.modal-x{position:absolute;top:14px;right:14px;width:30px;height:30px;display:grid;place-items:center;
+  border:0;border-radius:8px;background:none;color:var(--muted);cursor:pointer}
+.modal-x:hover{background:var(--mid);color:var(--ink)}
+.signout-options{display:grid;gap:8px;margin-top:16px}
+.signout-opt{display:flex;align-items:center;gap:12px;font:inherit;font-size:14px;text-align:left;padding:12px 14px;
+  border-radius:10px;cursor:pointer;border:1px solid var(--line);background:var(--plane);color:var(--ink)}
+.signout-opt svg{flex:none;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
 .signout-opt:hover{border-color:var(--accent)}
 .signout-opt.main{background:var(--accent);border-color:transparent;color:#fff;font-weight:600}
-.signout-opt small{display:block;margin-top:2px;font-size:12px;color:var(--muted)}
-.signout-note{font-size:12px;color:var(--muted);margin:12px 0 0}
-.signout-danger{display:block;margin:18px 0 0;padding:0;border:0;background:none;font:inherit;font-size:13px;
-  color:var(--critical);cursor:pointer}
+.signout-opt small{display:block;margin-top:2px;font-size:12px;color:var(--muted);font-weight:400}
+.signout-zone{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.signout-danger{padding:0;border:0;background:none;font:inherit;font-size:13px;color:var(--critical);cursor:pointer}
+.signout-danger:hover{text-decoration:underline}
 .acct-sep{height:1px;background:var(--line);margin:4px 6px}
 .acct-note{margin:8px 10px;color:var(--muted);font-size:13px}
 .acct-wait{position:fixed;inset:0;z-index:200;display:grid;place-items:center;padding:16px;

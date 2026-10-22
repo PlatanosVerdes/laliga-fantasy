@@ -150,6 +150,19 @@ func (s *sessionStore) find(id string) (visitor, bool) {
 	return *who, true
 }
 
+func (s *sessionStore) countUser(user string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.load()
+	count := 0
+	for _, who := range s.byKey {
+		if who.User == user && s.live(who) {
+			count++
+		}
+	}
+	return count
+}
+
 func (s *sessionStore) closeUser(user string) int {
 	s.mu.Lock()
 	defer s.mu.Unlock()

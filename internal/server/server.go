@@ -325,6 +325,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/accounts/logout", s.logout)
 	mux.HandleFunc("/api/accounts/avatar", s.avatar)
 	mux.HandleFunc("/api/logout", s.signOut)
+	mux.HandleFunc("/api/devices", s.devices)
 	mux.HandleFunc("/vincular", s.linkPage)
 	mux.HandleFunc("/vincular/nuevo", s.newLinkPage)
 	mux.HandleFunc("/api/link", s.createLink)
