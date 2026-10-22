@@ -579,6 +579,9 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	payload, err := s.opts.Client.Lineup(s.myTeamID(), time.Minute)
+	if s.throttled(writer, err) {
+		return
+	}
 	if err != nil {
 		s.json(writer, http.StatusBadGateway,
 			map[string]any{"error": "no he podido leer la alineacion: " + err.Error()})
@@ -645,8 +648,8 @@ func (s *Server) lineup(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	s.json(writer, http.StatusOK, map[string]any{"lines": lines, "bench": bench,
-		"best":      bestLineup(rows),
-		"formation": formation["tacticalFormation"],
+		"best":       bestLineup(rows),
+		"formation":  formation["tacticalFormation"],
 		"formations": map[string]any{"free": free, "premium": premium},
 		"updated_at": payload["updatedAt"], "writes_enabled": s.opts.AllowWrites})
 }
@@ -808,20 +811,20 @@ func shirtOf(slot map[string]any, known map[string]map[string]any) map[string]an
 		face = text(extra["image"])
 	}
 	return map[string]any{
-		"player_team_id": text(slot["playerTeamId"]),
-		"id":             id,
-		"image":          face,
-		"name":           fallback(text(master["nickname"]), text(master["name"])),
-		"position_id":    master["positionId"],
-		"team_id":        text(pick("teamId", "team_id")),
-		"value":          pick("marketValue", "value"),
-		"status":         pick("playerStatus", "status"),
-		"week_points":    master["weekPoints"],
-		"average":        average,
+		"player_team_id":     text(slot["playerTeamId"]),
+		"id":                 id,
+		"image":              face,
+		"name":               fallback(text(master["nickname"]), text(master["name"])),
+		"position_id":        master["positionId"],
+		"team_id":            text(pick("teamId", "team_id")),
+		"value":              pick("marketValue", "value"),
+		"status":             pick("playerStatus", "status"),
+		"week_points":        master["weekPoints"],
+		"average":            average,
 		"last_season_points": master["lastSeasonPoints"],
 		"weeks":              weeks,
 		// from the analysis, so the pitch agrees with the tables
-		"xpts":              extra["xpts"],
+		"xpts": extra["xpts"],
 		// Whether he can play at all, decided in the model from the official status, so the
 		// pitch and the engine never disagree about who is on the pitch for nothing.
 		"available":         extra["available"],
