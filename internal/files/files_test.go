@@ -29,7 +29,6 @@ func TestWriteAtomicReplacesAndLeavesNoTemporary(t *testing.T) {
 	}
 }
 
-// Writers that each read, add their line and write must all find their line at the end.
 func TestUpdateKeepsEveryConcurrentWritersChange(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "store.txt")
 	var wait sync.WaitGroup

@@ -116,8 +116,6 @@ func TestTheExtrasSurviveARestart(t *testing.T) {
 	}
 }
 
-// Another league's process stores a page after this one loaded the store; this one's next write
-// must keep it.
 func TestAWriteKeepsThePagesAnotherProcessStored(t *testing.T) {
 	config.CacheRoot, config.CacheDir = t.TempDir(), t.TempDir()
 	defer func(was bool) { httpx.Frozen = was }(httpx.Frozen)

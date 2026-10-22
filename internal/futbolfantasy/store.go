@@ -166,8 +166,7 @@ func FetchDetail(ffID string) (Detail, error) {
 	return detail, nil
 }
 
-// saveStore writes the store merged with what other processes stored since it was loaded, the
-// newer page winning, so a process for another league does not drop the pages this one read.
+// saveStore merges in what other processes stored meanwhile, the newer page winning.
 func saveStore() error {
 	if err := os.MkdirAll(config.CacheRoot, 0o700); err != nil {
 		return err

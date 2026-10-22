@@ -49,7 +49,6 @@ func TestACachedBodyThatDoesNotParseIsFetchedAgain(t *testing.T) {
 	}
 }
 
-// profiles points the cache at two leagues under one root, starting on the first.
 func profiles(t *testing.T) (string, string) {
 	t.Helper()
 	root := t.TempDir()
@@ -69,7 +68,6 @@ func counting(t *testing.T) (*httptest.Server, *int) {
 	return server, &hits
 }
 
-// The player catalogue is the same for every league, so a second league reads the first's copy.
 func TestAGlobalTagIsFetchedOnceForEveryProfile(t *testing.T) {
 	one, two := profiles(t)
 	server, hits := counting(t)
@@ -92,7 +90,6 @@ func TestAGlobalTagIsFetchedOnceForEveryProfile(t *testing.T) {
 	}
 }
 
-// A league's market is its own: another league asks for its own.
 func TestALeagueTagIsNotSharedWithAnotherProfile(t *testing.T) {
 	one, two := profiles(t)
 	server, hits := counting(t)

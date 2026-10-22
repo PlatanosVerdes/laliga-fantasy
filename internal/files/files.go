@@ -37,11 +37,9 @@ func WriteAtomic(path string, data []byte, perm os.FileMode) error {
 	return os.Rename(name, path)
 }
 
-// Update rewrites a file that several processes read, change and write, holding an exclusive
-// lock across the three so none of them writes over a change it never read. change gets the
-// current content, nil when there is none.
+// Update locks across read, change and write: no process overwrites a change it never read.
 func Update(path string, perm os.FileMode, change func(current []byte) ([]byte, error)) error {
-	// The lock lives on a file of its own: the rename in WriteAtomic replaces the target's inode.
+	// A separate lock file: the rename in WriteAtomic replaces the target's inode.
 	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return err

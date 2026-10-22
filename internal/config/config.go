@@ -101,19 +101,15 @@ var Tags = map[string]bool{
 	"necro-state": true,
 }
 
-// GlobalTags are the responses that are the same whichever account or league asks: their URL
-// carries no league or team and the answer does not depend on who is signed in. Every profile
-// reads them from one folder, so switching league does not fetch them again.
+// GlobalTags carry no league or account in the URL and answer the same to whoever asks.
 var GlobalTags = map[string]bool{
 	"players": true, "player": true, "mv": true, "teams": true, "week": true, "calendar": true,
 	"ff_market": true, "ff_detail": true, "ff_player": true, "ff_absences": true,
 	"ff_hierarchy": true,
 }
 
-// GlobalCacheDir holds the responses of the global tags.
 func GlobalCacheDir() string { return filepath.Join(CacheRoot, "global") }
 
-// TagDir is where the responses of a tag are cached.
 func TagDir(tag string) string {
 	if GlobalTags[tag] {
 		return GlobalCacheDir()
