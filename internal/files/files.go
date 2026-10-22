@@ -3,8 +3,11 @@
 package files
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 )
 
 // WriteAtomic writes to a temporary file beside the target, flushes it to disk and renames it
@@ -32,4 +35,26 @@ func WriteAtomic(path string, data []byte, perm os.FileMode) error {
 		return err
 	}
 	return os.Rename(name, path)
+}
+
+// Update locks across read, change and write: no process overwrites a change it never read.
+func Update(path string, perm os.FileMode, change func(current []byte) ([]byte, error)) error {
+	// A separate lock file: the rename in WriteAtomic replaces the target's inode.
+	lock, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	current, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	next, err := change(current)
+	if err != nil {
+		return err
+	}
+	return WriteAtomic(path, next, perm)
 }

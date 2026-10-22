@@ -115,3 +115,29 @@ func TestTheExtrasSurviveARestart(t *testing.T) {
 		t.Errorf("after a restart: %+v %v", got, ok)
 	}
 }
+
+func TestAWriteKeepsThePagesAnotherProcessStored(t *testing.T) {
+	config.CacheRoot, config.CacheDir = t.TempDir(), t.TempDir()
+	defer func(was bool) { httpx.Frozen = was }(httpx.Frozen)
+	httpx.Frozen = true
+	restart()
+	LoadDetails()
+	theirs := `{"theirs":{"ideal_bid":1000000,"fetched_at":"2026-10-21T08:00:00Z"}}`
+	if err := os.WriteFile(StoreFile(), []byte(theirs), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cachedPage(t, strings.ReplaceAll(config.FFDetailURL, "{ff_id}", "ours"),
+		`puja_ideal = parsePujaIdeal(2000000 );`)
+	if _, err := FetchDetail("ours"); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := StoredDetail("theirs"); !ok || got.IdealBid != 1_000_000 {
+		t.Errorf("this process does not see theirs: %+v %v", got, ok)
+	}
+	restart()
+	for id, bid := range map[string]float64{"theirs": 1_000_000, "ours": 2_000_000} {
+		if got, ok := StoredDetail(id); !ok || got.IdealBid != bid {
+			t.Errorf("%s on disk: %+v %v", id, got, ok)
+		}
+	}
+}

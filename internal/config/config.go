@@ -96,8 +96,25 @@ var Tags = map[string]bool{
 	"standing": true, "teams": true, "week": true,
 	// futbolfantasy's pages, cached the same way.
 	"ff_market": true, "ff_detail": true, "ff_player": true, "ff_absences": true,
+	"ff_hierarchy": true,
 	// The Necroporra's round, dropped once a vote is cast.
 	"necro-state": true,
+}
+
+// GlobalTags carry no league or account in the URL and answer the same to whoever asks.
+var GlobalTags = map[string]bool{
+	"players": true, "player": true, "mv": true, "teams": true, "week": true, "calendar": true,
+	"ff_market": true, "ff_detail": true, "ff_player": true, "ff_absences": true,
+	"ff_hierarchy": true,
+}
+
+func GlobalCacheDir() string { return filepath.Join(CacheRoot, "global") }
+
+func TagDir(tag string) string {
+	if GlobalTags[tag] {
+		return GlobalCacheDir()
+	}
+	return CacheDir
 }
 
 func init() {
@@ -159,10 +176,11 @@ func exists(path string) bool {
 	return err == nil
 }
 
-// EnsureDirs creates the three directories. Tokens are written 0600 by the auth
+// EnsureDirs creates the directories. Tokens are written 0600 by the auth
 // package; the directories themselves are 0700 because two of them hold credentials.
 func EnsureDirs() error {
-	for _, dir := range []string{ConfigRoot, StateRoot, CacheRoot, ConfigDir, StateDir, CacheDir} {
+	for _, dir := range []string{ConfigRoot, StateRoot, CacheRoot, ConfigDir, StateDir, CacheDir,
+		GlobalCacheDir()} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return err
 		}
