@@ -249,14 +249,21 @@ func LoadBridge(client *api.Client, ffTTL time.Duration) (*Bridge, error) {
 	}
 
 	reached("Datos de futbolfantasy", 2, 4)
-	absences := MatchAbsences(players, futbolfantasy.Absences(3*time.Hour))
+	recent := recentFixtures(client, teams)
+	now := time.Now()
+	absencesTTL := AbsencesTTLAt(recent, now)
+	rows, err := futbolfantasy.Absences(absencesTTL)
+	if err == nil {
+		absenceWatch.Observe(rows, recent, absencesTTL, now)
+	}
+	absences := MatchAbsences(players, rows)
 	reached("Datos de futbolfantasy", 3, 4)
 	loose := make([]any, 0, len(unmatched))
 	for _, row := range unmatched {
 		loose = append(loose, row)
 	}
 	roles := MatchRoles(players, matched,
-		futbolfantasy.Hierarchies(futbolfantasy.HierarchyTTL), teamIndex)
+		futbolfantasy.Hierarchies(futbolfantasy.HierarchyTTL, absencesTTL), teamIndex)
 	return &Bridge{Trends: trends, Absences: absences, Roles: roles, Unmatched: loose,
 		MatchedCount: len(matched)}, nil
 }
