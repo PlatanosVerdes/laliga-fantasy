@@ -123,3 +123,17 @@ func asStrings(value any) []string {
 	}
 	return out
 }
+
+func TestShirtsCarryTheStartingOdds(t *testing.T) {
+	known := map[string]map[string]any{"1": {"start_probability": 85.0}, "2": {}}
+	shirt := func(id string) map[string]any {
+		return shirtOf(map[string]any{"playerTeamId": "pt" + id,
+			"playerMaster": map[string]any{"id": id}}, known)
+	}
+	if got := shirt("1")["start_probability"]; got != 85.0 {
+		t.Errorf("known odds: %v", got)
+	}
+	if got := shirt("2")["start_probability"]; got != nil {
+		t.Errorf("unknown odds must stay empty: %v", got)
+	}
+}

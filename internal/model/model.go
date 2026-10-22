@@ -71,6 +71,8 @@ type Player struct {
 	PriorBased       bool                   `json:"prior_based"`
 	Confidence       float64                `json:"confidence"`
 	StartProbability *float64               `json:"start_probability"`
+	StartSource      string                 `json:"start_probability_source,omitempty"`
+	StartWeek        *int                   `json:"start_week,omitempty"`
 	NextWeek         *int                   `json:"next_week"`
 	NextRival        *string                `json:"next_rival"`
 	NextRivalID      string                 `json:"next_rival_id,omitempty"`
@@ -376,6 +378,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		reached("Mercado", 1, 1)
 		freshStatus(client, raw, ownership, myTeamID)
 	}
+	fichas := squadOdds(raw, ownership, myTeamID, bridge, futbolfantasy.DetailTTL)
 
 	for _, entry := range raw {
 		id := text(entry["id"])
@@ -435,10 +438,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		}
 		player.BaseWeek = currentWeight*perWeekNow + (1-currentWeight)*perWeekLast
 
-		if trend != nil && trend.StartProbability != nil {
-			player.StartProbability = trend.StartProbability
-		}
-		availability := Availability(player.StartProbability)
+		player.applyOdds(trend, fichas[id])
 
 		var rivalStrength *float64
 		if trend != nil && trend.NextRival != nil {
@@ -468,22 +468,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		}
 		player.FixtureFactor = FixtureFactor(rivalStrength, home)
 
-		// Unknown minutes and a price-derived baseline are both guesses; discount them
-		// so a fringe player with no data cannot outrank a known starter.
-		player.Confidence = 1.0
-		if player.StartProbability == nil {
-			player.Confidence *= NoTrendConfidence
-		}
-		if player.PriorBased {
-			player.Confidence *= PriorConfidence
-		}
-
-		if player.Available {
-			player.XPts = player.BaseWeek * availability * player.FixtureFactor * player.Confidence
-			if status == "doubtful" {
-				player.XPts *= DoubtfulXPts
-			}
-		}
+		player.score(status)
 		if player.Value > 0 {
 			player.PointsValue = player.XPts / (player.Value / 1e6)
 		}

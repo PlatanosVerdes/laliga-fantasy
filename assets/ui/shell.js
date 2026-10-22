@@ -199,10 +199,12 @@ let stepping = false;
 let linkedHash = null;
 
 export function closeDrawer() {
+  if (!nav.drawer) return;
   const depth = (history.state && history.state.depth) || 0;
   // Opened from this page: step back to where it was. From a pasted link there is no page
   // behind it, so the address is rewritten instead.
-  if (depth > 0) { stepping = true; history.go(-depth); return; }
+  // Shut before the step lands: a second tap meanwhile stepped back once more, to another tab.
+  if (depth > 0) { stepping = true; shutDrawer(); history.go(-depth); return; }
   if (hashParts().view) history.replaceState(null, '', '#' + (hashParts().base || 'decidir'));
   routed = location.hash;
   shutDrawer();
