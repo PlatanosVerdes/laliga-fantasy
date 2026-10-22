@@ -39,9 +39,12 @@ services:
       # Who may sign in: LaLiga user ids or emails, comma separated, or "*". Unset, the users
       # of the accounts already saved, or the first login on a fresh install.
       # FANTASY_ALLOW: "me@example.com"
+      # The key that seals the sessions on disk (32 bytes, base64 or hex). Unset, it is
+      # generated into /data/secret.key, beside what it seals.
+      # FANTASY_SECRET_KEY: ${FANTASY_SECRET_KEY}
     volumes:
       # Session, cache, favourites, standing instructions and the report all live
-      # here. The session is the only thing that cannot be regenerated.
+      # here. The session (and its key, unless given above) cannot be regenerated.
       - laliga-fantasy:/data
 
 volumes:
@@ -51,6 +54,11 @@ volumes:
 The image sets `FANTASY_DATA_DIR=/data`, which collapses config, state and cache into that
 one directory so there is a single volume to mount. Outside a container the files follow the
 XDG spec instead — see [Where things live](../README.md#where-things-live).
+
+Sessions are encrypted at rest (see [Encrypted at rest](../README.md#encrypted-at-rest)). With
+no `FANTASY_SECRET_KEY` the key is `/data/secret.key`, in the same volume, so a copy of the
+volume still opens them. Set the variable from a secrets manager to keep the key off the volume,
+and back the key up either way: losing it means logging in again.
 
 The image is a two-stage build: `golang:1.26-alpine` compiles a static binary, `alpine:3.21`
 carries it plus the page's assets and `tzdata`, so `date` in a shell there answers the same
@@ -73,14 +81,18 @@ The two older ways still work. **Copy the file into the volume**:
 ```bash
 ./fantasy auth browser
 ./fantasy auth code '<the redirect URL>'
-docker cp ~/.config/laliga-fantasy/tokens.json laliga-fantasy:/data/tokens.json
+./fantasy auth export > tokens.json
+docker cp tokens.json laliga-fantasy:/data/tokens.json && rm tokens.json
 ```
+
+The exported file is plaintext, and the container seals it on its first read. Copying the
+sealed file instead works only when both sides share the key.
 
 **Or pass it in the environment**, which is friendlier to a secrets manager:
 
 ```yaml
 environment:
-  # The whole tokens.json...
+  # The whole tokens.json (`fantasy auth export`)...
   FANTASY_TOKENS: ${FANTASY_TOKENS}
   # ...or just the refresh token, exchanged on startup.
   # FANTASY_REFRESH_TOKEN: ${FANTASY_REFRESH_TOKEN}

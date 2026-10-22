@@ -115,10 +115,32 @@ keeps the session alive indefinitely, exactly as the app does; you should never 
 again. `auth status` shows what is stored. Tokens live in `tokens.json`, mode `0600`, in the config
 directory — see [Where things live](#where-things-live).
 
+### Encrypted at rest
+
+`tokens.json` and the cookie and action id in `necroporra.json` are sealed with AES-256-GCM, so
+a copy of the data folder alone opens no session. The file is a small envelope,
+`{"v":1,"kid":…,"nonce":…,"data":…}`; in `necroporra.json` only those two fields are, and the
+gameweek and roster stay editable. A plaintext file (an older install, a fresh cookie pasted in)
+is accepted and sealed in place on its first read.
+
+The key, in this order:
+
+* **`FANTASY_SECRET_KEY`**: 32 bytes in base64 or hex (`openssl rand -base64 32`).
+* **`FANTASY_SECRET_FILE`**, by default `secret.key` at the config root, created `0600` on the
+  first start when missing.
+
+Only a key kept outside the data folder (the variable, from a secrets manager) protects a
+copied folder; the file default is for a zero-config install and sits right beside what it
+seals. Either way, **back up the key**: without it the sessions cannot be read and every account
+has to log in again. A file sealed under another key is never overwritten by a read: the panel
+logs `la clave no coincide` and asks for a login, and only that login replaces it. `auth export`
+prints the decrypted session, for moving it to another machine.
+
 ### Other routes
 
 * Pasting a whole `tokens.json` into the page's login box works too, and is checked against
-  `/user/me` before it is accepted. Useful when a session already exists on another machine.
+  `/user/me` before it is accepted. Useful when a session already exists on another machine:
+  `auth export` there prints it decrypted.
 
 ## Commands
 
@@ -334,7 +356,7 @@ cannot be regenerated:
 
 | Directory | Default | Holds |
 |---|---|---|
-| config | `~/.config/laliga-fantasy/` | `active.json`, each account's `tokens.json` (`0600`), each league's `settings.json` and `policies.json` |
+| config | `~/.config/laliga-fantasy/` | `active.json`, `secret.key`, each account's sealed `tokens.json` (`0600`), each league's `settings.json` and `policies.json` |
 | state | `~/.local/state/laliga-fantasy/` | each league's `report.html` and history, the shared `fantasy.log` |
 | cache | `~/.cache/laliga-fantasy/` | scraped futbolfantasy pages, 24 h TTL, and `ff_ceilings.json`, every player page read with when (ceiling, season high and low, open injury); safe to delete |
 
