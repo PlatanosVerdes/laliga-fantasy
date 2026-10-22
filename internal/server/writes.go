@@ -40,6 +40,10 @@ func (s *Server) body(request *http.Request) map[string]any {
 // writeError maps the guard's refusals onto status codes: 403 when writes are off, 400 when
 // the operation itself is wrong.
 func (s *Server) writeError(writer http.ResponseWriter, err error) {
+	if s.throttled(writer, err) {
+		slog.Warn("write refused", "status", http.StatusServiceUnavailable, "reason", err.Error())
+		return
+	}
 	status := http.StatusBadRequest
 	switch {
 	case errors.Is(err, writes.ErrDisabled):

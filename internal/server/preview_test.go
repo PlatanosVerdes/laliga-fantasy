@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
@@ -173,5 +174,16 @@ func TestTheColdStartServesThePreviewUntilThePanelIsDrawn(t *testing.T) {
 	<-server.draw(server.state.RenderStamp())
 	if page := open(); page != "page 1" {
 		t.Errorf("once drawn: %.200s", page)
+	}
+}
+
+func TestARequestTheQueueRefusedSaysWhenToTryAgain(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	(&Server{}).writeError(recorder, &httpx.Throttled{Paused: true, RetryIn: 90 * time.Second})
+	var body map[string]any
+	_ = json.Unmarshal(recorder.Body.Bytes(), &body)
+	if recorder.Code != http.StatusServiceUnavailable || recorder.Header().Get("Retry-After") != "90" ||
+		body["error"] != "LaLiga nos frena: reintenta en 2 min" {
+		t.Errorf("%d %q %v", recorder.Code, recorder.Header().Get("Retry-After"), body)
 	}
 }

@@ -1,7 +1,7 @@
 # Phase 3: many leagues and accounts in one process
 
-Design for phase 3 of `docs/multi-tenant.md`, read from `main` after phases 1 and 2a. Nothing here
-is built yet. Section 6 holds the decisions the owner makes before the code starts.
+Design for phase 3 of `docs/multi-tenant.md`, read from `main` after phases 1 and 2a. Built so
+far: 3.0 and 3.8. Section 6 holds the decisions the owner makes before the code starts.
 
 ## 0. Findings that change the plan
 
@@ -114,6 +114,25 @@ A activity pages (3–5).
 - Soft daily budgets per tenant and global, shown in `/healthz`; going over stretches the tick,
   never blocks writes.
 
+**Built (3.8)** as `httpx.Queue`, the transport under the cache, so a cache hit never takes a turn:
+- Defaults 5 req/s, burst 30, 4 in flight, per host (close to the unthrottled pace until the counters show LaLiga's limit); `FANTASY_LALIGA_RATE`, `_BURST`, `_IN_FLIGHT`
+  and `_PATIENCE` override them. futbolfantasy is not in the queue.
+- Tagged at the source: `writes.Send`, the token refresh, `Guard.Cash` and the reads `automate`,
+  `claimReward` and `fixLineup` act on are P0; the server's client and the page render P1; the
+  probe P2; the world build P3 (also anything untagged); the activity value history P4.
+- Strict priority between levels, round-robin between scopes inside one. P0 also skips the
+  in-flight cap. A scope is a string on the request (`api.Client.For`); today there is one.
+- On 429: P1–P4 fail at once with `httpx.Throttled` ("LaLiga nos frena: reintenta en X", a 503
+  with `Retry-After` from the server) for every scope, for max(Retry-After, 1→2→4… min capped at
+  30) plus up to 10% jitter. P1 is paused with them: a click during a 429 is not worth deepening
+  the ban, and the user gets the time to retry instead of a spinner. P0 goes on, one every 5 s.
+  A P1 waiting longer than 15 s fails the same way.
+- The queue never retries and never reorders writes among themselves; a write still makes one
+  attempt (`Retries: 1`). A write that times out waiting was never sent.
+- `/healthz` shows `queue`: limits, and per host the pause left, the backoff, in flight, queued
+  per priority and, per scope, sent, waited ms, 429s and refused. A `laliga requests` line is
+  logged once a day with the previous day's counters.
+
 ## 4. Memory on the Pi
 
 Today ~65 MB: runtime ~20, global data 5–8, universe 2–4 (two during a compare), render peak
@@ -127,9 +146,9 @@ unwatched, render after a rebuild only for tenants with watchers.
 Each leaves the single-user deploy working; until 3.10 the registry holds one tenant built from
 `config.Active()`.
 
-- **3.0** Test seams and the render race: swappable `RoundTripper`, a fake LaLiga server that
-  records bearer, method, path and body; `render.*` set once. *Test:* two concurrent renders
-  under `-race`.
+- **3.0** (done) Test seams and the render race: swappable `RoundTripper`
+  (`httpx.SetTransport`), a fake LaLiga server that records bearer, method, path and body
+  (`httpx/httpxtest`); `render.*` set once. *Test:* two concurrent renders under `-race`.
 - **3.1** `config.Profile`. *Test:* every path equals today's.
 - **3.2** A store per profile for policies, outcomes, dismissed, rewards, forecast, rules,
   clausulazos, necroporra, services. *Tests:* writes on A invisible on B; parallel updates under
@@ -146,8 +165,8 @@ Each leaves the single-user deploy working; until 3.10 the registry holds one te
   on B; a sale or acceptance for a player not in A's universe is refused.
 - **3.7** The model split: `BuildGlobal`, `BuildLeague`, `Compose`. *Test:* on the frozen
   fixtures, `Compose` equals today's `Build` field for field.
-- **3.8** The limiter. *Tests:* P0 jumps 100 queued P3; a 429 pauses P2–P4 everywhere and lets P0
-  through spaced; jitter spreads N engines.
+- **3.8** (done) The limiter. *Tests:* P0 jumps 100 queued P3; a 429 pauses P1–P4 everywhere and
+  lets P0 through spaced; jitter spreads N engines (left for 3.9, with the engines).
 - **3.9** `world` and `tenant.Registry`; `cmdServe` becomes registry plus default tenant.
   **End-to-end money-safety on the fake API**, two tenants in one league with different cash
   raiding the same player: each `pay_clause` uses its own bearer, team and an amount within its

@@ -6,6 +6,7 @@ package httpx
 
 import (
 	"compress/gzip"
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
@@ -37,7 +38,28 @@ type Counters struct {
 var (
 	mu    sync.Mutex
 	stats Counters
+
+	transportMu sync.RWMutex
+	transport   http.RoundTripper = http.DefaultTransport
 )
+
+func SetTransport(next http.RoundTripper) func() {
+	transportMu.Lock()
+	previous := transport
+	transport = next
+	transportMu.Unlock()
+	return func() {
+		transportMu.Lock()
+		transport = previous
+		transportMu.Unlock()
+	}
+}
+
+func wire() http.RoundTripper {
+	transportMu.RLock()
+	defer transportMu.RUnlock()
+	return transport
+}
 
 func Stats() Counters {
 	mu.Lock()
@@ -85,15 +107,17 @@ func (e *RateLimited) Error() string {
 // which is what a probe wants: always ask, but leave the answer where the rest of the
 // cycle will find it.
 type Request struct {
-	URL     string
-	Method  string
-	Headers map[string]string
-	Body    []byte
-	TTL     time.Duration
-	Store   bool
-	Tag     string
-	Timeout time.Duration
-	Retries int
+	URL      string
+	Method   string
+	Headers  map[string]string
+	Body     []byte
+	TTL      time.Duration
+	Store    bool
+	Tag      string
+	Timeout  time.Duration
+	Retries  int
+	Priority Priority
+	Scope    string
 }
 
 // Frozen is the differential harness's guarantee: TTLs are ignored and the network is
@@ -241,7 +265,8 @@ func fetch(request Request) (string, bool, error) {
 		}
 
 		var limited *RateLimited
-		if errors.As(err, &limited) {
+		var throttled *Throttled
+		if errors.As(err, &limited) || errors.As(err, &throttled) {
 			return "", false, err
 		}
 		var httpErr *Error
@@ -262,8 +287,9 @@ func fetch(request Request) (string, bool, error) {
 }
 
 func once(request Request) (string, int, error) {
-	bump(&stats.Requests)
-	req, err := http.NewRequest(request.Method, request.URL, bodyReader(request.Body))
+	req, err := http.NewRequestWithContext(
+		withTicket(context.Background(), request.Priority, request.Scope),
+		request.Method, request.URL, bodyReader(request.Body))
 	if err != nil {
 		return "", 0, err
 	}
@@ -272,8 +298,12 @@ func once(request Request) (string, int, error) {
 	}
 	req.Header.Set("Accept-Encoding", "gzip")
 
-	ctxClient := &http.Client{Timeout: request.Timeout}
-	resp, err := ctxClient.Do(req)
+	client := &http.Client{Timeout: request.Timeout, Transport: current()}
+	resp, err := client.Do(req)
+	var throttled *Throttled
+	if !errors.As(err, &throttled) {
+		bump(&stats.Requests)
+	}
 	if err != nil {
 		bump(&stats.Errors)
 		return "", 0, err
@@ -374,7 +404,8 @@ func PostForm(rawURL string, form map[string]string, target any) error {
 			"Content-Type": "application/x-www-form-urlencoded",
 			"User-Agent":   config.APIHeaders()["User-Agent"],
 		},
-		Tag: "raw",
+		Tag:      "raw",
+		Priority: Write,
 		// A login code and a refresh token are spent by the first answer; a retry after a
 		// timeout only spends them again and gets invalid_grant.
 		Retries: 1,

@@ -6,18 +6,22 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/services"
@@ -430,6 +434,19 @@ func logging(next http.Handler) http.Handler {
 	})
 }
 
+func (s *Server) throttled(writer http.ResponseWriter, err error) bool {
+	var refused *httpx.Throttled
+	if !errors.As(err, &refused) {
+		return false
+	}
+	if refused.RetryIn > 0 {
+		writer.Header().Set("Retry-After", strconv.Itoa(int(math.Ceil(refused.RetryIn.Seconds()))))
+	}
+	s.json(writer, http.StatusServiceUnavailable,
+		map[string]any{"error": refused.Error(), "throttled": true})
+	return true
+}
+
 func (s *Server) json(writer http.ResponseWriter, status int, body any) {
 	blob, err := json.Marshal(body)
 	if err != nil {
@@ -446,12 +463,14 @@ func (s *Server) json(writer http.ResponseWriter, status int, body any) {
 // step the render is on and to know when the panel is ready.
 type health struct {
 	state.Health
-	Rendering *model.Progress `json:"rendering,omitempty"`
-	PageReady bool            `json:"page_ready"`
+	Rendering *model.Progress   `json:"rendering,omitempty"`
+	PageReady bool              `json:"page_ready"`
+	Queue     httpx.QueueReport `json:"queue"`
 }
 
 func (s *Server) health(writer http.ResponseWriter, _ *http.Request) {
-	answer := health{Health: s.state.Health(), PageReady: s.pageReady()}
+	answer := health{Health: s.state.Health(), PageReady: s.pageReady(),
+		Queue: httpx.QueueStats()}
 	if current, running := Rendering.Current(); running {
 		answer.Rendering = &current
 	}

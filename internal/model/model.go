@@ -20,6 +20,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/matching"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
 )
@@ -539,7 +540,7 @@ func Build(client *api.Client, leagueID, myTeamID string, bridge *Bridge,
 		}
 		universe.CashModel = ReconstructCash(universe.Activity, universe.LeagueTeams,
 			myTeamID, myCash)
-		EnrichActivityValues(client, universe.Activity, 18)
+		EnrichActivityValues(client.At(httpx.Enrich), universe.Activity, 18)
 	}
 
 	ApplyScores(universe.Players)

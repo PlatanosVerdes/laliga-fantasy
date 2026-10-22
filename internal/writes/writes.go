@@ -278,7 +278,7 @@ func Send(call Call) (any, error) {
 	}
 	raw, err := httpx.Fetch(httpx.Request{
 		URL: config.APIBase + call.Path + separator + "x-lang=es", Method: call.Method,
-		Headers: headers, Body: body, Retries: 1, Tag: "raw",
+		Headers: headers, Body: body, Retries: 1, Tag: "raw", Priority: httpx.Write,
 	})
 	if err != nil {
 		return nil, explain(err)
