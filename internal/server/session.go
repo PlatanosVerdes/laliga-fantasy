@@ -46,15 +46,16 @@ func (s *Server) setup(writer http.ResponseWriter, request *http.Request) {
 	_, signed := visitorOf(request)
 	adding := request.URL.Query().Get("cuenta") == "nueva" && signed
 	title, lead, back := "Inicia sesión", "Entra con tu cuenta de LaLiga Fantasy y el panel se pone en marcha.", ""
+	linkIn := linkInBox
 	if adding {
 		title, lead = "Añadir cuenta", "Entra con otra cuenta de LaLiga Fantasy. Queda guardada y el panel pasa a usarla."
-		back = `<a class="back" href="/">← Volver al panel</a>`
+		back, linkIn = `<a class="back" href="/">← Volver al panel</a>`, ""
 	}
 	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
 	writer.Header().Set("Cache-Control", "no-store")
 	fmt.Fprint(writer, authPage(title, strings.NewReplacer("{{title}}", html.EscapeString(title),
 		"{{lead}}", html.EscapeString(lead), "{{login}}", html.EscapeString(pending.URL),
-		"{{back}}", back).Replace(setupBody)))
+		"{{back}}", back, "{{linkin}}", linkIn).Replace(setupBody)))
 }
 
 // session finishes the login: it accepts the pasted redirect URL, a bare code, or a whole
@@ -234,24 +235,47 @@ func (s *Server) foreign(writer http.ResponseWriter, who visitor) {
 }
 
 const setupBody = `<h1>{{title}}</h1><p class="lead">{{lead}}</p>
+<div class="phone" data-for="phone" hidden><p class="lead">En el móvil o la tableta no hay herramientas de red, y sin
+ellas no se puede sacar el código del login. Haz la primera entrada en un ordenador, o, si ya has entrado en otro
+dispositivo, vincula este con el código que te dé allí.</p>
+ <button class="btn quiet" id="show-steps" type="button">Ver los pasos igualmente</button></div>
 <ol class="steps">
  <li><div><b>Abre el login de LaLiga</b>
   <p>Entra como en la app: Google, Apple o correo.</p>
   <a class="btn" href="{{login}}" target="_blank" rel="noreferrer">Abrir el login ↗</a></div></li>
  <li><div><b>Antes de entrar, abre las herramientas de red</b>
-  <p>En la pestaña del login: <code>Cmd+Opt+I</code> (Mac) o <code>Ctrl+Shift+I</code> →
+  <p>En la pestaña del login: <span data-for="any"><code>Cmd+Opt+I</code> en Mac, <code>F12</code> o
+  <code>Ctrl+Shift+I</code> en Windows y Linux</span><span data-for="mac" hidden><code>Cmd+Opt+I</code>
+  (en Safari, antes activa Ajustes → Avanzado → <b>Mostrar funciones para desarrolladores web</b>)</span><span
+  data-for="pc" hidden><code>F12</code> o <code>Ctrl+Shift+I</code></span> →
   pestaña <b>Network</b> (Red) → marca <b>Preserve log</b> (Conservar registro). Ahora entra.</p></div></li>
  <li><div><b>Copia la última petición</b>
   <p>Al terminar, la página se queda en blanco y la barra no cambia: es lo normal. En Network, la
   última fila, en rojo y <code>(canceled)</code>, es <code>authredirect://…?code=…</code>:
   botón derecho → <b>Copy → Copy URL</b>. En Safari y Firefox suele salir también en la barra.</p></div></li>
  <li><div><b>Pégala aquí</b>
-  <textarea id="paste" placeholder="authredirect://com.lfp.laligafantasy?code=…"></textarea>
+  <textarea id="paste" name="login-redirect" aria-label="Dirección de vuelta del login" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="authredirect://com.lfp.laligafantasy?code=…"></textarea>
   <button class="btn" id="go">Entrar</button></div></li>
 </ol>
-<div id="msg"></div>{{back}}
+<div id="msg"></div>{{linkin}}{{back}}
 <script>
 const msg=document.getElementById('msg'), go=document.getElementById('go');
+(()=>{
+  const ua=navigator.userAgent||'', hints=navigator.userAgentData;
+  const platform=(hints&&hints.platform)||navigator.platform||ua;
+  // iPadOS asks for the desktop site and reports itself as a Mac; only the touch screen gives it away.
+  const phone=(hints&&hints.mobile)||/Android|iPhone|iPad|iPod/i.test(platform+' '+ua)||(/Mac/i.test(platform)&&navigator.maxTouchPoints>1);
+  const os=phone?'phone':/Mac/i.test(platform)?'mac':'pc';
+  document.querySelectorAll('[data-for]').forEach((e)=>{e.hidden=e.dataset.for!==os;});
+  if(os!=='phone') return;
+  const steps=document.querySelector('.steps'), link=document.querySelector('.link-in');
+  steps.hidden=true;
+  if(link){link.classList.add('first');steps.before(link);}
+  document.getElementById('show-steps').onclick=(e)=>{steps.hidden=false;e.target.remove();
+    document.querySelectorAll('[data-for="any"]').forEach((x)=>{x.hidden=false;});};
+})();
+const linkGo=document.getElementById('link-go');
+if(linkGo) linkGo.onclick=()=>linkHere(document.getElementById('link-code').value,document.getElementById('link-msg'),linkGo);
 go.onclick=async()=>{
   const paste=document.getElementById('paste').value.trim();
   if(!paste) return;
@@ -287,6 +311,11 @@ async function refused(res){const data=await res.clone().json().catch(()=>({}));
   throw new Error('');}
 </script>
 `
+
+const linkInBox = `<section class="link-in"><b>¿Ya has entrado en otro dispositivo?</b>
+<p>Allí, menú de la cuenta → <b>Vincular un dispositivo</b>, y escribe aquí el código o escanea el QR con la cámara.</p>
+<input class="code" id="link-code" name="device-link" aria-label="Código de vinculación" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="ABCD-EFGH" maxlength="12">
+<button class="btn" id="link-go" type="button">Vincular</button><div class="msg" id="link-msg"></div></section>`
 
 const foreignBody = `<h1>El panel sigue otra cuenta</h1>
 <p class="lead">Ahora mismo está con la cuenta de otra persona, y eso no se enseña. Puedes pasarlo a una tuya:

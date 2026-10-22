@@ -20,6 +20,7 @@ type gate struct {
 	sessions *sessionStore
 	logins   *pendingLogins
 	attempts *attempts
+	links    *deviceLinks
 }
 
 func (s *Server) doors() *gate {
@@ -29,14 +30,15 @@ func (s *Server) doors() *gate {
 			path = filepath.Join(config.ConfigRoot, "sessions.json")
 		}
 		s.gate = &gate{sessions: newSessionStore(path), logins: newPendingLogins(),
-			attempts: newAttempts(LoginAttempts, LoginWindow)}
+			attempts: newAttempts(LoginAttempts, LoginWindow), links: newDeviceLinks()}
 	})
 	return s.gate
 }
 
 func signedOut(path string) bool {
 	switch path {
-	case "/healthz", "/api/health", "/favicon.ico", "/apple-touch-icon.png", "/api/session", "/api/logout":
+	case "/healthz", "/api/health", "/favicon.ico", "/apple-touch-icon.png", "/api/session", "/api/logout",
+		"/vincular", "/api/link/redeem":
 		return true
 	}
 	return strings.HasPrefix(path, "/assets/")
@@ -44,7 +46,7 @@ func signedOut(path string) bool {
 
 var anyProfile = map[string]bool{
 	"/": true, "/api/accounts": true, "/api/accounts/use": true, "/api/accounts/logout": true,
-	"/api/accounts/avatar": true,
+	"/api/accounts/avatar": true, "/vincular/nuevo": true, "/api/link": true, "/api/link/status": true,
 }
 
 func visitorOf(request *http.Request) (visitor, bool) {

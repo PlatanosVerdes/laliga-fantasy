@@ -403,6 +403,7 @@ function AccountMenu() {
         onClick=${() => act('/api/accounts/use', {account: a.id, league: (a.leagues[0] || {}).id || ''}, 'Cambiando de cuenta…')}><${Avatar} account=${a} name=${who(a)}/>${who(a)}</button>`)}` : null}
       ${leagues.length > 1 || accounts.length > 1 ? html`<div class="acct-sep"></div>` : null}
       <a class="acct-item" role="menuitem" href="/?cuenta=nueva">Añadir cuenta</a>
+      <a class="acct-item" role="menuitem" href="/vincular/nuevo">Vincular un dispositivo</a>
       <button type="button" role="menuitem" class="acct-item"
         onClick=${() => postJSON('/api/logout', {}).then(() => { location.href = '/'; }, (e) => flash('No se ha podido', e.message))}>Salir de este navegador</button>
       ${active ? html`<button type="button" role="menuitem" class="acct-item acct-out"

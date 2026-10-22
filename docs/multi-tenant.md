@@ -57,9 +57,18 @@ own, no user table to maintain.
 - **A proxy in front** (Cloudflare Access, Authelia, oauth2-proxy) stays supported as an extra
   layer. It never replaces the app's own session.
 
-The redirect goes to `authredirect://com.lfp.laligafantasy`, so the user pastes the address
-bar back. That stays unless LaLiga's client accepts another redirect; the page should explain
-the step better.
+The redirect goes to `authredirect://com.lfp.laligafantasy`, so the user copies the
+`(canceled)` request out of DevTools. That stays unless LaLiga's client accepts another redirect.
+The login page shows the keys for the visitor's platform, and on a phone or tablet, which has no
+DevTools, it points to linking instead.
+
+- **Linking a device** (like WhatsApp Web or a TV sign-in): a signed-in browser opens
+  *Vincular un dispositivo* and gets a one-time code, `ABCD-EFGH`, with a QR of
+  `/vincular#<code>`. The code is single use, lives 2 minutes in memory only, stored as its
+  SHA-256, at most 3 live per user. The other device types or scans it on `/vincular` and gets
+  a session of its own; the creator's cookie is never copied. Wrong codes count toward the
+  per-IP login limit and burn every live code after 5, and the user is checked against
+  `FANTASY_ALLOW` again when the code is used.
 
 ## Extras as modules
 

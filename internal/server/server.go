@@ -325,6 +325,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/accounts/logout", s.logout)
 	mux.HandleFunc("/api/accounts/avatar", s.avatar)
 	mux.HandleFunc("/api/logout", s.signOut)
+	mux.HandleFunc("/vincular", s.linkPage)
+	mux.HandleFunc("/vincular/nuevo", s.newLinkPage)
+	mux.HandleFunc("/api/link", s.createLink)
+	mux.HandleFunc("/api/link/status", s.linkStatus)
+	mux.HandleFunc("/api/link/redeem", s.redeemLink)
 	mux.HandleFunc("/", s.index)
 	return logging(sameOrigin(sameSiteOnly(s.requireSession(s.whileLoading(mux)))))
 }
