@@ -308,7 +308,6 @@ func TestBuyLineOutOfReachKeepsMyBid(t *testing.T) {
 	}
 }
 
-// Every row of Mi plantilla carries the starting odds the futbolfantasy pages gave.
 func TestMySquadRowsCarryTheStartingOdds(t *testing.T) {
 	document := decidingDocument()
 	squad := rows(document.Advice["squad"])

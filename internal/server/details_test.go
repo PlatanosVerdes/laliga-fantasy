@@ -124,7 +124,6 @@ func asStrings(value any) []string {
 	return out
 }
 
-// The pitch shows the starting odds of starters and reserves alike, and nothing when unknown.
 func TestShirtsCarryTheStartingOdds(t *testing.T) {
 	known := map[string]map[string]any{"1": {"start_probability": 85.0}, "2": {}}
 	shirt := func(id string) map[string]any {
