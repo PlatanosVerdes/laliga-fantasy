@@ -5,8 +5,6 @@ import (
 	"sync"
 )
 
-// flights lets concurrent identical requests share one fetch: the first goes to the wire, the
-// rest wait for its answer.
 type flights struct {
 	mu    sync.Mutex
 	calls map[string]*flight

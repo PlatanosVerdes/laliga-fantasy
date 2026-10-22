@@ -40,7 +40,6 @@ func TestACachedBodyThatDoesNotParseIsFetchedAgain(t *testing.T) {
 	}
 }
 
-// echo answers with the bearer that asked, so a body shows whose request produced it.
 func echo(t *testing.T) (*httptest.Server, *atomic.Int32) {
 	t.Helper()
 	var hits atomic.Int32

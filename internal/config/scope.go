@@ -2,8 +2,6 @@ package config
 
 import "path/filepath"
 
-// Level is whose a cached answer is: everybody's, a league's, an account's, or one account's
-// team in one league.
 type Level int
 
 const (

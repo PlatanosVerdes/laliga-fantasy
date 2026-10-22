@@ -149,7 +149,6 @@ func (e *FrozenMiss) Error() string {
 	return "FANTASY_FREEZE: no hay nada en cache para " + e.Tag + " " + e.URL
 }
 
-// Misscoped is a request whose cache folder is not its tag's level, refused before the wire.
 type Misscoped struct {
 	Tag   string
 	Want  config.Level
@@ -263,7 +262,6 @@ func Invalidate(scope config.CacheScope, tags ...string) int {
 	return dropped
 }
 
-// InvalidateIn drops each tag in the profile's own scope for that tag's level.
 func InvalidateIn(profile config.Profile, tags ...string) int {
 	dropped := 0
 	for _, tag := range tags {

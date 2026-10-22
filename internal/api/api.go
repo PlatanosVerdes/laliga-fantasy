@@ -79,7 +79,6 @@ type Activity struct {
 	Raw  json.RawMessage `json:"-"`
 }
 
-// reader is one way of asking: with whose token, kept in which cache folder, at which turn.
 // The token is read from the source on every call, so one rotated mid-run is picked up.
 type reader struct {
 	source   *auth.Source
@@ -111,7 +110,6 @@ func (r reader) getList(path string, ttl time.Duration, tag string, store bool,
 	return r.get(path, ttl, tag, store, &listOf{target})
 }
 
-// Global reads what answers the same to everybody, without a token.
 type Global struct{ reader }
 
 func NewGlobal() *Global { return &Global{reader{scope: config.GlobalScope()}} }
@@ -194,7 +192,6 @@ func (a *Account) Team(league string) (string, error) {
 	return "", fmt.Errorf("no encuentro tu equipo en la liga %s", league)
 }
 
-// Member is the account's team in a league, refused when the team is not the account's.
 func (a *Account) Member(league, team string) (*Member, error) {
 	mine, err := a.Team(league)
 	if err != nil {
@@ -209,7 +206,6 @@ func (a *Account) Member(league, team string) (*Member, error) {
 		profile: profile}, nil
 }
 
-// League is what every member of a league sees, read with one member's own token.
 type League struct {
 	reader
 	id string
