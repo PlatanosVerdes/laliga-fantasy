@@ -1,7 +1,6 @@
 name: Stage
 
-# Runs the branch it is started on as the read-only stage on the Pi, at fantasy-stage, or turns
-# the stage off: gh workflow run stage.yml --ref <branch> [-f action=stop].
+# gh workflow run stage.yml --ref <branch> [-f action=stop]
 
 on:
   workflow_dispatch:
