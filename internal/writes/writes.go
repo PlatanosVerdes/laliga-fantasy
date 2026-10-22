@@ -236,7 +236,6 @@ func Validate(testCase ValidationCase) (refused bool, reason string, warnings []
 	return false, "", warnings
 }
 
-// Build is the call an operation would make for a member, without sending it.
 func Build(name string, member *api.Member, args Args) (Call, error) {
 	if member == nil {
 		return Call{}, ErrNoMember
@@ -421,7 +420,6 @@ type Guard struct {
 	Squad func() *Squad
 }
 
-// Squad holds the member's slots (player-team ids) and its own listings (market ids).
 type Squad struct {
 	Slots    map[string]bool
 	Listings map[string]bool

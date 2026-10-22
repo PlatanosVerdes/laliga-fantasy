@@ -12,8 +12,6 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api/apitest"
 )
 
-// Nothing here reaches LaLiga: the member is the fake's and Cash is stubbed. Every case is a
-// guarantee that stands between a click and somebody's money.
 
 func guard(t *testing.T, cash int64) *Guard {
 	t.Helper()
@@ -423,7 +421,6 @@ func TestAnOfferWithoutAListingIsAnsweredInTheApp(t *testing.T) {
 	}
 }
 
-// A rehearsal never reaches the API.
 func TestARehearsedWriteIsNotSent(t *testing.T) {
 	laliga := apitest.New(t)
 	g := guardOf(laliga.Member("a", "L", "T"), 0)
