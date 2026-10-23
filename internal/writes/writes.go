@@ -593,6 +593,14 @@ func (g *Guard) PrepareFor(owner, name string, args Args, who Player, allowWrite
 }
 
 // balance is the current cash, or nil when it cannot be read.
+func (g *Guard) Balance() *int64 {
+	member, err := g.resolve()
+	if err != nil {
+		return nil
+	}
+	return g.balance(member)
+}
+
 func (g *Guard) balance(member *api.Member) *int64 {
 	if g.Cash == nil {
 		return nil
@@ -816,7 +824,7 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 			return nil, fmt.Errorf("ya le ofreces %s", money(who.MyBid))
 		}
 		// Committed counts the other listings only, so the offer being replaced frees its money.
-		if cash != nil && args.Amount > *cash-who.Committed {
+		if short(name, args.Amount, cash, who) {
 			return nil, fmt.Errorf("no te llega: tienes %s y %s en otras pujas", money(*cash),
 				money(who.Committed))
 		}
@@ -842,7 +850,7 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 			return nil, fmt.Errorf("ya tienes una oferta de %s por el: retirala primero, que "+
 				"cambiarla no se puede", money(who.MyBid))
 		}
-		if cash != nil && args.Amount > *cash-who.Committed {
+		if short(name, args.Amount, cash, who) {
 			return nil, fmt.Errorf("no te llega: tienes %s y %s en otras pujas", money(*cash),
 				money(who.Committed))
 		}
@@ -860,7 +868,7 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 		if args.Amount <= 0 {
 			return nil, errors.New("el importe tiene que ser positivo")
 		}
-		if cash != nil && args.Amount > *cash {
+		if short(name, args.Amount, cash, who) {
 			return nil, fmt.Errorf("no te llega: tienes %s", money(*cash))
 		}
 
@@ -876,7 +884,7 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 			return nil, fmt.Errorf("%s no acepta ofertas directas por el: solo se puede pujar "+
 				"por su venta", owner)
 		}
-		if cash != nil && args.Amount > *cash {
+		if short(name, args.Amount, cash, who) {
 			return nil, fmt.Errorf("no te llega: tienes %s", money(*cash))
 		}
 		if name == "pay_clause" && who.Clause > 0 && args.Amount < who.Clause {
@@ -902,7 +910,7 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 		if who.MinBid > 0 && args.Amount < who.MinBid {
 			return nil, fmt.Errorf("la puja minima es %s", money(who.MinBid))
 		}
-		if cash != nil && args.Amount > *cash+who.DebtRoom-who.Committed {
+		if short(name, args.Amount, cash, who) {
 			return nil, fmt.Errorf("no te llega: tienes %s, %s de margen de deuda y %s en otras "+
 				"pujas", money(*cash), money(who.DebtRoom), money(who.Committed))
 		}
@@ -929,6 +937,37 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 		}
 	}
 	return warnings, nil
+}
+
+// Room is what an operation may spend: check refuses any amount over Limit.
+type Room struct {
+	Cash      int64 `json:"cash"`
+	Committed int64 `json:"committed"`
+	DebtRoom  int64 `json:"debt_room"`
+	Limit     int64 `json:"limit"`
+}
+
+func RoomFor(name string, cash int64, who Player) (Room, bool) {
+	room := Room{Cash: cash}
+	switch name {
+	case "bid", "modify_bid":
+		room.Committed, room.DebtRoom = who.Committed, who.DebtRoom
+	case "buy_offer", "change_offer":
+		room.Committed = who.Committed
+	case "raise_clause", "direct_offer", "pay_clause":
+	default:
+		return Room{}, false
+	}
+	room.Limit = cash + room.DebtRoom - room.Committed
+	return room, true
+}
+
+func short(name string, amount int64, cash *int64, who Player) bool {
+	if cash == nil {
+		return false
+	}
+	room, spends := RoomFor(name, *cash, who)
+	return spends && amount > room.Limit
 }
 
 // after is the balance the operation would leave: out for a purchase, in for a sale.

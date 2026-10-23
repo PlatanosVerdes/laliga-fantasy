@@ -335,6 +335,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/shield", s.shield)
 	mux.HandleFunc("/api/shield/cancel", s.cancelShield)
 	mux.HandleFunc("/api/bid/prepare", s.prepare)
+	mux.HandleFunc("/api/bid/room", s.room)
 	mux.HandleFunc("/api/bid/confirm", s.confirm)
 	mux.HandleFunc("/api/necroporra/vote", s.necroVote)
 	mux.HandleFunc("/refresh", s.refresh)

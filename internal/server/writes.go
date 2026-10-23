@@ -445,6 +445,26 @@ func (s *Server) prepare(writer http.ResponseWriter, request *http.Request) {
 	s.json(writer, http.StatusOK, summary)
 }
 
+// room is what the amount dialog may promise while it is typed: the limit prepare refuses beyond.
+func (s *Server) room(writer http.ResponseWriter, request *http.Request) {
+	if s.opts.Guard == nil {
+		s.json(writer, http.StatusNotImplemented, map[string]any{"error": "sin escrituras"})
+		return
+	}
+	cash := s.opts.Guard.Balance()
+	if cash == nil {
+		s.json(writer, http.StatusServiceUnavailable, map[string]any{"error": "saldo ilegible"})
+		return
+	}
+	query := request.URL.Query()
+	room, spends := writes.RoomFor(query.Get("operation"), *cash, s.playerFor(query.Get("player_id")))
+	if !spends {
+		s.json(writer, http.StatusOK, map[string]any{"cash": *cash})
+		return
+	}
+	s.json(writer, http.StatusOK, room)
+}
+
 // confirm is step two: it spends the token, sends the call, and then makes the world catch up.
 func (s *Server) confirm(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost {
