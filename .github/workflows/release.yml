@@ -6,8 +6,8 @@ name: Release
 on:
   push:
     branches: [main]
-    # An icon or a README is not a new version.
-    paths-ignore: ["assets/**", "**/*.md"]
+    # A README is not a new version; assets/ is, being the panel the image serves.
+    paths-ignore: ["**/*.md"]
 
 permissions:
   contents: write
