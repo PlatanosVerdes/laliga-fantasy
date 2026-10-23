@@ -462,3 +462,34 @@ func TestAThrottledRequestIsNotRetried(t *testing.T) {
 		t.Fatalf("err=%v calls=%d", err, len(fake.Calls()))
 	}
 }
+
+type slowBackend struct {
+	*backend
+	clock *fakeClock
+	takes time.Duration
+}
+
+func (s slowBackend) RoundTrip(request *http.Request) (*http.Response, error) {
+	s.clock.Advance(s.takes)
+	return s.backend.RoundTrip(request)
+}
+
+func TestTheQueueTimesEveryAnswerAndSortsItByClass(t *testing.T) {
+	server, clock := &backend{status: func(call int) (int, string) {
+		if call == 2 {
+			return http.StatusServiceUnavailable, ""
+		}
+		return http.StatusOK, ""
+	}}, newClock()
+	slow := slowBackend{backend: server, clock: clock, takes: 3 * time.Second}
+	queue := NewQueue(func() http.RoundTripper { return slow }, limits(100, 100, 4), clock, testHost)
+	send(queue, Rebuild, "a")
+	send(queue, Rebuild, "a")
+	host := queue.Report().Hosts[0]
+	if host.Latency.Count != 2 || host.Latency.Sum != 6 || host.Latency.Counts[5] != 2 {
+		t.Errorf("two answers of 3s land in the 5s bucket: %+v", host.Latency)
+	}
+	if host.Answers["2xx"] != 1 || host.Answers["5xx"] != 1 {
+		t.Errorf("answers by class: %v", host.Answers)
+	}
+}

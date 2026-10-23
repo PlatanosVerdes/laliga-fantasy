@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
 	"math"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -241,6 +243,42 @@ type lane struct {
 	stopWake    func() bool
 	total       map[string]*ScopeCounters
 	today       map[string]*ScopeCounters
+	latency     Latency
+	answers     map[string]int
+}
+
+// LatencyBuckets are the upper bounds, in seconds, of the response time histogram.
+var LatencyBuckets = []float64{0.1, 0.25, 0.5, 1, 2, 5, 10, 30}
+
+// Latency is how long the upstream took to answer, until its headers: Counts[i] holds the
+// answers at or under LatencyBuckets[i], the last one everything slower.
+type Latency struct {
+	Counts []int   `json:"counts"`
+	Sum    float64 `json:"sum_seconds"`
+	Count  int     `json:"count"`
+}
+
+func (l *Latency) observe(seconds float64) {
+	if l.Counts == nil {
+		l.Counts = make([]int, len(LatencyBuckets)+1)
+	}
+	index := len(LatencyBuckets)
+	for i, bound := range LatencyBuckets {
+		if seconds <= bound {
+			index = i
+			break
+		}
+	}
+	l.Counts[index]++
+	l.Sum += seconds
+	l.Count++
+}
+
+func answerClass(response *http.Response, err error) string {
+	if err != nil || response == nil {
+		return "error"
+	}
+	return strconv.Itoa(response.StatusCode/100) + "xx"
 }
 
 func (l *lane) count(scope string, change func(*ScopeCounters)) {
@@ -324,7 +362,7 @@ func (q *Queue) lane(host string) *lane {
 	found := q.lanes[host]
 	if found == nil {
 		found = &lane{host: host, tokens: float64(q.limits.Burst), refilled: q.clock.Now(),
-			total: map[string]*ScopeCounters{}, today: map[string]*ScopeCounters{}}
+			total: map[string]*ScopeCounters{}, today: map[string]*ScopeCounters{}, answers: map[string]int{}}
 		q.lanes[host] = found
 	}
 	return found
@@ -339,7 +377,13 @@ func (q *Queue) RoundTrip(request *http.Request) (*http.Response, error) {
 	if err := q.acquire(request.Context(), host, ticket); err != nil {
 		return nil, err
 	}
+	started := q.clock.Now()
 	response, err := q.next().RoundTrip(request)
+	q.mu.Lock()
+	lane := q.lane(host)
+	lane.latency.observe(q.clock.Now().Sub(started).Seconds())
+	lane.answers[answerClass(response, err)]++
+	q.mu.Unlock()
 	q.release(host, ticket, response, true)
 	return response, err
 }
@@ -576,6 +620,8 @@ type HostReport struct {
 	InFlight     int                      `json:"in_flight"`
 	Queued       map[string]int           `json:"queued"`
 	Scopes       map[string]ScopeCounters `json:"scopes"`
+	Latency      Latency                  `json:"latency"`
+	Answers      map[string]int           `json:"answers"`
 }
 
 type QueueReport struct {
@@ -594,7 +640,9 @@ func (q *Queue) Report() QueueReport {
 	for _, host := range sortedKeys(q.lanes) {
 		lane := q.lanes[host]
 		line := HostReport{Host: host, BackoffSecs: int(lane.backoff.Seconds()),
-			InFlight: lane.inFlight, Queued: map[string]int{}, Scopes: map[string]ScopeCounters{}}
+			InFlight: lane.inFlight, Queued: map[string]int{}, Scopes: map[string]ScopeCounters{},
+			Latency: Latency{Counts: slices.Clone(lane.latency.Counts), Sum: lane.latency.Sum, Count: lane.latency.Count},
+			Answers: maps.Clone(lane.answers)}
 		if now.Before(lane.pausedUntil) {
 			until := lane.pausedUntil
 			line.PausedUntil = &until
