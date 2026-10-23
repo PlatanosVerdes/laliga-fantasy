@@ -1099,7 +1099,7 @@ body:has(.drawer.as-pop:not([hidden])) .cmp-tray{display:none}
 .link-code{margin:14px 0 0;text-align:center;font:700 28px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em}
 .link-state{margin:12px 0 0;text-align:center;font-size:14px;color:var(--ink-2)}
 .link-state.good{color:var(--good)} .link-state.bad{color:var(--critical)}
-.device-list{margin:4px 0 0}
+.device-list{margin:4px 0 0;max-height:285px;overflow-y:auto;overscroll-behavior:contain}
 .device-row{display:flex;align-items:center;gap:12px;padding:8px 2px}
 .device-row+.device-row{border-top:1px solid var(--line)}
 .device-row svg{flex:none;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;color:var(--ink-2)}

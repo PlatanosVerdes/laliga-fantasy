@@ -89,3 +89,17 @@ func TestDevicesListsAndClosesOnlyTheVisitorsSessions(t *testing.T) {
 func withDoor(request *http.Request, door string) *http.Request {
 	return request.WithContext(context.WithValue(request.Context(), doorKey{}, door))
 }
+
+func TestARequestThatSaysNothingKeepsTheKnownDevice(t *testing.T) {
+	store := newSessionStore("")
+	_, who, err := store.open("user-me", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.note(who.key, "iPhone · Safari", place{Country: "ES"})
+	store.note(who.key, "", place{})
+	got := store.listUser("user-me")[0]
+	if got.Device != "iPhone · Safari" || got.Place.Country != "ES" {
+		t.Errorf("an anonymous request erased the device: %+v", got)
+	}
+}
