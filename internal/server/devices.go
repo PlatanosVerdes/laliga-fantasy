@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -110,47 +109,5 @@ func (s *Server) devices(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (s *Server) devicesPage(writer http.ResponseWriter, request *http.Request) {
-	if _, signed := visitorOf(request); !signed {
-		http.Redirect(writer, request, "/", http.StatusSeeOther)
-		return
-	}
-	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-	writer.Header().Set("Cache-Control", "no-store")
-	fmt.Fprint(writer, authPage("Dispositivos", devicesBody))
+	http.Redirect(writer, request, "/?abrir=dispositivos", http.StatusSeeOther)
 }
-
-const devicesBody = `<h1>Dispositivos</h1>
-<p class="lead">Dónde tienes abierto el panel. Cerrar uno lo saca al momento.</p>
-<div class="device-list" id="devices"><p class="hint">Cargando…</p></div>
-<div class="msg" id="devices-msg"></div>
-<div class="row"><a class="btn quiet" href="/">Volver</a>
-<button class="btn quiet danger" id="close-all" type="button">Cerrar todas las sesiones</button></div>
-<script>
-const list=document.getElementById('devices'), msg=document.getElementById('devices-msg'), all=document.getElementById('close-all');
-const countries=(()=>{try{return new Intl.DisplayNames(['es'],{type:'region'});}catch(e){return null;}})();
-const country=(code)=>{try{return code&&countries?countries.of(code):code;}catch(e){return code;}};
-const placeText=(p)=>{p=p||{};if(p.network==='tailnet')return 'Tailnet';if(p.network==='lan')return 'Red local';
-  return [p.city||p.region,country(p.country)].filter(Boolean).join(', ');};
-const ago=(stamp)=>{const m=Math.floor((Date.now()-new Date(stamp))/60000);
-  return m<10?'activo ahora':m<60?'hace '+m+' min':m<1440?'hace '+Math.floor(m/60)+' h':'hace '+Math.floor(m/1440)+' d';};
-const icon=(d)=>/iPhone|iPad|Android/.test(d)
-  ?'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg>'
-  :'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>';
-const esc=(t)=>String(t).replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-async function post(body){const res=await fetch('/api/devices',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||res.status);return data;}
-async function load(){
-  try{
-    const data=await fetch('/api/devices',{cache:'no-store'}).then((r)=>r.json());
-    const devices=data.devices||[];
-    list.innerHTML=devices.map((d)=>'<div class="device-row">'+icon(d.device||'')+'<span class="device-who"><b>'+esc(d.device||'Dispositivo desconocido')+'</b><small>'+
-      esc([placeText(d.place),d.current?'activo ahora':ago(d.seen)].filter(Boolean).join(' · '))+'</small></span>'+
-      (d.current?'<span class="device-here">Este dispositivo</span>':'<button class="device-out" type="button" data-id="'+esc(d.id)+'">Cerrar</button>')+'</div>').join('');
-  }catch(e){msg.className='msg bad';msg.textContent='No he podido leer las sesiones.';}
-}
-list.onclick=async(e)=>{const id=e.target.dataset&&e.target.dataset.id;if(!id)return;
-  try{await post({close:id});load();}catch(err){msg.className='msg bad';msg.textContent=err.message;}};
-all.onclick=async()=>{try{const res=await fetch('/api/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"everywhere":true}'});
-  if(!res.ok)throw new Error((await res.json().catch(()=>({}))).error||res.status);location.href='/';}catch(err){msg.className='msg bad';msg.textContent=err.message;}};
-load();
-</script>`

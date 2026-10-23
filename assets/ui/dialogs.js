@@ -306,7 +306,7 @@ function SignOutDialog() {
       <button type="button" class="signout-opt" onClick=${() => out(true)}>${DEVICES}<span>En todos los dispositivos
         <small>${count > 1 ? count + ' sesiones abiertas, también las vinculadas con QR' : 'También los vinculados con QR'}</small></span></button>
     </div>
-    <p class="signout-more"><a href="/dispositivos">Ver los dispositivos y cerrar uno solo</a></p>
+    <p class="signout-more"><button type="button" class="text-link" onClick=${() => show('devices')}>Ver los dispositivos y cerrar uno solo</button></p>
     <div class="modal-actions"><button type="button" onClick=${closeDialog}>Cancelar</button></div>
     ${error ? html`<p class="bid-error">${error}</p>` : null}
   </${Modal}>`;

@@ -245,14 +245,9 @@ func (s *Server) linkPage(writer http.ResponseWriter, request *http.Request) {
 	fmt.Fprint(writer, authPage("Vincular este dispositivo", strings.Replace(body, "{{other}}", "", 1)))
 }
 
+// The QR is a window over the panel now; the old address opens it there.
 func (s *Server) newLinkPage(writer http.ResponseWriter, request *http.Request) {
-	if _, signed := visitorOf(request); !signed {
-		http.Redirect(writer, request, "/", http.StatusSeeOther)
-		return
-	}
-	writer.Header().Set("Content-Type", "text/html; charset=utf-8")
-	writer.Header().Set("Cache-Control", "no-store")
-	fmt.Fprint(writer, authPage("Vincular un dispositivo", linkOutBody))
+	http.Redirect(writer, request, "/?abrir=vincular", http.StatusSeeOther)
 }
 
 const linkInBody = `<h1>Vincular este dispositivo</h1>
@@ -270,44 +265,4 @@ box.onkeydown=(e)=>{if(e.key==='Enter') go.click();};
 box.oninput=(e)=>{const raw=box.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);
   const deleting=(e.inputType||'').startsWith('delete');
   box.value=raw.length>4||(raw.length===4&&!deleting)?raw.slice(0,4)+'-'+raw.slice(4):raw;};
-</script>`
-
-const linkOutBody = `<h1>Vincular un dispositivo</h1>
-<p class="lead">Escanéalo con la cámara del otro dispositivo, o abre <b id="link-where">/vincular</b> y escribe el código.</p>
-<div id="link-show" hidden><div class="link-qr" id="link-qr"></div><div class="link-code" id="link-code"></div></div>
-<div class="msg" id="link-msg">Creando el código…</div>
-<div class="btn-row"><button class="btn quiet" id="link-again" type="button" hidden>Otro código</button></div>
-<a class="back" href="/">← Volver al panel</a>
-<script>
-const msg=document.getElementById('link-msg'), again=document.getElementById('link-again');
-let poll=null, tick=null;
-async function create(){
-  clearInterval(poll); clearInterval(tick); again.hidden=true; msg.className='msg'; msg.textContent='Creando el código…';
-  try{
-    const res=await fetch('/api/link',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-    const data=await res.json().catch(()=>({}));
-    if(!res.ok) throw new Error(data.error||res.status);
-    document.getElementById('link-qr').innerHTML=data.qr;
-    document.getElementById('link-code').textContent=data.code;
-    document.getElementById('link-where').textContent=data.url.split('#')[0];
-    document.getElementById('link-show').hidden=false;
-    const until=Date.now()+data.expires_in*1000;
-    const left=()=>{const s=Math.max(0,Math.round((until-Date.now())/1000));
-      msg.textContent='Un solo uso · caduca en '+Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
-    left(); tick=setInterval(left,1000);
-    poll=setInterval(async()=>{
-      const answer=await fetch('/api/link/status',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({code:data.code})}).then((r)=>r.json()).catch(()=>null);
-      if(!answer||answer.status==='waiting') return;
-      clearInterval(poll); clearInterval(tick);
-      document.getElementById('link-show').hidden=true;
-      if(answer.status==='linked'){msg.className='msg good';msg.textContent='✓ Dispositivo vinculado. Volviendo al panel…';
-        setTimeout(()=>{location.href='/';},1500);return;}
-      msg.className='msg bad';msg.textContent='El código ha caducado.';
-      again.hidden=false;
-    },2000);
-  }catch(e){msg.className='msg bad';msg.textContent=e.message;again.hidden=false;}
-}
-again.onclick=create;
-create();
 </script>`

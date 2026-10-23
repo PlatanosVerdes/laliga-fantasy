@@ -4,6 +4,7 @@ import {ApiFace, Icon, Countdown} from './components.js';
 import {getJSON, postJSON, useView, useCash, changed, getViews, reloadViews} from './api.js';
 import {fmt, esMoney, exact, countdownText} from './format.js';
 import {flash, askSignOut} from './dialogs.js';
+import {openDevices, openLink} from './devices.js';
 import {compare} from './compare.js';
 
 // The page around the views: the tab bar with the search, the live dot and the version, the
@@ -405,8 +406,8 @@ function AccountMenu() {
         onClick=${() => act('/api/accounts/use', {account: a.id, league: (a.leagues[0] || {}).id || ''}, 'Cambiando de cuenta…')}><${Avatar} account=${a} name=${who(a)}/>${who(a)}</button>`)}` : null}
       ${leagues.length > 1 || accounts.length > 1 ? html`<div class="acct-sep"></div>` : null}
       <a class="acct-item" role="menuitem" href="/?cuenta=nueva">Añadir cuenta</a>
-      <a class="acct-item" role="menuitem" href="/vincular/nuevo">Vincular un dispositivo</a>
-      <a class="acct-item" role="menuitem" href="/dispositivos">Dispositivos</a>
+      <button type="button" role="menuitem" class="acct-item" onClick=${() => { setOpen(false); openLink(); }}>Vincular un dispositivo</button>
+      <button type="button" role="menuitem" class="acct-item" onClick=${() => { setOpen(false); openDevices(); }}>Dispositivos</button>
       <div class="acct-sep"></div>
       <button type="button" role="menuitem" class="acct-item"
         onClick=${() => { setOpen(false); askSignOut(); }}>Cerrar sesión</button>`}
