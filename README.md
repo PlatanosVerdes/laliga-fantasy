@@ -1,4 +1,13 @@
-# laliga-fantasy
+<p align="center">
+  <img src="assets/favicon.png" width="96" alt="">
+</p>
+
+<h1 align="center">laliga-fantasy</h1>
+
+<p align="center">
+  <a href="https://github.com/PlatanosVerdes/laliga-fantasy/tags"><img src="https://img.shields.io/github/v/tag/PlatanosVerdes/laliga-fantasy?label=release&color=2f7d3a" alt="Latest release"></a>
+  <img src="https://img.shields.io/github/go-mod/go-version/PlatanosVerdes/laliga-fantasy" alt="Go version">
+</p>
 
 Decision support for [LaLiga Fantasy](https://fantasy.laliga.com/): who to sign, who to
 sell and which buyout clauses to pay, given your cash, your squad and your rivals' squads.
