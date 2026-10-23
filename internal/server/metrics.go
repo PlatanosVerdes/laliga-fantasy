@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
@@ -47,6 +48,31 @@ func prometheusText(report httpx.QueueReport) string {
 			for _, scope := range scopes {
 				fmt.Fprintf(&out, "%s{upstream=%q,scope=%q} %d\n", counter.name, host.Host, scope, counter.value(host.Scopes[scope]))
 			}
+		}
+	}
+	series("upstream_response_seconds", "How long the upstream took to answer, until its headers.", "histogram")
+	for _, host := range report.Hosts {
+		cumulative := 0
+		for i, bound := range httpx.LatencyBuckets {
+			if i < len(host.Latency.Counts) {
+				cumulative += host.Latency.Counts[i]
+			}
+			fmt.Fprintf(&out, "upstream_response_seconds_bucket{upstream=%q,le=%q} %d\n", host.Host,
+				strconv.FormatFloat(bound, 'f', -1, 64), cumulative)
+		}
+		fmt.Fprintf(&out, "upstream_response_seconds_bucket{upstream=%q,le=\"+Inf\"} %d\n", host.Host, host.Latency.Count)
+		fmt.Fprintf(&out, "upstream_response_seconds_sum{upstream=%q} %g\n", host.Host, host.Latency.Sum)
+		fmt.Fprintf(&out, "upstream_response_seconds_count{upstream=%q} %d\n", host.Host, host.Latency.Count)
+	}
+	series("upstream_responses_total", "Answers from the upstream by status class, or error when none came.", "counter")
+	for _, host := range report.Hosts {
+		classes := make([]string, 0, len(host.Answers))
+		for class := range host.Answers {
+			classes = append(classes, class)
+		}
+		sort.Strings(classes)
+		for _, class := range classes {
+			fmt.Fprintf(&out, "upstream_responses_total{upstream=%q,code=%q} %d\n", host.Host, class, host.Answers[class])
 		}
 	}
 	return out.String()
