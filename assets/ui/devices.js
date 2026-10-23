@@ -21,6 +21,7 @@ const ago = (stamp) => {
 function DevicesDialog() {
   const [devices, setDevices] = useState(null);
   const [error, setError] = useState('');
+  const [confirming, setConfirming] = useState(false);
   const load = () => getJSON('/api/devices').then((d) => setDevices(d.devices || []), () => setError('No he podido leer las sesiones.'));
   useEffect(() => { load(); }, []);
   const closeOne = (id) => postJSON('/api/devices', {close: id}).then(load, (e) => setError(e.message));
@@ -36,10 +37,16 @@ function DevicesDialog() {
       ${d.current ? html`<span class="device-here">Este dispositivo</span>`
         : html`<button type="button" class="device-out" onClick=${() => closeOne(d.id)}>Cerrar</button>`}</div>`)}</div>
     ${error ? html`<p class="bid-error">${error}</p>` : null}
-    <div class="modal-actions device-actions">
+    ${confirming ? html`<div class="device-confirm">
+      <p><b>¿Cerrar todas las sesiones?</b> Se cierran ${devices && devices.length > 1 ? `las ${devices.length}, esta incluida` : 'también esta'}: para volver a entrar tendrás que iniciar sesión o vincular con QR.</p>
+      <div class="modal-actions device-actions">
+        <button type="button" onClick=${() => setConfirming(false)}>Cancelar</button>
+        <button type="button" class="device-all" onClick=${closeAll}>Sí, cerrar todas</button>
+      </div></div>`
+    : html`<div class="modal-actions device-actions">
       <button type="button" onClick=${closeDialog}>Volver</button>
-      <button type="button" class="device-all" onClick=${closeAll}>Cerrar todas las sesiones</button>
-    </div>
+      <button type="button" class="device-all" onClick=${() => setConfirming(true)}>Cerrar todas las sesiones</button>
+    </div>`}
   <//>`;
 }
 
