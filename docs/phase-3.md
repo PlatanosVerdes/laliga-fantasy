@@ -1,7 +1,7 @@
 # Phase 3: many leagues and accounts in one process
 
 Design for phase 3 of `docs/multi-tenant.md`, read from `main` after phases 1 and 2a. Built so
-far: 3.0 to 3.6 and 3.8. Section 6 holds the decisions the owner makes before the code starts.
+far: 3.0 to 3.8. Section 6 holds the decisions the owner makes before the code starts.
 
 ## 0. Findings that change the plan
 
@@ -227,8 +227,18 @@ Each leaves the single-user deploy working; until 3.10 the registry holds one te
   `fav` sends through `Member.Send` directly, so an API refusal there prints LaLiga's raw error
   instead of the guard's sentence. Still on the globals: `server.HasSession`/`adopt`, the CLI's
   session reads, and `LeagueID`, `MyTeamID`, `Identity` on `server.Options` (3.10).
-- **3.7** The model split: `BuildGlobal`, `BuildLeague`, `Compose`. *Test:* on the frozen
+- **3.7** (done) The model split: `BuildGlobal`, `BuildLeague`, `Compose`. *Test:* on the frozen
   fixtures, `Compose` equals today's `Build` field for field.
+  `model.Global` holds week, fixtures, schedule, team strength, the bridge and one scored row per
+  player with the bulk status and no ficha. `model.League` holds ownership, league teams, the
+  activity (value-enriched there) and the lineups. `Compose` copies the rows and attaches
+  ownership, market, offers, stars, raids, faces and cash; it rescores only the member's own
+  players, the only ones with a fresher status from their own page and a ficha. It writes to
+  neither world: the rows and the league teams `ReconstructCash` fills are copies. `Build` is the
+  three steps in a row and keeps every caller unchanged. The progress stages now run activity
+  before the market, as the league is built first. Checked on a frozen copy of the Pi cache: the
+  universe is identical to `main`'s, clock fields aside; a golden test on synthetic fixtures was
+  taken from `main`'s `Build`.
 - **3.8** (done) The limiter. *Tests:* P0 jumps 100 queued P3; a 429 pauses P1–P4 everywhere and
   lets P0 through spaced; jitter spreads N engines (left for 3.9, with the engines).
 - **3.9** `world` and `tenant.Registry`; `cmdServe` becomes registry plus default tenant.
