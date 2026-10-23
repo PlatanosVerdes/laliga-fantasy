@@ -14,8 +14,7 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 )
 
-// Global is the part of the universe every league reads alike. Compose never writes to it, so
-// one value can serve every tenant.
+// Compose never writes to Global or League: one value serves every tenant.
 type Global struct {
 	Week           api.Week
 	NextWeekOpens  string
@@ -27,14 +26,11 @@ type Global struct {
 	Bridge         *Bridge
 
 	raw []map[string]any
-	// rows[i] is entries[i] scored with the bulk status and no ficha, which is what it is for
-	// everybody but its owner.
+	// Scored with the bulk status and no ficha; only the owner's view differs.
 	rows    []Player
 	entries []map[string]any
 }
 
-// League is what every member of one league reads alike, read with any member's token.
-// Compose never writes to it.
 type League struct {
 	ownership map[string]slot
 	Teams     map[string]*LeagueTeam
@@ -241,9 +237,7 @@ func BuildLeague(global *api.Global, world *Global, league *api.League) (*League
 		Lineups: loadLineups(league, teams, world.Week.WeekNumber)}, nil
 }
 
-// Compose lays one member's view over the shared worlds: ownership, the market and offers as
-// that member sees them, and its own players rescored with their fresher status. league is nil
-// when the member has no league yet.
+// league is nil when the member has no league yet.
 func Compose(world *Global, league *League, member *api.Member, state State) (*Universe, error) {
 	global, myTeamID := member.Global(), member.TeamID()
 	universe := &Universe{
@@ -365,8 +359,6 @@ func Compose(world *Global, league *League, member *api.Member, state State) (*U
 	return universe, nil
 }
 
-// rate is the part of a row that depends on who is asking: the owner reads a fresher status
-// and a ficha the others never fetch.
 func (p *Player) rate(trend *Trend, ficha *Odds, status string) {
 	p.Status = status
 	// Only the severe statuses make a player unavailable; doubtful still plays.
@@ -405,7 +397,7 @@ func (b *Bridge) trendOf(id string) *Trend {
 	return nil
 }
 
-// cloneTeams copies the rows ReconstructCash writes each member's cash estimate into.
+// ReconstructCash writes each member's own estimate into these.
 func cloneTeams(teams map[string]*LeagueTeam) map[string]*LeagueTeam {
 	out := make(map[string]*LeagueTeam, len(teams))
 	for id, team := range teams {

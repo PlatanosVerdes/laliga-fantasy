@@ -267,7 +267,6 @@ func LoadBridge(global *api.Global, ffTTL time.Duration) (*Bridge, error) {
 		MatchedCount: len(matched)}, nil
 }
 
-// Build is the three steps in one go, for a caller that holds a single member.
 func Build(member *api.Member, bridge *Bridge, state State) (*Universe, error) {
 	world, err := BuildGlobal(member.Global(), bridge)
 	if err != nil {

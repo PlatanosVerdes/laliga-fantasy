@@ -21,8 +21,7 @@ import (
 
 var update = flag.Bool("update", false, "rewrite testdata/universe.golden.json")
 
-// A league of two teams: T1 holds p1 (injured on his own page only) and p2 (no trend, so his
-// odds come from his ficha); T2 holds p3 and lists p5; p4 is a free agent.
+// p1 is injured only on his own page; T1 lists p5.
 func fixtureLeague(t *testing.T) *apitest.LaLiga {
 	t.Helper()
 	laliga := apitest.New(t)
@@ -123,7 +122,7 @@ func dump(t *testing.T, universe *Universe) []byte {
 
 var hoursLeft = regexp.MustCompile(`"((?:clause_)?hours_left)": [-0-9.e+]+`)
 
-// The universe the single Build produced before it was split, on the same fixtures.
+// The golden was taken from Build before the split.
 func TestComposeEqualsTheSingleBuild(t *testing.T) {
 	member := fixtureLeague(t).Member("a", "L1", "T1")
 	universe, err := Build(member, nil, fixtureState)
@@ -156,8 +155,6 @@ func firstDifference(want, got string) string {
 	return fmt.Sprintf("lengths %d and %d", len(wantLines), len(gotLines))
 }
 
-// One global and one league world serve two members of the league, each seeing only his own
-// squad as his, and neither composition leaks into the next.
 func TestComposeKeepsTheSharedWorldsIntact(t *testing.T) {
 	laliga := fixtureLeague(t)
 	a, b := laliga.Member("a", "L1", "T1"), laliga.Member("b", "L1", "T2")
