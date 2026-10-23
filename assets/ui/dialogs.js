@@ -1,7 +1,7 @@
 import {html, useState, useEffect, useRef, panel} from './lib.js';
 import {Modal, Icon, useDialogTrace} from './components.js';
 import {prepare, confirm, getJSON, postJSON, changed, closeDialog, openDialog, useCash, useMeta} from './api.js';
-import {exact, group, digits, stampText} from './format.js';
+import {exact, group, digits, stampText, since} from './format.js';
 
 // The dialogs that ask for something before an operation: an amount (bid, offer, sale, clause
 // payment or raise), the shield's day and hour, the clausulazo's ceiling. Money goes through the
@@ -293,11 +293,19 @@ function RaidDialog({p, done}) {
 const DEVICE = html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg>`;
 const DEVICES = html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="14" height="10" rx="1.5"/><path d="M1 18h12"/><rect x="16" y="9" width="7" height="12" rx="1.5"/></svg>`;
 
+const PHONE = html`<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></svg>`;
+const MOBILE = /iPhone|iPad|Android/;
+// The stamp is moved at most every ten minutes, so anything fresher than that is now.
+const lastSeen = (stamp) => Date.now() - new Date(stamp).getTime() < 10 * 60000 ? 'activo ahora' : since(stamp);
+
 function SignOutDialog() {
   const [error, setError] = useState('');
-  const [count, setCount] = useState(0);
-  useEffect(() => { fetch('/api/devices').then((r) => r.json()).then((d) => setCount(d.count || 0), () => {}); }, []);
+  const [devices, setDevices] = useState([]);
+  const load = () => getJSON('/api/devices').then((d) => setDevices(d.devices || []), () => {});
+  useEffect(() => { load(); }, []);
+  const count = devices.length;
   const out = (everywhere) => postJSON('/api/logout', {everywhere}).then(() => { location.href = '/'; }, (e) => setError(e.message));
+  const closeOne = (id) => postJSON('/api/devices', {close: id}).then(load, (e) => setError(e.message));
   return html`<${Modal} label="Cerrar sesión" onClose=${closeDialog}>
     <button type="button" class="modal-x" aria-label="Cerrar" onClick=${closeDialog}><${Icon} name="x"/></button>
     <h3>Cerrar sesión</h3>
@@ -306,6 +314,13 @@ function SignOutDialog() {
       <button type="button" class="signout-opt" onClick=${() => out(true)}>${DEVICES}<span>En todos los dispositivos
         <small>${count > 1 ? count + ' sesiones abiertas, también las vinculadas con QR' : 'También los vinculados con QR'}</small></span></button>
     </div>
+    ${count ? html`<div class="device-list"><div class="device-list-h">Sesiones abiertas</div>
+      ${devices.map((d) => html`<div class="device-row">${MOBILE.test(d.device || '') ? PHONE : DEVICE}
+        <span class="device-who"><b>${d.device || 'Dispositivo desconocido'}</b>
+          <small>${[d.place, d.current ? 'activo ahora' : lastSeen(d.seen)].filter(Boolean).join(' · ')}</small></span>
+        ${d.current ? html`<span class="device-here">Este dispositivo</span>`
+          : html`<button type="button" class="device-out" onClick=${() => closeOne(d.id)}>Cerrar</button>`}</div>`)}
+    </div>` : null}
     <div class="modal-actions"><button type="button" onClick=${closeDialog}>Cancelar</button></div>
     ${error ? html`<p class="bid-error">${error}</p>` : null}
   </${Modal}>`;

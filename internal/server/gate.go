@@ -69,6 +69,7 @@ func (s *Server) requireSession(next http.Handler) http.Handler {
 			ok = false
 		}
 		if ok {
+			doors.sessions.note(who.key, deviceOf(request), placeOf(request))
 			request = request.WithContext(context.WithValue(request.Context(), visitorKey{}, who))
 		}
 		// Cleaned, so /assets/../api/state is judged as the route it reaches.
@@ -128,10 +129,11 @@ func (s *Server) signIn(writer http.ResponseWriter, request *http.Request, user,
 	if previous, ok := visitorOf(request); ok {
 		doors.sessions.close(previous.key)
 	}
-	id, _, err := doors.sessions.open(user, email)
+	id, opened, err := doors.sessions.open(user, email)
 	if err != nil {
 		return err
 	}
+	doors.sessions.note(opened.key, deviceOf(request), placeOf(request))
 	http.SetCookie(writer, cookie(request, SessionCookie, id, SessionLifetime))
 	return nil
 }
@@ -156,7 +158,3 @@ func (s *Server) signOut(writer http.ResponseWriter, request *http.Request) {
 	s.json(writer, http.StatusOK, map[string]any{"ok": true})
 }
 
-func (s *Server) devices(writer http.ResponseWriter, request *http.Request) {
-	who, _ := visitorOf(request)
-	s.json(writer, http.StatusOK, map[string]any{"count": s.doors().sessions.countUser(who.User)})
-}

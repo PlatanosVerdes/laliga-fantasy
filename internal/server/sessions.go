@@ -37,6 +37,8 @@ type visitor struct {
 	Email   string `json:"email,omitempty"`
 	Created int64  `json:"created"`
 	Seen    int64  `json:"seen"`
+	Device  string `json:"device,omitempty"`
+	Place   string `json:"place,omitempty"`
 	key     string
 }
 
@@ -150,17 +152,32 @@ func (s *sessionStore) find(id string) (visitor, bool) {
 	return *who, true
 }
 
-func (s *sessionStore) countUser(user string) int {
+// note records where a session was last used from, writing only when that changed.
+func (s *sessionStore) note(key, device, place string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.load()
-	count := 0
+	who, ok := s.byKey[key]
+	if !ok || (who.Device == device && who.Place == place) {
+		return
+	}
+	who.Device, who.Place = device, place
+	s.save()
+}
+
+// listUser is the user's live sessions, the most recently used first.
+func (s *sessionStore) listUser(user string) []visitor {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.load()
+	var out []visitor
 	for _, who := range s.byKey {
 		if who.User == user && s.live(who) {
-			count++
+			out = append(out, *who)
 		}
 	}
-	return count
+	slices.SortFunc(out, func(a, b visitor) int { return int(b.Seen - a.Seen) })
+	return out
 }
 
 func (s *sessionStore) closeUser(user string) int {
