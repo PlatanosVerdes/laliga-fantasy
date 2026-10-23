@@ -42,6 +42,7 @@ const authFrame = `<!doctype html><html lang="es"><meta charset="utf-8">
 .auth .btn{text-transform:none;letter-spacing:0;height:auto;box-shadow:none;margin-right:8px}
 .auth .btn.quiet{background:transparent;color:var(--ink);border-color:var(--line)}
 .auth .btn[disabled]{opacity:.5;cursor:default}
+.auth .btn.danger{color:var(--critical);border-color:color-mix(in srgb,var(--critical) 45%,transparent)}
 textarea{width:100%;box-sizing:border-box;min-height:84px;margin-top:10px;padding:10px 12px;
   border-radius:10px;border:1px solid var(--line);background:var(--plane);color:var(--ink);
   font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}

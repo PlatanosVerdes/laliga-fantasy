@@ -86,28 +86,6 @@ func TestDevicesListsAndClosesOnlyTheVisitorsSessions(t *testing.T) {
 	}
 }
 
-func TestClosingTheOthersKeepsThisOne(t *testing.T) {
-	server := New(nil, Options{Allow: "*"})
-	here := ownerSession(t, server)
-	phone := sessionFor(t, server, "user-me")
-	tablet := sessionFor(t, server, "user-me")
-	stranger := sessionFor(t, server, "user-other")
-	answer := visit(server.Handler(), http.MethodPost, "/api/devices", `{"others":true}`, here)
-	if answer.Code != http.StatusOK || answer.Body.String() == "" {
-		t.Fatalf("close others: %d %s", answer.Code, answer.Body)
-	}
-	for name, cookie := range map[string]*http.Cookie{"phone": phone, "tablet": tablet} {
-		if _, ok := server.doors().sessions.find(cookie.Value); ok {
-			t.Errorf("the %s is still signed in", name)
-		}
-	}
-	for name, cookie := range map[string]*http.Cookie{"this browser": here, "the other user": stranger} {
-		if _, ok := server.doors().sessions.find(cookie.Value); !ok {
-			t.Errorf("%s was signed out", name)
-		}
-	}
-}
-
 func withDoor(request *http.Request, door string) *http.Request {
 	return request.WithContext(context.WithValue(request.Context(), doorKey{}, door))
 }

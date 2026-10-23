@@ -79,8 +79,7 @@ func (s *Server) devices(writer http.ResponseWriter, request *http.Request) {
 	sessions := s.doors().sessions
 	if request.Method == http.MethodPost {
 		var body struct {
-			Close  string `json:"close"`
-			Others bool   `json:"others"`
+			Close string `json:"close"`
 		}
 		_ = json.NewDecoder(request.Body).Decode(&body)
 		closed := 0
@@ -88,12 +87,12 @@ func (s *Server) devices(writer http.ResponseWriter, request *http.Request) {
 			if open.key == who.key {
 				continue
 			}
-			if body.Others || (body.Close != "" && sessionID(open.key) == body.Close) {
+			if body.Close != "" && sessionID(open.key) == body.Close {
 				sessions.close(open.key)
 				closed++
 			}
 		}
-		if closed == 0 && !body.Others {
+		if closed == 0 {
 			s.json(writer, http.StatusNotFound, map[string]any{"error": "esa sesion ya no existe"})
 			return
 		}
@@ -124,11 +123,10 @@ const devicesBody = `<h1>Dispositivos</h1>
 <p class="lead">Dónde tienes abierto el panel. Cerrar uno lo saca al momento.</p>
 <div class="device-list" id="devices"><p class="hint">Cargando…</p></div>
 <div class="msg" id="devices-msg"></div>
-<div class="row"><a class="btn quiet" href="/vincular/nuevo">Vincular un dispositivo</a>
-<button class="btn quiet" id="close-others" type="button" hidden>Cerrar los demás</button></div>
-<a class="back" href="/">← Volver al panel</a>
+<div class="row"><a class="btn quiet" href="/">Volver</a>
+<button class="btn quiet danger" id="close-all" type="button">Cerrar todas las sesiones</button></div>
 <script>
-const list=document.getElementById('devices'), msg=document.getElementById('devices-msg'), others=document.getElementById('close-others');
+const list=document.getElementById('devices'), msg=document.getElementById('devices-msg'), all=document.getElementById('close-all');
 const countries=(()=>{try{return new Intl.DisplayNames(['es'],{type:'region'});}catch(e){return null;}})();
 const country=(code)=>{try{return code&&countries?countries.of(code):code;}catch(e){return code;}};
 const placeText=(p)=>{p=p||{};if(p.network==='tailnet')return 'Tailnet';if(p.network==='lan')return 'Red local';
@@ -148,12 +146,11 @@ async function load(){
     list.innerHTML=devices.map((d)=>'<div class="device-row">'+icon(d.device||'')+'<span class="device-who"><b>'+esc(d.device||'Dispositivo desconocido')+'</b><small>'+
       esc([placeText(d.place),d.current?'activo ahora':ago(d.seen)].filter(Boolean).join(' · '))+'</small></span>'+
       (d.current?'<span class="device-here">Este dispositivo</span>':'<button class="device-out" type="button" data-id="'+esc(d.id)+'">Cerrar</button>')+'</div>').join('');
-    others.hidden=devices.length<2;
   }catch(e){msg.className='msg bad';msg.textContent='No he podido leer las sesiones.';}
 }
 list.onclick=async(e)=>{const id=e.target.dataset&&e.target.dataset.id;if(!id)return;
   try{await post({close:id});load();}catch(err){msg.className='msg bad';msg.textContent=err.message;}};
-others.onclick=async()=>{try{const d=await post({others:true});msg.className='msg good';
-  msg.textContent=d.closed===1?'Cerrada 1 sesión.':'Cerradas '+d.closed+' sesiones.';load();}catch(err){msg.className='msg bad';msg.textContent=err.message;}};
+all.onclick=async()=>{try{const res=await fetch('/api/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{"everywhere":true}'});
+  if(!res.ok)throw new Error((await res.json().catch(()=>({}))).error||res.status);location.href='/';}catch(err){msg.className='msg bad';msg.textContent=err.message;}};
 load();
 </script>`
