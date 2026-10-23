@@ -442,10 +442,16 @@ function Stat({s}) {
     if (!isNaN(left)) { value = countdownText(left); hot = left > 0 && left < 6 * 3600000; }
   }
   // The balance moves between rebuilds, and every button is judged against it.
-  if (s.value_id === 'kpi-cash' && typeof cash === 'number') { value = esMoney(cash); note = exact(cash); }
+  const live = s.value_id === 'kpi-cash' && typeof cash === 'number';
+  if (live) { value = esMoney(cash); note = exact(cash); }
+  const pending = s.pending > 0;
+  const tip = live ? 'Tu saldo ahora mismo: ' + exact(cash) + (pending
+    ? ` · ${exact(s.pending)} en pujas y ofertas pendientes · libre ${exact(cash - s.pending)}` : '') : undefined;
   const inner = html`<span class="k">${s.icon ? s.icon + ' ' : ''}${s.label}</span><span class="v" id=${s.value_id || undefined}
-    title=${s.value_id === 'kpi-cash' && typeof cash === 'number' ? 'Tu saldo ahora mismo: ' + exact(cash) : undefined}>${value}${
-    s.small ? html` <small>${s.small}</small>` : null}</span><span class="s">${note || ''}</span>`;
+    title=${tip}>${value}${
+    s.small ? html` <small>${s.small}</small>` : null}</span>${pending
+    ? html`<span class="s pending" title=${tip}>−${esMoney(s.pending)} en pujas</span>`
+    : html`<span class="s">${note || ''}</span>`}`;
   return s.tab ? html`<button class=${'stat' + (hot ? ' hot' : '')} type="button" onClick=${() => goto(s.tab)}>${inner}</button>`
     : html`<div class=${'stat' + (hot ? ' hot' : '')}>${inner}</div>`;
 }
