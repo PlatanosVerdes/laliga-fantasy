@@ -194,6 +194,14 @@ function followPreview(){
   poll=setInterval(check,700);
   check();
 }
+// Every device-link field: the dash appears once four characters are typed, and deleting back
+// over it does not put it back.
+document.addEventListener('DOMContentLoaded',()=>document.querySelectorAll('input[name="device-link"]').forEach((box)=>{
+  box.maxLength=9;
+  box.addEventListener('input',(e)=>{const raw=box.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);
+    const deleting=(e.inputType||'').startsWith('delete');
+    box.value=raw.length>4||(raw.length===4&&!deleting)?raw.slice(0,4)+'-'+raw.slice(4):raw;});
+}));
 async function linkHere(code,msg,button){
   if(!code.trim()) return;
   button.disabled=true; msg.className='msg'; msg.textContent='Comprobando…';
