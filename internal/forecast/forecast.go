@@ -265,7 +265,12 @@ type Week struct {
 	// The average distance between forecast and result per player, across the whole league.
 	MeanAbsError float64 `json:"mean_abs_error"`
 	Counted      int     `json:"counted"`
+	// Hits is how many of the counted players scored within HitWithin points of their forecast.
+	Hits int `json:"hits"`
 }
+
+// HitWithin is how close a player's points must land to his forecast to count as a hit.
+const HitWithin = 2.0
 
 // Review is the last matchday that is over and, while it runs, the current one.
 type Review struct {
@@ -368,6 +373,9 @@ func summarizeWeek(week int, teams map[string]*Team, mine string, complete bool)
 				total.Counted++
 				errorSum += math.Abs(points - pick.XPts)
 				out.Counted++
+				if math.Abs(points-pick.XPts) <= HitWithin {
+					out.Hits++
+				}
 			}
 			line := Line{ID: id, Name: pick.Name, Forecast: pick.XPts, Points: pick.Points}
 			if known || complete {

@@ -6,13 +6,61 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/forecast"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 )
 
 func (s *Server) metrics(writer http.ResponseWriter, _ *http.Request) {
 	writer.Header().Set("Content-Type", "text/plain; version=0.0.4")
 	fmt.Fprint(writer, prometheusText(httpx.QueueStats()))
+	if s.state == nil {
+		return
+	}
+	if universe := s.state.Universe(); universe != nil {
+		if log, err := forecast.Open(s.profile()).Load(); err == nil {
+			fmt.Fprint(writer, forecastText(log, universe, time.Now()))
+		}
+	}
+}
+
+// forecastText is how each played matchday's forecast went, league-wide: no money, no names.
+func forecastText(log forecast.Log, universe *model.Universe, now time.Time) string {
+	var weeks []*forecast.Week
+	for number := range log {
+		if week := forecast.ReviewWeek(log, universe, number, now); week != nil && week.Complete && week.Counted > 0 {
+			weeks = append(weeks, week)
+		}
+	}
+	sort.Slice(weeks, func(i, j int) bool { return weeks[i].Week < weeks[j].Week })
+	var out strings.Builder
+	series := func(name, help string, value func(*forecast.Week) (float64, bool)) {
+		fmt.Fprintf(&out, "# HELP %s %s\n# TYPE %s gauge\n", name, help, name)
+		for _, week := range weeks {
+			if got, ok := value(week); ok {
+				fmt.Fprintf(&out, "%s{week=\"%d\"} %g\n", name, week.Week, got)
+			}
+		}
+	}
+	series("fantasy_forecast_hit_ratio", fmt.Sprintf("Share of fielded players who scored within %g points of their forecast.", forecast.HitWithin),
+		func(w *forecast.Week) (float64, bool) { return float64(w.Hits) / float64(w.Counted), true })
+	series("fantasy_forecast_mean_abs_error_points", "Average distance between a player's forecast and his points.",
+		func(w *forecast.Week) (float64, bool) { return w.MeanAbsError, true })
+	series("fantasy_forecast_actual_over_forecast", "Points the league's elevens scored over what was forecast for them: above 1, the forecast fell short.",
+		func(w *forecast.Week) (float64, bool) {
+			predicted, actual := 0.0, 0.0
+			for _, team := range w.Managers {
+				if !team.Short {
+					predicted, actual = predicted+team.Forecast, actual+team.Actual
+				}
+			}
+			return actual / predicted, predicted > 0
+		})
+	series("fantasy_forecast_players", "Fielded players compared on that matchday.",
+		func(w *forecast.Week) (float64, bool) { return float64(w.Counted), true })
+	return out.String()
 }
 
 // Named upstream_* rather than laliga_*: one alert rule covers every service that exports them.
