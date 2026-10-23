@@ -297,16 +297,16 @@ function SignOutDialog() {
   const [error, setError] = useState('');
   const [count, setCount] = useState(0);
   useEffect(() => { getJSON('/api/devices').then((d) => setCount(d.count || 0), () => {}); }, []);
-  const out = (everywhere) => postJSON('/api/logout', {everywhere}).then(() => { location.href = '/'; }, (e) => setError(e.message));
+  const out = () => postJSON('/api/logout', {}).then(() => { location.href = '/'; }, (e) => setError(e.message));
+  // Closing every session lives inside the list, where what it closes can be seen first.
   return html`<${Modal} label="Cerrar sesión" onClose=${closeDialog}>
     <button type="button" class="modal-x" aria-label="Cerrar" onClick=${closeDialog}><${Icon} name="x"/></button>
     <h3>Cerrar sesión</h3>
     <div class="signout-options">
-      <button type="button" class="signout-opt main" onClick=${() => out(false)}>${DEVICE}<span>En este dispositivo</span></button>
-      <button type="button" class="signout-opt" onClick=${() => out(true)}>${DEVICES}<span>En todos los dispositivos
-        <small>${count > 1 ? count + ' sesiones abiertas, también las vinculadas con QR' : 'También los vinculados con QR'}</small></span></button>
+      <button type="button" class="signout-opt main" onClick=${out}>${DEVICE}<span>En este dispositivo</span></button>
+      <button type="button" class="signout-opt" onClick=${() => show('devices')}>${DEVICES}<span>Dispositivos
+        <small>${count === 1 ? '1 sesión abierta' : count + ' sesiones abiertas'}: ver y cerrar una o todas</small></span></button>
     </div>
-    <p class="signout-more"><button type="button" class="text-link" onClick=${() => show('devices')}>Ver los dispositivos y cerrar uno solo</button></p>
     <div class="modal-actions"><button type="button" onClick=${closeDialog}>Cancelar</button></div>
     ${error ? html`<p class="bid-error">${error}</p>` : null}
   </${Modal}>`;
