@@ -7,6 +7,8 @@ import {ManagerView, MatchdayView, ForecastView} from './drawers.js';
 import {CompareTab} from './compare.js';
 import {Lineup} from './lineup.js';
 import {start, registerUI, registerDrawer} from './shell.js';
+import {DIALOGS} from './dialogs.js';
+import {DEVICE_DIALOGS, openDevices, openLink} from './devices.js';
 import './league.js';
 import './decide.js';
 import './necro.js';
@@ -27,3 +29,11 @@ start(document.getElementById('app'));
 const dialogs = document.createElement('div');
 document.body.appendChild(dialogs);
 render(html`<${ModalRoot}/>`, dialogs);
+
+Object.assign(DIALOGS, DEVICE_DIALOGS);
+// /dispositivos and /vincular/nuevo send the panel here with the window to open.
+const asked = new URLSearchParams(location.search).get('abrir');
+if (asked) {
+  history.replaceState(null, '', location.pathname + location.hash);
+  if (asked === 'dispositivos') openDevices(); else if (asked === 'vincular') openLink();
+}

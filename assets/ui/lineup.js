@@ -352,7 +352,7 @@ function Frame({st, formation = '', best, select, status, onReset, onSave, canSa
     <div class="pitch-bar">
       <label>Formación ${select || html`<select id="pitch-formation-select"></select>`}</label>
       <span id="pitch-status" class="kpi-label" style=${st.warn ? 'color:var(--warning)' : undefined}>${status || ''}</span>
-      <button id="pitch-reset" type="button" onClick=${onReset}>Descartar cambios</button>
+      ${st.dirty ? html`<button id="pitch-reset" type="button" onClick=${onReset}>Descartar cambios</button>` : null}
       <button id="pitch-save" class="primary" type="button" disabled=${!canSave} onClick=${onSave}>${saving ? 'Guardando…' : 'Guardar alineación'}</button>
     </div>
     <p class=${'pitch-alert' + (alert && alert.soft ? ' soft' : '')} id="pitch-alert" hidden=${!alert}>${alert ? alert.body : null}</p>

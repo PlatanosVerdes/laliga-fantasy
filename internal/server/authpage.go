@@ -42,6 +42,7 @@ const authFrame = `<!doctype html><html lang="es"><meta charset="utf-8">
 .auth .btn{text-transform:none;letter-spacing:0;height:auto;box-shadow:none;margin-right:8px}
 .auth .btn.quiet{background:transparent;color:var(--ink);border-color:var(--line)}
 .auth .btn[disabled]{opacity:.5;cursor:default}
+.auth .btn.danger{color:var(--critical);border-color:color-mix(in srgb,var(--critical) 45%,transparent)}
 textarea{width:100%;box-sizing:border-box;min-height:84px;margin-top:10px;padding:10px 12px;
   border-radius:10px;border:1px solid var(--line);background:var(--plane);color:var(--ink);
   font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
@@ -80,10 +81,6 @@ kbd{font:600 12px/1 ui-monospace,SFMono-Regular,Menlo,monospace;padding:3px 6px;
 .closed .btn.wide{margin-top:12px}
 .link-in p,.aside{margin:3px 0 0;color:var(--ink-2);font-size:14px}
 .aside{margin-top:18px}
-.link-qr{width:min(240px,70vw);margin:4px auto 0;padding:8px;background:#fff;border-radius:12px}
-.link-qr svg{display:block;width:100%;height:auto}
-.link-code{margin:14px 0 0;text-align:center;font:700 28px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;
-  letter-spacing:.12em}
 .choices{display:grid;gap:8px}
 .choices button{font:inherit;text-align:left;padding:13px 15px;border:1px solid var(--line);border-radius:12px;
   background:var(--plane);color:var(--ink);cursor:pointer;display:flex;justify-content:space-between;
