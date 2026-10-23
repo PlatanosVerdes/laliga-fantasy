@@ -53,9 +53,9 @@ volumes:
 
 The image sets `FANTASY_DATA_DIR=/data`, which collapses config, state and cache into that
 one directory so there is a single volume to mount. Outside a container the files follow the
-XDG spec instead — see [Where things live](../README.md#where-things-live).
+XDG spec instead — see [Where things live](../docs/data.md).
 
-Sessions are encrypted at rest (see [Encrypted at rest](../README.md#encrypted-at-rest)). With
+Sessions are encrypted at rest (see [Encrypted at rest](../docs/login.md#encrypted-at-rest)). With
 no `FANTASY_SECRET_KEY` the key is `/data/secret.key`, in the same volume, so a copy of the
 volume still opens them. Set the variable from a secrets manager to keep the key off the volume,
 and back the key up either way: losing it means logging in again.
