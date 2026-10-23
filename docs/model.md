@@ -15,6 +15,8 @@ without confirming it first — every operation is prepared, shown with its amou
 leaves in the bank, and only then confirmed with a single-use token. `--read-only` refuses all
 of them.
 
+## Expected points
+
 `xPts` is an estimate of points per matchday:
 
 ```
