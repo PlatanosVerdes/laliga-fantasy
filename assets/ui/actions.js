@@ -59,6 +59,7 @@ export async function runAct(a, origin = null) {
         offer_id: x.offer_id, bid_id: x.bid_id, amount: x.amount || null, origin});
       return;
     case 'card': await runCardAction(x.player_id, x.op); return;
+    case 'bulk': openDialog({kind: 'bulk', key: ++opened, ...x}); return;
     case 'bid': openBid(x); return;
     case 'raid':
       raidDialog({id: x.id, name: x.name, suggested: x.max, clause: x.clause});

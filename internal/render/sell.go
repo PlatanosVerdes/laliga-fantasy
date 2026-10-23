@@ -39,6 +39,9 @@ func (d Document) offersBlock() Block {
 	_, xiNow := bestElevenOf(squad)
 	held := d.held() > 0
 	lines := []Row{}
+	var recommended, answerable []map[string]any
+	var recommendedIDs []string
+	recommendedCash := 0.0
 	for _, offer := range offers {
 		amount, value := number(offer["offer_amount"]), number(offer["value"])
 		ratio := number(offer["vs_value"])
@@ -72,6 +75,14 @@ func (d Document) offersBlock() Block {
 		decline.Tip = "recomendado: " + why
 		tone := ""
 		blocked := AcceptBlocked(offer)
+		if text(offer["market_id"]) != "" {
+			answerable = append(answerable, args)
+		}
+		if take && blocked == "" && !held {
+			recommended = append(recommended, args)
+			recommendedIDs = append(recommendedIDs, text(offer["id"]))
+			recommendedCash += amount
+		}
 		if take && blocked == "" {
 			tone = "good"
 			accept = act("Aceptar", "primary", "op", "op", opArgs("accept_offer"))
@@ -119,8 +130,20 @@ func (d Document) offersBlock() Block {
 			[]Act{accept, decline}, tone
 		lines = append(lines, line)
 	}
+	// Both act on the offers as they stand now, one confirmation for the lot, each sent as if
+	// pressed alone so every check still applies.
+	var links []Act
+	if len(recommended) > 1 {
+		links = append(links, act(fmt.Sprintf("Aceptar las recomendadas (%d)", len(recommended)), "primary", "", "bulk",
+			map[string]any{"op": "accept_offer", "items": recommended, "cash": int64(recommendedCash),
+				"xi_drop": math.Round((xiNow-elevenWithout(squad, recommendedIDs...))*10) / 10}))
+	}
+	if len(answerable) > 1 {
+		links = append(links, act(fmt.Sprintf("Rechazar todas (%d)", len(answerable)), "ghost", "", "bulk",
+			map[string]any{"op": "decline_offer", "items": answerable}))
+	}
 	return Block{Title: "Ofertas recibidas", Count: count(len(lines)), Rows: lines,
-		Empty: "Ninguna oferta ahora mismo."}
+		Empty: "Ninguna oferta ahora mismo.", Links: links}
 }
 
 func (d Document) listedBlock() Block {

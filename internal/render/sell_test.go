@@ -2,6 +2,7 @@ package render
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -95,5 +96,65 @@ func TestAcceptBlockedMatchesWhatTheServerRefuses(t *testing.T) {
 		if got := AcceptBlocked(c.row) != ""; got != c.blocked {
 			t.Errorf("%s: blocked = %v, want %v", c.name, got, c.blocked)
 		}
+	}
+}
+
+// The lot buttons carry exactly the offers their rows would answer: the recommended ones for
+// Aceptar, every answerable one for Rechazar.
+func TestTheLotButtonsMatchTheRows(t *testing.T) {
+	block := decidingDocument().offersBlock()
+	recommended, answerable := 0, 0
+	for _, row := range block.Rows {
+		if strings.Contains(row.Acts[0].Class, "mb-primary") {
+			recommended++
+		}
+		if row.Acts[1].Args["market_id"] != "" && !row.Acts[1].Off {
+			answerable++
+		}
+	}
+	items := map[string]int{}
+	for _, link := range block.Links {
+		if link.Do != "bulk" {
+			t.Fatalf("a lot button that is not a lot: %+v", link)
+		}
+		items[link.Args["op"].(string)] = len(link.Args["items"].([]map[string]any))
+	}
+	if want := map[bool]int{true: recommended, false: 0}[recommended > 1]; items["accept_offer"] != want {
+		t.Errorf("accept lot has %d offers, the rows recommend %d", items["accept_offer"], recommended)
+	}
+	if want := map[bool]int{true: answerable, false: 0}[answerable > 1]; items["decline_offer"] != want {
+		t.Errorf("decline lot has %d offers, %d can be answered", items["decline_offer"], answerable)
+	}
+}
+
+// Two good offers for spare players go in one Aceptar lot, with the cash and what the eleven
+// loses without both.
+func TestTwoRecommendedOffersMakeAnAcceptLot(t *testing.T) {
+	squad := []any{}
+	for i, pos := range []float64{1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 2, 3} {
+		squad = append(squad, map[string]any{"id": fmt.Sprint(100 + i), "name": fmt.Sprint("P", i),
+			"position_id": pos, "available": true, "is_mine": true, "xpts": 6.0, "value": 10e6})
+	}
+	spare := func(id string) map[string]any {
+		return map[string]any{"id": id, "name": "Spare " + id, "position_id": 4.0, "available": true,
+			"is_mine": true, "xpts": 0.5, "value": 2e6}
+	}
+	squad = append(squad, spare("1"), spare("2"))
+	offer := func(id string) map[string]any {
+		return map[string]any{"id": id, "name": "Spare " + id, "market_id": "m" + id, "offer_id": "o" + id,
+			"offer_amount": 3e6, "value": 2e6, "vs_value": 1.5, "position_id": 4.0}
+	}
+	d := Document{Advice: map[string]any{"squad": squad, "offers": []any{offer("1"), offer("2")}}}
+	var lot *Act
+	for i, link := range d.offersBlock().Links {
+		if link.Args["op"] == "accept_offer" {
+			lot = &d.offersBlock().Links[i]
+		}
+	}
+	if lot == nil {
+		t.Fatalf("no accept lot: %+v", d.offersBlock().Links)
+	}
+	if got := len(lot.Args["items"].([]map[string]any)); got != 2 || lot.Args["cash"] != int64(6e6) {
+		t.Errorf("lot of %d for %v, want 2 for 6000000", got, lot.Args["cash"])
 	}
 }
