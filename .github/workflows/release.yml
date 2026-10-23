@@ -6,6 +6,8 @@ name: Release
 on:
   push:
     branches: [main]
+    # An icon or a README is not a new version.
+    paths-ignore: ["assets/**", "**/*.md"]
 
 permissions:
   contents: write
