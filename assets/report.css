@@ -876,6 +876,7 @@ button.stat:hover{border-color:var(--baseline)}
   line-height:1.25}
 .stat .v small{font-size:12px;color:var(--muted);font-weight:500}
 .stat .s{font-size:11px;color:var(--ink-2)}
+.stat .s.pending{color:var(--serious);font-weight:600}
 .stat .k,.stat .s{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stat.hot{border-color:color-mix(in srgb,var(--critical) 55%,var(--line))}
 .stat.hot .v{color:var(--critical)}

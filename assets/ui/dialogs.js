@@ -1,6 +1,6 @@
 import {html, useState, useEffect, useRef, panel} from './lib.js';
 import {Modal, Icon, useDialogTrace} from './components.js';
-import {prepare, confirm, postJSON, changed, closeDialog, openDialog, useCash, useMeta} from './api.js';
+import {prepare, confirm, getJSON, postJSON, changed, closeDialog, openDialog, useCash, useMeta} from './api.js';
 import {exact, group, digits, stampText} from './format.js';
 
 // The dialogs that ask for something before an operation: an amount (bid, offer, sale, clause
@@ -49,6 +49,7 @@ export function openAmount(a, player) {
   show('amount', {p: {operation: a.op, market_id: a.market_id, player_id: a.player_id || player.id,
     player_team_id: a.player_team_id || player.player_team_id, offer_id: a.offer_id, bid_id: a.bid_id,
     name: player.name, min_bid: a.min || 0, ideal: player.ideal_bid || 0, value: player.value,
+    pending: !!player.detail_pending, ideal_age: player.detail_age || '',
     raise, clause: +player.clause || 0, safe: +a.safe_margin || 0, bids: +a.bids || 0, expires: a.expires,
     title: a.label + ' —',
     label: raise ? 'Importe a pagar (se descuenta de tu saldo)' : a.op === 'pay_clause'
@@ -86,6 +87,11 @@ function AmountDialog({p}) {
   const [step, setStep] = useState({n: 1, summary: null, token: null, error: '', sending: false, done: '', drop: false});
   const input = useRef(null);
   useEffect(() => { if (p.focus && input.current) input.current.focus(); }, []);
+  const [room, setRoom] = useState(null);
+  useEffect(() => {
+    const query = new URLSearchParams({operation: p.operation || 'bid', player_id: p.player_id || ''});
+    getJSON('/api/bid/room?' + query).then(setRoom, () => {});
+  }, []);
   const traced = useDialogTrace(p.operation || 'bid');
   const amount = digits(text) || 0;
   const op = p.operation || 'bid';
@@ -146,7 +152,10 @@ function AmountDialog({p}) {
       closeDialog();
     } catch (e) { setStep({...step, sending: false, error: e.message}); }
   };
-  const after = cash == null ? null : cash + (CASH_IN.has(op) ? amount : -amount);
+  const balance = room ? room.cash : cash;
+  const after = balance == null ? null : balance + (CASH_IN.has(op) ? amount : -amount);
+  const limit = room && typeof room.limit === 'number' ? room.limit : null;
+  const over = !CASH_IN.has(op) && (limit != null ? amount > limit : after < 0);
   const s = step.summary;
   return html`<${Modal} label="Confirmar operacion" onClose=${closeDialog}>
     <h3><span class="bid-action">${p.title}</span> <span class="bid-who">${p.name}</span></h3>
@@ -160,8 +169,10 @@ function AmountDialog({p}) {
           p.ideal_age ? html` <span class="muted">(${p.ideal_age})</span>` : null}</span>
         <span>Valor <b class="bid-value">${exact(p.value)}</b></span>
         <${Rivals} p=${p}/></p>`}
-      ${cash != null && amount ? html`<p class="bid-balance">Saldo <b>${exact(cash)}</b> → <b class=${after < 0 ? 'balance-bad' : 'balance-after'}>${exact(after)}</b>${
-        CASH_WHEN[op] ? html` <span class="muted">${CASH_WHEN[op]}</span>` : null}${after < 0 ? html` <span class="balance-bad">no te llega</span>` : null}</p>` : null}
+      ${balance != null && amount ? html`<p class="bid-balance">Saldo <b>${exact(balance)}</b> → <b class=${over ? 'balance-bad' : 'balance-after'}>${exact(after)}</b>${
+        CASH_WHEN[op] ? html` <span class="muted">${CASH_WHEN[op]}</span>` : null}${over ? html` <span class="balance-bad">no te llega</span>` : null}</p>` : null}
+      ${limit != null && (room.committed || room.debt_room) ? html`<p class="bid-balance muted">Puedes llegar a <b>${exact(limit)}</b>${
+        room.committed ? ` · ${exact(room.committed)} en otras pujas` : ''}${room.debt_room ? ` · ${exact(room.debt_room)} de margen de deuda` : ''}</p>` : null}
       ${warn ? html`<p class="bid-warn">${warn}</p>` : null}
     </div>` : html`<div id="bid-summary-step"><div class="bid-summary">
       ${step.done ? html`<p class="bid-ok">${step.done}.</p>`

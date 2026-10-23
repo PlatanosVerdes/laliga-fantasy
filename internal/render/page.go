@@ -42,6 +42,8 @@ type Stat struct {
 	// Deadline turns the figure into a live countdown, outlined in red in its last six hours.
 	Deadline string `json:"deadline,omitempty"`
 	Tab      string `json:"tab,omitempty"`
+	// Pending is what my live bids and offers hold of the balance.
+	Pending float64 `json:"pending,omitempty"`
 }
 
 // Foot is where the page comes from and what the server may do.

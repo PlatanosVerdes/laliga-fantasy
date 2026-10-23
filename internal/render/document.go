@@ -247,7 +247,7 @@ func (d Document) widgets(week map[string]any, players []map[string]any) []Stat 
 		exact = group(fmt.Sprintf("%.0f", *budget)) + " €"
 	}
 	stats := []Stat{{Label: "Caja", Value: esMoney(number(d.Advice["budget"])), ValueID: "kpi-cash",
-		Note: exact, Tab: "rivales"}}
+		Note: exact, Tab: "rivales", Pending: number(d.Advice["committed"])}}
 	stats = append(stats, clauses...)
 	return append(stats, matchday, Stat{Label: "Liga", Value: position + "º",
 		Small: fmt.Sprintf("de %d", len(teams)),
