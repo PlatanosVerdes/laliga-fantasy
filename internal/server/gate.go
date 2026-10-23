@@ -47,7 +47,7 @@ func signedOut(path string) bool {
 
 var anyProfile = map[string]bool{
 	"/": true, "/api/accounts": true, "/api/accounts/use": true, "/api/accounts/logout": true,
-	"/api/accounts/avatar": true, "/api/devices": true, "/vincular/nuevo": true, "/api/link": true, "/api/link/status": true,
+	"/api/accounts/avatar": true, "/api/devices": true, "/dispositivos": true, "/vincular/nuevo": true, "/api/link": true, "/api/link/status": true,
 }
 
 func visitorOf(request *http.Request) (visitor, bool) {
@@ -157,4 +157,3 @@ func (s *Server) signOut(writer http.ResponseWriter, request *http.Request) {
 	forget(writer, request, SessionCookie)
 	s.json(writer, http.StatusOK, map[string]any{"ok": true})
 }
-

@@ -406,6 +406,7 @@ function AccountMenu() {
       ${leagues.length > 1 || accounts.length > 1 ? html`<div class="acct-sep"></div>` : null}
       <a class="acct-item" role="menuitem" href="/?cuenta=nueva">Añadir cuenta</a>
       <a class="acct-item" role="menuitem" href="/vincular/nuevo">Vincular un dispositivo</a>
+      <a class="acct-item" role="menuitem" href="/dispositivos">Dispositivos</a>
       <div class="acct-sep"></div>
       <button type="button" role="menuitem" class="acct-item"
         onClick=${() => { setOpen(false); askSignOut(); }}>Cerrar sesión</button>`}

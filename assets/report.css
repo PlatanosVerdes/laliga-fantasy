@@ -1089,8 +1089,9 @@ body:has(.drawer.as-pop:not([hidden])) .cmp-tray{display:none}
 .signout-opt:hover{border-color:var(--accent)}
 .signout-opt.main{background:var(--accent);border-color:transparent;color:#fff;font-weight:600}
 .signout-opt small{display:block;margin-top:2px;font-size:12px;color:var(--muted);font-weight:400}
-.device-list{margin-top:18px;border-top:1px solid var(--line);padding-top:12px;max-height:40vh;overflow-y:auto}
-.device-list-h{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
+.signout-more{margin:14px 0 0;font-size:13px}
+.signout-more a{color:var(--accent)}
+.device-list{margin:4px 0 0}
 .device-row{display:flex;align-items:center;gap:12px;padding:8px 2px}
 .device-row+.device-row{border-top:1px solid var(--line)}
 .device-row svg{flex:none;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;color:var(--ink-2)}

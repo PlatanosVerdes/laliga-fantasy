@@ -351,6 +351,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/devices", s.devices)
 	mux.HandleFunc("/vincular", s.linkPage)
 	mux.HandleFunc("/vincular/nuevo", s.newLinkPage)
+	mux.HandleFunc("/dispositivos", s.devicesPage)
 	mux.HandleFunc("/api/link", s.createLink)
 	mux.HandleFunc("/api/link/status", s.linkStatus)
 	mux.HandleFunc("/api/link/redeem", s.redeemLink)

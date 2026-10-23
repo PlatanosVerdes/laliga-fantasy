@@ -38,8 +38,16 @@ type visitor struct {
 	Created int64  `json:"created"`
 	Seen    int64  `json:"seen"`
 	Device  string `json:"device,omitempty"`
-	Place   string `json:"place,omitempty"`
+	Place   place  `json:"place,omitempty"`
 	key     string
+}
+
+// place is where a session was last used from. The country is a code: the browser names it.
+type place struct {
+	City    string `json:"city,omitempty"`
+	Region  string `json:"region,omitempty"`
+	Country string `json:"country,omitempty"`
+	Network string `json:"network,omitempty"`
 }
 
 // Keyed by the SHA-256 of the id, so the file alone signs nobody in.
@@ -153,15 +161,15 @@ func (s *sessionStore) find(id string) (visitor, bool) {
 }
 
 // note records where a session was last used from, writing only when that changed.
-func (s *sessionStore) note(key, device, place string) {
+func (s *sessionStore) note(key, device string, where place) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.load()
 	who, ok := s.byKey[key]
-	if !ok || (who.Device == device && who.Place == place) {
+	if !ok || (who.Device == device && who.Place == where) {
 		return
 	}
-	who.Device, who.Place = device, place
+	who.Device, who.Place = device, where
 	s.save()
 }
 
