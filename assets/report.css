@@ -1255,6 +1255,9 @@ section.mk{margin:0 0 22px}
 .mk .rank-dot.out-icon{background:var(--surface-2)}
 .mk .rchip .oi{margin-right:2px}
 .mk .r>.tags{grid-area:g;min-width:0}
+/* Club, role and odds cannot shrink, so where they do not fit beside each other they wrap rather
+   than run under the figure next to them. */
+.mk .r>.tags .pl{flex-wrap:wrap;row-gap:2px}
 .mk .rwho{grid-area:w;display:flex;flex-direction:column;min-width:0;line-height:1.3;overflow:hidden}
 .mk .rname{display:flex;align-items:center;gap:6px;min-width:0}
 .mk .rname b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
