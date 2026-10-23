@@ -48,6 +48,15 @@ function ManagerRow({p}) {
   </div>`;
 }
 
+const lined = (d, fielded) => (d.squad || []).filter((p) => d.lineup.includes(String(p.id)) === fielded);
+
+function SquadLines({squad}) {
+  if (!squad.length) return html`<p class="empty">Ninguno.</p>`;
+  return byLine(squad).map((line) => html`<div class="squad-line">
+    <span class=${'squad-line-label pos pos-' + line.label.toLowerCase()}>${line.label}</span>
+    <div class="squad-list">${line.players.map((p) => html`<${ManagerRow} p=${p}/>`)}</div></div>`);
+}
+
 // A rival's squad. It comes off the world already in memory, so it costs no request to LaLiga.
 export function ManagerView({team}) {
   const {data: d, error} = useAnswer('/api/manager/' + team);
@@ -65,9 +74,12 @@ export function ManagerView({team}) {
       <div><dt>Jugadores</dt><dd>${d.players}${d.listed ? ` · ${d.listed} en venta` : ''}</dd></div>
       <div><dt>Clausulas bloqueadas</dt><dd>${d.clauses_locked} de ${d.players}</dd></div>
     </dl>
-    ${byLine(d.squad).map((line) => html`<div class="squad-line">
-      <span class=${'squad-line-label pos pos-' + line.label.toLowerCase()}>${line.label}</span>
-      <div class="squad-list">${line.players.map((p) => html`<${ManagerRow} p=${p}/>`)}</div></div>`)}
+    ${d.lineup ? html`
+      <h4 class="squad-group">Alineados en la J${d.week} <span>${lined(d, true).length}</span></h4>
+      <${SquadLines} squad=${lined(d, true)}/>
+      <h4 class="squad-group squad-group-out">No alineados <span>${lined(d, false).length}</span></h4>
+      <${SquadLines} squad=${lined(d, false)}/>`
+    : html`<p class="drawer-note">No tengo su alineacion de esta jornada.</p><${SquadLines} squad=${d.squad}/>`}
     <p class="drawer-note">La caja es una estimacion reconstruida del log de traspasos, no un dato que publique el juego. Pulsa un jugador para su ficha.</p>`;
 }
 
