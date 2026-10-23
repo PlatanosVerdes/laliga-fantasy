@@ -257,7 +257,7 @@ func (s *Server) newLinkPage(writer http.ResponseWriter, request *http.Request) 
 
 const linkInBody = `<h1>Vincular este dispositivo</h1>
 <p class="lead">El código del otro dispositivo: menú de la cuenta → Vincular un dispositivo.</p>
-<div class="code-row"><input class="field code" id="link-code" name="device-link" aria-label="Código de vinculación" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="ABCD-EFGH" maxlength="12"><button class="btn" id="link-go">Vincular</button></div>
+<div class="code-row"><input class="field code" id="link-code" name="device-link" aria-label="Código de vinculación" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="ABCD-EFGH" maxlength="9"><button class="btn" id="link-go">Vincular</button></div>
 <div class="msg" id="link-msg"></div>{{other}}
 <a class="back" href="/">← Volver</a>
 <script>
@@ -266,6 +266,10 @@ const box=document.getElementById('link-code'), go=document.getElementById('link
 if(location.hash.length>1){box.value=decodeURIComponent(location.hash.slice(1));history.replaceState(null,'',location.pathname);}
 go.onclick=()=>linkHere(box.value,document.getElementById('link-msg'),go);
 box.onkeydown=(e)=>{if(e.key==='Enter') go.click();};
+// The dash appears once four characters are typed; deleting back over it does not put it back.
+box.oninput=(e)=>{const raw=box.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);
+  const deleting=(e.inputType||'').startsWith('delete');
+  box.value=raw.length>4||(raw.length===4&&!deleting)?raw.slice(0,4)+'-'+raw.slice(4):raw;};
 </script>`
 
 const linkOutBody = `<h1>Vincular un dispositivo</h1>
