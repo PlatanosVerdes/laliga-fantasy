@@ -160,17 +160,26 @@ func (s *sessionStore) find(id string) (visitor, bool) {
 	return *who, true
 }
 
-// note records where a session was last used from, writing only when that changed.
+// note records where a session was last used from. A request that says nothing (an icon the
+// phone fetches on its own has no browser in its user agent) leaves what is known alone.
 func (s *sessionStore) note(key, device string, where place) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.load()
 	who, ok := s.byKey[key]
-	if !ok || (who.Device == device && who.Place == where) {
+	if !ok {
 		return
 	}
-	who.Device, who.Place = device, where
-	s.save()
+	changed := false
+	if device != "" && device != who.Device {
+		who.Device, changed = device, true
+	}
+	if where != (place{}) && where != who.Place {
+		who.Place, changed = where, true
+	}
+	if changed {
+		s.save()
+	}
 }
 
 // listUser is the user's live sessions, the most recently used first.
