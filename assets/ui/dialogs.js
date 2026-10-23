@@ -313,7 +313,47 @@ function SignOutDialog() {
 }
 export const askSignOut = (props) => show('signout', props);
 
-export const DIALOGS = {amount: AmountDialog, shield: ShieldDialog, raid: RaidDialog, signout: SignOutDialog};
+// Several offers answered at once: one confirmation for the list, then each one prepared and
+// confirmed on its own, so a refusal stops that one and not the rest.
+function BulkDialog({op, items = [], cash = 0, xi_drop: drop = 0}) {
+  const accepting = op === 'accept_offer';
+  const [results, setResults] = useState(null);
+  const [running, setRunning] = useState(false);
+  const run = async () => {
+    setRunning(true);
+    const done = [];
+    for (const item of items) {
+      try {
+        const ready = await prepare({operation: op, market_id: item.market_id, offer_id: item.offer_id, player_id: item.player_id});
+        await confirm(ready.token);
+        done.push({...item, ok: true});
+      } catch (e) { done.push({...item, ok: false, error: e.message}); }
+      setResults([...done]);
+    }
+    setRunning(false);
+    changed();
+  };
+  const okCount = (results || []).filter((r) => r.ok).length;
+  return html`<${Modal} label=${accepting ? 'Aceptar ofertas' : 'Rechazar ofertas'} onClose=${running ? () => {} : closeDialog}>
+    <h3>${accepting ? `¿Aceptar ${items.length} ofertas?` : `¿Rechazar ${items.length} ofertas?`}</h3>
+    <ul class="bulk-list">${items.map((item) => {
+      const result = (results || []).find((r) => r.offer_id === item.offer_id);
+      return html`<li><span>${item.name}</span><b>${exact(item.amount)}</b>${result
+        ? html`<span class=${result.ok ? 'bulk-ok' : 'bulk-bad'} title=${result.error || ''}>${result.ok ? '✓' : '✕ ' + result.error}</span>` : null}</li>`;
+    })}</ul>
+    ${accepting && !results ? html`<p class="bulk-sum">Entran <b>${exact(cash)}</b>${drop >= 0.05 ? html` · tu once pierde <b>${drop.toFixed(1)} xPts</b>` : null}. Se venden todos.</p>` : null}
+    ${!accepting && !results ? html`<p class="bulk-sum">Quien ofertó puede volver a hacerlo; las del mercado vuelven mañana.</p>` : null}
+    ${results && !running ? html`<p class="bulk-sum">${okCount} de ${items.length} hechas.</p>` : null}
+    <div class="modal-actions">
+      ${results && !running ? html`<button type="button" class="bid-next" onClick=${closeDialog}>Cerrar</button>`
+        : html`<button type="button" disabled=${running} onClick=${closeDialog}>Cancelar</button>
+          <button type="button" class=${accepting ? 'bid-next' : 'bid-drop-all'} disabled=${running} onClick=${run}>${running
+            ? `Enviando ${(results || []).length + 1} de ${items.length}…` : accepting ? 'Sí, aceptar todas' : 'Sí, rechazar todas'}</button>`}
+    </div>
+  <//>`;
+}
+
+export const DIALOGS = {amount: AmountDialog, shield: ShieldDialog, raid: RaidDialog, signout: SignOutDialog, bulk: BulkDialog};
 
 // The notice that an operation landed, said at once without waiting for the rebuild.
 let notices = [];

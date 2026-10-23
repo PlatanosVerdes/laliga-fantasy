@@ -3,6 +3,7 @@ package render
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -534,10 +535,10 @@ func bestElevenOf(squad []map[string]any) (eleven.Choice, float64) {
 	return choice, total
 }
 
-func elevenWithout(squad []map[string]any, id string) float64 {
+func elevenWithout(squad []map[string]any, ids ...string) float64 {
 	rest := make([]map[string]any, 0, len(squad))
 	for _, player := range squad {
-		if text(player["id"]) != id {
+		if !slices.Contains(ids, text(player["id"])) {
 			rest = append(rest, player)
 		}
 	}
