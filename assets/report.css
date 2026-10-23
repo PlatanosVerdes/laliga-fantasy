@@ -537,6 +537,9 @@ footer code{background:var(--mid);padding:1px 5px;border-radius:4px;font-size:11
 .squad-line{display:grid;grid-template-columns:38px 1fr;gap:8px;align-items:start;
   margin-top:6px}
 .squad-line-label{justify-self:start;font-size:10px;padding:2px 5px}
+.squad-group{margin:14px 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-2)}
+.squad-group span{color:var(--muted);font-weight:400}
+.squad-group-out{padding-top:10px;border-top:1px solid var(--line)}
 .mine-bid{font-size:11px;color:var(--accent);white-space:nowrap}
 
 /* A past matchday's pitch in miniature: the same shape as the eleven, at a third of the size.
@@ -796,6 +799,9 @@ td .muted,span.muted{color:var(--muted)}
 .bench-item .slot-grip{position:static;width:24px;height:24px;flex:0 0 auto;
   background:var(--mid);color:var(--ink-2)}
 .slot.lifted,.bench-item.lifted{box-shadow:inset 0 0 0 2px var(--accent)}
+/* A long press on a phone would otherwise select the face, or drag the image instead of the player. */
+.slot,.bench-item,.face{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.face img,.slot img,.bench-item img{-webkit-user-drag:none;pointer-events:none}
 .slot.lifted .slot-grip,.bench-item.lifted .slot-grip{background:var(--accent);color:#fff}
 .on-touch{display:none}
 @media (hover:hover){.slot-grip{display:none}}
@@ -944,7 +950,9 @@ body:has(.modal:not([hidden])) .cmp-tray{display:none}
 .pc-h{font-size:12px;color:var(--muted);margin:14px 0 6px;font-weight:600;text-transform:uppercase;
   letter-spacing:.05em}
 .pc-h-note{text-transform:none;letter-spacing:0;font-weight:400}
-.pc-wks{display:flex;gap:4px;flex-wrap:wrap}
+.pc-wks{display:flex;gap:4px;overflow-x:auto;scrollbar-width:thin;padding-bottom:4px;
+  -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.pc-wk{flex:0 0 auto}
 .pc-wk{display:flex;flex-direction:column;align-items:center;min-width:38px}
 .pc-wk b{display:block;width:100%;text-align:center;border-radius:7px;padding:3px 0;font-size:13px;
   color:#fff;font-variant-numeric:tabular-nums}

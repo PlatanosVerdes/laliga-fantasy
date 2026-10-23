@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
@@ -52,6 +53,27 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 				"pero el analisis no cubre"})
 		return
 	}
+
+	// LaLiga and futbolfantasy are read side by side: one after the other, a rival's card took
+	// seconds.
+	var master map[string]any
+	var series []map[string]any
+	var budget float64
+	var laliga sync.WaitGroup
+	laliga.Add(3)
+	go func() {
+		defer laliga.Done()
+		if s.opts.Global != nil {
+			master, _ = s.opts.Global.Player(id, 6*time.Hour)
+		}
+	}()
+	go func() {
+		defer laliga.Done()
+		if s.opts.Global != nil {
+			series, _ = s.opts.Global.PlayerMarketValue(id, 24*time.Hour)
+		}
+	}()
+	go func() { defer laliga.Done(); budget = s.budget() }()
 
 	// The profitable ceiling lives on futbolfantasy's page, not in the model, so the drawer
 	// only knows it if the server puts it here: without it the dialog reads "sin margen" and
@@ -111,7 +133,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	listing := mapOf(player["market"])
 	offers := listOf(player["offers"])
 	clause := number(player["clause"])
-	budget := s.budget()
+	laliga.Wait()
 	actions := s.actions(player, rows, armed, listing, offers, clause, budget)
 	if s.clauseRecommended(rows, player, budget) {
 		for _, action := range actions {
@@ -125,48 +147,44 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	// three sevens, and the shape is what a card is opened for. The opponents come off the
 	// futbolfantasy page already read above, so they cost no request of their own.
 	weeks := []map[string]any{}
-	if s.opts.Global != nil {
-		if master, err := s.opts.Global.Player(id, 6*time.Hour); err == nil {
-			// The row lists both sides in the order they played, so at home the opponent is
-			// the second name and away it is the first.
-			rivals := map[float64]string{}
-			for _, match := range ffMatches {
-				teams, ok := match["teams"].([]string)
-				if !ok || len(teams) != 2 {
-					continue
-				}
-				if truthy(match["home"]) {
-					rivals[number(match["week"])] = teams[1]
-				} else {
-					rivals[number(match["week"])] = teams[0]
-				}
+	if master != nil {
+		// The row lists both sides in the order they played, so at home the opponent is
+		// the second name and away it is the first.
+		rivals := map[float64]string{}
+		for _, match := range ffMatches {
+			teams, ok := match["teams"].([]string)
+			if !ok || len(teams) != 2 {
+				continue
 			}
-			for _, week := range model.OneRowPerWeek(listOf(master["playerStats"])) {
-				row := map[string]any{"week": week["weekNumber"], "points": week["totalPoints"],
-					"ideal": truthy(week["isInIdealFormation"])}
-				if rival := rivals[number(week["weekNumber"])]; rival != "" {
-					row["rival"] = rival
-				}
-				weeks = append(weeks, row)
+			if truthy(match["home"]) {
+				rivals[number(match["week"])] = teams[1]
+			} else {
+				rivals[number(match["week"])] = teams[0]
 			}
+		}
+		for _, week := range model.OneRowPerWeek(listOf(master["playerStats"])) {
+			row := map[string]any{"week": week["weekNumber"], "points": week["totalPoints"],
+				"ideal": truthy(week["isInIdealFormation"])}
+			if rival := rivals[number(week["weekNumber"])]; rival != "" {
+				row["rival"] = rival
+			}
+			weeks = append(weeks, row)
 		}
 	}
 	weeks = addForecasts(forecast.Open(s.profile()), id, weeks)
 
 	history := []map[string]any{}
-	if s.opts.Global != nil {
-		if series, err := s.opts.Global.PlayerMarketValue(id, 24*time.Hour); err == nil {
-			for _, point := range series {
-				date := text(point["date"])
-				if len(date) > 10 {
-					date = date[:10]
-				}
-				history = append(history,
-					map[string]any{"date": date, "value": point["marketValue"]})
+	if series != nil {
+		for _, point := range series {
+			date := text(point["date"])
+			if len(date) > 10 {
+				date = date[:10]
 			}
-			if len(history) > 90 {
-				history = history[len(history)-90:]
-			}
+			history = append(history,
+				map[string]any{"date": date, "value": point["marketValue"]})
+		}
+		if len(history) > 90 {
+			history = history[len(history)-90:]
 		}
 	}
 

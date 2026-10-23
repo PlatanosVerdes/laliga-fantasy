@@ -10,11 +10,14 @@ const weekClass = (w) => {
   return p == null ? (w.forecast != null ? 'fc' : 'na') : p < 0 ? 'rd' : p >= 8 ? 'g' : p >= 4 ? 'bl' : 'br';
 };
 
+// One strip, scrolled to the latest matchday: the earlier ones are a swipe to the left.
+const toLatest = (strip) => { if (strip) strip.scrollLeft = strip.scrollWidth; };
+
 function Weeks({weeks}) {
   if (!weeks || !weeks.length) return null;
   const legend = weeks.some((w) => w.forecast != null) ? ' · en pequeño, lo previsto' : '';
   return html`<div class="pc-h">Puntos por jornada<span class="pc-h-note">${legend}</span></div>
-    <div class="pc-wks">${weeks.map((w) => {
+    <div class="pc-wks" ref=${toLatest}>${weeks.map((w) => {
       const p = w.points;
       const shown = p == null ? (w.forecast != null ? dec(w.forecast) : '–') : p;
       const tip = `Jornada ${w.week}${w.rival ? ' · ' + w.rival : ''}${w.ideal ? ' · once ideal' : ''}` +
@@ -282,14 +285,19 @@ function Actions({data, reopen}) {
   return html`<div class="pc-h">Acciones</div><div class="pc-groups">${sections}</div>`;
 }
 
+// The last card of each player, drawn at once when it is opened again while the fresh one loads.
+const seenCards = new Map();
+
 export function PlayerPopup({id, from}) {
-  const [state, setState] = useState({data: null, error: null});
+  const [state, setState] = useState(() => ({data: seenCards.get(String(id)) || null, error: null}));
   // Asked again whenever the world moves, a write of ours included: the card shows what is.
   const stamp = useStamp();
   useEffect(() => {
     let current = true;
-    getJSON('/api/player/' + id).then((data) => current && setState({data, error: null}),
-      (error) => current && setState((before) => ({data: before.data, error: before.data ? null : error})));
+    getJSON('/api/player/' + id).then((data) => {
+      seenCards.set(String(id), data);
+      if (current) setState({data, error: null});
+    }, (error) => current && setState((before) => ({data: before.data, error: before.data ? null : error})));
     return () => { current = false; };
   }, [id, stamp]);
   if (state.error) return html`<p class="empty">Solo disponible en la version servida (<code>fantasy serve</code>).</p>`;

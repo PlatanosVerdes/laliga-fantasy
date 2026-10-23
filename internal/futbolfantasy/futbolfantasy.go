@@ -595,12 +595,50 @@ func PlayerPageFor(slug, ffID string, ttl time.Duration) (map[string]any, error)
 	return page, nil
 }
 
+// A player's page is over a megabyte and takes most of a second to parse on the Pi, so like the
+// detail pages it is parsed once per fetch, and one parse serves every request waiting on it.
+var (
+	pageMu      sync.Mutex
+	pageSeen    = map[string]parsedDetail{}
+	pageParsing = map[string]*sync.Mutex{}
+)
+
 func PlayerPage(slug string, ttl time.Duration) (map[string]any, error) {
-	page, err := fetch(strings.ReplaceAll(config.FFPlayerURL, "{slug}", slug), ttl, "ff_player")
+	url := strings.ReplaceAll(config.FFPlayerURL, "{slug}", slug)
+	if ttl <= 0 || httpx.Frozen {
+		page, err := fetch(url, ttl, "ff_player")
+		if err != nil {
+			return nil, err
+		}
+		return ParsePlayerPage(page), nil
+	}
+	pageMu.Lock()
+	parsing, ok := pageParsing[url]
+	if !ok {
+		parsing = &sync.Mutex{}
+		pageParsing[url] = parsing
+	}
+	pageMu.Unlock()
+	parsing.Lock()
+	defer parsing.Unlock()
+
+	pageMu.Lock()
+	kept, ok := pageSeen[url]
+	pageMu.Unlock()
+	if ok && time.Since(kept.written) <= ttl {
+		return maps.Clone(kept.detail), nil
+	}
+	page, err := fetch(url, ttl, "ff_player")
 	if err != nil {
 		return nil, err
 	}
-	return ParsePlayerPage(page), nil
+	parsed := ParsePlayerPage(page)
+	if written, ok := httpx.CachedAt(config.GlobalScope(), url, "ff_player"); ok {
+		pageMu.Lock()
+		pageSeen[url] = parsedDetail{detail: parsed, written: written}
+		pageMu.Unlock()
+	}
+	return maps.Clone(parsed), nil
 }
 
 // --- the absence pages ------------------------------------------------------------------

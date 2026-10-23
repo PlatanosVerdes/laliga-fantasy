@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 )
 
 func (s *Server) manager(writer http.ResponseWriter, request *http.Request) {
@@ -80,6 +82,18 @@ func (s *Server) manager(writer http.ResponseWriter, request *http.Request) {
 		"estimated_cash": team.EstimatedCash, "cash_is_estimate": team.CashIsEstimate,
 		"net_flow": team.NetFlow, "players": len(squad),
 		"listed": listed, "clauses_locked": locked, "xpts_total": total,
-		"squad": squad,
+		"squad": squad, "lineup": lineupIDs(universe.Lineups[teamID]), "week": universe.Week.WeekNumber,
 	})
+}
+
+// nil when his eleven for the matchday in play could not be read, which is not the same as empty.
+func lineupIDs(eleven []model.LineupPlayer) []string {
+	if eleven == nil {
+		return nil
+	}
+	ids := make([]string, 0, len(eleven))
+	for _, player := range eleven {
+		ids = append(ids, player.ID)
+	}
+	return ids
 }
