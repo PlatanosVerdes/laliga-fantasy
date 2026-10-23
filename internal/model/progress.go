@@ -117,8 +117,8 @@ var build = NewTracker(
 	Stage{"Plantillas rivales", "rivals", 8},
 	Stage{"Datos de futbolfantasy", "futbolfantasy", 12}, Stage{"Jugadores de LaLiga", "players", 6},
 	Stage{"Calendario", "calendar", 9}, Stage{"Plantillas de la liga", "squads", 6},
-	Stage{"Mercado", "market", 4}, Stage{"Estado de tus jugadores", "status", 5},
-	Stage{"Ofertas recibidas", "offers", 5}, Stage{"Movimientos de la liga", "activity", 7},
+	Stage{"Movimientos de la liga", "activity", 7}, Stage{"Mercado", "market", 4},
+	Stage{"Estado de tus jugadores", "status", 5}, Stage{"Ofertas recibidas", "offers", 5},
 	Stage{"Detalle de candidatos", "deep", 7}, Stage{"Preparando la página", "page", 25},
 )
 
