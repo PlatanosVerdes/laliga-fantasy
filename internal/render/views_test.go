@@ -57,6 +57,35 @@ func TestMatchdayBoardOrdersByProjectedFinish(t *testing.T) {
 	}
 }
 
+func TestLigaOpensWithTheMatchdayAsItStands(t *testing.T) {
+	document := Document{Advice: map[string]any{"matchday": map[string]any{"week": 10.0,
+		"live": true, "played": 4.0, "matches": 10.0, "managers": []any{
+			map[string]any{"team_id": "a", "manager": "Ana", "points": 30.0, "points_rank": 2.0,
+				"position": 1.0, "season_points": 400.0, "projection": 60.0, "projection_rank": 1.0,
+				"waiting": 4.0},
+			map[string]any{"team_id": "b", "manager": "Yo", "is_me": true, "points": 41.0,
+				"points_rank": 1.0, "position": 5.0, "season_points": 350.0, "projection": 50.0,
+				"projection_rank": 2.0, "waiting": 0.0},
+		}}}}
+	shells := document.leagueShells()
+	if len(shells) == 0 || shells[0].View != "directo" {
+		t.Fatalf("la jornada va primero en Liga: %+v", shells)
+	}
+	live := asJSON(document.leagueViews()["directo"])
+	for _, want := range []string{"Cómo va la J10", "4 de 10 partidos jugados", "41 pts",
+		"5º en la general", "acabaría 1º", "ya no le queda nadie", "accent me"} {
+		if !strings.Contains(live, want) {
+			t.Errorf("falta %q: %s", want, live)
+		}
+	}
+	if strings.Index(live, "Yo") > strings.Index(live, "Ana") {
+		t.Error("ordenada por lo que lleva cada uno")
+	}
+	if shells := (Document{}).leagueShells(); len(shells) > 0 && shells[0].View == "directo" {
+		t.Error("sin jornada no hay sección")
+	}
+}
+
 // "Los mejores" is by xPts alone and says whether my reach gets to each one's price.
 func TestRankingOpensWithTheBestAndTheirPrice(t *testing.T) {
 	document := decidingDocument()

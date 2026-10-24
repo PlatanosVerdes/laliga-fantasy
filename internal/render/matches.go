@@ -185,6 +185,26 @@ func (d Document) MatchesData() View {
 	return View{Main: main, Aside: aside}
 }
 
+func stillToPlay(manager map[string]any) string {
+	names := asStrings(manager["waiting_names"])
+	waiting := int(number(manager["waiting"]))
+	if waiting == 0 {
+		return "ya no le queda nadie"
+	}
+	shown := names
+	if len(shown) > 4 {
+		shown = shown[:4]
+	}
+	left := "le quedan " + counted(waiting, "jugador", "jugadores")
+	if len(shown) > 0 {
+		left += ": " + strings.Join(shown, ", ")
+		if len(names) > len(shown) {
+			left += fmt.Sprintf(" +%d", len(names)-len(shown))
+		}
+	}
+	return left
+}
+
 // boardBlock is how the matchday would end: every manager's saved eleven played out, with
 // where each stands now and who is still to play.
 func (d Document) boardBlock() *Block {
@@ -207,22 +227,7 @@ func (d Document) boardBlock() *Block {
 	lines := []Row{}
 	for _, manager := range managers {
 		finish, now := int(number(manager["projection_rank"])), int(number(manager["points_rank"]))
-		names := asStrings(manager["waiting_names"])
-		waiting := int(number(manager["waiting"]))
-		left := "ya no le queda nadie"
-		if waiting > 0 {
-			shown := names
-			if len(shown) > 4 {
-				shown = shown[:4]
-			}
-			left = "le quedan " + counted(waiting, "jugador", "jugadores")
-			if len(shown) > 0 {
-				left += ": " + strings.Join(shown, ", ")
-				if len(names) > len(shown) {
-					left += fmt.Sprintf(" +%d", len(names)-len(shown))
-				}
-			}
-		}
+		left := stillToPlay(manager)
 		meta := fmt.Sprintf("%.0f pts · ahora %dº", number(manager["points"]), now)
 		if !started {
 			meta = fmt.Sprintf("%.0f pts en la temporada", number(manager["season_points"]))

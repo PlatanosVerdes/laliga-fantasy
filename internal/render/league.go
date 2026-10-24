@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 )
 
@@ -11,8 +12,12 @@ import (
 
 // The three sections of Liga, each a view of its own so a link can still land on one.
 func (d Document) leagueShells() []SectionView {
-	out := []SectionView{shell("evolucion", "liga", "evolucion"), shell("movimientos", "liga",
-		"movimientos")}
+	out := []SectionView{}
+	if d.liveBlock() != nil {
+		out = append(out, shell("directo", "liga", "directo"))
+	}
+	out = append(out, shell("evolucion", "liga", "evolucion"), shell("movimientos", "liga",
+		"movimientos"))
 	if d.HoldDays > 0 || len(d.RuleNotes) > 0 {
 		out = append(out, shell("normas", "liga", "normas"))
 	}
@@ -27,12 +32,69 @@ func (d Document) leagueViews() map[string]any {
 			Kind: "season"}}},
 		"movimientos": View{Plain: true, Main: []Block{d.feedBlock()}},
 	}
+	if live := d.liveBlock(); live != nil {
+		views["directo"] = View{Plain: true, Main: []Block{*live}}
+	}
 	if d.HoldDays > 0 || len(d.RuleNotes) > 0 {
 		rules := houseRules(d.HoldDays, d.HoldExceptions, d.RuleNotes)
 		views["normas"] = View{Plain: true, Main: []Block{{Title: "Normas de la liga",
 			Count: count(len(rules)), Kind: "rules", Data: rules}}}
 	}
 	return views
+}
+
+// liveBlock is the matchday in play as a table of the moment: what each manager has scored so
+// far, who he has left, and where he would finish.
+func (d Document) liveBlock() *Block {
+	matchday := mapOf(d.Advice["matchday"])
+	managers := rows(matchday["managers"])
+	if len(managers) == 0 {
+		return nil
+	}
+	week := int(number(matchday["week"]))
+	played := int(number(matchday["played"]))
+	started := played > 0
+	for _, manager := range managers {
+		if number(manager["points"]) != 0 {
+			started = true
+		}
+	}
+	sort.SliceStable(managers, func(one, two int) bool {
+		return number(managers[one]["points_rank"]) < number(managers[two]["points_rank"])
+	})
+	lines := []Row{}
+	for _, manager := range managers {
+		now, finish := int(number(manager["points_rank"])), int(number(manager["projection_rank"]))
+		line := Row{Lead: []Seg{{T: fmt.Sprintf("%dº", now)}}, Name: text(manager["manager"]),
+			Team: text(manager["team_id"]), Value: fmt.Sprintf("%.0f pts", number(manager["points"])),
+			Meta: metaSegs(fmt.Sprintf("%dº en la general · %.0f pts",
+				int(number(manager["position"])), number(manager["season_points"]))),
+			Sub: metaSegs(stillToPlay(manager))}
+		if !started {
+			line.Lead, line.Value = nil, ""
+		}
+		if started && truthy(matchday["live"]) {
+			line.Note = []Seg{{T: fmt.Sprintf("acabaría %dº con %s", finish,
+				esNum(number(manager["projection"]), 1))}}
+		}
+		if truthy(manager["is_me"]) {
+			line.Tone = "accent me"
+		}
+		if started && now <= 3 {
+			line.Tone += fmt.Sprintf(" podium p%d", now)
+		}
+		lines = append(lines, line)
+	}
+	title, sub := fmt.Sprintf("Cómo va la J%d", week), ""
+	switch {
+	case !truthy(matchday["live"]):
+		title = fmt.Sprintf("Cómo acabó la J%d", week)
+	case !started:
+		title, sub = fmt.Sprintf("La J%d", week), "aún no ha empezado"
+	default:
+		sub = fmt.Sprintf("%d de %d partidos jugados", played, int(number(matchday["matches"])))
+	}
+	return &Block{Title: title, Sub: sub, Rows: lines, ListC: "board"}
 }
 
 // Rule is one line of the league's pact: whether the tool enforces it or it is a social
