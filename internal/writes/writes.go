@@ -565,7 +565,11 @@ func (g *Guard) PrepareFor(owner, name string, args Args, who Player, allowWrite
 		return Summary{}, err
 	}
 
-	cash := g.balance(member)
+	// Taking a bid or an offer back moves no money, and reading the balance can queue for seconds.
+	var cash *int64
+	if Spends[name] || args.Amount != 0 {
+		cash = g.balance(member)
+	}
 	warnings, err := check(name, args, who, cash, g.window())
 	if err != nil {
 		return Summary{}, err

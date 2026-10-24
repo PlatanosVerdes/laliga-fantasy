@@ -596,3 +596,22 @@ func TestAStoredCeilingSaysHowOldItIs(t *testing.T) {
 		t.Errorf("%v: %s", err, joined)
 	}
 }
+
+func TestTakingABidOrAnOfferBackDoesNotWaitForTheBalance(t *testing.T) {
+	g := guard(t, 50_000_000)
+	reads := 0
+	g.Cash = func(string) (int64, error) { reads++; return 50_000_000, nil }
+	for _, name := range []string{"cancel_offer", "cancel_bid"} {
+		if _, err := g.Prepare(name, Args{MarketID: "M", OfferID: "O", BidID: "B"},
+			Player{Name: "X"}, true); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+	if reads != 0 {
+		t.Errorf("read the balance %d times for operations that move no money", reads)
+	}
+	if _, err := g.Prepare("bid", bidArgs(1_000_000), Player{Name: "X", IdealBid: 2_000_000},
+		true); err != nil || reads != 1 {
+		t.Errorf("a bid is still checked against the balance: %v, %d reads", err, reads)
+	}
+}

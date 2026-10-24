@@ -437,7 +437,7 @@ func (s *Server) prepare(writer http.ResponseWriter, request *http.Request) {
 	}
 	who, _ := visitorOf(request)
 	summary, err := s.opts.Guard.PrepareFor(who.key, operation, args,
-		s.playerFor(text(body["player_id"])), s.opts.AllowWrites)
+		s.playerFor(text(body["player_id"]), writes.JudgedByCeiling[operation]), s.opts.AllowWrites)
 	if err != nil {
 		s.writeError(writer, err)
 		return
@@ -457,7 +457,8 @@ func (s *Server) room(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 	query := request.URL.Query()
-	room, spends := writes.RoomFor(query.Get("operation"), *cash, s.playerFor(query.Get("player_id")))
+	room, spends := writes.RoomFor(query.Get("operation"), *cash,
+		s.playerFor(query.Get("player_id"), false))
 	if !spends {
 		s.json(writer, http.StatusOK, map[string]any{"cash": *cash})
 		return
@@ -578,7 +579,7 @@ var (
 // playerFor is the context the confirmation dialog quotes: what he is worth, what the listing
 // asks, how long it has left. Read from the last built world, not from the API, so a
 // confirmation never waits on the network.
-func (s *Server) playerFor(id string) writes.Player {
+func (s *Server) playerFor(id string, withCeiling bool) writes.Player {
 	universe := s.state.Universe()
 	if universe == nil || id == "" {
 		return writes.Player{}
@@ -625,7 +626,7 @@ func (s *Server) playerFor(id string) writes.Player {
 		// A page that cannot be read falls back on the stored ceiling with its age, and without
 		// one the ceiling is said to be unknown: read as zero, every bid was warned as
 		// unprofitable, which is worse than saying nothing.
-		if player.FFID != nil && *player.FFID != "" {
+		if withCeiling && player.FFID != nil && *player.FFID != "" {
 			ceiling, err := readCeiling(*player.FFID)
 			if err != nil {
 				slog.Warn("futbolfantasy page unread for a write", "player", player.Name,
