@@ -43,8 +43,6 @@ func (d Document) leagueViews() map[string]any {
 	return views
 }
 
-// liveBlock is the matchday in play as a table of the moment: what each manager has scored so
-// far, who he has left, and where he would finish.
 func (d Document) liveBlock() *Block {
 	matchday := mapOf(d.Advice["matchday"])
 	managers := rows(matchday["managers"])

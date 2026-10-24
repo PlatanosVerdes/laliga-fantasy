@@ -208,7 +208,6 @@ document.addEventListener('DOMContentLoaded',()=>document.querySelectorAll('inpu
     const deleting=(e.inputType||'').startsWith('delete');
     box.value=raw.length>4||(raw.length===4&&!deleting)?raw.slice(0,4)+'-'+raw.slice(4):raw;});
 }));
-// The camera button of a device-link field: reads the other device's QR and links with its code.
 // BarcodeDetector where the browser has it; Safari does not, so jsQR is fetched on first use.
 async function qrReader(){
   if('BarcodeDetector' in window){
