@@ -173,7 +173,7 @@ function AmountDialog({p}) {
         <span>Valor <b class="bid-value">${exact(p.value)}</b></span>
         <${Rivals} p=${p}/></p>`}
       ${balance != null && amount ? html`<p class="bid-balance">Saldo <b>${exact(balance)}</b> → <b class=${over ? 'balance-bad' : 'balance-after'}>${exact(after)}</b>${
-        CASH_WHEN[op] ? html` <span class="muted">${CASH_WHEN[op]}</span>` : null}${over ? html` <span class="balance-bad">no te llega</span>` : null}</p>` : null}
+        CASH_WHEN[op] ? html` <span class="muted">${CASH_WHEN[op]}</span>` : null}${over ? html` <span class="balance-bad">en negativo</span>` : null}</p>` : null}
       ${limit != null && (room.committed || room.debt_room) ? html`<p class="bid-balance muted">Puedes llegar a <b>${exact(limit)}</b>${
         room.committed ? ` · ${exact(room.committed)} en otras pujas` : ''}${room.debt_room ? ` · ${exact(room.debt_room)} de margen de deuda` : ''}</p>` : null}
       ${warn ? html`<p class="bid-warn">${warn}</p>` : null}

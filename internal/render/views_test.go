@@ -135,7 +135,7 @@ func TestRestOfSquadPutsTheBenchFirstAndHonoursTheHoldRule(t *testing.T) {
 }
 
 // Each Comprar box holds every candidate in a scroll box, best for the eleven first; what cash
-// cannot reach stays at the end, greyed out with what is missing.
+// cannot reach stays at the end, greyed out with what is missing and still open to a bid.
 func TestBuyBoxesListEveryCandidate(t *testing.T) {
 	document := decidingDocument()
 	view := document.BuyData()
@@ -149,8 +149,8 @@ func TestBuyBoxesListEveryCandidate(t *testing.T) {
 	if !strings.Contains(blob, "+1.0M de margen") || !strings.Contains(blob, `"price":2000000`) {
 		t.Error("margin to the ceiling and the price the filter reads")
 	}
-	if !strings.Contains(blob, `"wrap":"te faltan 20.0M"`) {
-		t.Error("an unreachable bid is disabled and says what is missing")
+	if !strings.Contains(blob, `"⚠ te faltan 20.0M"`) || strings.Contains(blob, `"wrap":"te faltan`) {
+		t.Error("an unreachable bid stays open and says what is missing")
 	}
 	document.MaxDebtPct = 30
 	blob = asJSON(document.BuyData())
@@ -332,8 +332,13 @@ func TestBuyLineOutOfReachKeepsMyBid(t *testing.T) {
 	}
 	delete(mapOf(item["market"]), "my_bid_id")
 	line = document.buyLine(item, "oferta al dueño", 0, nil)
+	if len(line.Acts) != 1 || line.Acts[0].Off || line.Acts[0].Args["operation"] != "buy_offer" {
+		t.Errorf("acts = %+v, want an offer that can still be sent", line.Acts)
+	}
+	item["clause"] = 20e6
+	line = document.buyLine(item, "clausula", 0, &windowState{known: true, open: true})
 	if len(line.Acts) != 1 || !line.Acts[0].Off {
-		t.Errorf("acts = %+v, want one disabled button", line.Acts)
+		t.Errorf("acts = %+v, want a clause out of cash disabled", line.Acts)
 	}
 }
 

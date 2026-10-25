@@ -58,16 +58,21 @@ func askRoom(t *testing.T, handler http.Handler, operation, player string) write
 }
 
 func prepareAmount(handler http.Handler, operation, market, player string, amount int64) int {
+	code, _ := prepareAnswer(handler, operation, market, player, amount)
+	return code
+}
+
+func prepareAnswer(handler http.Handler, operation, market, player string, amount int64) (int, string) {
 	body := fmt.Sprintf(`{"operation":%q,"amount":%d,"market_id":%q,"player_id":%q,"bid_id":"b20"}`,
 		operation, amount, market, player)
 	request := httptest.NewRequest(http.MethodPost, "http://x/api/bid/prepare", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
-	return recorder.Code
+	return recorder.Code, recorder.Body.String()
 }
 
-func TestTheDialogIsToldTheLimitPrepareEnforces(t *testing.T) {
+func TestTheDialogIsToldTheLimitPrepareWarnsPast(t *testing.T) {
 	handler := roomServer(t)
 	cases := []struct {
 		operation, market, player string
@@ -85,8 +90,10 @@ func TestTheDialogIsToldTheLimitPrepareEnforces(t *testing.T) {
 		if code := prepareAmount(handler, c.operation, c.market, c.player, got.Limit); code != http.StatusOK {
 			t.Errorf("%s: the limit itself is refused (%d)", c.operation, code)
 		}
-		if code := prepareAmount(handler, c.operation, c.market, c.player, got.Limit+1); code == http.StatusOK {
-			t.Errorf("%s: one euro over the limit is accepted", c.operation)
+		code, body := prepareAnswer(handler, c.operation, c.market, c.player, got.Limit+1)
+		if code != http.StatusOK || !strings.Contains(body, "en negativo no puntúas") {
+			t.Errorf("%s: one euro over the limit should pass with the warning: %d %s",
+				c.operation, code, body)
 		}
 	}
 }
