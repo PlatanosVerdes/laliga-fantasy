@@ -251,7 +251,7 @@ func (s *Server) newLinkPage(writer http.ResponseWriter, request *http.Request) 
 }
 
 const linkInBody = `<h1>Vincular este dispositivo</h1>
-<p class="lead">El código del otro dispositivo: menú de la cuenta → Vincular un dispositivo.</p>
+<p class="lead">El código del otro dispositivo (menú de la cuenta → Vincular un dispositivo): escríbelo o escanea su QR con el botón de la cámara.</p>
 <div class="code-row"><input class="field code" id="link-code" name="device-link" aria-label="Código de vinculación" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" data-bwignore placeholder="ABCD-EFGH" maxlength="9"><button class="btn" id="link-go">Vincular</button></div>
 <div class="msg" id="link-msg"></div>{{other}}
 <a class="back" href="/">← Volver</a>

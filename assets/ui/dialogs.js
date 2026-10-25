@@ -84,7 +84,7 @@ function ClauseSums({p, amount}) {
 function AmountDialog({p}) {
   const cash = useCash();
   const [text, setText] = useState(p.suggested === '' ? '' : group(p.suggested));
-  const [step, setStep] = useState({n: 1, summary: null, token: null, error: '', sending: false, done: '', drop: false});
+  const [step, setStep] = useState({n: 1, summary: null, token: null, error: '', sending: false, done: '', drop: false, checking: ''});
   const input = useRef(null);
   useEffect(() => { if (p.focus && input.current) input.current.focus(); }, []);
   const [room, setRoom] = useState(null);
@@ -120,23 +120,26 @@ function AmountDialog({p}) {
     requestAnimationFrame(() => { const shift = next.length - before; el.setSelectionRange(Math.max(0, caret + shift), Math.max(0, caret + shift)); });
   };
   const next = async () => {
-    setStep({...step, error: ''});
+    if (step.checking) return;
+    setStep({...step, error: '', checking: 'next'});
     usage().op('empezar ' + op);
     try {
       const data = await prepare({operation: op, amount, market_id: p.market_id, player_id: p.player_id,
         player_team_id: p.player_team_id, offer_id: p.offer_id, bid_id: p.bid_id});
-      setStep({...step, n: 2, summary: data, token: data.token, error: ''});
-    } catch (e) { setStep({...step, error: e.message}); }
+      setStep({...step, n: 2, summary: data, token: data.token, error: '', checking: ''});
+    } catch (e) { setStep({...step, error: e.message, checking: ''}); }
   };
   // The bid or the offer being changed can be taken back from here instead.
   const dropOp = op === 'change_offer' ? 'cancel_offer' : 'cancel_bid';
   const drop = async () => {
+    if (step.checking) return;
+    setStep({...step, error: '', checking: 'drop'});
     try {
       const data = await prepare({operation: dropOp, market_id: p.market_id, bid_id: p.bid_id,
         offer_id: p.offer_id, player_id: p.player_id});
       traced.become(dropOp);
-      setStep({...step, n: 2, summary: null, token: data.token, drop: true, error: ''});
-    } catch (e) { setStep({...step, error: e.message}); }
+      setStep({...step, n: 2, summary: null, token: data.token, drop: true, error: '', checking: ''});
+    } catch (e) { setStep({...step, error: e.message, checking: ''}); }
   };
   const send = async () => {
     const operation = step.drop ? dropOp : op;
@@ -187,9 +190,9 @@ function AmountDialog({p}) {
     </div></div>`}
     <p class="bid-error">${step.error}</p>
     <div class="modal-actions">
-      ${step.n === 1 && (p.bid_id || op === 'change_offer') ? html`<button class="bid-drop" type="button" onClick=${drop}>${dropOp === 'cancel_offer' ? 'Retirar mi oferta' : 'Retirar mi puja'}</button>` : null}
+      ${step.n === 1 && (p.bid_id || op === 'change_offer') ? html`<button class="bid-drop" type="button" disabled=${!!step.checking} onClick=${drop}>${step.checking === 'drop' ? 'Comprobando…' : dropOp === 'cancel_offer' ? 'Retirar mi oferta' : 'Retirar mi puja'}</button>` : null}
       <button class="bid-cancel" type="button" onClick=${closeDialog}>${step.done ? 'Cerrar' : 'Cancelar'}</button>
-      ${step.n === 1 ? html`<button class="bid-next primary" type="button" onClick=${next}>Continuar</button>` : null}
+      ${step.n === 1 ? html`<button class="bid-next primary" type="button" disabled=${!!step.checking} onClick=${next}>${step.checking === 'next' ? 'Comprobando…' : 'Continuar'}</button>` : null}
       ${step.n === 2 && !step.done ? html`<button class="bid-confirm" type="button" disabled=${step.sending} onClick=${send}>${step.sending ? 'Enviando…' : 'Aceptar'}</button>` : null}
     </div>
     <p class="modal-note">Se comprueba contra tu saldo antes de ejecutar.</p>

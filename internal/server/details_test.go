@@ -136,3 +136,18 @@ func TestShirtsCarryTheStartingOdds(t *testing.T) {
 		t.Errorf("unknown odds must stay empty: %v", got)
 	}
 }
+
+func TestTakingAnOfferBackReadsNoFutbolfantasyPage(t *testing.T) {
+	handler := biddingServer(t, func(string) (futbolfantasy.Detail, error) {
+		t.Error("read a futbolfantasy page to take an offer back")
+		return futbolfantasy.Detail{}, nil
+	}, nil)
+	request := httptest.NewRequest(http.MethodPost, "http://x/api/bid/prepare", strings.NewReader(
+		`{"operation":"cancel_offer","market_id":"mk-20","offer_id":"of-1","player_id":"20"}`))
+	request.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("prepared: %d %s", recorder.Code, recorder.Body)
+	}
+}
