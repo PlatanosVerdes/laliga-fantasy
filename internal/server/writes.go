@@ -572,7 +572,7 @@ func patch(universe *model.Universe, operation string, args writes.Args) bool {
 // readCeiling reads a player's futbolfantasy page for an operation about to be checked, and
 // storedCeiling is the last one read, for when it cannot be.
 var (
-	readCeiling   = futbolfantasy.FetchDetail
+	readCeiling   = futbolfantasy.Interactive.FetchDetail
 	storedCeiling = futbolfantasy.StoredDetail
 )
 

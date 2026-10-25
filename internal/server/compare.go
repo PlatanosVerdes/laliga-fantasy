@@ -68,7 +68,7 @@ func (s *Server) compare(writer http.ResponseWriter, request *http.Request) {
 		wait.Add(1)
 		go func(target map[string]any, ffID string) {
 			defer wait.Done()
-			if ceiling, _ := futbolfantasy.DetailFor(ffID); !ceiling.FetchedAt.IsZero() {
+			if ceiling, _ := futbolfantasy.Interactive.DetailFor(ffID); !ceiling.FetchedAt.IsZero() {
 				target["ideal_bid"] = ceiling.IdealBid
 			}
 		}(player, ffID)

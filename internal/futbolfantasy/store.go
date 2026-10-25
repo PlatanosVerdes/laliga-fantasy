@@ -136,7 +136,11 @@ func StoredDetail(ffID string) (Detail, bool) {
 
 // FetchDetail reads the player's page now, through the throttle, and stores what it says.
 func FetchDetail(ffID string) (Detail, error) {
-	page, err := PlayerDetail(ffID, 0)
+	return fetchDetail(ffID, false)
+}
+
+func fetchDetail(ffID string, urgent bool) (Detail, error) {
+	page, err := playerDetail(ffID, 0, urgent)
 	if err != nil {
 		return Detail{}, err
 	}
@@ -191,11 +195,15 @@ func saveStore() error {
 // falls back on the stored one, however old, and still returns the error so the caller can say
 // how old it is.
 func DetailFor(ffID string) (Detail, error) {
+	return detailFor(ffID, false)
+}
+
+func detailFor(ffID string, urgent bool) (Detail, error) {
 	stored, ok := StoredDetail(ffID)
 	if ok && stored.Fresh(time.Now()) {
 		return stored, nil
 	}
-	fetched, err := FetchDetail(ffID)
+	fetched, err := fetchDetail(ffID, urgent)
 	if err == nil {
 		return fetched, nil
 	}
@@ -210,4 +218,17 @@ func text(value any) string {
 		return *found
 	}
 	return ""
+}
+
+// Interactive reads for someone waiting on the screen: they take the next turn.
+var Interactive interactive
+
+type interactive struct{}
+
+func (interactive) FetchDetail(ffID string) (Detail, error) { return fetchDetail(ffID, true) }
+
+func (interactive) DetailFor(ffID string) (Detail, error) { return detailFor(ffID, true) }
+
+func (interactive) PlayerPageFor(slug, ffID string, ttl time.Duration) (map[string]any, error) {
+	return playerPageFor(slug, ffID, ttl, true)
 }

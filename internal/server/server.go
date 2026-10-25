@@ -423,6 +423,8 @@ func sameSiteOnly(next http.Handler) http.Handler {
 	})
 }
 
+const slowRequest = 2 * time.Second
+
 func logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		started := time.Now()
@@ -440,7 +442,8 @@ func logging(next http.Handler) http.Handler {
 		// so counting it as mutating would bury the log it is filed next to.
 		mutating := request.Method != http.MethodGet && request.Method != http.MethodHead &&
 			request.URL.Path != "/api/usage"
-		interesting := mutating || wrapped.status >= 400 || request.URL.Path == "/"
+		interesting := mutating || wrapped.status >= 400 || request.URL.Path == "/" ||
+			elapsed >= slowRequest.Milliseconds()
 		level := slog.LevelDebug
 		if interesting {
 			level = slog.LevelInfo
