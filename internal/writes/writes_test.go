@@ -110,10 +110,22 @@ func TestBidBelowTheFloorIsRefused(t *testing.T) {
 	}
 }
 
-func TestBidAboveCashIsRefused(t *testing.T) {
+// Going into the red is the person's call; the automatic writes never make it for them.
+func TestABidAboveCashWarnsAPersonAndStopsTheAutomaticWrites(t *testing.T) {
 	g := guard(t, 1_000_000)
-	if _, err := g.Prepare("bid", bidArgs(2_000_000), Player{Name: "X"}, true); err == nil {
-		t.Fatal("no te llega y aun asi lo ha aceptado")
+	summary, err := g.Prepare("bid", bidArgs(2_000_000), Player{Name: "X"}, true)
+	if err != nil {
+		t.Fatalf("a person's bid over the balance was refused: %v", err)
+	}
+	if !strings.Contains(strings.Join(summary.Warnings, " "), "te quedas en -1.000.000") {
+		t.Errorf("warnings %v do not say where the balance ends", summary.Warnings)
+	}
+	if _, err := g.Automatic("bid", bidArgs(2_000_000), Player{Name: "X"}, true); err == nil {
+		t.Error("an automatic bid went over the balance")
+	}
+	if _, err := g.Prepare("pay_clause", Args{PlayerTeamID: "3", Amount: 2_000_000},
+		Player{Name: "X", Owner: "R"}, true); err == nil {
+		t.Error("a clause was paid on debt")
 	}
 }
 
@@ -464,8 +476,8 @@ func TestABidIsNeverCancelledWithoutItsID(t *testing.T) {
 func TestABidFitsCashPlusDebtRoomMinusOtherBids(t *testing.T) {
 	cash := int64(10_000_000)
 	who := Player{DebtRoom: 5_000_000, Committed: 9_000_000}
-	if _, err := check("bid", Args{MarketID: "m", Amount: 7_000_000}, who, &cash, nil); err == nil {
-		t.Error("a bid over cash + debt room - committed went through")
+	if !short("bid", 7_000_000, &cash, who) {
+		t.Error("a bid over cash + debt room - committed fits")
 	}
 	if _, err := check("bid", Args{MarketID: "m", Amount: 6_000_000}, who, &cash, nil); err != nil {
 		t.Errorf("a bid within the limit was refused: %v", err)

@@ -139,8 +139,14 @@ func (d Document) buyLine(item map[string]any, route string, gain float64,
 			break
 		}
 		short := "te faltan " + esMoney(cost-reach)
-		line.Acts = []Act{{Label: verb + " " + esMoney(cost), Class: "mb mb-ghost", Off: true,
-			Tip: short, Wrap: short}}
+		if route == "clausula" {
+			line.Acts = []Act{{Label: verb + " " + esMoney(cost), Class: "mb mb-ghost", Off: true,
+				Tip: short, Wrap: short}}
+			break
+		}
+		line.Acts = bidActs(item, "mb mb-ghost bid", verb+" "+esMoney(cost))
+		line.Chips = append([]Chip{{T: "⚠ " + short, C: "soon",
+			Tip: "si empiezas la jornada en negativo no puntúas"}}, line.Chips...)
 	case cost > cash:
 		line.Chips = append([]Chip{{T: "⚠ en negativo", C: "soon",
 			Tip: "si empiezas la jornada en negativo no puntúas"}}, line.Chips...)

@@ -829,8 +829,7 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 		}
 		// Committed counts the other listings only, so the offer being replaced frees its money.
 		if short(name, args.Amount, cash, who) {
-			return nil, fmt.Errorf("no te llega: tienes %s y %s en otras pujas", money(*cash),
-				money(who.Committed))
+			warnings = append(warnings, overdrawn(args.Amount, *cash, who))
 		}
 		if who.MinBid > 0 && args.Amount < who.MinBid {
 			warnings = append(warnings, fmt.Sprintf("piden %s: por debajo puede que ni la miren",
@@ -855,8 +854,7 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 				"cambiarla no se puede", money(who.MyBid))
 		}
 		if short(name, args.Amount, cash, who) {
-			return nil, fmt.Errorf("no te llega: tienes %s y %s en otras pujas", money(*cash),
-				money(who.Committed))
+			warnings = append(warnings, overdrawn(args.Amount, *cash, who))
 		}
 		if who.MinBid > 0 && args.Amount < who.MinBid {
 			warnings = append(warnings, fmt.Sprintf("piden %s: por debajo puede que ni la miren",
@@ -915,8 +913,7 @@ func check(name string, args Args, who Player, cash *int64, window *Window) ([]s
 			return nil, fmt.Errorf("la puja minima es %s", money(who.MinBid))
 		}
 		if short(name, args.Amount, cash, who) {
-			return nil, fmt.Errorf("no te llega: tienes %s, %s de margen de deuda y %s en otras "+
-				"pujas", money(*cash), money(who.DebtRoom), money(who.Committed))
+			warnings = append(warnings, overdrawn(args.Amount, *cash, who))
 		}
 		if who.IdealBid > 0 {
 			if args.Amount > who.IdealBid {
@@ -964,6 +961,16 @@ func RoomFor(name string, cash int64, who Player) (Room, bool) {
 	}
 	room.Limit = cash + room.DebtRoom - room.Committed
 	return room, true
+}
+
+// Overdraws are the market bids a person may push past the balance: LaLiga takes them and only
+// a matchday started in the red costs the points.
+var Overdraws = map[string]bool{"bid": true, "modify_bid": true, "buy_offer": true,
+	"change_offer": true}
+
+func overdrawn(amount, cash int64, who Player) string {
+	return fmt.Sprintf("si se cierra con tus otras pujas te quedas en %s: si empiezas la "+
+		"jornada en negativo no puntúas", "-"+money(who.Committed+amount-cash))
 }
 
 func short(name string, amount int64, cash *int64, who Player) bool {
@@ -1057,6 +1064,10 @@ func (g *Guard) Automatic(name string, args Args, who Player, allowWrites bool) 
 	warnings, err := check(name, args, who, cash, g.window())
 	if err != nil {
 		return nil, err
+	}
+	if Overdraws[name] && short(name, args.Amount, cash, who) {
+		return nil, fmt.Errorf("no te llega: tienes %s y %s en otras pujas", money(*cash),
+			money(who.Committed))
 	}
 
 	call, err := Build(name, member, args)
