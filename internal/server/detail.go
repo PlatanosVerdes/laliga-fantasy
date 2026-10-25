@@ -81,7 +81,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	// The link is the page the ceiling was read from, so it comes with it rather than from a
 	// slug of his name, which a short or shared name gets wrong.
 	if ffID := text(player["ff_id"]); ffID != "" {
-		page, err := futbolfantasy.DetailFor(ffID)
+		page, err := futbolfantasy.Interactive.DetailFor(ffID)
 		if page.FetchedAt.IsZero() {
 			// Never read is not "sin margen": prepare reads it again before any amount is judged.
 			player[advice.PendingKey] = true
@@ -108,7 +108,7 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 		if url := text(player["ff_url"]); url != "" {
 			slug = url[strings.LastIndex(url, "/")+1:]
 		}
-		if page, err := futbolfantasy.PlayerPageFor(slug, text(player["ff_id"]),
+		if page, err := futbolfantasy.Interactive.PlayerPageFor(slug, text(player["ff_id"]),
 			futbolfantasy.DetailTTL); err == nil {
 			if _, known := player["ff_url"]; !known {
 				player["ff_url"] = strings.ReplaceAll(config.FFPlayerURL, "{slug}", slug)

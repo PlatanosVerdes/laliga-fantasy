@@ -34,20 +34,47 @@ const Hour = time.Hour
 const MinInterval = 400 * time.Millisecond
 
 var (
-	throttle    sync.Mutex
-	lastRequest time.Time
+	throttle      sync.Mutex
+	turn          = sync.NewCond(&throttle)
+	lastRequest   time.Time
+	pacing        bool
+	urgentWaiting int
 )
 
+// pace waits for this request's turn. Someone looking at the screen goes before every background
+// read still waiting: behind a fill of seventy pages, a player's card took half a minute.
+func pace(urgent bool) {
+	throttle.Lock()
+	defer throttle.Unlock()
+	if urgent {
+		urgentWaiting++
+	}
+	for pacing || (!urgent && urgentWaiting > 0) {
+		turn.Wait()
+	}
+	if urgent {
+		urgentWaiting--
+	}
+	pacing = true
+	if wait := MinInterval - time.Since(lastRequest); wait > 0 && !lastRequest.IsZero() {
+		throttle.Unlock()
+		time.Sleep(wait)
+		throttle.Lock()
+	}
+	lastRequest = time.Now()
+	pacing = false
+	turn.Broadcast()
+}
+
 func fetch(url string, ttl time.Duration, tag string) (string, error) {
+	return fetchAt(url, ttl, tag, false)
+}
+
+func fetchAt(url string, ttl time.Duration, tag string, urgent bool) (string, error) {
 	if cached, ok := httpx.Cached(config.GlobalScope(), url, tag, ttl); ok {
 		return cached, nil
 	}
-	throttle.Lock()
-	if wait := MinInterval - time.Since(lastRequest); wait > 0 && !lastRequest.IsZero() {
-		time.Sleep(wait)
-	}
-	lastRequest = time.Now()
-	throttle.Unlock()
+	pace(urgent)
 
 	return httpx.Fetch(httpx.Request{URL: url, Headers: config.FFHeaders(), TTL: ttl,
 		Tag: tag, Timeout: 60 * time.Second, Cache: config.GlobalScope()})
@@ -397,6 +424,10 @@ type parsedDetail struct {
 }
 
 func PlayerDetail(ffID string, ttl time.Duration) (map[string]any, error) {
+	return playerDetail(ffID, ttl, false)
+}
+
+func playerDetail(ffID string, ttl time.Duration, urgent bool) (map[string]any, error) {
 	url := strings.ReplaceAll(config.FFDetailURL, "{ff_id}", ffID)
 	if ttl > 0 && !httpx.Frozen {
 		detailMu.Lock()
@@ -406,7 +437,7 @@ func PlayerDetail(ffID string, ttl time.Duration) (map[string]any, error) {
 			return maps.Clone(kept.detail), nil
 		}
 	}
-	page, err := fetch(url, ttl, "ff_detail")
+	page, err := fetchAt(url, ttl, "ff_detail", urgent)
 	if err != nil {
 		return nil, err
 	}
@@ -581,7 +612,11 @@ func ParsePlayerPage(page string) map[string]any {
 // land on a stranger -- "angel-perez" is a Segunda player, not the Alaves one -- so a page that
 // states a different id is no answer.
 func PlayerPageFor(slug, ffID string, ttl time.Duration) (map[string]any, error) {
-	page, err := PlayerPage(slug, ttl)
+	return playerPageFor(slug, ffID, ttl, false)
+}
+
+func playerPageFor(slug, ffID string, ttl time.Duration, urgent bool) (map[string]any, error) {
+	page, err := playerPage(slug, ttl, urgent)
 	if err != nil {
 		return nil, err
 	}
@@ -604,9 +639,13 @@ var (
 )
 
 func PlayerPage(slug string, ttl time.Duration) (map[string]any, error) {
+	return playerPage(slug, ttl, false)
+}
+
+func playerPage(slug string, ttl time.Duration, urgent bool) (map[string]any, error) {
 	url := strings.ReplaceAll(config.FFPlayerURL, "{slug}", slug)
 	if ttl <= 0 || httpx.Frozen {
-		page, err := fetch(url, ttl, "ff_player")
+		page, err := fetchAt(url, ttl, "ff_player", urgent)
 		if err != nil {
 			return nil, err
 		}
@@ -628,7 +667,7 @@ func PlayerPage(slug string, ttl time.Duration) (map[string]any, error) {
 	if ok && time.Since(kept.written) <= ttl {
 		return maps.Clone(kept.detail), nil
 	}
-	page, err := fetch(url, ttl, "ff_player")
+	page, err := fetchAt(url, ttl, "ff_player", urgent)
 	if err != nil {
 		return nil, err
 	}
