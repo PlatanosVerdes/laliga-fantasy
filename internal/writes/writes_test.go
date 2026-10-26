@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api/apitest"
 )
-
 
 func guard(t *testing.T, cash int64) *Guard {
 	t.Helper()
@@ -625,5 +625,25 @@ func TestTakingABidOrAnOfferBackDoesNotWaitForTheBalance(t *testing.T) {
 	if _, err := g.Prepare("bid", bidArgs(1_000_000), Player{Name: "X", IdealBid: 2_000_000},
 		true); err != nil || reads != 1 {
 		t.Errorf("a bid is still checked against the balance: %v, %d reads", err, reads)
+	}
+}
+
+// A clause rise that kept the cached balance showed its cost under the next click instead.
+func TestEverySpendRereadsTheBalance(t *testing.T) {
+	for name := range Spends {
+		if !slices.Contains(Operations[name].Effects, "money") {
+			t.Errorf("%s spends money but keeps the cached balance", name)
+		}
+		if !slices.Contains(Moves(name), "cash") {
+			t.Errorf("%s spends money but cannot be credited with the balance moving", name)
+		}
+	}
+}
+
+func TestMovesOfAnActionThatTouchesNoFigure(t *testing.T) {
+	for _, name := range []string{"favourite", "save_lineup", "always"} {
+		if moves := Moves(name); len(moves) != 0 {
+			t.Errorf("%s moves %v, want nothing", name, moves)
+		}
 	}
 }
