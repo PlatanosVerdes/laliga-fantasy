@@ -148,14 +148,13 @@ var Operations = map[string]operation{
 			nil}
 	}, []string{"market", "money"}},
 
-	// The slot id, not the player's. What you pay is valueToIncrease and the clause goes up by
-	// ClauseFactor times that, which is the app's own arithmetic: pay 8.555 and the clause
-	// gains 17.110.
+	// The slot id, not the player's. Amount is what you pay; valueToIncrease is what the clause
+	// gains, and the API charges it divided by the factor (sent 2.6M, paid 1.3M).
 	"raise_clause": {"subir clausula", func(w where, a Args) Call {
 		return Call{http.MethodPut,
 			fmt.Sprintf("%s/league/%s/buyout/player", config.CMP, w.LeagueID),
 			map[string]any{"playerId": a.PlayerTeamID, "factor": ClauseFactor,
-				"valueToIncrease": a.Amount}}
+				"valueToIncrease": a.Amount * ClauseFactor}}
 	}, []string{"squad", "money"}},
 
 	// The API demands the amount in the body as a confirmation of what is being accepted;
