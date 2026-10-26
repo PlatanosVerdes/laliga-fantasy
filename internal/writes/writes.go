@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -78,6 +79,28 @@ type operation struct {
 	Effects []string
 }
 
+// figures is which of the panel's before/after figures each cached answer feeds.
+var figures = map[string][]string{
+	"money":  {"cash"},
+	"squad":  {"squad", "squad_value", "points", "absences", "listed"},
+	"market": {"listed"},
+	"offers": {"offers"},
+}
+
+// Moves is every figure an operation can change: what a rebuild after it may put under its
+// name. Anything else that moved happened elsewhere. Unknown names move nothing.
+func Moves(name string) []string {
+	var moves []string
+	for _, effect := range Operations[name].Effects {
+		for _, figure := range figures[effect] {
+			if !slices.Contains(moves, figure) {
+				moves = append(moves, figure)
+			}
+		}
+	}
+	return moves
+}
+
 // Operations, with the id semantics spelled out. Each comment is a bug that was paid for.
 var Operations = map[string]operation{
 	"bid": {"puja", func(w where, a Args) Call {
@@ -133,7 +156,7 @@ var Operations = map[string]operation{
 			fmt.Sprintf("%s/league/%s/buyout/player", config.CMP, w.LeagueID),
 			map[string]any{"playerId": a.PlayerTeamID, "factor": ClauseFactor,
 				"valueToIncrease": a.Amount}}
-	}, []string{"squad"}},
+	}, []string{"squad", "money"}},
 
 	// The API demands the amount in the body as a confirmation of what is being accepted;
 	// without it, it answers 400.

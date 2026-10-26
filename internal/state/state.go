@@ -388,6 +388,16 @@ func (s *State) Refresh(cause string) error {
 // /refresh is a person pressing a button and expecting the page to react: staying silent
 // because the fingerprint matched would look like the button is broken.
 func (s *State) RefreshWith(cause string, force bool) error {
+	return s.rebuild(cause, force, nil, false)
+}
+
+// Settle is the forced rebuild after a person's action. Only the figures in moves go under the
+// action's name; the rest moved elsewhere, often an earlier write a stale cache hid until now.
+func (s *State) Settle(cause string, moves []string) error {
+	return s.rebuild(cause, true, moves, true)
+}
+
+func (s *State) rebuild(cause string, force bool, moves []string, bounded bool) error {
 	s.rebuilding.Lock()
 	defer s.rebuilding.Unlock()
 	started := time.Now()
@@ -431,22 +441,40 @@ func (s *State) RefreshWith(cause string, force bool) error {
 		"matched", universe.MatchedCount, "activity", len(universe.Activity))
 
 	after := s.Snapshot()
-	if diff := Difference(before, after, Discrete); len(diff) > 0 {
-		effect := &Effect{Operation: cause, At: time.Now().UTC().Format(time.RFC3339),
-			Changed: diff}
-		s.mu.Lock()
-		s.lastEffect = effect
-		s.mu.Unlock()
-		slog.Info("world moved", "cause", cause, "changed", keys(diff))
-		s.announce(map[string]any{"type": "effect", "version": version,
-			"operation": effect.Operation, "at": effect.At, "changed": effect.Changed})
+	diff := Difference(before, after, Discrete)
+	elsewhere := map[string]Change{}
+	if bounded {
+		for key, change := range diff {
+			if !slices.Contains(moves, key) {
+				elsewhere[key] = change
+				delete(diff, key)
+			}
+		}
 	}
+	s.report(cause, version, diff)
+	s.report(Unattributed, version, elsewhere)
 
 	if changed {
 		s.announce(map[string]any{"type": "state", "version": version,
 			"generated_at": s.generatedAt.UTC().Format(time.RFC3339)})
 	}
 	return nil
+}
+
+// Unattributed is the operation a change is reported under when no action it followed explains it.
+const Unattributed = "refresco"
+
+func (s *State) report(operation string, version int, diff map[string]Change) {
+	if len(diff) == 0 {
+		return
+	}
+	effect := &Effect{Operation: operation, At: time.Now().UTC().Format(time.RFC3339), Changed: diff}
+	s.mu.Lock()
+	s.lastEffect = effect
+	s.mu.Unlock()
+	slog.Info("world moved", "cause", operation, "changed", keys(diff))
+	s.announce(map[string]any{"type": "effect", "version": version,
+		"operation": effect.Operation, "at": effect.At, "changed": effect.Changed})
 }
 
 func keys(changed map[string]Change) []string {

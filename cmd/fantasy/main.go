@@ -763,7 +763,7 @@ func cmdServe(args []string) error {
 		Settle: func(cause string) {
 			// Force it: a write whose effect the fingerprint cannot see still has to make
 			// the page react, or the click looks like it did nothing.
-			if err := world.RefreshWith(cause, true); err != nil {
+			if err := world.Settle(cause, writes.Moves(cause)); err != nil {
 				slog.Error("settle failed", "cause", cause, "reason", err.Error())
 			}
 		},
