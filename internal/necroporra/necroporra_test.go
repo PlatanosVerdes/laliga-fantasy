@@ -3,6 +3,7 @@ package necroporra
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 // Between rounds the page has no ballot, only the past rounds; your row there is the one
@@ -42,5 +43,31 @@ func TestParseShields(t *testing.T) {
 	got := parseShields(body)
 	if got["JMjugon"] != 1 || got["tete alejo"] != 3 || len(got) != 2 {
 		t.Errorf("shields: %v", got)
+	}
+}
+
+func TestStateTTLReadsRarelyUntilTheRoundCloses(t *testing.T) {
+	closes := time.Date(2026, 10, 30, 21, 0, 0, 0, time.UTC)
+	open := State{Open: true, ClosesAt: closes}
+	voted := State{Open: true, ClosesAt: closes, Chosen: []string{"1", "2"}}
+	cases := []struct {
+		name     string
+		cached   State
+		cachedAt time.Time
+		now      time.Time
+		want     time.Duration
+	}{
+		{"between rounds", State{}, closes, closes.Add(time.Minute), idleTTL},
+		{"days before closing", open, closes.Add(-48 * time.Hour), closes.Add(-47 * time.Hour), idleTTL},
+		{"wakes as the window opens", open, closes.Add(-3 * time.Hour), closes.Add(-150 * time.Minute), time.Hour},
+		{"inside the window, no vote", open, closes.Add(-time.Hour), closes.Add(-time.Hour), closingTTL},
+		{"inside the window, voted", voted, closes.Add(-time.Hour), closes.Add(-time.Hour), time.Hour},
+		{"read before closing, now closed", voted, closes.Add(-time.Hour), closes.Add(time.Minute), time.Hour},
+		{"read after closing", open, closes.Add(time.Minute), closes.Add(2 * time.Minute), idleTTL},
+	}
+	for _, c := range cases {
+		if got := stateTTL(c.cached, c.cachedAt, c.now); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
 	}
 }
