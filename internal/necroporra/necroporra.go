@@ -234,9 +234,17 @@ var (
 		`\{"className":"min-w-0 text-right","style":\{"color":"[^"]*"\},"children":\["([^"]+)"`)
 )
 
-// FetchState reads the open round. The response is cached briefly so the panel's repaint loop
-// does not hammer the external app, and a read failure falls back to the configured gameweek
-// rather than breaking the page. The call also keeps the sliding session alive.
+// Every read renders a page on tebasfury's free tier, which a five-minute poll drained in
+// October 2026: outside the last hours of a round a few reads a day are enough.
+const (
+	idleTTL       = 3 * time.Hour
+	closingTTL    = 4 * time.Minute
+	closingWindow = 2 * time.Hour
+)
+
+// FetchState reads the open round, a few times a day until the round is about to close, and
+// a read failure falls back to the configured gameweek rather than breaking the page. The call
+// also keeps the sliding session alive.
 func FetchState(cfg Config, scope config.CacheScope) State {
 	if fake, ok := loadFake(); ok {
 		return fake.State
@@ -245,8 +253,14 @@ func FetchState(cfg Config, scope config.CacheScope) State {
 	if cfg.Cookie == "" {
 		return state
 	}
+	ttl := idleTTL
+	if cachedAt, ok := httpx.CachedAt(scope, stateURL, "necro-state"); ok {
+		if body, ok := httpx.Cached(scope, stateURL, "necro-state", 30*24*time.Hour); ok {
+			ttl = stateTTL(parseState(body, state), cachedAt, time.Now())
+		}
+	}
 	body, err := httpx.Fetch(httpx.Request{
-		URL:    "https://tebasfury.vercel.app/necroporra",
+		URL:    stateURL,
 		Method: http.MethodGet,
 		Headers: map[string]string{
 			"rsc":    "1",
@@ -254,7 +268,7 @@ func FetchState(cfg Config, scope config.CacheScope) State {
 			"cookie": "__Secure-better-auth.session_token=" + cfg.Cookie,
 		},
 		Tag:   "necro-state",
-		TTL:   30 * time.Second,
+		TTL:   ttl,
 		Cache: scope,
 	})
 	if err != nil {
@@ -265,6 +279,34 @@ func FetchState(cfg Config, scope config.CacheScope) State {
 		state.Shields = fetchShields(cfg, scope, state.LastRound)
 	}
 	return state
+}
+
+// stateTTL is how long a read taken at cachedAt stays good: until the round enters its closing
+// window, every few minutes inside it while no vote is in, and over once the round has closed.
+func stateTTL(cached State, cachedAt, now time.Time) time.Duration {
+	refreshAt := cachedAt.Add(idleTTL)
+	if cached.Open && !cached.ClosesAt.IsZero() {
+		switch opens := cached.ClosesAt.Add(-closingWindow); {
+		case !cachedAt.Before(cached.ClosesAt):
+		case now.After(cached.ClosesAt):
+			refreshAt = cached.ClosesAt
+		case now.Before(opens):
+			refreshAt = earliest(refreshAt, opens)
+		case !cached.Voted():
+			refreshAt = earliest(refreshAt, cachedAt.Add(closingTTL))
+		default:
+			refreshAt = earliest(refreshAt, cached.ClosesAt)
+		}
+	}
+	// httpx reads a TTL of zero as "never cache", so an expired read still gets a positive one.
+	return max(refreshAt.Sub(cachedAt), time.Nanosecond)
+}
+
+func earliest(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
 }
 
 var reShield = regexp.MustCompile(`"children":"([^"]+)"\}\],null,null,\["\$","span",null,` +
@@ -279,7 +321,7 @@ func fetchShields(cfg Config, scope config.CacheScope, round int) map[string]int
 		Headers: map[string]string{"rsc": "1", "accept": "text/x-component",
 			"cookie": "__Secure-better-auth.session_token=" + cfg.Cookie},
 		Tag:   "necro-shields",
-		TTL:   5 * time.Minute,
+		TTL:   idleTTL,
 		Cache: scope,
 	})
 	if err != nil {
@@ -467,7 +509,8 @@ func bestEleven(xpts []float64) float64 {
 }
 
 const (
-	voteURL   = "https://tebasfury.vercel.app/necroporra"
+	stateURL  = "https://tebasfury.vercel.app/necroporra"
+	voteURL   = stateURL
 	stateTree = "%5B%22%22%2C%7B%22children%22%3A%5B%22(portal)%22%2C%7B%22children%22%3A%5B%22necroporra%22%2C%7B%22children%22%3A%5B%22__PAGE__%22%2C%7B%7D%2Cnull%2Cnull%2C4096%5D%7D%2Cnull%2Cnull%2C4096%5D%7D%2Cnull%2Cnull%2C4096%5D%7D%2Cnull%2Cnull%2C4112%5D"
 )
 
