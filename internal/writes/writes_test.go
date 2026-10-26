@@ -347,8 +347,8 @@ func TestRaiseClauseCallCarriesTheFactor(t *testing.T) {
 	if call.Body["factor"] != ClauseFactor {
 		t.Errorf("factor = %v, want %d", call.Body["factor"], ClauseFactor)
 	}
-	if call.Body["valueToIncrease"] != int64(1_000) {
-		t.Errorf("valueToIncrease = %v, want what you pay", call.Body["valueToIncrease"])
+	if call.Body["valueToIncrease"] != int64(2_000) {
+		t.Errorf("valueToIncrease = %v, want what the clause gains", call.Body["valueToIncrease"])
 	}
 }
 
