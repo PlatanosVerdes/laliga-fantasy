@@ -13,7 +13,7 @@ export async function runAction(a, player, {fromCard = false, reopen} = {}) {
   if (a.op === 'note') return;
   if (a.op === 'raid') {
     raidDialog({id: player.id, name: player.name, suggested: a.suggested, clause: player.clause,
-      opens: player.clause_locked_until}, reopen);
+      opens: player.clause_locked_until, armed: !!a.on}, reopen);
     return;
   }
   if (a.op === 'shield') { shieldDialog(a, player); return; }
@@ -62,7 +62,7 @@ export async function runAct(a, origin = null) {
     case 'bulk': openDialog({kind: 'bulk', key: ++opened, ...x}); return;
     case 'bid': openBid(x); return;
     case 'raid':
-      raidDialog({id: x.id, name: x.name, suggested: x.max, clause: x.clause});
+      raidDialog({id: x.id, name: x.name, suggested: x.max, clause: x.clause, armed: !!x.armed});
       return;
     case 'raise':
       openAmount({op: 'raise_clause', kind: 'amount', label: 'Subir cláusula', player_id: x.id,

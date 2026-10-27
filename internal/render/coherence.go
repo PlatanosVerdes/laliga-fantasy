@@ -258,8 +258,8 @@ func clauseButton(player map[string]any, cost float64, opens, class string, arme
 			Args: map[string]any{"op": "pay_clause", "player_id": id, "name": name,
 				"amount": int64(cost)}}
 	}
-	label, ceiling := "Programar clausulazo", cost
-	if truthy(player["raid_scheduled"]) {
+	label, ceiling, armed := "Programar clausulazo", cost, truthy(player["raid_scheduled"])
+	if armed {
 		label = "Cambiar clausulazo programado"
 		if armed := number(armedMax[id]); armed > 0 {
 			ceiling = armed
@@ -267,7 +267,7 @@ func clauseButton(player map[string]any, cost float64, opens, class string, arme
 	}
 	return Act{Label: label, Class: "raid-btn " + class, Do: "raid",
 		Args: map[string]any{"id": id, "name": name, "max": int64(ceiling),
-			"clause": int64(number(player["clause"]))}}
+			"clause": int64(number(player["clause"])), "armed": armed}}
 }
 
 // swapCards are the sales the eleven only survives with a clausulazo: both legs on one card.

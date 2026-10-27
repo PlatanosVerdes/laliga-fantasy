@@ -165,7 +165,7 @@ func (d Document) plannedBlock() Block {
 		}
 		line.Acts = []Act{act("Cambiar límite", "ghost", "raid-btn", "raid", map[string]any{
 			"id": text(raid["player_id"]), "name": text(raid["name"]), "max": int64(limit),
-			"clause": int64(clause)})}
+			"clause": int64(clause), "armed": true})}
 		if standing {
 			line.Acts = append(line.Acts, act("Cancelar", "ghost", "op", "cancel_raid",
 				map[string]any{"player_id": text(raid["player_id"]), "name": text(raid["name"])}))
