@@ -273,6 +273,13 @@ function RaidDialog({p, done}) {
     changed();
     if (done) done();
   };
+  const remove = async () => {
+    try { await postJSON('/api/raid/cancel', {id: p.id, name: p.name}); }
+    catch (e) { setError('No se ha podido quitar.'); return; }
+    closeDialog();
+    changed();
+    if (done) done();
+  };
   return html`<${Modal} label="Programar clausulazo" onClose=${closeDialog}>
     <h3>Clausulazo a <span class="raid-who">${p.name}</span></h3>
     <dl class="bid-dl raid-facts">
@@ -286,6 +293,7 @@ function RaidDialog({p, done}) {
         onInput=${(e) => setText(group(digits(e.currentTarget.value)))} onKeyDown=${(e) => { if (e.key === 'Enter') save(); }}/></div>
     <p class="bid-error raid-error">${error}</p>
     <div class="modal-actions">
+      ${p.armed ? html`<button class="raid-remove bid-drop" type="button" onClick=${remove}>Quitar clausulazo</button>` : null}
       <button class="raid-cancel" type="button" onClick=${closeDialog}>Cancelar</button>
       <button class="raid-save bid-next" type="button" onClick=${save}>Programar</button>
     </div>

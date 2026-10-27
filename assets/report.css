@@ -1335,6 +1335,15 @@ section.mk{margin:0 0 22px}
   .mk .rnote{white-space:normal;text-align:right}
   .mk .rtail:not(:has(*)){display:none}
 }
+/* An aside is as tight as a phone: its buttons' column left the name one letter wide. */
+@container rows (max-width:440px){
+  .mk .r{grid-template-columns:28px minmax(0,1fr) auto;grid-template-areas:"f w v" "f g g" "f z z";
+    row-gap:4px;column-gap:8px}
+  .mk .rtail{grid-area:z;display:flex;justify-content:flex-end;align-items:center;gap:6px}
+  .mk .rval{max-width:150px}
+  .mk .rnote{white-space:normal;text-align:right}
+  .mk .rtail:not(:has(*)){display:none}
+}
 .mk .fold{margin-top:6px}
 .mk .fold summary{cursor:pointer;color:var(--muted);font-size:12px;padding:6px 2px;list-style:none}
 .mk .fold summary::-webkit-details-marker{display:none}
