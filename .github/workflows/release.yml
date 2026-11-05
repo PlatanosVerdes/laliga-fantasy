@@ -6,8 +6,8 @@ name: Release
 on:
   push:
     branches: [main]
-    # A README is not a new version; assets/ is, being the panel the image serves.
-    paths-ignore: ["**/*.md"]
+    # Only what goes into the image is a new version.
+    paths: ["cmd/**", "internal/**", "assets/**", "go.mod", "go.sum", "Dockerfile", "!**/*.md", "!**/*_test.go"]
 
 permissions:
   contents: write
