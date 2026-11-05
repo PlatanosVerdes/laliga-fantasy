@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -246,6 +247,10 @@ func (m *Member) At(priority httpx.Priority) *Member {
 
 // Invalidate drops each tag in the folder this member reads it from, whatever its level.
 func (m *Member) Invalidate(tags ...string) int {
+	if slices.Contains(tags, "squad") && !slices.Contains(tags, "own_lineup") {
+		// The saved eleven still lists a player who just left the squad.
+		tags = append(slices.Clone(tags), "own_lineup")
+	}
 	return httpx.InvalidateIn(m.profile, tags...)
 }
 
