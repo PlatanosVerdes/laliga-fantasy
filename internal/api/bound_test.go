@@ -174,3 +174,25 @@ func TestAMembersTurnInTheQueueReachesItsLeagueReads(t *testing.T) {
 		t.Errorf("a write's read was held: %v", err)
 	}
 }
+
+func TestASquadChangeAlsoDropsTheSavedEleven(t *testing.T) {
+	fake := twoAccounts(t)
+	member := memberOf(t, "a", "LA", "TA")
+	readLineup := func() {
+		if _, err := member.OwnLineup(time.Hour); err != nil {
+			t.Fatal(err)
+		}
+	}
+	readLineup()
+	before := len(fake.Calls())
+	member.Invalidate("money")
+	readLineup()
+	if len(fake.Calls()) != before {
+		t.Fatal("a cash-only change refetched the lineup")
+	}
+	member.Invalidate("market", "squad")
+	readLineup()
+	if len(fake.Calls()) != before+1 {
+		t.Fatal("the lineup was served from cache after the squad changed")
+	}
+}
