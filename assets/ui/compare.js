@@ -1,5 +1,5 @@
 import {html, render, useState, useEffect, useRef, panel} from './lib.js';
-import {ApiFace, Empty} from './components.js';
+import {ApiFace, Empty, Icon} from './components.js';
 import {Segs} from './view.js';
 import {getJSON} from './api.js';
 import {fmt} from './format.js';
@@ -166,11 +166,11 @@ function Tray() {
     <${Find} placeholder="buscar jugador…"/>
     <div class="cmp-chips">${list.map((p) => html`<span class="cmp-chip">${posTag(p.pos)}
       <button class="p-name" type="button" onClick=${() => page.openDetail(p.id)}>${p.name}</button>
-      <button class="cmp-x" type="button" aria-label="Quitar" onClick=${() => compare.drop(p.id)}>×</button></span>`)}</div>
+      <button class="cmp-x" type="button" aria-label="Quitar" onClick=${() => compare.drop(p.id)}><${Icon} name="x"/></button></span>`)}</div>
     <span class="cmp-msg">${message}</span>
     <div class="cmp-acts"><${Mine}/>
       <button type="button" class="cmp-go primary" onClick=${() => page.openCompare()}>Comparar (${list.length})</button>
-      <button type="button" class="cmp-close" title="Quitar todos" aria-label="Quitar todos" onClick=${() => compare.clear()}>✕</button>
+      <button type="button" class="cmp-close" title="Quitar todos" aria-label="Quitar todos" onClick=${() => compare.clear()}><${Icon} name="x"/></button>
     </div></div>`;
 }
 
@@ -221,7 +221,7 @@ function CompareView({data}) {
       <thead><tr><th></th>${t.heads.map((h, i) => html`<th><div class="cmp-who">
         <${ApiFace} p=${players[i]} size="md"/>
         <span class="cmp-name"><button class="p-name" type="button" onClick=${() => page.openDetail(h.player.id)}>${h.player.name}</button>
-          <button class="cmp-x" type="button" aria-label="Quitar" onClick=${() => compare.drop(h.player.id)}>×</button></span>
+          <button class="cmp-x" type="button" aria-label="Quitar" onClick=${() => compare.drop(h.player.id)}><${Icon} name="x"/></button></span>
         <span class="cmp-sub">${posTag(h.player.position)} ${h.crest ? html`<span class=${'crest crest-' + h.player.team_id}></span>` : null}${h.team} · <${Segs} list=${[h.owner]}/></span>
       </div></th>`)}</tr></thead>
       <tbody>${t.rows.map((row) => html`<tr><td>${row.label}</td>${row.cells.map((c) => html`<td class=${c.c || ''}><${Segs} list=${c.segs}/></td>`)}</tr>`)}

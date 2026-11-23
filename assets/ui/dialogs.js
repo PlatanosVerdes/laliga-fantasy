@@ -382,7 +382,7 @@ export function Notices() {
   const drop = (id) => { notices = notices.filter((n) => n.id !== id); noticeWatchers.forEach((watch) => watch(notices)); };
   if (!list.length) return null;
   return html`<div class="effects">${list.map((n) => html`<div class="effect in" key=${n.id}>
-    <button class="effect-close" aria-label="Cerrar" onClick=${() => drop(n.id)}>×</button>
+    <button class="effect-close" aria-label="Cerrar" onClick=${() => drop(n.id)}><${Icon} name="x"/></button>
     <h4>${n.title}</h4>${n.detail ? html`<p class="effect-line">${n.detail}</p>` : null}
     ${n.rows ? html`<table>${n.rows.map((r) => html`<tr><th>${r.label}</th><td>${r.before}</td><td class="arrow">→</td><td>${r.after}</td><td class=${'delta ' + r.sign}>${r.delta}</td></tr>`)}</table>` : null}
   </div>`)}</div>`;
