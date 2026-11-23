@@ -4,6 +4,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -25,6 +26,9 @@ import (
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/schedule"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
 )
+
+// cardPatience is how long a card waits on futbolfantasy before drawing without it.
+var cardPatience = 3 * time.Second
 
 // detail answers one player: everything the drawer shows, plus what can be done with him
 // right now. The actions are computed here rather than in the browser because only the server
@@ -75,13 +79,56 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	}()
 	go func() { defer laliga.Done(); budget = s.budget() }()
 
+	// Both futbolfantasy pages are read at once and waited for only briefly: the site can take a
+	// minute to answer, and a card that waits for it looks broken. What arrives late is cached
+	// for the next time the card is drawn.
+	ffID := text(player["ff_id"])
+	slug := ""
+	if name := fallback(text(player["ff_name"]), text(player["name"])); name != "" {
+		slug = matching.SlugifyFF(name)
+	}
+	if stored, ok := futbolfantasy.StoredDetail(ffID); ok && stored.URL != "" {
+		slug = stored.URL[strings.LastIndex(stored.URL, "/")+1:]
+	}
+	type detailRead struct {
+		page futbolfantasy.Detail
+		err  error
+	}
+	type pageRead struct {
+		page map[string]any
+		err  error
+	}
+	details := make(chan detailRead, 1)
+	pages := make(chan pageRead, 1)
+	if ffID != "" {
+		go func() {
+			page, err := futbolfantasy.Interactive.DetailFor(ffID)
+			details <- detailRead{page, err}
+		}()
+	}
+	if slug != "" {
+		go func() {
+			page, err := futbolfantasy.Interactive.PlayerPageFor(slug, ffID, futbolfantasy.DetailTTL)
+			pages <- pageRead{page, err}
+		}()
+	}
+	patience := make(chan struct{})
+	defer time.AfterFunc(cardPatience, func() { close(patience) }).Stop()
+
 	// The profitable ceiling lives on futbolfantasy's page, not in the model, so the drawer
 	// only knows it if the server puts it here: without it the dialog reads "sin margen" and
 	// warns about every amount, however small.
 	// The link is the page the ceiling was read from, so it comes with it rather than from a
 	// slug of his name, which a short or shared name gets wrong.
-	if ffID := text(player["ff_id"]); ffID != "" {
-		page, err := futbolfantasy.Interactive.DetailFor(ffID)
+	if ffID != "" {
+		var read detailRead
+		select {
+		case read = <-details:
+		case <-patience:
+			stored, _ := futbolfantasy.StoredDetail(ffID)
+			read = detailRead{stored, errors.New("futbolfantasy tarda")}
+		}
+		page, err := read.page, read.err
 		if page.FetchedAt.IsZero() {
 			// Never read is not "sin margen": prepare reads it again before any amount is judged.
 			player[advice.PendingKey] = true
@@ -103,13 +150,14 @@ func (s *Server) detail(writer http.ResponseWriter, request *http.Request) {
 	// Reading the page costs a request, so only the player being looked at gets one; my squad's
 	// odds are already read when the world is built.
 	var ffMatches []map[string]any
-	if name := fallback(text(player["ff_name"]), text(player["name"])); name != "" {
-		slug := matching.SlugifyFF(name)
-		if url := text(player["ff_url"]); url != "" {
-			slug = url[strings.LastIndex(url, "/")+1:]
+	if slug != "" {
+		var read pageRead
+		select {
+		case read = <-pages:
+		case <-patience:
+			read.err = errors.New("futbolfantasy tarda")
 		}
-		if page, err := futbolfantasy.Interactive.PlayerPageFor(slug, text(player["ff_id"]),
-			futbolfantasy.DetailTTL); err == nil {
+		if page, err := read.page, read.err; err == nil {
 			if _, known := player["ff_url"]; !known {
 				player["ff_url"] = strings.ReplaceAll(config.FFPlayerURL, "{slug}", slug)
 			}

@@ -9,8 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/advice"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api/apitest"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/futbolfantasy"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/state"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/writes"
@@ -149,5 +151,42 @@ func TestTakingAnOfferBackReadsNoFutbolfantasyPage(t *testing.T) {
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("prepared: %d %s", recorder.Code, recorder.Body)
+	}
+}
+
+type hangingTransport struct{ release chan struct{} }
+
+func (h hangingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	select {
+	case <-h.release:
+	case <-request.Context().Done():
+	}
+	return nil, errors.New("hung up")
+}
+
+// futbolfantasy taking a minute to answer must not hold the card for that minute: it is drawn
+// with what is stored, and the ceiling is marked as still to be read.
+func TestACardDoesNotWaitOnASlowFutbolfantasy(t *testing.T) {
+	handler := biddingServer(t, nil, nil)
+	hung := hangingTransport{release: make(chan struct{})}
+	restore := httpx.SetTransport(hung)
+	t.Cleanup(func() { close(hung.release); restore() })
+	was := cardPatience
+	cardPatience = 50 * time.Millisecond
+	t.Cleanup(func() { cardPatience = was })
+
+	started := time.Now()
+	request := httptest.NewRequest(http.MethodGet, "http://x/api/player/20", nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if elapsed := time.Since(started); elapsed > 2*time.Second {
+		t.Fatalf("the card waited %v on futbolfantasy", elapsed)
+	}
+	var body struct{ Player map[string]any }
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || recorder.Code != http.StatusOK {
+		t.Fatalf("code=%d err=%v body=%s", recorder.Code, err, recorder.Body.String())
+	}
+	if body.Player[advice.PendingKey] != true {
+		t.Errorf("a ceiling never read is pending, not missing: %v", body.Player)
 	}
 }
