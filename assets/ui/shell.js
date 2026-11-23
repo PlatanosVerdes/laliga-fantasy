@@ -559,7 +559,7 @@ function Drawer() {
       onMouseDown=${(e) => { drawerPressed = e.target === e.currentTarget; }}
       onClick=${(e) => { if (drawerPressed && e.target === e.currentTarget) closeDrawer(); drawerPressed = false; }}>
     <div class="drawer-panel">
-      <button class="drawer-close" type="button" aria-label="Cerrar" onClick=${closeDrawer}>×</button>
+      <button class="drawer-close" type="button" aria-label="Cerrar" onClick=${closeDrawer}><${Icon} name="x"/></button>
       <div class="drawer-body" data-view=${d ? d.name : undefined}>${View ? html`<${View} key=${d.name + '/' + d.arg} arg=${d.arg} d=${d}/>` : null}</div>
     </div>
   </div>`;
