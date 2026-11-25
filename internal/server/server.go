@@ -21,6 +21,7 @@ import (
 
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/api"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/config"
+	"github.com/PlatanosVerdes/laliga-fantasy/internal/engine"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/httpx"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/model"
 	"github.com/PlatanosVerdes/laliga-fantasy/internal/rules"
@@ -45,6 +46,8 @@ type Options struct {
 	// Nudge lets a request tighten the refresh cadence (a browser connecting, a write
 	// landing) without the server knowing what the engine is.
 	Nudge func(string)
+	// Check probes at once, out of turn, for /api/check.
+	Check func() <-chan engine.Check
 	// Page renders the current world. Injected so the server does not need to know what a
 	// document is, and so a run without a session can still answer /healthz.
 	Page func() Rendered
@@ -339,6 +342,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/bid/confirm", s.confirm)
 	mux.HandleFunc("/api/necroporra/vote", s.necroVote)
 	mux.HandleFunc("/refresh", s.refresh)
+	mux.HandleFunc("/api/check", s.check)
 	mux.HandleFunc("/assets/", s.asset)
 	mux.HandleFunc("/favicon.ico", s.icon)
 	mux.HandleFunc("/apple-touch-icon.png", s.icon)

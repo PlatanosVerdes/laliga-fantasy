@@ -50,11 +50,27 @@ type Deps struct {
 	Invalidate func(tags ...string)
 }
 
+// CheckFresh is how recent a probe has to be for an on-demand check to be answered with it
+// instead of asking the API again.
+const CheckFresh = 15 * time.Second
+
+// Check is what an on-demand check found: whether it asked the API at all, whether that
+// rebuilt the world, and when the probe it reports on ran.
+type Check struct {
+	Probed  bool
+	Rebuilt bool
+	At      time.Time
+}
+
 type Engine struct {
 	deps Deps
 
 	nudge chan string
+	check chan struct{}
 	mu    sync.Mutex
+	// Everyone waiting on the check under way: a pull and a tab coming back share one probe.
+	checkers []chan Check
+	checking bool
 	// A deadline once woken for is remembered as spent: an expiry the API keeps
 	// reporting as imminent must not become a loop of rebuilds.
 	deadlineFloor time.Time
@@ -94,7 +110,7 @@ func New(deps Deps) *Engine {
 	if deps.Invalidate == nil {
 		deps.Invalidate = func(...string) {}
 	}
-	return &Engine{deps: deps, nudge: make(chan string, 8)}
+	return &Engine{deps: deps, nudge: make(chan string, 8), check: make(chan struct{}, 1)}
 }
 
 // Nudge cuts the current wait short. Opening the page has to tighten the cadence now, not
@@ -103,6 +119,37 @@ func (e *Engine) Nudge(why string) {
 	select {
 	case e.nudge <- why:
 	default: // already pending; one is enough
+	}
+}
+
+// CheckNow probes out of turn, for somebody who has just been told something moved and is
+// looking at the page. The answer arrives on the channel once the probe, and the rebuild it
+// may set off, are done.
+func (e *Engine) CheckNow() <-chan Check {
+	answer := make(chan Check, 1)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.checking {
+		e.checkers = append(e.checkers, answer)
+		return answer
+	}
+	if !e.lastProbe.IsZero() && e.deps.Now().Sub(e.lastProbe) < CheckFresh {
+		answer <- Check{At: e.lastProbe}
+		return answer
+	}
+	e.checkers = append(e.checkers, answer)
+	e.checking = true
+	e.check <- struct{}{}
+	return answer
+}
+
+func (e *Engine) answerCheck(rebuilt bool) {
+	e.mu.Lock()
+	waiting, at := e.checkers, e.lastProbe
+	e.checkers, e.checking = nil, false
+	e.mu.Unlock()
+	for _, answer := range waiting {
+		answer <- Check{Probed: true, Rebuilt: rebuilt, At: at}
 	}
 }
 
@@ -158,6 +205,11 @@ func (e *Engine) Run(ctx context.Context) {
 			timer.Stop()
 			slog.Debug("wait cut short", "why", why)
 			continue
+		case <-e.check:
+			timer.Stop()
+			e.answerCheck(e.doWork(schedule.Decision{At: now, Why: "comprobación pedida",
+				Kind: schedule.Probe}))
+			continue
 		case <-timer.C:
 		}
 
@@ -165,7 +217,8 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 }
 
-func (e *Engine) doWork(decision schedule.Decision) {
+// doWork reports whether it rebuilt.
+func (e *Engine) doWork(decision schedule.Decision) bool {
 	payload := e.deps.Payload()
 	now := e.deps.Now()
 
@@ -184,7 +237,7 @@ func (e *Engine) doWork(decision schedule.Decision) {
 			cause = "partido"
 		}
 		e.rebuild(cause, decision.Why)
-		return
+		return true
 	}
 
 	moved, halves, err := e.deps.Probe()
@@ -197,12 +250,12 @@ func (e *Engine) doWork(decision schedule.Decision) {
 		// its own error handling and keeps the last good page up.
 		slog.Warn("probe failed", "reason", err.Error())
 		e.rebuild("refresco", "el sondeo ha fallado")
-		return
+		return true
 	}
 
 	if !moved && len(live) == 0 && decision.Kind != schedule.Rebuild {
 		slog.Debug("nothing moved")
-		return
+		return false
 	}
 
 	cause := "mercado"
@@ -215,6 +268,7 @@ func (e *Engine) doWork(decision schedule.Decision) {
 		cause = "traspaso"
 	}
 	e.rebuild(cause, decision.Why)
+	return true
 }
 
 func (e *Engine) rebuild(cause, why string) {

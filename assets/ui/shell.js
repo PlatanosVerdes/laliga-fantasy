@@ -6,6 +6,7 @@ import {fmt, esMoney, exact, countdownText} from './format.js';
 import {flash, askSignOut} from './dialogs.js';
 import {openLink} from './devices.js';
 import {compare} from './compare.js';
+import {CheckButton, installChecks} from './check.js';
 
 // The page around the views: the tab bar with the search, the live dot and the version, the
 // four cards, the sections of the tab on show, the foot; the addresses (#tab/view/arg) and Back;
@@ -474,7 +475,7 @@ function Header({page, meta}) {
   return html`<div class="topbar">${page.tabs && page.tabs.length ? html`<div class="tabs" id="tabs" role="tablist" ref=${bar}>${page.tabs.map((t) => html`
       <button class=${'tab' + (n.tab === t.id ? ' on' : '')} role="tab" data-tab=${t.id} aria-selected=${n.tab === t.id ? 'true' : 'false'}
         type="button" onClick=${() => click(t.id)}>${t.label}</button>`)}</div>` : null}
-    <div class="topright"><${LiveDot} build=${meta.build}/>${meta.build ? html`<span class="build-tag">${meta.build}</span>` : null}<${Find}/><${AccountMenu}/></div>
+    <div class="topright"><${LiveDot} build=${meta.build}/>${meta.build ? html`<span class="build-tag">${meta.build}</span>` : null}<${CheckButton}/><${Find}/><${AccountMenu}/></div>
   </div>
   ${page.stats && page.stats.length ? html`<div class="strip">${page.stats.map((s) => html`<${Stat} s=${s}/>`)}</div>` : null}`;
 }
@@ -678,4 +679,5 @@ export function start(appRoot) {
   if (resolveTarget('#' + hashParts().base)) route();
   else showTab('decidir');
   if (window.EventSource && location.protocol.startsWith('http')) connect();
+  installChecks();
 }
