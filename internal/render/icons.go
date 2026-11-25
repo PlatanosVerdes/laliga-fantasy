@@ -13,6 +13,7 @@ const IconSprite = `<svg width="0" height="0" style="position:absolute" aria-hid
 	`<symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 4.6V8l2.4 1.5"/></symbol>` +
 	`<symbol id="i-coin" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M10.2 5.6a2.7 2.7 0 1 0 0 4.8M5.2 7.3h3.6M5.2 8.8h3.6"/></symbol>` +
 	`<symbol id="i-x" viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></symbol>` +
+	`<symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v2.8h-2.8"/></symbol>` +
 	`<symbol id="i-up" viewBox="0 0 16 16"><path d="M8 13.5V3M4.2 6.8L8 3l3.8 3.8"/></symbol>` +
 	`<symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 1.8l5 2v3.7c0 3.1-2.1 5.4-5 6.7-2.9-1.3-5-3.6-5-6.7V3.8z"/></symbol>` +
 	`<symbol id="i-swap" viewBox="0 0 16 16"><path d="M2.5 5.5h10l-2.5-2.5M13.5 10.5h-10l2.5 2.5"/></symbol>` +

@@ -27,6 +27,14 @@ Three kinds of wake-up, and `/healthz` names the next one (`next_wake_in`,
 | live match | every 2 min while one of *our* players is on the pitch | rebuilds, and drops the six-hour player cache first |
 | rebuild | 15 min since the last full one | catches the drift nothing announces — values, futbolfantasy |
 
+**Asked for, the probe runs now.** The official app notifies at once, and a panel opened right
+after that notification used to wait for the next tick: up to 8 minutes with nobody watching, 2
+with the page open. So a page that loads or comes back after 20 s away posts `/api/check`, and a
+pull down from the top (touch screens) or the button by the live dot does the same and waits for the
+answer. The check is the probe out of turn, with the rebuild it may set off; what changed reaches
+the page over SSE as always. A probe under 15 s old answers instead of asking again, and checks that
+arrive together share one probe, so a busy page costs at most four extra probes a minute.
+
 `/healthz` also reports the request counter (`requests`, `cache_hits`, `errors`), so the
 cost of a refresh policy is a measurement rather than a claim.
 

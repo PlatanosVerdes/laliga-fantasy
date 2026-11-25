@@ -867,6 +867,23 @@ section{margin:28px 0}
   background:var(--surface);color:var(--ink-2);cursor:pointer;padding:0}
 .find-btn:hover,.head-find.open .find-btn{border-color:var(--accent);color:var(--accent)}
 .find-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+/* Ask LaLiga now: the same square as the search, spinning while the check is under way. */
+.check-btn{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink-2);cursor:pointer;padding:0}
+.check-btn:hover{border-color:var(--accent);color:var(--accent)}
+.check-btn:disabled{cursor:default}
+.check-btn .ic{width:16px;height:16px;stroke-width:1.8}
+.check-btn.busy .ic,.pull-hint.busy .ic{animation:check-spin .8s linear infinite}
+.check-btn.same,.check-btn.moved{color:var(--good)}
+.check-btn.error{color:var(--critical)}
+@keyframes check-spin{to{transform:rotate(360deg)}}
+html,body{overscroll-behavior-y:contain}
+.pull-hint{position:fixed;top:0;left:50%;z-index:60;width:36px;height:36px;border-radius:50%;
+  display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--ink-2);
+  box-shadow:0 4px 14px rgba(0,0,0,.18);transform:translate(-50%,-44px);opacity:0;pointer-events:none}
+.pull-hint.ready{color:var(--accent);border-color:var(--accent)}
+.pull-hint.busy{transform:translate(-50%,14px);opacity:1;transition:transform .15s ease-out}
+@media (prefers-reduced-motion:reduce){.check-btn.busy .ic,.pull-hint.busy .ic{animation-duration:2.4s}}
 .find-pop{position:absolute;right:56px;top:50%;transform:translateY(-50%);width:min(340px,calc(100% - 72px));z-index:7}
 .topbar .head-input,.topbar .head-input:focus{width:100%;font-size:13px;padding:7px 12px;
   border-radius:9px;background:var(--surface);box-shadow:0 4px 18px rgba(0,0,0,.12)}

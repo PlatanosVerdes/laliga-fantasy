@@ -737,7 +737,7 @@ func cmdServe(args []string) error {
 	necroCfg := necroporra.Open(config.Default()).Load()
 	panel := server.New(world, server.Options{
 		Host: *host, Port: *port, AllowWrites: allowWrites, Mode: mode, Rehearse: rehearsal,
-		Nudge: engineRef.Nudge, Refresh: world.RefreshWith,
+		Nudge: engineRef.Nudge, Check: engineRef.CheckNow, Refresh: world.RefreshWith,
 		Global: api.NewGlobal().At(httpx.Interactive),
 		Account: func() *api.Account {
 			return api.AccountOf(config.Default()).At(httpx.Interactive)

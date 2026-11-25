@@ -247,3 +247,83 @@ func TestALiveMatchInvalidatesTheCalendar(t *testing.T) {
 	}
 	t.Fatalf("calendar not invalidated during a live match: %v", dropped)
 }
+
+func checkEngine(rec *recorder) (*Engine, context.CancelFunc) {
+	engine := New(Deps{
+		Payload:  func() schedule.Payload { return schedule.Payload{} },
+		Probe:    rec.probe,
+		Rebuild:  rec.rebuild,
+		Watchers: func() int { return 0 },
+		// Nobody watching and a long tick: only the check can make it probe within the test.
+		Tick: 10 * time.Minute,
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	go engine.Run(ctx)
+	return engine, cancel
+}
+
+func waitCheck(t *testing.T, answer <-chan Check) Check {
+	t.Helper()
+	select {
+	case check := <-answer:
+		return check
+	case <-time.After(2 * time.Second):
+		t.Fatal("la comprobación no ha respondido")
+		return Check{}
+	}
+}
+
+func TestACheckProbesAtOnceAndReportsTheRebuild(t *testing.T) {
+	rec := &recorder{moved: true, halves: []string{"events"}}
+	engine, cancel := checkEngine(rec)
+	defer cancel()
+
+	check := waitCheck(t, engine.CheckNow())
+	causes, probes := rec.seen()
+	if !check.Probed || !check.Rebuilt || probes != 1 || len(causes) != 1 || causes[0] != "traspaso" {
+		t.Fatalf("esperaba un sondeo y una reconstrucción por traspaso: %+v, %v, %d sondeos",
+			check, causes, probes)
+	}
+}
+
+func TestACheckRightAfterAProbeDoesNotAskAgain(t *testing.T) {
+	rec := &recorder{}
+	engine, cancel := checkEngine(rec)
+	defer cancel()
+
+	first := waitCheck(t, engine.CheckNow())
+	second := waitCheck(t, engine.CheckNow())
+	if _, probes := rec.seen(); probes != 1 {
+		t.Fatalf("esperaba un solo sondeo, hubo %d", probes)
+	}
+	if !first.Probed || first.Rebuilt || second.Probed || !second.At.Equal(first.At) {
+		t.Fatalf("la segunda debía responder con el sondeo de la primera: %+v %+v", first, second)
+	}
+}
+
+func TestChecksAtTheSameTimeShareOneProbe(t *testing.T) {
+	rec := &recorder{}
+	slow := make(chan struct{})
+	engine := New(Deps{
+		Payload: func() schedule.Payload { return schedule.Payload{} },
+		Probe: func() (bool, []string, error) {
+			<-slow
+			return rec.probe()
+		},
+		Rebuild:  rec.rebuild,
+		Watchers: func() int { return 0 },
+		Tick:     10 * time.Minute,
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go engine.Run(ctx)
+
+	first := engine.CheckNow()
+	time.Sleep(50 * time.Millisecond)
+	second := engine.CheckNow()
+	close(slow)
+	a, b := waitCheck(t, first), waitCheck(t, second)
+	if _, probes := rec.seen(); probes != 1 || !a.Probed || !b.Probed {
+		t.Fatalf("esperaba un sondeo compartido: %d sondeos, %+v %+v", probes, a, b)
+	}
+}
