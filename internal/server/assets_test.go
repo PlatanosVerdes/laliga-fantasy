@@ -50,3 +50,26 @@ func TestIconsAnswerTheDefaultPaths(t *testing.T) {
 		}
 	}
 }
+
+// The page loads its modules under the build, so every deploy is a new URL for each of them.
+func TestAssetsUnderABuildPathServeTheSameFile(t *testing.T) {
+	assets := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(assets, "ui"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(assets, "ui", "shell.js"), []byte("export {}"), 0o644)
+	_ = os.WriteFile(filepath.Join(filepath.Dir(assets), "secret.txt"), []byte("no"), 0o644)
+	server := &Server{opts: Options{Assets: assets}}
+	for path, want := range map[string]int{
+		"/assets/v/v2026.11.25/ui/shell.js": http.StatusOK,
+		"/assets/v/dev/ui/shell.js":         http.StatusOK,
+		"/assets/v/x/../../secret.txt":      http.StatusNotFound,
+		"/assets/v/x/../../../secret.txt":   http.StatusNotFound,
+	} {
+		recorder := httptest.NewRecorder()
+		server.asset(recorder, httptest.NewRequest(http.MethodGet, "http://x"+path, nil))
+		if recorder.Code != want {
+			t.Errorf("%s: %d, want %d", path, recorder.Code, want)
+		}
+	}
+}
