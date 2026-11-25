@@ -1,5 +1,7 @@
 package render
 
+import "net/url"
+
 // The page is a shell: the stylesheet, the icons, the views as JSON and the module that draws
 // them (assets/ui). Everything on screen is drawn there, from the views built here.
 
@@ -75,5 +77,15 @@ func Page(css, crestCSS, views string) string {
 		`<noscript><p class="noscript">Este panel se dibuja con JavaScript: actívalo para verlo.` +
 		`</p></noscript>` +
 		`<script type="application/json" id="views-data">` + views + `</script>` +
-		`<script type="module" src="/assets/ui/main.js?v=` + Esc(Build) + `"></script>`
+		`<script type="module" src="` + ModuleRoot() + `/ui/main.js"></script>`
+}
+
+// ModuleRoot is where the page loads its modules from, with the build in the path so the
+// relative imports between them change URL on every deploy too.
+func ModuleRoot() string {
+	build := url.PathEscape(Build)
+	if build == "" {
+		build = "dev"
+	}
+	return "/assets/v/" + build
 }

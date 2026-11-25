@@ -587,6 +587,13 @@ func (s *Server) events(writer http.ResponseWriter, request *http.Request) {
 
 func (s *Server) asset(writer http.ResponseWriter, request *http.Request) {
 	name := path.Clean(strings.TrimPrefix(request.URL.Path, "/assets/"))
+	// The build in the path is only there to make a new URL per deploy: Safari reuses cached
+	// modules under the same URL whatever Cache-Control says.
+	if rest, ok := strings.CutPrefix(name, "v/"); ok {
+		if _, file, found := strings.Cut(rest, "/"); found {
+			name = path.Clean(file)
+		}
+	}
 	if name == "." || strings.HasPrefix(name, "..") || strings.HasPrefix(name, "/") ||
 		strings.Contains(name, "\\") {
 		http.NotFound(writer, request)
@@ -619,8 +626,7 @@ func (s *Server) asset(writer http.ResponseWriter, request *http.Request) {
 	default:
 		writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	}
-	// The modules import each other by plain path, so a deploy is only picked up if every load
-	// asks again; Last-Modified keeps that a 304.
+	// Last-Modified keeps a revalidation a 304.
 	writer.Header().Set("Cache-Control", "no-cache")
 	http.ServeContent(writer, request, name, info.ModTime(), file)
 }

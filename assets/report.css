@@ -877,7 +877,7 @@ section{margin:28px 0}
 .check-btn.same,.check-btn.moved{color:var(--good)}
 .check-btn.error{color:var(--critical)}
 @keyframes check-spin{to{transform:rotate(360deg)}}
-html,body{overscroll-behavior-y:contain}
+html,body{overscroll-behavior-y:none}
 .pull-hint{position:fixed;top:0;left:50%;z-index:60;width:36px;height:36px;border-radius:50%;
   display:grid;place-items:center;background:var(--surface);border:1px solid var(--line);color:var(--ink-2);
   box-shadow:0 4px 14px rgba(0,0,0,.18);transform:translate(-50%,-44px);opacity:0;pointer-events:none}

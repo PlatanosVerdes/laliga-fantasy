@@ -13,7 +13,7 @@ func TestPageIsAShellAroundTheViews(t *testing.T) {
 	got := Page("body{}", "", `{"a":1}`)
 	for _, want := range []string{`name="viewport"`, `<div class="wrap" id="app"></div>`,
 		`<noscript>`, `<script type="application/json" id="views-data">{"a":1}</script>`,
-		`src="/assets/ui/main.js?v=v2026.08.21.3"`} {
+		`src="/assets/v/v2026.08.21.3/ui/main.js"`} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %s in %.300s", want, got)
 		}
